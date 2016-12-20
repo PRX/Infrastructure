@@ -32,10 +32,10 @@ Metadata:
         Parameters:
           - GitHubOAuthToken
       - Label:
-          defaut: Root Stack
+          default: Root Stack
         Parameters:
-          - TemplateConfigS3Bucket
-          - TemplateConfigFile
+          - RootStackTemplateConfigBucket
+          - RootStackTemplateConfigArchive
           - RootStackName
       - Label:
           default: External Services
@@ -46,28 +46,28 @@ Metadata:
         default: GitHub personal access token
       SlackWebhookURL:
         default: Slack WebHook URL
-      TemplateConfigS3Bucket:
-        default: CloudFormation template config bucket
-      TemplateConfigFile:
-        default: CloudFormation template config archive (.zip)
+      RootStackTemplateConfigBucket:
+        default: Root stack template config bucket
+      RootStackTemplateConfigArchive:
+        default: Root stack template config archive (.zip)
       RootStackName:
         default: Root stack name
 Parameters:
-  TemplateConfigS3Bucket:
-    Description: >
-      Name of the S3 bucket that contains CloudFormation template configuration
-      files that are used for launching new stacks
-    Type: String
-  TemplateConfigFile:
-    Description: >
-      The name of the zip file that contains template configuration files for
-      various environments (staging.json, production.json, etc). Include the
-      entire file name (eg demo.zip)
-    Type: String
   GitHubOAuthToken:
     Description: >
       A GitHub token with access to the Infrastructure repository that contains
       CloudFormation templates
+    Type: String
+  RootStackTemplateConfigBucket:
+    Description: >
+      Name of the S3 bucket that contains CloudFormation template configuration
+      files that are used for launching new stacks
+    Type: String
+  RootStackTemplateConfigArchive:
+    Description: >
+      The name of the zip file that contains template configuration files for
+      various environments (staging.json, production.json, etc). Include the
+      entire file name (eg demo.zip)
     Type: String
   RootStackName:
     Description: >
@@ -255,8 +255,8 @@ Resources:
                 Provider: S3
                 Version: 1
               Configuration:
-                S3Bucket: !Ref TemplateConfigS3Bucket
-                S3ObjectKey: !Ref TemplateConfigFile
+                S3Bucket: !Ref RootStackTemplateConfigBucket
+                S3ObjectKey: !Ref RootStackTemplateConfigArchive
               OutputArtifacts:
                 - Name: TemplateConfigZipArtifact
               RunOrder: 1
@@ -312,6 +312,8 @@ Resources:
                 StackName: !Sub ${RootStackName}-Staging
               RunOrder: 4
   StagingSyncBuildProject:
+    # TODO It may be possible to do this action with a Lambda, which could be
+    # considerably faster
     Type: "AWS::CodeBuild::Project"
     Properties:
       Artifacts:
