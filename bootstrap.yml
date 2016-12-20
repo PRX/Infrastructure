@@ -116,22 +116,17 @@ Resources:
               - Effect: Allow
                 Action:
                   - "s3:*"
-                Resource: !Sub arn:aws:s3:::${ArtifactStore}
-              - Effect: Allow
-                Action:
-                  - "s3:*"
-                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactStore}
+                  - !Sub arn:aws:s3:::${ArtifactStore}/*
               - Effect: Allow
                 Action:
                   - "cloudwatch:*"
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                   - "s3:GetBucketVersioning"
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - "codebuild:BatchGetBuilds"
-                  - "codebuild:StartBuild"
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -146,7 +141,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - "iam:PassRole"
-                Resource: !GetAtt CloudFormationIAMRole.Arn
+                Resource:
+                  - !GetAtt CloudFormationIAMRole.Arn
   CodeBuildIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -220,6 +216,12 @@ Resources:
                 Action:
                   - "cloudformation:*"
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub arn:aws:s3:::${StagingTemplateBucket}/*
+                  - !Sub arn:aws:s3:::${ProductionTemplateBucket}/*
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
