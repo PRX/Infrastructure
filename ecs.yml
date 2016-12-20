@@ -15,6 +15,14 @@ Parameters:
     Description: The kind of environment this cluster is being used for (eg
     Production, Staging, etc)
     Type: String
+  VPCSubnet1:
+    Type: String
+  VPCSubnet2:
+    Type: String
+  VPCSubnet1AZ:
+    Type: String
+  VPCSubnet2AZ:
+    Type: String
 Mappings:
   InstanceTypeMap:
     Staging:
@@ -251,37 +259,37 @@ Resources:
           yum install -y aws-cfn-bootstrap
           /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
-  # ECSClusterASG:
-  #   Type: "AWS::AutoScaling::AutoScalingGroup"
-  #   Properties:
-  #     AvailabilityZones:
-  #       - !GetAtt Subnet1.AvailabilityZone
-  #       - !GetAtt Subnet2.AvailabilityZone
-  #     Cooldown: "300"
-  #     DesiredCapacity: !FindInMap [ASGSizingMap, !Ref EnvironmentType, DefaultDesiredCapacity]
-  #     HealthCheckGracePeriod: 500
-  #     HealthCheckType: EC2
-  #     LaunchConfigurationName: !Ref ECSClusterASGLaunchConfiguration
-  #     MaxSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MaxSize]
-  #     MetricsCollection:
-  #       - Granularity: 1Minute
-  #     MinSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MinSize]
-  #     NotificationConfigurations:
-  #       - TopicARN: !Ref OpsDebugMessagesSNSTopic
-  #         NotificationTypes:
-  #           - "autoscaling:EC2_INSTANCE_LAUNCH"
-  #           - "autoscaling:EC2_INSTANCE_TERMINATE"
-  #           - "autoscaling:TEST_NOTIFICATION"
-  #       - TopicARN: !Ref OpsInfoMessagesSNSTopic
-  #         NotificationTypes:
-  #           - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
-  #           - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Ref ECSCluster
-  #         PropagateAtLaunch: true
-  #     #  TerminationPolicies:
-  #       # - String
-  #     VPCZoneIdentifier:
-  #       - !Ref Subnet1
-  #       - !Ref Subnet2
+  ECSClusterASG:
+    Type: "AWS::AutoScaling::AutoScalingGroup"
+    Properties:
+      AvailabilityZones:
+        - !Ref VPCSubnet1AZ
+        - !Ref VPCSubnet2AZ
+      Cooldown: "300"
+      DesiredCapacity: !FindInMap [ASGSizingMap, !Ref EnvironmentType, DefaultDesiredCapacity]
+      HealthCheckGracePeriod: 500
+      HealthCheckType: EC2
+      LaunchConfigurationName: !Ref ECSClusterASGLaunchConfiguration
+      MaxSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MaxSize]
+      MetricsCollection:
+        - Granularity: 1Minute
+      MinSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MinSize]
+      # NotificationConfigurations:
+      #   - TopicARN: !Ref OpsDebugMessagesSNSTopic
+      #     NotificationTypes:
+      #       - "autoscaling:EC2_INSTANCE_LAUNCH"
+      #       - "autoscaling:EC2_INSTANCE_TERMINATE"
+      #       - "autoscaling:TEST_NOTIFICATION"
+      #   - TopicARN: !Ref OpsInfoMessagesSNSTopic
+      #     NotificationTypes:
+      #       - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+      #       - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+      Tags:
+        - Key: Name
+          Value: !Ref ECSCluster
+          PropagateAtLaunch: true
+      #  TerminationPolicies:
+        # - String
+      VPCZoneIdentifier:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet1
