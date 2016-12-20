@@ -86,6 +86,15 @@ Resources:
     # app, infrastructure, or user data.
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
+  StagingTemplateBucket:
+    # The contents of the PRX/Infrastructure repository get synced into this
+    # bucket so that the staging root stack is able to launch stacks for the
+    # app- and service-specific templates that are tracked in the repository
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
+  ProductionTemplateBucket:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
   CodePipelineIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -137,43 +146,43 @@ Resources:
                 Action:
                   - "iam:PassRole"
                 Resource: !GetAtt CloudFormationIAMRole.Arn
-  # CodeBuildIAMRole:
-  #   Type: "AWS::IAM::Role"
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: "2012-10-17"
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service:
-  #               - codebuild.amazonaws.com
-  #           Action:
-  #             - "sts:AssumeRole"
-  #     Path: "/"
-  #     Policies:
-  #       - PolicyName: CodeBuildRolePolicy
-  #         PolicyDocument:
-  #           Version: "2012-10-17"
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - "logs:CreateLogGroup"
-  #                 - "logs:CreateLogStream"
-  #                 - "logs:PutLogEvents"
-  #               Resource:
-  #                 # NOTE When this policy is created by the AWS console during
-  #                 # CodeBuild project creation, the log resources are tightly
-  #                 # scoped to the project (eg log-group:/aws/codebuild/projName)
-  #                 # but right now the name of that project isn't available until
-  #                 # the project resource is created, and it relies on this IAM
-  #                 # role. Need some way of that not being circular
-  #                 - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
-  #             - Effect: Allow
-  #               Action:
-  #                 - "s3:PutObject"
-  #                 - "s3:GetObject"
-  #                 - "s3:GetObjectVersion"
-  #               Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+  CodeBuildIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: CodeBuildRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  # NOTE When this policy is created by the AWS console during
+                  # CodeBuild project creation, the log resources are tightly
+                  # scoped to the project (eg log-group:/aws/codebuild/projName)
+                  # but right now the name of that project isn't available until
+                  # the project resource is created, and it relies on this IAM
+                  # role. Need some way of that not being circular
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
   CloudFormationIAMRole:
     # This is the role used to launch the root stack, and thus all nested app
     # and service stacks. It needs permissions to create any of the resources
@@ -241,23 +250,21 @@ Resources:
               OutputArtifacts:
                 - Name: TemplateConfigZipArtifact
               RunOrder: 1
-        # - Name: Build
-        #   Actions:
-        #     - Name: RootTemplate
-        #       ActionTypeId:
-        #         Category: Build
-        #         Owner: AWS
-        #         Provider: CodeBuild
-        #         Version: 1
-        #       Configuration:
-        #         ProjectName: !Ref RootTemplateBuildProject
-        #       InputArtifacts:
-        #         - Name: GitHubSourceArtifact
-        #       OutputArtifacts:
-        #         - Name: RootTemplateArtifact
-        #       RunOrder: 1
         - Name: Staging
           Actions:
+            - Name: TemplateSync
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref StagingSyncBuildProject
+              InputArtifacts:
+                - Name: GitHubSourceArtifact
+              OutputArtifacts:
+                - Name: StagingTemplateSyncArtifact
+              RunOrder: 1
             - Name: CreateChangeSet
               ActionTypeId:
                 Category: Deploy
@@ -274,14 +281,14 @@ Resources:
                 StackName: !Sub ${RootStackName}-Staging
                 TemplateConfiguration: TemplateConfigZipArtifact::staging.json
                 TemplatePath: GitHubSourceArtifact::root.yml
-              RunOrder: 1
+              RunOrder: 2
             - Name: ApproveChangeSet
               ActionTypeId:
                 Category: Approval
                 Owner: AWS
                 Provider: Manual
                 Version: 1
-              RunOrder: 2
+              RunOrder: 3
             - Name: ExecuteChangeSet
               ActionTypeId:
                 Category: Deploy
@@ -293,19 +300,22 @@ Resources:
                 ChangeSetName: !Sub ${RootStackName}ChangeSetStaging
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
-              RunOrder: 3
-  # RootTemplateBuildProject:
-  #   Type: "AWS::CodeBuild::Project"
-  #   Properties:
-  #     Artifacts:
-  #       Type: CODEPIPELINE
-  #     Description: Returns only the root.yml template
-  #     Environment:
-  #       ComputeType: BUILD_GENERAL1_SMALL
-  #       Image: aws/codebuild/ubuntu-base:14.04
-  #       Type: LINUX_CONTAINER
-  #     Name: !Sub root-template-build-${AWS::Region}
-  #     ServiceRole: !GetAtt CodeBuildIAMRole.Arn
-  #     Source:
-  #       Type: CODEPIPELINE
-  #     TimeoutInMinutes: 5
+              RunOrder: 4
+  StagingSyncBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Syncs the GitHub repo to S3 for staging
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: TEMPLATE_BUCKET
+            Value: !Ref StagingTemplateBucket
+        Image: aws/codebuild/ubuntu-base:14.04
+        Type: LINUX_CONTAINER
+      Name: !Sub staging-template-sync-${AWS::Region}
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Source:
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 5
