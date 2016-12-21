@@ -109,7 +109,7 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-        - PolicyName: CodePipelineRolePolicy
+        - PolicyName: ArtifactStoreFullAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -119,15 +119,15 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${ArtifactStore}
                   - !Sub arn:aws:s3:::${ArtifactStore}/*
+        - PolicyName: RootStacksCloudFormationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
-                  - "cloudwatch:*"
-                  - "codebuild:BatchGetBuilds"
-                  - "codebuild:StartBuild"
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                  - "s3:GetBucketVersioning"
-                Resource: "*"
+                  - "iam:PassRole"
+                Resource:
+                  - !GetAtt CloudFormationIAMRole.Arn
               - Effect: Allow
                 Action:
                   - "cloudformation:DescribeStacks"
@@ -138,11 +138,19 @@ Resources:
                 Resource:
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Staging/*
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Production/*
+        - PolicyName: CodePipelineRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
-                  - "iam:PassRole"
-                Resource:
-                  - !GetAtt CloudFormationIAMRole.Arn
+                  - "cloudwatch:*" # TODO Really?
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:GetBucketVersioning"
+                Resource: "*" # TODO Really?
   CodeBuildIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -157,7 +165,7 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-        - PolicyName: CodeBuildRolePolicy
+        - PolicyName: CodeBuildLogs
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -174,12 +182,20 @@ Resources:
                   # the project resource is created, and it relies on this IAM
                   # role. Need some way of that not being circular
                   - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+        - PolicyName: ArtifactStoreBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
                   - "s3:PutObject"
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                 Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+        - PolicyName: TemplateBucketsBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
               - Effect: Allow
                 Action:
                   - "s3:ListBucket"
@@ -209,24 +225,28 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-        - PolicyName: CloudFormationRolePolicy
+        - PolicyName: TemplateBucketAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - "cloudformation:*"
-                Resource: "*"
               - Effect: Allow
                 Action:
                   - "s3:GetObject"
                 Resource:
                   - !Sub arn:aws:s3:::${StagingTemplateBucket}/*
                   - !Sub arn:aws:s3:::${ProductionTemplateBucket}/*
+        - PolicyName: CloudFormationRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudformation:*" # TODO Really?
+                Resource: "*" # TODO Really?
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
-                Resource: "*"
+                Resource: "*" # TODO Really?
               - Effect: Allow
                 # TODO Dangerous!
                 Action:
@@ -241,7 +261,7 @@ Resources:
                   - "application-autoscaling:*"
                   - "lambda:*"
                   - "sns:*"
-                Resource: "*"
+                Resource: "*" # TODO Really?
   Pipeline:
     Type: "AWS::CodePipeline::Pipeline"
     Properties:
