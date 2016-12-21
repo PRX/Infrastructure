@@ -328,6 +328,59 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
               RunOrder: 4
+        - Name: Production
+          Actions:
+            - Name: TemplateSync
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref ProductionSyncBuildProject
+              InputArtifacts:
+                - Name: GitHubSourceArtifact
+              OutputArtifacts:
+                - Name: ProductionTemplateSyncArtifact
+              RunOrder: 1
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              InputArtifacts:
+                - Name: TemplateConfigZipArtifact
+                - Name: GitHubSourceArtifact
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${RootStackName}ChangeSetProduction
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: !Sub ${RootStackName}-Production
+                TemplateConfiguration: TemplateConfigZipArtifact::production.json
+                TemplatePath: GitHubSourceArtifact::root.yml
+              RunOrder: 2
+            - Name: ApproveChangeSet
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              RunOrder: 3
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${RootStackName}ChangeSetProduction
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: !Sub ${RootStackName}-Production
+              RunOrder: 4
   StagingSyncBuildProject:
     # TODO It may be possible to do this action with a Lambda, which could be
     # considerably faster
@@ -344,6 +397,26 @@ Resources:
         Image: aws/codebuild/ubuntu-base:14.04
         Type: LINUX_CONTAINER
       Name: !Sub staging-template-sync-${AWS::Region}
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Source:
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 5
+  ProductionSyncBuildProject:
+    # TODO It may be possible to do this action with a Lambda, which could be
+    # considerably faster
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Syncs the GitHub repo to S3 for production
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: TEMPLATE_BUCKET
+            Value: !Ref ProductionTemplateBucket
+        Image: aws/codebuild/ubuntu-base:14.04
+        Type: LINUX_CONTAINER
+      Name: !Sub production-template-sync-${AWS::Region}
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         Type: CODEPIPELINE
