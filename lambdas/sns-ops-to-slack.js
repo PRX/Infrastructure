@@ -1,12 +1,12 @@
 'use strict';
 
-const url     = require('url');
-const https   = require('https');
+const url = require('url');
+const https = require('https');
 
-const postPayload = (payload, callback) => {
-    const body = JSON.stringify(payload);
+const postPayload = (webhookURL, payload, callback) => {
+    let body = JSON.stringify(payload);
 
-    const options = url.parse(process.env.SLACK_WEBHOOK_URL);
+    let options = url.parse(webhookURL);
     options.method = 'POST';
     options.headers = {
         'Content-Type': 'application/json',
@@ -15,14 +15,15 @@ const postPayload = (payload, callback) => {
 
     let postReq = https.request(options, res => {
         let chunks = [];
-
         res.setEncoding('utf8');
+
         res.on('data', chunk => chunks.push(chunk));
+
         res.on('end', () => {
-            const resBody = chunks.join('');
+            let body = chunks.join('');
             if (callback) {
                 callback({
-                    body: resBody,
+                    body: body,
                     statusCode: res.statusCode,
                     statusMessage: res.statusMessage
                 });
@@ -36,30 +37,150 @@ const postPayload = (payload, callback) => {
     postReq.end();
 };
 
-const payloadForEvent = event => {
+const slackChannelForEvent = event => {
+    let sns = event.Records[0].Sns;
+    let topicArn = sns.TopicArn;
+
+    if (topicArn.search('OpsFatalMessagesSNSTopic') !== -1) {
+        return '#ops-fatal';
+    } else if (topicArn.search('OpsErrorMessagesSNSTopic') !== -1) {
+        return '#ops-error';
+    } else if (topicArn.search('OpsWarnMessagesSNSTopic') !== -1) {
+        return '#ops-warn';
+    } else if (topicArn.search('OpsInfoMessagesSNSTopic') !== -1) {
+        return '#ops-info';
+    } else if (topicArn.search('OpsDebugMessagesSNSTopic') !== -1) {
+        return '#ops-debug';
+    } else {
+        return '#ops-debug';
+    }
+};
+
+const colorForAlarmMessage = message => {
+    if (message.NewStateValue === 'ALARM') {
+        return '#cc0000';
+    } else if (message.NewStateValue === 'OK') {
+        return '#019933';
+    } else {
+        return '#e07701';
+    }
+};
+
+const attachmentForAlarmMessage = message => {
     return {
-        channel: '#ops-debug',
-        attachments: [{
-          title: 'title',
-          text: 'text'
-        }]
+        fallback: `${message.NewStateValue} – ${message.AlarmDescription}`,
+        color: colorForAlarmMessage(message),
+        author_name: message.AlarmName,
+        title: message.AlarmDescription,
+        text: message.NewStateReason,
+        footer: message.Region,
+        ts: (Date.now() / 1000 | 0)
     };
 };
 
-const processEvent = (event, context, callback) => {
-    postPayload(payloadForEvent(event), response => {
-        if (response.statusCode < 400) {
-            console.info(`Message posted successfully`);
-            callback();
-        } else if (response.statusCode < 500) {
-            console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
-            callback();  // Don't retry because the error is due to a problem with the request, not Slack
-        } else {
-            // Let Lambda retry
-            const msg = `Server error when processing message: ${response.statusCode} - ${response.statusMessage}`;
-            callback(new Error(msg));
+const colorForASGMessage = message => {
+    if (message.Event.search('EC2_INSTANCE_TERMINATE') !== -1) {
+        return '#FF8400';
+    } else {
+        return '#0099FF';
+    }
+};
+
+const attachmentForASGMessage = message => {
+    return {
+        fallback: message.Cause,
+        color: colorForASGMessage(message),
+        author_name: message.AutoScalingGroupName,
+        title: message.Event,
+        text: message.Cause,
+        footer: message.Details['Availability Zone'],
+        ts: (Date.now() / 1000 | 0)
+    };
+};
+
+const objFromCFNMessage = message => {
+    // let obj = {};
+    // message = message.replace(/\\\\n/g, '');
+    // message.split('\n').map(x => x.split('=')).forEach(x => obj[x[0]] = x[1]);
+    //
+    // return obj;
+};
+
+const attachmentForCFNMessage = message => {
+    // let obj = objFromCFNMessage(message);
+
+    return {
+        fallback: '',
+        text: 'WIP CloudFormation event'
+    };
+};
+
+const attachmentForEvent = event => {
+    let sns = event.Records[0].Sns;
+
+    if (sns.Message.search(`StackId='arn:aws:cloudformation`) !== -1) {
+        return attachmentForCFNMessage(sns.Message);
+    } else {
+        try {
+            let msgObj = JSON.parse(sns.Message);
+
+            if (msgObj.hasOwnProperty('AlarmName')) {
+                return attachmentForAlarmMessage(msgObj);
+            } else if (msgObj.hasOwnProperty('AutoScalingGroupARN')) {
+                return attachmentForASGMessage(msgObj);
+            } else {
+                return {
+                  title: 'Unknown event JSON message',
+                  text: sns.Message
+                };
+            }
+        } catch (e) {
+            return {
+              title: 'Unknown event message',
+              text: sns.Message
+            };
         }
-    });
+    }
+};
+
+const payloadForEvent = event => {
+    let sns = event.Records[0].Sns;
+    let topicArn = sns.TopicArn;
+    let message = JSON.parse(sns.Message);
+
+    return {
+        channel: slackChannelForEvent(event),
+        attachments: [attachmentForEvent(event)]
+    };
+};
+
+const webhookForEvent = event => {
+    let sns = event.Records[0].Sns;
+    let message = JSON.parse(sns.Message);
+
+    // PIPELINE_SLACK_WEBHOOK_URL
+
+    if (message.hasOwnProperty('AutoScalingGroupARN')) {
+        return process.env.ASG_SLACK_WEBHOOK_URL;
+    } else {
+        return process.env.CW_SLACK_WEBHOOK_URL;
+    }
+};
+
+const processEvent = (event, context, callback) => {
+  postPayload(webhookForEvent(event), payloadForEvent(event), response => {
+      if (response.statusCode < 400) {
+          console.info(`Message posted successfully`);
+          callback();
+      } else if (response.statusCode < 500) {
+          console.error(`Error posting message to Slack API: ${response.statusCode} - ${response.statusMessage}`);
+          callback();  // Don't retry because the error is due to a problem with the request
+      } else {
+          // Let Lambda retry
+          let msg = `Server error when processing message: ${response.statusCode} - ${response.statusMessage}`;
+          callback(new Error(msg));
+      }
+  });
 };
 
 exports.handler = (event, context, callback) => {
