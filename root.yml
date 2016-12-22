@@ -48,25 +48,27 @@ Resources:
         TemplateBucket: !Join ["", ["Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket"]]
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/notifications.yml"]]
       TimeoutInMinutes: "2"
-  # VPCStack:
-  #   Type: "AWS::CloudFormation::Stack"
-  #   Properties:
-  #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/vpc.yml"]]
-  #     TimeoutInMinutes: "5"
-  # ECSClusterStack:
-  #   Type: "AWS::CloudFormation::Stack"
-  #   DependsOn: VPCStack
-  #   Properties:
-  #     Parameters:
-  #       KeyPairName: !Ref ASGKeyPairName
-  #       EnvironmentType: !Ref RootEnvironmentType
-  #       VPC: !GetAtt VPCStack.Outputs.VPC
-  #       VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
-  #       VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-  #       VPCSubnet1AZ: !GetAtt VPCStack.Outputs.Subnet1AvailabilityZone
-  #       VPCSubnet2AZ: !GetAtt VPCStack.Outputs.Subnet2AvailabilityZone
-  #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/ecs.yml"]]
-  #     TimeoutInMinutes: "5"
+  VPCStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/vpc.yml"]]
+      TimeoutInMinutes: "5"
+  ECSClusterStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: VPCStack
+    Properties:
+      Parameters:
+        KeyPairName: !Ref ASGKeyPairName
+        EnvironmentType: !Ref RootEnvironmentType
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet1AZ: !GetAtt VPCStack.Outputs.Subnet1AvailabilityZone
+        VPCSubnet2AZ: !GetAtt VPCStack.Outputs.Subnet2AvailabilityZone
+        OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+        OpsErrorMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsErrorMessagesSNSTopicArn
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/ecs.yml"]]
+      TimeoutInMinutes: "5"
   # AudiogramStack:
   #   Type: "AWS::CloudFormation::Stack"
   #   DependsOn: ECSClusterStack

@@ -29,6 +29,10 @@ Parameters:
     Type: String
   VPCSubnet2AZ:
     Type: String
+  OpsDebugMessagesSNSTopicArn:
+    Type: String
+  OpsErrorMessagesSNSTopicArn:
+    Type: String
 Mappings:
   InstanceTypeMap:
     Staging:
@@ -280,16 +284,16 @@ Resources:
       MetricsCollection:
         - Granularity: 1Minute
       MinSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MinSize]
-      # NotificationConfigurations:
-      #   - TopicARN: !Ref OpsDebugMessagesSNSTopic
-      #     NotificationTypes:
-      #       - "autoscaling:EC2_INSTANCE_LAUNCH"
-      #       - "autoscaling:EC2_INSTANCE_TERMINATE"
-      #       - "autoscaling:TEST_NOTIFICATION"
-      #   - TopicARN: !Ref OpsInfoMessagesSNSTopic
-      #     NotificationTypes:
-      #       - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
-      #       - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+      NotificationConfigurations:
+        - TopicARN: !Ref OpsDebugMessagesSNSTopicArn
+          NotificationTypes:
+            - "autoscaling:EC2_INSTANCE_LAUNCH"
+            - "autoscaling:EC2_INSTANCE_TERMINATE"
+            - "autoscaling:TEST_NOTIFICATION"
+        - TopicARN: !Ref OpsErrorMessagesSNSTopicArn
+          NotificationTypes:
+            - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
       Tags:
         - Key: Name
           Value: !Ref ECSCluster
