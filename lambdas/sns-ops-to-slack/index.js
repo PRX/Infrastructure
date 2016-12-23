@@ -1,5 +1,18 @@
 'use strict';
 
+// This is intended to handle any sort of alerts or notifications that may
+// result from deploying and maintaining the infrastructure, or from the apps
+// and services that are deployed. It is subscribed to the main SNS topics that
+// notifications are sent to, and includes logic to handle different types of
+// messages in different ways. The result of this particular function is to
+// forward messages to Slack. Other endpoints could be handled by other
+// functions.
+//
+// The following environment variables are required:
+// - ASG_SLACK_WEBHOOK_URL
+// - CW_SLACK_WEBHOOK_URL
+// - PIPELINE_SLACK_WEBHOOK_URL
+
 const url = require('url');
 const https = require('https');
 
