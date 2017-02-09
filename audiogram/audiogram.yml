@@ -124,90 +124,90 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt AudiogramALB.DNSName
             HostedZoneId: !GetAtt AudiogramALB.CanonicalHostedZoneID
-  AudiogramScalableTarget:
-    Type: "AWS::ApplicationAutoScaling::ScalableTarget"
-    Properties:
-      MaxCapacity: 5
-      MinCapacity: 1
-      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt AudiogramService.Name]]
-      RoleARN: !Ref ECSServiceAutoscaleIAMRoleArn
-      ScalableDimension: "ecs:service:DesiredCount"
-      ServiceNamespace: ecs
-  AudiogramScaleOutPolicy:
-    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-    Properties:
-      PolicyName: AudiogramScaleOutPolicy
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref AudiogramScalableTarget
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: 0
-            MetricIntervalUpperBound: 25
-            ScalingAdjustment: 1
-          - MetricIntervalLowerBound: 25
-            ScalingAdjustment: 2
-  AudiogramScaleInPolicy:
-    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-    Properties:
-      PolicyName: AudiogramScaleInPolicy
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref AudiogramScalableTarget
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalUpperBound: 0
-            ScalingAdjustment: -1
-  AudiogramScaleOutAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmActions:
-        - !Ref AudiogramScaleOutPolicy
-        - !Ref OpsDebugMessagesSNSTopicArn
-      AlarmDescription: >
-        The CPU utilization of the service has exceeded 50% for more than
-        one minute. Breaching this alarm should trigger a service scale out.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: !Ref ECSCluster
-        - Name: ServiceName
-          Value: !GetAtt AudiogramService.Name
-      EvaluationPeriods: "1"
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      Period: "60"
-      Statistic: Average
-      Threshold: "50"
-      Unit: Percent
-  AudiogramScaleInAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmActions:
-        - !Ref AudiogramScaleInPolicy
-        - !Ref OpsDebugMessagesSNSTopicArn
-      AlarmDescription: >
-        The CPU utilization of the service has dropped below 10% for more than
-        five minutes. Breaching this alarm should trigger a service scale in.
-      ComparisonOperator: LessThanOrEqualToThreshold
-      Dimensions:
-        - Name: ClusterName
-          Value: !Ref ECSCluster
-        - Name: ServiceName
-          Value: !GetAtt AudiogramService.Name
-      EvaluationPeriods: "5"
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      Period: "60"
-      Statistic: Average
-      Threshold: "10"
-      Unit: Percent
+  # AudiogramScalableTarget:
+  #   Type: "AWS::ApplicationAutoScaling::ScalableTarget"
+  #   Properties:
+  #     MaxCapacity: 5
+  #     MinCapacity: 1
+  #     ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt AudiogramService.Name]]
+  #     RoleARN: !Ref ECSServiceAutoscaleIAMRoleArn
+  #     ScalableDimension: "ecs:service:DesiredCount"
+  #     ServiceNamespace: ecs
+  # AudiogramScaleOutPolicy:
+  #   Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+  #   Properties:
+  #     PolicyName: AudiogramScaleOutPolicy
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref AudiogramScalableTarget
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 60
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalLowerBound: 0
+  #           MetricIntervalUpperBound: 25
+  #           ScalingAdjustment: 1
+  #         - MetricIntervalLowerBound: 25
+  #           ScalingAdjustment: 2
+  # AudiogramScaleInPolicy:
+  #   Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+  #   Properties:
+  #     PolicyName: AudiogramScaleInPolicy
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref AudiogramScalableTarget
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 60
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalUpperBound: 0
+  #           ScalingAdjustment: -1
+  # AudiogramScaleOutAlarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmActions:
+  #       - !Ref AudiogramScaleOutPolicy
+  #       - !Ref OpsDebugMessagesSNSTopicArn
+  #     AlarmDescription: >
+  #       The CPU utilization of the service has exceeded 50% for more than
+  #       one minute. Breaching this alarm should trigger a service scale out.
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     Dimensions:
+  #       - Name: ClusterName
+  #         Value: !Ref ECSCluster
+  #       - Name: ServiceName
+  #         Value: !GetAtt AudiogramService.Name
+  #     EvaluationPeriods: "1"
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/ECS
+  #     Period: "60"
+  #     Statistic: Average
+  #     Threshold: "50"
+  #     Unit: Percent
+  # AudiogramScaleInAlarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmActions:
+  #       - !Ref AudiogramScaleInPolicy
+  #       - !Ref OpsDebugMessagesSNSTopicArn
+  #     AlarmDescription: >
+  #       The CPU utilization of the service has dropped below 10% for more than
+  #       five minutes. Breaching this alarm should trigger a service scale in.
+  #     ComparisonOperator: LessThanOrEqualToThreshold
+  #     Dimensions:
+  #       - Name: ClusterName
+  #         Value: !Ref ECSCluster
+  #       - Name: ServiceName
+  #         Value: !GetAtt AudiogramService.Name
+  #     EvaluationPeriods: "5"
+  #     MetricName: CPUUtilization
+  #     Namespace: AWS/ECS
+  #     Period: "60"
+  #     Statistic: Average
+  #     Threshold: "10"
+  #     Unit: Percent
 Outputs:
   DNSName:
     Description: The DNS name for the applications load balancer
