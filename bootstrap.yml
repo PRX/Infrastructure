@@ -93,6 +93,9 @@ Resources:
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
   ProductionTemplateBucket:
+    # The contents of the PRX/Infrastructure repository get synced into this
+    # bucket so that the production root stack is able to launch stacks for the
+    # app- and service-specific templates that are tracked in the repository
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
   CodePipelineIAMRole:
@@ -328,6 +331,12 @@ Resources:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
                 ChangeSetName: !Sub ${RootStackName}ChangeSetStaging
+                # TODO Nest notifications stack in Bootstrap, and pass SNS
+                # topic ARN's to root stacks
+                # ParameterOverrides:
+                #   {
+                #
+                #   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
                 TemplateConfiguration: TemplateConfigZipArtifact::staging.json
@@ -339,6 +348,8 @@ Resources:
                 Owner: AWS
                 Provider: Manual
                 Version: 1
+              Configuration:
+                NotificationArn:
               RunOrder: 3
             - Name: ExecuteChangeSet
               ActionTypeId:
