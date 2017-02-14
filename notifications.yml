@@ -3,6 +3,8 @@ Description: >
   Creates foundational resources needed to handle infrastructure-related
   messaging and notifications
 Parameters:
+  OpsStatusMessagesSNSTopicArn:
+    Type: String
   AutoScalingSlackWebhookURL:
     Type: String
   CloudWatchSlackWebhookURL:
@@ -12,6 +14,16 @@ Parameters:
   TemplateBucket:
     Type: String
 Resources:
+  # This topic is maintained by the Bootstrap stack, but we need to subscribe
+  # the relay Lambda function here
+  OpsStatusMessagesSNSSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      TopicArn: !Ref OpsStatusMessagesSNSTopicArn
+      Protocol: lambda
+      Endpoint: !GetAtt SNSOpsMessagesToSlackLambdaFunction.Arn
+  #
+  # SNS Topics with subscriptions to the relay Lambda
   OpsDebugMessagesSNSTopic:
     Type: "AWS::SNS::Topic"
     Properties:
@@ -47,6 +59,8 @@ Resources:
       Subscription:
         - Endpoint: !GetAtt SNSOpsMessagesToSlackLambdaFunction.Arn
           Protocol: lambda
+  #
+  # A Lambda function that relays messages sent to all ops topics to Slack
   LambdaBasicExecutionIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -79,6 +93,15 @@ Resources:
       Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
       Runtime: nodejs4.3
       Timeout: 3
+  #
+  # Permission needs to be granted to each SNS topic to invoke the lambda
+  SNSOpsMessagesToSlackLambdaFunctionStatusTopicPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SNSOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsStatusMessagesSNSTopicArn
   SNSOpsMessagesToSlackLambdaFunctionDebugTopicPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
