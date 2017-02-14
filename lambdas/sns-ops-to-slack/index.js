@@ -64,6 +64,8 @@ const slackChannelForEvent = event => {
         return '#ops-info';
     } else if (topicArn.search('OpsDebugMessagesSNSTopic') !== -1) {
         return '#ops-debug';
+    } else if (topicArn.search('OpsStatusMessagesSNSTopic') !== -1) {
+        return '#ops-status';
     } else {
         return '#ops-debug';
     }
