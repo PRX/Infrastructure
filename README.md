@@ -73,3 +73,10 @@ For most applications, an additional template will be built to support the CI/CD
 - `BootstrapStackName`: The name of the bootstrap stack that will launch a root stack using this config file. This is used mainly so the root stack can find the S3 bucket where infrastructure code is copied to, which is created by the bootstrap stack.
 - `ASGKeyPairName`: The name of an EC2 key pair that will be used by instances launched by Auto Scale groups
 - `RootEnvironmentType`: either `Production` or `Staging` (case sensitive) to describe the type environment being launched with this config
+- `GitHubOAuthToken`: A GitHub token that has pull access to the PRX/Infrastructure repository
+- `AutoScalingSlackWebhookURL`: A Slack webhook URL to which messages about autoscaling can be sent
+- `CloudWatchSlackWebhookURL`: A Slack webhook URL to which messages about CloudWatch Alarms can be sent
+- `CodePipelineSlackWebhookURL`: A Slack webhook URL to which messages about CodePipeline events can be sent
+- `AudiogramECRRegion`: The AWS region that audiogram docker images are stored
+- `AudiogramECRRepositoryName`: The name of the ECR repository with audiogram docker images
+- `AudiogramECRImageTag`: The current docker image tag to use for audiogram deployments (this is incremented automatically by the audiogram pipeline build process)
