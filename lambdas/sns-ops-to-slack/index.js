@@ -130,6 +130,25 @@ const attachmentForCFNMessage = message => {
     };
 };
 
+const colorForApprovalMessage = message => {
+    return '#FF8400';
+};
+
+const attachmentForApprovalMessage = message => {
+    return {
+        fallback: 'message.Cause',
+        color: colorForApprovalMessage(message),
+        author_name: message.approval.pipelineName,
+        author_link: message.consoleLink,
+        title: `${message.approval.stageName}: ${message.approval.actionName}`,
+        title_link: message.approval.approvalReviewLink,
+        text: `Manual approval required to trigger *ExecuteChangeSet*`,
+        footer: message.region,
+        ts: (Date.now() / 1000 | 0),
+        mrkdwn_in: ["text"]
+    };
+};
+
 const attachmentForEvent = event => {
     let sns = event.Records[0].Sns;
 
@@ -141,8 +160,10 @@ const attachmentForEvent = event => {
 
             if (msgObj.hasOwnProperty('AlarmName')) {
                 return attachmentForAlarmMessage(msgObj);
+            } else if (msgObj.hasOwnProperty('approval')) {
+                return attachmentForApprovalMessage(msgObj);
             } else if (msgObj.hasOwnProperty('AutoScalingGroupARN')) {
-                return attachmentForASGMessage(msgObj);
+
             } else {
                 return {
                   title: 'Unknown event JSON message',
@@ -159,10 +180,6 @@ const attachmentForEvent = event => {
 };
 
 const payloadForEvent = event => {
-    let sns = event.Records[0].Sns;
-    let topicArn = sns.TopicArn;
-    let message = JSON.parse(sns.Message);
-
     return {
         channel: slackChannelForEvent(event),
         attachments: [attachmentForEvent(event)]
@@ -173,10 +190,10 @@ const webhookForEvent = event => {
     let sns = event.Records[0].Sns;
     let message = JSON.parse(sns.Message);
 
-    // PIPELINE_SLACK_WEBHOOK_URL
-
     if (message.hasOwnProperty('AutoScalingGroupARN')) {
         return process.env.ASG_SLACK_WEBHOOK_URL;
+    } else if (message.hasOwnProperty('approval')) {
+        return process.env.PIPELINE_SLACK_WEBHOOK_URL;
     } else {
         return process.env.CW_SLACK_WEBHOOK_URL;
     }
