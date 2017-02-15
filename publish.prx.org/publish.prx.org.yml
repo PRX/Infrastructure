@@ -100,6 +100,17 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref PublishALBTargetGroup
+  PublishALBListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      Certificates:
+        - !Ref PublishCertificate
+      LoadBalancerArn: !Ref PublishALB
+      Port: 443
+      Protocol: HTTPS
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref PublishALBTargetGroup
   PublishTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -168,6 +179,15 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt PublishALB.DNSName
             HostedZoneId: !GetAtt PublishALB.CanonicalHostedZoneID
+  PublishCertificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Sub |
+        ${EnvironmentTypeAbbreviation}.publish.${VPC}.prx.tech
+      DomainValidationOptions:
+        DomainName: !Sub |
+          ${EnvironmentTypeAbbreviation}.publish.${VPC}.prx.tech
+        ValidationDomain: prx.tech
   # AudiogramScalableTarget:
   #   Type: "AWS::ApplicationAutoScaling::ScalableTarget"
   #   Properties:
