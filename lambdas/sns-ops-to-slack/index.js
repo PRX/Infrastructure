@@ -136,7 +136,7 @@ const colorForApprovalMessage = message => {
 
 const attachmentForApprovalMessage = message => {
     return {
-        fallback: 'message.Cause',
+        fallback: `${message.approval.pipelineName} ${message.approval.stageName}: ${message.approval.actionName}`,
         color: colorForApprovalMessage(message),
         author_name: message.approval.pipelineName,
         author_link: message.consoleLink,
