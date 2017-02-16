@@ -1,5 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: publish.prx.org application running in Docker
+Mappings:
+  ContainerNameMap:
+    PublishWebApp:
+      name: publish-express
 Parameters:
   VPC:
     Type: String
@@ -149,7 +153,7 @@ Resources:
               awslogs-group: !Ref PublishLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 384
-          Name: publish-express # TODO better name
+          Name: !FindInMap [ContainerNameMap, PublishWebApp, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 4200
@@ -165,7 +169,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 1
       LoadBalancers:
-        - ContainerName: publish-express # TODO better name
+        - ContainerName: !FindInMap [ContainerNameMap, PublishWebApp, name]
           ContainerPort: 4200
           TargetGroupArn: !Ref PublishALBTargetGroup
       Role: !Ref ECSServiceIAMRole
