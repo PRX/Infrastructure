@@ -7,6 +7,8 @@ Parameters:
     Type: String
   VPCSubnet2:
     Type: String
+  VPCCertificateArn:
+    Type: String
   RootStackName:
     Type: String
   ECSCluster:
@@ -71,12 +73,23 @@ Resources:
         - !Ref VPCSubnet2
       SecurityGroups:
         - !Ref AudiogramSecurityGroup
-  AudiogramALBListener:
+  AudiogramALBHTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref AudiogramALB
       Port: 80
       Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AudiogramALBTargetGroup
+  AudiogramALBHTTPSListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref VPCCertificateArn
+      LoadBalancerArn: !Ref AudiogramALB
+      Port: 443
+      Protocol: HTTPS
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref AudiogramALBTargetGroup
@@ -124,7 +137,7 @@ Resources:
       RecordSets:
         - Type: A
           Name: !Sub |
-            ${EnvironmentTypeAbbreviation}.audiogram.${VPC}.prx.tech.
+            ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech.
           AliasTarget:
             DNSName: !GetAtt AudiogramALB.DNSName
             HostedZoneId: !GetAtt AudiogramALB.CanonicalHostedZoneID
@@ -219,4 +232,4 @@ Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
-      ${EnvironmentTypeAbbreviation}.audiogram.${VPC}.prx.tech.
+      ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech.
