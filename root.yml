@@ -97,6 +97,13 @@ Resources:
     Properties:
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/vpc.yml"]]
       TimeoutInMinutes: "5"
+  CertificateStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/certificate.yml"]]
+      TimeoutInMinutes: "5"
   ECSClusterStack:
     Type: "AWS::CloudFormation::Stack"
     DependsOn: VPCStack
@@ -176,6 +183,9 @@ Resources:
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/publish.prx.org/publish.prx.org.yml"]]
       TimeoutInMinutes: "5"
 Outputs:
+  VpcCertificateArn:
+    Description: The ARN for the wildcard certificate for the VPC
+    Value: !GetAtt CertificateStack.Outputs.CertificateArn
   AudiogramHostedZoneDNSName:
     Description: Domain name for audiogram app
     Value: !GetAtt AudiogramStack.Outputs.HostedZoneDNSName
