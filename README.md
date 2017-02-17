@@ -28,6 +28,15 @@ Second is the orchestrate deployments of **root stacks** using the infrastructur
 
 The bootstrap process is itself defined as a CloudFormation template, but generally a bootstrap stack will be launched manually. Once a bootstrap stack has been launched in a region, all the standard environments (staging, production, etc) will be handled mainly by automated processes, including changes to both infrastructure and app code.
 
+Launching a bootstrap stack can be done via the command line, using a command such as:
+
+```
+aws cloudformation create-stack --stack-name Bootstrap --template-body file:///path/to/the/bootstrap.yml --parameters ParameterKey=GitHubOAuthToken,ParameterValue=123456789abcdef ParameterKey=RootStackName,ParameterValue=Root ParameterKey=RootStackTemplateConfigArchive,ParameterValue=us-east-1.zip ParameterKey=RootStackTemplateConfigBucket,ParameterValue=infrastructure-template-config-archives
+
+```
+
+All parameters are required to launch a bootstrap stack, and descriptions of each can be found in `bootstrap.yml`.
+
 ### Template Configuration Files
 
 When the bootstrapping process launches a root stack, it must provide values for all of the parameters the root stack template expects. These values are provided by a _template configuration file_, and can include values that are used by the root stack, stacks nested in the root stack, or images or applications that those stacks launch (eg environment variables).
