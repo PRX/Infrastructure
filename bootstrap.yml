@@ -79,18 +79,34 @@ Resources:
     # app, infrastructure, or user data.
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Infrastructure
   StagingTemplateBucket:
     # The contents of the PRX/Infrastructure repository get synced into this
     # bucket so that the staging root stack is able to launch stacks for the
     # app- and service-specific templates that are tracked in the repository
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
+    Properties:
+      Tags:
+        - Key: Project
+          Value: Infrastructure
   ProductionTemplateBucket:
     # The contents of the PRX/Infrastructure repository get synced into this
     # bucket so that the production root stack is able to launch stacks for the
     # app- and service-specific templates that are tracked in the repository
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
+    Properties:
+      Tags:
+        - Key: Project
+          Value: Infrastructure
   CodePipelineIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -440,6 +456,9 @@ Resources:
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
       TimeoutInMinutes: 5
   ProductionSyncBuildProject:
     # TODO It may be possible to do this action with a Lambda, which could be
@@ -460,6 +479,9 @@ Resources:
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
       TimeoutInMinutes: 5
 Outputs:
   StagingTemplateBucket:
