@@ -164,6 +164,49 @@ Resources:
         OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/audiogram/audiogram.yml"]]
       TimeoutInMinutes: "5"
+  CmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.CertificateArn
+        RootStackName: !Ref AWS::StackName
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
+        OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+        CmsEnvAwsAccessKeyId: !Ref CmsEnvAwsAccessKeyId
+        CmsEnvAwsAccountId: !Ref CmsEnvAwsAccountId
+        CmsEnvAwsBucket: !Ref CmsEnvAwsBucket
+        CmsEnvAwsRegion: !Ref CmsEnvAwsRegion
+        CmsEnvAwsSecretAccessKey: !Ref CmsEnvAwsSecretAccessKey
+        CmsEnvCmsHost: !Ref CmsEnvCmsHost
+        CmsEnvDatabasePoolSize: !Ref CmsEnvDatabasePoolSize
+        CmsEnvDbEnvMysqlDatabase: !Ref CmsEnvDbEnvMysqlDatabase
+        CmsEnvDbEnvMysqlPassword: !Ref CmsEnvDbEnvMysqlPassword
+        CmsEnvDbEnvMysqlUser: !Ref CmsEnvDbEnvMysqlUser
+        CmsEnvDbPort3306TcpAddr: !Ref CmsEnvDbPort3306TcpAddr
+        CmsEnvDbPort3306TcpPort: !Ref CmsEnvDbPort3306TcpPort
+        CmsEnvFeederHost: !Ref CmsEnvFeederHost
+        CmsEnvIdHost: !Ref CmsEnvIdHost
+        CmsEnvMemcacheServers: !Ref CmsEnvMemcacheServers
+        CmsEnvMetaHost: !Ref CmsEnvMetaHost
+        CmsEnvMysqlAllowEmptyPassword: !Ref CmsEnvMysqlAllowEmptyPassword
+        CmsEnvNewRelicKey: !Ref CmsEnvNewRelicKey
+        CmsEnvNewRelicName: !Ref CmsEnvNewRelicName
+        CmsEnvPrxHost: !Ref CmsEnvPrxHost
+        CmsEnvPrxSecret: !Ref CmsEnvPrxSecret
+        CmsEnvPublicAssetSecret: !Ref CmsEnvPublicAssetSecret
+        CmsEnvRailsEnv: !Ref CmsEnvRailsEnv
+        CmsEnvRailsSecretKey: !Ref CmsEnvRailsSecretKey
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/cms.prx.org/cms.prx.org.yml"]]
+      TimeoutInMinutes: "5"
   PublishStack:
     Type: "AWS::CloudFormation::Stack"
     DependsOn: ECSClusterStack
