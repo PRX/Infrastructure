@@ -217,6 +217,7 @@ const processEvent = (event, context, callback) => {
 
 exports.handler = (event, context, callback) => {
     try {
+        console.log(event.Records[0].Sns)
         processEvent(event, context, callback);
     } catch (e) {
         callback(e);
