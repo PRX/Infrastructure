@@ -12,6 +12,7 @@
 // - ASG_SLACK_WEBHOOK_URL
 // - CW_SLACK_WEBHOOK_URL
 // - PIPELINE_SLACK_WEBHOOK_URL
+// - CFN_SLACK_WEBHOOK_URL
 
 const url = require('url');
 const https = require('https');
@@ -126,7 +127,7 @@ const attachmentForCFNMessage = message => {
 
     return {
         fallback: '',
-        text: 'WIP CloudFormation event'
+        text: message
     };
 };
 
@@ -188,6 +189,11 @@ const payloadForEvent = event => {
 
 const webhookForEvent = event => {
     let sns = event.Records[0].Sns;
+
+    if (sns.Subject === 'AWS CloudFormation Notification') {
+      return process.env.CFN_SLACK_WEBHOOK_URL;
+    }
+
     let message = JSON.parse(sns.Message);
 
     if (message.hasOwnProperty('AutoScalingGroupARN')) {
