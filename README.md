@@ -17,6 +17,7 @@ This system is designed to provide CI and CD for applications as well as the inf
 - [AWS CodePipeline CloudFormation Action Reference](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-action-reference.html)
 - [AWS CodeBuild Build Specification Reference](https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html)
 - [AWS CodeBuild Build Phase Transitions ](https://docs.aws.amazon.com/codebuild/latest/userguide/view-build-details.html#view-build-details-phases)
+- [AWS CodeBuild Environment Variables in Build Environments ](https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html#build-env-ref-env-vars)
 
 ## Bootstrap
 
