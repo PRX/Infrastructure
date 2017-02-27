@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Audiogram application running in Docker
+Parameters:
+Resources:
+  LambdaBasicExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  CmsAudioLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref TemplateBucket
+        S3Key: "lambdas/sns-ops-to-slack.zip" # TODO get from template config
+      Description: Audio processing for cms.prx.org
+      Environment:
+        Variables:
+          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookURL
+          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookURL
+          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookURL
+          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookURL
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
+      Runtime: nodejs4.3
+      Timeout: 60
