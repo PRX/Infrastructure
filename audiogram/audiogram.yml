@@ -1,5 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Audiogram application running in Docker
+Mappings:
+  ContainerNameMap:
+    AudiogramApp:
+      name: server-worker-combined
 Parameters:
   VPC:
     Type: String
@@ -112,7 +116,7 @@ Resources:
               awslogs-group: !Ref AudiogramLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 384
-          Name: audiogram-aio # TODO better name
+          Name: !FindInMap [ContainerNameMap, AudiogramApp, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 8888
@@ -128,7 +132,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 1
       LoadBalancers:
-        - ContainerName: audiogram-aio # TODO better name
+        - ContainerName: !FindInMap [ContainerNameMap, AudiogramApp, name]
           ContainerPort: 8888
           TargetGroupArn: !Ref AudiogramALBTargetGroup
       Role: !Ref ECSServiceIAMRole
