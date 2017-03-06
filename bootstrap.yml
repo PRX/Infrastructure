@@ -338,7 +338,7 @@ Resources:
       Stages:
         - Name: Source
           Actions:
-            - Name: GitHub
+            - Name: InfrastructureRepo
               ActionTypeId:
                 Category: Source
                 Owner: ThirdParty
@@ -350,7 +350,21 @@ Resources:
                 Branch: master
                 OAuthToken: !Ref GitHubOAuthToken
               OutputArtifacts:
-                - Name: GitHubSourceArtifact
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            - Name: MetaRepo
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: PRX
+                Repo: meta.prx.org
+                Branch: master
+                OAuthToken: !Ref GitHubOAuthToken
+              OutputArtifacts:
+                - Name: MetaRepoSourceArtifact
               RunOrder: 1
             - Name: S3
               ActionTypeId:
@@ -375,7 +389,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref StagingSyncBuildProject
               InputArtifacts:
-                - Name: GitHubSourceArtifact
+                - Name: InfrastructureRepoSourceArtifact
               OutputArtifacts:
                 - Name: StagingTemplateSyncArtifact
               RunOrder: 1
@@ -387,7 +401,7 @@ Resources:
                 Version: 1
               InputArtifacts:
                 - Name: TemplateConfigZipArtifact
-                - Name: GitHubSourceArtifact
+                - Name: InfrastructureRepoSourceArtifact
               Configuration:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
@@ -401,7 +415,7 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
                 TemplateConfiguration: TemplateConfigZipArtifact::staging.json
-                TemplatePath: GitHubSourceArtifact::root.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::root.yml
               RunOrder: 2
             - Name: ApproveChangeSet
               ActionTypeId:
@@ -426,6 +440,21 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
               RunOrder: 4
+        - Name: Testing
+          Actions:
+            - Name: Acceptance
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref AcceptanceTestBuildProject
+              InputArtifacts:
+                - Name: MetaRepoSourceArtifact
+              OutputArtifacts:
+                - Name: AcceptanceTestArtifact
+              RunOrder: 1
         - Name: Production
           Actions:
             - Name: TemplateSync
@@ -437,7 +466,7 @@ Resources:
               Configuration:
                 ProjectName: !Ref ProductionSyncBuildProject
               InputArtifacts:
-                - Name: GitHubSourceArtifact
+                - Name: InfrastructureRepoSourceArtifact
               OutputArtifacts:
                 - Name: ProductionTemplateSyncArtifact
               RunOrder: 1
@@ -449,7 +478,7 @@ Resources:
                 Version: 1
               InputArtifacts:
                 - Name: TemplateConfigZipArtifact
-                - Name: GitHubSourceArtifact
+                - Name: InfrastructureRepoSourceArtifact
               Configuration:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
@@ -457,7 +486,7 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Production
                 TemplateConfiguration: TemplateConfigZipArtifact::production.json
-                TemplatePath: GitHubSourceArtifact::root.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::root.yml
               RunOrder: 2
             - Name: ApproveChangeSet
               ActionTypeId:
@@ -518,6 +547,29 @@ Resources:
         Image: aws/codebuild/ubuntu-base:14.04
         Type: LINUX_CONTAINER
       Name: !Sub production-template-sync-${AWS::Region}
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Source:
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      TimeoutInMinutes: 5
+  AcceptanceTestBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Runs acceptance tests for PRX platform
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: DOVETAIL_HOST
+            Value: https://dovetail-staging.prxu.org
+          - Name: DOVETAIL_PROD
+            Value: https://dovetail.prxu.org
+        Image: aws/codebuild/ruby:2.1.10
+        Type: LINUX_CONTAINER
+      Name: !Sub acceptance-test-${AWS::Region}
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         Type: CODEPIPELINE
