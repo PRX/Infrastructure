@@ -21,7 +21,9 @@ Mappings:
     Production:
       abbreviation: prod
 Conditions:
-  CreatePipelineStacks: !Equals [!Ref RootEnvironmentType, Staging]
+  CreateSingletonStacks: !And
+    - !Equals [!Ref RootEnvironmentType, Staging]
+    - !Equals [!Ref "AWS::Region", !Ref SingletonStackRegion]
 Parameters:
   ASGKeyPairName:
     Description: >
@@ -40,6 +42,8 @@ Parameters:
   RootStackTemplateConfigBucket:
     Type: String
   RootStackTemplateConfigArchive:
+    Type: String
+  SingletonStackRegion:
     Type: String
   OpsStatusMessagesSNSTopicArn:
     Type: String
@@ -195,7 +199,7 @@ Resources:
   #     TimeoutInMinutes: "5"
   # AudiogramPipelineStack:
   #   Type: "AWS::CloudFormation::Stack"
-  #   Condition: CreatePipelineStacks
+  #   Condition: CreateSingletonStacks
   #   DependsOn: ECSClusterStack
   #   Properties:
   #     NotificationARNs:
@@ -235,7 +239,7 @@ Resources:
   #     TimeoutInMinutes: "5"
   # CmsPipelineStack:
   #   Type: "AWS::CloudFormation::Stack"
-  #   Condition: CreatePipelineStacks
+  #   Condition: CreateSingletonStacks
   #   DependsOn: ECSClusterStack
   #   Properties:
   #     NotificationARNs:
@@ -331,7 +335,7 @@ Resources:
   #     TimeoutInMinutes: "5"
   CmsAudioLambdaPipelineStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: CreatePipelineStacks
+    Condition: CreateSingletonStacks
     Properties:
       NotificationARNs:
         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
@@ -356,7 +360,7 @@ Resources:
       TimeoutInMinutes: "5"
   CmsImageLambdaPipelineStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: CreatePipelineStacks
+    Condition: CreateSingletonStacks
     Properties:
       NotificationARNs:
         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn

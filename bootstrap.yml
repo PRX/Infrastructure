@@ -37,6 +37,7 @@ Metadata:
           - RootStackTemplateConfigBucket
           - RootStackTemplateConfigArchive
           - RootStackName
+          - SingletonStackRegion
     ParameterLabels:
       GitHubOAuthToken:
         default: GitHub personal access token
@@ -46,6 +47,8 @@ Metadata:
         default: Root stack template config archive (.zip)
       RootStackName:
         default: Root stack name
+      SingletonStackRegion:
+        default: Singleton stack region
 Parameters:
   GitHubOAuthToken:
     Description: >
@@ -67,6 +70,11 @@ Parameters:
     Description: >
       The name of the root stack that the bootstrapping process will create, and
       which will launch application and service stacks.
+    Type: String
+  SingletonStackRegion:
+    Description: >
+      The region in which singleton stacks (stacks that should only be launched
+      once across all regions and environments) should be launched.
     Type: String
 Resources:
   OpsStatusMessagesSNSTopic:
@@ -410,6 +418,7 @@ Resources:
                   {
                     "RootStackTemplateConfigBucket": "${RootStackTemplateConfigBucket}",
                     "RootStackTemplateConfigArchive": "${RootStackTemplateConfigArchive}",
+                    "SingletonStackRegion": "${SingletonStackRegion}",
                     "OpsStatusMessagesSNSTopicArn": "${OpsStatusMessagesSNSTopic}"
                   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
@@ -483,6 +492,13 @@ Resources:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
                 ChangeSetName: !Sub ${RootStackName}ChangeSetProduction
+                ParameterOverrides: !Sub |
+                  {
+                    "RootStackTemplateConfigBucket": "${RootStackTemplateConfigBucket}",
+                    "RootStackTemplateConfigArchive": "${RootStackTemplateConfigArchive}",
+                    "SingletonStackRegion": "${SingletonStackRegion}",
+                    "OpsStatusMessagesSNSTopicArn": "${OpsStatusMessagesSNSTopic}"
+                  }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Production
                 TemplateConfiguration: TemplateConfigZipArtifact::production.json
