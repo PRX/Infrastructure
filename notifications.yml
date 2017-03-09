@@ -109,6 +109,31 @@ Resources:
       Timeout: 3
   #
   # A Lambda function that handles button action request
+  CodePipelineApprovalHandlerLambdaIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: CodePipelineApprovalPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:PutApprovalResult"
+                Resource:
+                  - "*" # This should be okay
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   CodePipelineApprovalHandlerLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -123,7 +148,7 @@ Resources:
           SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
+      Role: !GetAtt CodePipelineApprovalHandlerLambdaIAMRole.Arn
       Runtime: nodejs4.3
       Timeout: 3
   #
@@ -175,7 +200,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref CodePipelineApprovalHandlerLambdaFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CodePipelineApprovalHandlerRestApi}/${CodePipelineApprovalHandlerRestApiStage}/*"
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CodePipelineApprovalHandlerRestApi}/${CodePipelineApprovalHandlerRestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
   #
   # Permission needs to be granted to each SNS topic to invoke the lambda
   SNSOpsMessagesToSlackLambdaFunctionStatusTopicPermission:
