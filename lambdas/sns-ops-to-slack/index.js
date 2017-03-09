@@ -13,6 +13,7 @@
 // - CW_SLACK_WEBHOOK_URL
 // - PIPELINE_SLACK_WEBHOOK_URL
 // - CFN_SLACK_WEBHOOK_URL
+// - IKE_SLACK_WEBHOOK_URL
 
 const url = require('url');
 const https = require('https');
@@ -146,7 +147,28 @@ const attachmentForApprovalMessage = message => {
         text: `Manual approval required to trigger *ExecuteChangeSet*`,
         footer: message.region,
         ts: (Date.now() / 1000 | 0),
-        mrkdwn_in: ["text"]
+        mrkdwn_in: ['text'],
+        callback_id: 'someId', // TODO
+        actions: [
+            {
+                type: 'button',
+                name: 'decision',
+                text: 'Reject',
+                value: 'reject'
+            }, {
+                type: 'button',
+                style: 'primary',
+                name: 'decision',
+                text: 'Approve',
+                value: 'approve',
+                confirm: {
+                    title: 'Are you sure?',
+                    text: 'This will initiate a production deploy',
+                    ok_text: 'Yes',
+                    dismiss_text: 'Abort'
+                }
+            }
+        ]
     };
 };
 
@@ -199,7 +221,7 @@ const webhookForEvent = event => {
     if (message.hasOwnProperty('AutoScalingGroupARN')) {
         return process.env.ASG_SLACK_WEBHOOK_URL;
     } else if (message.hasOwnProperty('approval')) {
-        return process.env.PIPELINE_SLACK_WEBHOOK_URL;
+        return process.env.IKE_SLACK_WEBHOOK_URL;
     } else {
         return process.env.CW_SLACK_WEBHOOK_URL;
     }
