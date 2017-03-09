@@ -120,6 +120,44 @@ Resources:
       Runtime: nodejs4.3
       Timeout: 3
   #
+  # API Gateway fronting the CodePipeline approval hander
+  CodePipelineApprovalHandlerRestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Body:
+        swagger: "2.0"
+        info:
+          version: "2017-03-08T22:12:24Z"
+          title: "infrastructure"
+        basePath: "/bootstrap"
+        schemes:
+          - "https"
+        paths:
+          /codepipeline/approval/interactive-messages:
+            post:
+              produces:
+                - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                uri: !Join ["", ["arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/", !GetAtt CodePipelineApprovalHandlerLambdaFunction.Arn]]
+                passthroughBehavior: "when_no_match"
+                httpMethod: "POST"
+                contentHandling: "CONVERT_TO_TEXT"
+                type: "aws_proxy"
+        definitions:
+          Empty:
+            type: "object"
+            title: "Empty Schema"
+      # Description: "A test API"
+      # Name: "MyRestAPI"
+  #
   # Permission needs to be granted to each SNS topic to invoke the lambda
   SNSOpsMessagesToSlackLambdaFunctionStatusTopicPermission:
     Type: "AWS::Lambda::Permission"
