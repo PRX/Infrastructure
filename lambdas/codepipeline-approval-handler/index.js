@@ -76,7 +76,7 @@ const processEvent = (event, context, callback) => {
                         break;
                     case APPROVED:
                         msg.text = `*Approved* by ${payload.user.name}`;
-                        attachment.color = '#de0e0e';
+                        attachment.color = '#15da34';
                         break;
                     default:
                         msg.text = `*Unknown action!*`;
