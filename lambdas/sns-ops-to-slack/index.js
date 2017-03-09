@@ -137,6 +137,19 @@ const colorForApprovalMessage = message => {
 };
 
 const attachmentForApprovalMessage = message => {
+    // All the values the CodePipeline SDK needs to approve or reject a pending
+    // approval get stuffed into the `callback_id` as serialized JSON.
+    // pipelineName
+    // stageName
+    // actionName
+    // token
+    const params = {
+      pipelineName: message.approval.pipelineName,
+      stageName: message.approval.stageName,
+      actionName: message.approval.actionName,
+      token: message.approval.token
+    }
+
     return {
         fallback: `${message.approval.pipelineName} ${message.approval.stageName}: ${message.approval.actionName}`,
         color: colorForApprovalMessage(message),
@@ -148,19 +161,19 @@ const attachmentForApprovalMessage = message => {
         footer: message.region,
         ts: (Date.now() / 1000 | 0),
         mrkdwn_in: ['text'],
-        callback_id: 'someId', // TODO
+        callback_id: JSON.stringify(params),
         actions: [
             {
                 type: 'button',
                 name: 'decision',
                 text: 'Reject',
-                value: 'reject'
+                value: 'Rejected'
             }, {
                 type: 'button',
                 style: 'primary',
                 name: 'decision',
                 text: 'Approve',
-                value: 'approve',
+                value: 'Approved',
                 confirm: {
                     title: 'Are you sure?',
                     text: 'This will initiate a production deploy',
