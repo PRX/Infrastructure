@@ -18,6 +18,11 @@
 const url = require('url');
 const https = require('https');
 
+const APPROVED = 'Approved';
+const REJECTED = 'Rejected';
+
+const CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = 'codepipeline-approval-action';
+
 const postPayload = (webhookURL, payload, callback) => {
     let body = JSON.stringify(payload);
 
@@ -161,19 +166,19 @@ const attachmentForApprovalMessage = message => {
         footer: message.region,
         ts: (Date.now() / 1000 | 0),
         mrkdwn_in: ['text'],
-        callback_id: JSON.stringify(params),
+        callback_id: CODEPIPELINE_MANUAL_APPROVAL_CALLBACK,
         actions: [
             {
                 type: 'button',
                 name: 'decision',
                 text: 'Reject',
-                value: 'Rejected'
+                value: JSON.stringify(Object.assign({value: REJECTED}, params))
             }, {
                 type: 'button',
                 style: 'primary',
                 name: 'decision',
                 text: 'Approve',
-                value: 'Approved',
+                value: JSON.stringify(Object.assign({value: APPROVED}, params)),
                 confirm: {
                     title: 'Are you sure?',
                     text: 'This will initiate a production deploy',
