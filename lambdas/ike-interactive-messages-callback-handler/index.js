@@ -89,7 +89,7 @@ const handleCodePipelineApproval = (payload, callback) => {
 
             const msg = { text: '', attachments: [attachment] };
 
-            switch (action.value) {
+            switch (extractedParams.value) {
                 case REJECTED:
                     msg.text = `*Rejected* by ${payload.user.name}`;
                     attachment.color = '#de0e0e';

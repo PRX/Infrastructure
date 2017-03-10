@@ -108,8 +108,8 @@ Resources:
       Runtime: nodejs4.3
       Timeout: 3
   #
-  # A Lambda function that handles button action request
-  CodePipelineApprovalHandlerLambdaIAMRole:
+  # A Lambda function that handles button action request from Ike
+  IkeCallbackHandlerLambdaIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -134,73 +134,72 @@ Resources:
                   - "*" # This should be okay
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  CodePipelineApprovalHandlerLambdaFunction:
+  IkeCallbackHandlerLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
         S3Bucket: !Ref TemplateBucket
-        S3Key: "lambdas/codepipeline-approval-handler.zip"
+        S3Key: "lambdas/ike-interactive-messages-callback-handler.zip"
       Description: >
-        Handles requests sent from Slack in response to button actions related
-        to the approval of CodePipeline actions
+        Handles callback requests from interactive message actions sent by Ike
       Environment:
         Variables:
           SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt CodePipelineApprovalHandlerLambdaIAMRole.Arn
+      Role: !GetAtt IkeCallbackHandlerLambdaIAMRole.Arn
       Runtime: nodejs4.3
       Timeout: 3
   #
-  # API Gateway fronting the CodePipeline approval hander
-  CodePipelineApprovalHandlerRestApi:
+  # API Gateway fronting the Ike callback handler
+  IkeCallbackHandlerRestApi:
     Type: "AWS::ApiGateway::RestApi"
     Properties:
       Name: !Sub "${BootstrapStackName}-${EnvironmentTypeAbbreviation}-Notifications"
       Description: "API used by a Notifications stack"
-  CodePipelineRestApiResource:
+  IkeCallbackHandlerCodePipelineRestApiResource:
     Type: "AWS::ApiGateway::Resource"
     Properties:
-      RestApiId: !Ref CodePipelineApprovalHandlerRestApi
-      ParentId: !GetAtt CodePipelineApprovalHandlerRestApi.RootResourceId
+      RestApiId: !Ref IkeCallbackHandlerRestApi
+      ParentId: !GetAtt IkeCallbackHandlerRestApi.RootResourceId
       PathPart: "codepipeline" # If this changes update Output
-  CodePipelineApprovalHandlerRestApiResource:
+  IkeCallbackHandlerCodePipelineApprovalRestApiResource:
     Type: "AWS::ApiGateway::Resource"
     Properties:
-      RestApiId: !Ref CodePipelineApprovalHandlerRestApi
-      ParentId: !Ref CodePipelineRestApiResource
+      RestApiId: !Ref IkeCallbackHandlerRestApi
+      ParentId: !Ref IkeCallbackHandlerCodePipelineRestApiResource
       PathPart: "approval" # If this changes update Output
-  CodePipelineApprovalHandlerRestApiProxyMethod:
+  IkeCallbackHandlerCodePipelineApprovalRestApiProxyMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      RestApiId: !Ref CodePipelineApprovalHandlerRestApi
-      ResourceId: !Ref CodePipelineApprovalHandlerRestApiResource
+      RestApiId: !Ref IkeCallbackHandlerRestApi
+      ResourceId: !Ref IkeCallbackHandlerCodePipelineApprovalRestApiResource
       HttpMethod: POST
       AuthorizationType: NONE
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CodePipelineApprovalHandlerLambdaFunction.Arn}/invocations
-  CodePipelineApprovalHandlerRestApiDeployment:
-    DependsOn: CodePipelineApprovalHandlerRestApiProxyMethod
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
+  IkeCallbackHandlerRestApiDeployment:
+    DependsOn: IkeCallbackHandlerCodePipelineApprovalRestApiProxyMethod
     Type: "AWS::ApiGateway::Deployment"
     Properties:
-      RestApiId: !Ref CodePipelineApprovalHandlerRestApi
+      RestApiId: !Ref IkeCallbackHandlerRestApi
       Description: "Main deployment for a given root stack environment"
-  CodePipelineApprovalHandlerRestApiStage:
+  IkeCallbackHandlerRestApiStage:
     Type: "AWS::ApiGateway::Stage"
     Properties:
       StageName: !Sub "${BootstrapStackName}${EnvironmentTypeAbbreviation}"
       Description: "Main stage for a given root stack environment"
-      RestApiId: !Ref CodePipelineApprovalHandlerRestApi
-      DeploymentId: !Ref CodePipelineApprovalHandlerRestApiDeployment
-  CodePipelineApprovalHandlerRestApiLambdaPermission:
+      RestApiId: !Ref IkeCallbackHandlerRestApi
+      DeploymentId: !Ref IkeCallbackHandlerRestApiDeployment
+  IkeCallbacHandlerRestApiLambdaPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref CodePipelineApprovalHandlerLambdaFunction
+      FunctionName: !Ref IkeCallbackHandlerLambdaFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${CodePipelineApprovalHandlerRestApi}/${CodePipelineApprovalHandlerRestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${IkeCallbackHandlerRestApi}/${IkeCallbackHandlerRestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
   #
   # Permission needs to be granted to each SNS topic to invoke the lambda
   SNSOpsMessagesToSlackLambdaFunctionStatusTopicPermission:
