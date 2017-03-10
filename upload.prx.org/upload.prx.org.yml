@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: File upload Lambda function
+Parameters: #these get passed in to stack
+  CodeBucket:
+    Type: String
+  LambdaFunctionCodeS3Key:
+    Type: String
+Resources: #these will be launched for us by CF
+  LambdaBasicExecutionIAMRole: #creating a role, giving it the policies/permissions it'll need
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  UploadLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeBucket
+        S3Key: !Ref LambdaFunctionCodeS3Key
+      Description: File upload Lambda function
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn #can't use !Ref because it'll return name instead of ARN
+      Runtime: nodejs4.3
+      Timeout: 5
