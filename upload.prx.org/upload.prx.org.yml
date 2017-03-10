@@ -21,6 +21,47 @@ Resources: #these will be launched for us by CF
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  UploadRestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: "Upload-Gateway-API"
+      Description: "Api used by PRX Upload Lambda"
+  UploadRestApiSignatureResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref UploadRestApi
+      ParentId: !GetAtt UploadRestApi.RootResourceId
+      PathPart: "signature"
+  UploadRestApiSignatureMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      RestApiId: !Ref UploadRestApi
+      ResourceId: !Ref UploadRestApiSignatureResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambdaFunction.Arn}/invocations
+  UploadRestApiDeployment:
+    DependsOn: UploadRestApiSignatureMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref UploadRestApi
+  UploadRestApiStage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: prod
+      Description: production stage for upload lambda gateway integration
+      RestApiId: !Ref UploadRestApi
+      DeploymentId: !Ref UploadRestApiDeployment
+  UploadRestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UploadLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
   UploadLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
