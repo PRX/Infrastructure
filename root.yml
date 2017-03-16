@@ -40,10 +40,16 @@ Parameters:
       - Staging
       - Production
   RootStackTemplateConfigBucket:
+    Description: >
+      S3 bucket that holds CloudFormation template configuration JSON files
     Type: String
   RootStackTemplateConfigArchive:
+    Description: >
+      The file name of the zip files that holds template configuration files
     Type: String
   SingletonStackRegion:
+    Description: >
+      The region that stacks considered singleton stacks should launch in
     Type: String
   OpsStatusMessagesSNSTopicArn:
     Type: String
@@ -64,29 +70,36 @@ Parameters:
       A GitHub access token that has permissions for any repositories being
       accessed by these stacks
     Type: String
-  AudiogramECRRegion:
+  ECRRegion:
     Type: String
-  AudiogramECRRepositoryName:
+  EnvCmsHost:
     Type: String
+  EnvPlayHost:
+    Type: String
+  EnvIdHost:
+    Type: String
+  EnvFeederHost:
+    Type: String
+  EnvMetaHost:
+    Type: String
+  EnvPrxHost:
+    Type: String
+  ##############################################################################
+  ##############################################################################
+  ##############################################################################
   AudiogramECRImageTag:
     Type: String
-  CmsECRRegion:
+  CmsECRImageTag:
     Type: String
-  CmsECRRepositoryName:
+  CmsEnvAwsAccessKeyId:
     Type: String
-  # CmsECRImageTag:
-  #   Type: String
-  # CmsEnvAwsAccessKeyId:
-  #   Type: String
-  # CmsEnvAwsAccountId:
-  #   Type: String
-  # CmsEnvAwsBucket:
-  #   Type: String
-  # CmsEnvAwsRegion:
-  #   Type: String
+  CmsEnvAwsAccountId:
+    Type: String
+  CmsEnvAwsBucket:
+    Type: String
+  CmsEnvAwsRegion:
+    Type: String
   CmsEnvAwsSecretAccessKey:
-    Type: String
-  CmsEnvCmsHost:
     Type: String
   CmsEnvDatabasePoolSize:
     Type: Number
@@ -100,21 +113,13 @@ Parameters:
     Type: String
   CmsEnvDbPort3306TcpPort:
     Type: Number
-  CmsEnvFeederHost:
-    Type: String
-  CmsEnvIdHost:
-    Type: String
   CmsEnvMemcacheServers:
-    Type: String
-  CmsEnvMetaHost:
     Type: String
   CmsEnvMysqlAllowEmptyPassword:
     Type: String
   CmsEnvNewRelicKey:
     Type: String
   CmsEnvNewRelicName:
-    Type: String
-  CmsEnvPrxHost:
     Type: String
   CmsEnvPrxSecret:
     Type: String
@@ -124,15 +129,9 @@ Parameters:
     Type: String
   CmsEnvRailsSecretKey:
     Type: String
-  PublishECRRegion:
-    Type: String
-  PublishECRRepositoryName:
-    Type: String
   PublishECRImageTag:
     Type: String
   PublishEnvAuthClientId:
-    Type: String
-  PublishEnvAuthHost:
     Type: String
   PublishEnvAwsKey:
     Type: String
@@ -141,10 +140,6 @@ Parameters:
   PublishEnvBucketFolder:
     Type: String
   PublishEnvBucketName:
-    Type: String
-  PublishEnvCmsHost:
-    Type: String
-  PublishEnvPlayHost:
     Type: String
   PublishEnvSignUrl:
     Type: String
@@ -221,8 +216,7 @@ Resources:
   #       RootStackTemplateConfigBucket: !Ref RootStackTemplateConfigBucket
   #       RootStackTemplateConfigArchive: !Ref RootStackTemplateConfigArchive
   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
-  #       AudiogramECRRegion: !Ref AudiogramECRRegion
-  #       AudiogramECRRepositoryName: !Ref AudiogramECRRepositoryName
+  #       ECRRegion: !Ref ECRRegion
   #       AudiogramECRImageTag: !Ref AudiogramECRImageTag
   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
   #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/audiogram/pipeline.yml"]]
@@ -243,8 +237,7 @@ Resources:
   #       ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
-  #       AudiogramECRRegion: !Ref AudiogramECRRegion
-  #       AudiogramECRRepositoryName: !Ref AudiogramECRRepositoryName
+  #       ECRRegion: !Ref ECRRegion
   #       AudiogramECRImageTag: !Ref AudiogramECRImageTag
   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
   #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${RootEnvironmentType}-TemplateBucket", "/audiogram/audiogram.yml"]]
@@ -261,7 +254,7 @@ Resources:
   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
   #       RootStackTemplateConfigBucket: !Ref RootStackTemplateConfigBucket
   #       RootStackTemplateConfigArchive: !Ref RootStackTemplateConfigArchive
-  #       CmsECRRegion: !Ref CmsECRRegion
+  #       ECRRegion: !Ref ECRRegion
   #       CmsECRRepositoryName: !Ref CmsECRRepositoryName
   #       CmsECRImageTag: !Ref CmsECRImageTag
   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
@@ -284,29 +277,28 @@ Resources:
   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
-  #       CmsECRRegion: !Ref CmsECRRegion
-  #       CmsECRRepositoryName: !Ref CmsECRRepositoryName
+  #       ECRRegion: !Ref ECRRegion
   #       CmsECRImageTag: !Ref CmsECRImageTag
   #       CmsEnvAwsAccessKeyId: !Ref CmsEnvAwsAccessKeyId
   #       CmsEnvAwsAccountId: !Ref CmsEnvAwsAccountId
   #       CmsEnvAwsBucket: !Ref CmsEnvAwsBucket
   #       CmsEnvAwsRegion: !Ref CmsEnvAwsRegion
   #       CmsEnvAwsSecretAccessKey: !Ref CmsEnvAwsSecretAccessKey
-  #       CmsEnvCmsHost: !Ref CmsEnvCmsHost
+  #       EnvCmsHost: !Ref EnvCmsHost
   #       CmsEnvDatabasePoolSize: !Ref CmsEnvDatabasePoolSize
   #       CmsEnvDbEnvMysqlDatabase: !Ref CmsEnvDbEnvMysqlDatabase
   #       CmsEnvDbEnvMysqlPassword: !Ref CmsEnvDbEnvMysqlPassword
   #       CmsEnvDbEnvMysqlUser: !Ref CmsEnvDbEnvMysqlUser
   #       CmsEnvDbPort3306TcpAddr: !Ref CmsEnvDbPort3306TcpAddr
   #       CmsEnvDbPort3306TcpPort: !Ref CmsEnvDbPort3306TcpPort
-  #       CmsEnvFeederHost: !Ref CmsEnvFeederHost
-  #       CmsEnvIdHost: !Ref CmsEnvIdHost
+  #       EnvFeederHost: !Ref EnvFeederHost
+  #       EnvIdHost: !Ref EnvIdHost
   #       CmsEnvMemcacheServers: !Ref CmsEnvMemcacheServers
-  #       CmsEnvMetaHost: !Ref CmsEnvMetaHost
+  #       EnvMetaHost: !Ref EnvMetaHost
   #       CmsEnvMysqlAllowEmptyPassword: !Ref CmsEnvMysqlAllowEmptyPassword
   #       CmsEnvNewRelicKey: !Ref CmsEnvNewRelicKey
   #       CmsEnvNewRelicName: !Ref CmsEnvNewRelicName
-  #       CmsEnvPrxHost: !Ref CmsEnvPrxHost
+  #       EnvPrxHost: !Ref EnvPrxHost
   #       CmsEnvPrxSecret: !Ref CmsEnvPrxSecret
   #       CmsEnvPublicAssetSecret: !Ref CmsEnvPublicAssetSecret
   #       CmsEnvRailsEnv: !Ref CmsEnvRailsEnv
@@ -329,17 +321,16 @@ Resources:
   #       ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref RootEnvironmentType, abbreviation]
-  #       PublishECRRegion: !Ref PublishECRRegion
-  #       PublishECRRepositoryName: !Ref PublishECRRepositoryName
+  #       ECRRegion: !Ref ECRRegion
   #       PublishECRImageTag: !Ref PublishECRImageTag
   #       PublishEnvAuthClientId: !Ref PublishEnvAuthClientId
-  #       PublishEnvAuthHost: !Ref PublishEnvAuthHost
+  #       EnvIdHost: !Ref EnvIdHost
   #       PublishEnvAwsKey: !Ref PublishEnvAwsKey
   #       PublishEnvAwsUrl: !Ref PublishEnvAwsUrl
   #       PublishEnvBucketFolder: !Ref PublishEnvBucketFolder
   #       PublishEnvBucketName: !Ref PublishEnvBucketName
-  #       PublishEnvCmsHost: !Ref PublishEnvCmsHost
-  #       PublishEnvPlayHost: !Ref PublishEnvPlayHost
+  #       EnvCmsHost: !Ref EnvCmsHost
+  #       EnvPlayHost: !Ref EnvPlayHost
   #       PublishEnvSignUrl: !Ref PublishEnvSignUrl
   #       PublishEnvUseCloudfront: !Ref PublishEnvUseCloudfront
   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
