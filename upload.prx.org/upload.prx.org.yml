@@ -113,3 +113,22 @@ Resources:
       Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
       Runtime: nodejs4.3
       Timeout: 5
+  UploadErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "Upload lambda errors"
+      AlarmActions:
+        - !Ref OpsDebugMessagesSNSTopicArn
+      AlarmDescription:
+        The error rate on the upload lambda has exceeded 0 in the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "300"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+        - Value: !GetAtt UploadLambdaFunction.name
