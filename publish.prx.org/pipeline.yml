@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Creates a CodePipeline that is used to handle CI/CD for the cms-image lambda
+  Creates a CodePipeline that is used to handle CI/CD for the publish app
 Parameters:
   CodePipelineArtifactStore:
     Type: String
@@ -14,7 +14,11 @@ Parameters:
     Type: String
   RootStackTemplateConfigArchive:
     Type: String
-  CodeBucket:
+  ECRRegion:
+    Type: String
+  PublishECRImageTag:
+    Type: String
+  PublishCodecovToken:
     Type: String
 Resources:
   CodePipelineIAMRole:
@@ -47,12 +51,18 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - "cloudwatch:*" # TODO Really?
-                  - "codebuild:BatchGetBuilds"
-                  - "codebuild:StartBuild"
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                   - "s3:GetBucketVersioning"
+                Resource: "*" # TODO Really?
+              - Effect: Allow
+                Action:
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
+                Resource: "*" # TODO Really?
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:*" # TODO Really?
                 Resource: "*" # TODO Really?
   CodeBuildIAMRole:
     Type: "AWS::IAM::Role"
@@ -85,6 +95,25 @@ Resources:
                   # the project resource is created, and it relies on this IAM
                   # role. Need some way of that not being circular
                   - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+        - PolicyName: ECRBasicAcces
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:*RepositoryPolicy"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:PutImage"
+                # TODO maybe make name a template config param?
+                Resource: "arn:aws:ecr:us-east-1:561178107736:repository/publish.prx.org"
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
         - PolicyName: ArtifactStoreBasicAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -95,16 +124,6 @@ Resources:
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                 Resource: !Sub arn:aws:s3:::${CodePipelineArtifactStore}/*
-        - PolicyName: CodeBucketFullAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:*"
-                Resource:
-                  - !Sub arn:aws:s3:::${CodeBucket}
-                  - !Sub arn:aws:s3:::${CodeBucket}/*
         - PolicyName: TemplateConfigStoreBasicAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -115,37 +134,6 @@ Resources:
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                 Resource: !Sub arn:aws:s3:::${RootStackTemplateConfigBucket}/*
-        - PolicyName: SqsTestQueuePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "sqs:*"
-                Resource:
-                  - "arn:aws:sqs:us-east-1:561178107736:test_cms_image_callback"
-        - PolicyName: S3TestBucketPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:*"
-                Resource:
-                  - "arn:aws:s3:::test.mediajoint.prx.org/*"
-              - Effect: Allow
-                Action:
-                  - "s3:ListBucket"
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource:
-                  - "arn:aws:s3:::test.mediajoint.prx.org"
-                  - "arn:aws:s3:::test.mediajoint.prx.org/*"
-              - Effect: Allow
-                Action:
-                  - "s3:ListAllMyBuckets"
-                Resource:
-                  - "*"
   Pipeline:
     Type: "AWS::CodePipeline::Pipeline"
     Properties:
@@ -165,7 +153,7 @@ Resources:
                 Version: 1
               Configuration:
                 Owner: PRX
-                Repo: cms-image-lambda
+                Repo: publish.prx.org
                 Branch: master
                 OAuthToken: !Ref GitHubOAuthToken
               OutputArtifacts:
@@ -173,25 +161,25 @@ Resources:
               RunOrder: 1
         - Name: Build
           Actions:
-            - Name: Build
+            - Name: Dockerize
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
                 Version: 1
               Configuration:
-                ProjectName: !Ref TestBuildProject
+                ProjectName: !Ref DockerBuildProject
               InputArtifacts:
                 - Name: GitHubSourceArtifact
               OutputArtifacts:
-                - Name: TestBuildArtifact
+                - Name: DockerBuildArtifact
               RunOrder: 1
-  TestBuildProject:
+  DockerBuildProject:
     Type: "AWS::CodeBuild::Project"
     Properties:
       Artifacts:
         Type: CODEPIPELINE
-      Description: Tests lambda function and pushes the code to an S3 bucket
+      Description: Tests, builds, and publishes a Docker image
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
@@ -201,11 +189,17 @@ Resources:
             Value: !Ref RootStackTemplateConfigBucket
           - Name: TEMPLATE_CONFIG_ARTIFACT
             Value: !Ref RootStackTemplateConfigArchive
-          - Name: CODE_BUCKET
-            Value: !Ref CodeBucket
-        Image: aws/codebuild/nodejs:4.3.2
+          - Name: ECR_REGION
+            Value: !Ref ECRRegion
+          - Name: ECR_REPOSITORY_NAME
+            Value: publish.prx.org
+          - Name: ECR_IMAGE_TAG
+            Value: !Ref PublishECRImageTag
+          - Name: CODECOV_TOKEN
+            Value: !Ref PublishCodecovToken
+        Image: aws/codebuild/docker:1.12.1
         Type: LINUX_CONTAINER
-      Name: !Sub cms-image-lambda-${AWS::Region}-${EnvironmentTypeAbbreviation}
+      Name: !Sub publish-${AWS::Region}-${EnvironmentTypeAbbreviation}
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         Type: CODEPIPELINE

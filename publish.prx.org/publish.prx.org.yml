@@ -2,7 +2,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: publish.prx.org application running in Docker
 Mappings:
   ContainerNameMap:
-    PublishWebApp:
+    PublishApp:
       name: publish-express
 Parameters:
   VPC:
@@ -27,12 +27,17 @@ Parameters:
     Type: String
   ECRRegion:
     Type: String
+  # Shared ENV
   EnvCmsHost:
     Type: String
   EnvIdHost:
     Type: String
+  EnvPlayHost:
+    Type: String
+  # Publish ECS
   PublishECRImageTag:
     Type: String
+  # Publish ENV
   PublishEnvAuthClientId:
     Type: String
   PublishEnvAwsKey:
@@ -43,7 +48,11 @@ Parameters:
     Type: String
   PublishEnvBucketName:
     Type: String
-  EnvPlayHost:
+  PublishEnvGaKey:
+    Type: String
+  PublishEnvNewRelicAppName:
+    Type: String
+  PublishEnvNewRelicLicenseKey:
     Type: String
   PublishEnvSignUrl:
     Type: String
@@ -98,7 +107,7 @@ Resources:
       Tags:
         - Key: Project
           Value: publish.prx.org
-  PublishALBListener:
+  PublishALBHTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref PublishALB
@@ -122,7 +131,7 @@ Resources:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
-        - Cpu: 512
+        - Cpu: 64
           Environment:
             - Name: AUTH_CLIENT_ID
               Value: !Ref PublishEnvAuthClientId
@@ -138,6 +147,12 @@ Resources:
               Value: !Ref PublishEnvBucketName
             - Name: CMS_HOST
               Value: !Ref EnvCmsHost
+            - Name: GA_KEY
+              Value: !Ref PublishEnvGaKey
+            - Name: NEW_RELIC_APP_NAME
+              Value: !Ref PublishEnvNewRelicAppName
+            - Name: NEW_RELIC_LICENSE_KEY
+              Value: !Ref PublishEnvNewRelicLicenseKey
             - Name: PLAY_HOST
               Value: !Ref EnvPlayHost
             - Name: SIGN_URL
@@ -146,22 +161,21 @@ Resources:
               Value: !Ref PublishEnvUseCloudfront
           Essential: true
           # TODO
-          # Image: !Sub ${AWS::AccountId}.dkr.ecr.${AudiogramECRRegion}.amazonaws.com/${AudiogramECRRepositoryName}:${AudiogramECRImageTag}
-          Image: 561178107736.dkr.ecr.us-east-1.amazonaws.com/publish.prx.org:master.193
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${ECRRegion}.amazonaws.com/publish.prx.org:${PublishECRImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref PublishLogGroup
               awslogs-region: !Ref AWS::Region
-          Memory: 384
-          Name: !FindInMap [ContainerNameMap, PublishWebApp, name]
+          Memory: 128
+          Name: !FindInMap [ContainerNameMap, PublishApp, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 4200
   PublishService:
     Type: "AWS::ECS::Service"
     DependsOn:
-      - PublishALBListener
+      - PublishALBHTTPListener
       - PublishALBHTTPSListener
     Properties:
       Cluster: !Ref ECSCluster
@@ -170,7 +184,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 1
       LoadBalancers:
-        - ContainerName: !FindInMap [ContainerNameMap, PublishWebApp, name]
+        - ContainerName: !FindInMap [ContainerNameMap, PublishApp, name]
           ContainerPort: 4200
           TargetGroupArn: !Ref PublishALBTargetGroup
       Role: !Ref ECSServiceIAMRole
@@ -187,90 +201,6 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt PublishALB.DNSName
             HostedZoneId: !GetAtt PublishALB.CanonicalHostedZoneID
-  # AudiogramScalableTarget:
-  #   Type: "AWS::ApplicationAutoScaling::ScalableTarget"
-  #   Properties:
-  #     MaxCapacity: 5
-  #     MinCapacity: 1
-  #     ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt AudiogramService.Name]]
-  #     RoleARN: !Ref ECSServiceAutoscaleIAMRoleArn
-  #     ScalableDimension: "ecs:service:DesiredCount"
-  #     ServiceNamespace: ecs
-  # AudiogramScaleOutPolicy:
-  #   Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-  #   Properties:
-  #     PolicyName: AudiogramScaleOutPolicy
-  #     PolicyType: StepScaling
-  #     ScalingTargetId: !Ref AudiogramScalableTarget
-  #     StepScalingPolicyConfiguration:
-  #       AdjustmentType: ChangeInCapacity
-  #       Cooldown: 60
-  #       MetricAggregationType: Average
-  #       StepAdjustments:
-  #         - MetricIntervalLowerBound: 0
-  #           MetricIntervalUpperBound: 25
-  #           ScalingAdjustment: 1
-  #         - MetricIntervalLowerBound: 25
-  #           ScalingAdjustment: 2
-  # AudiogramScaleInPolicy:
-  #   Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-  #   Properties:
-  #     PolicyName: AudiogramScaleInPolicy
-  #     PolicyType: StepScaling
-  #     ScalingTargetId: !Ref AudiogramScalableTarget
-  #     StepScalingPolicyConfiguration:
-  #       AdjustmentType: ChangeInCapacity
-  #       Cooldown: 60
-  #       MetricAggregationType: Average
-  #       StepAdjustments:
-  #         - MetricIntervalUpperBound: 0
-  #           ScalingAdjustment: -1
-  # AudiogramScaleOutAlarm:
-  #   Type: "AWS::CloudWatch::Alarm"
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmActions:
-  #       - !Ref AudiogramScaleOutPolicy
-  #       - !Ref OpsDebugMessagesSNSTopicArn
-  #     AlarmDescription: >
-  #       The CPU utilization of the service has exceeded 50% for more than
-  #       one minute. Breaching this alarm should trigger a service scale out.
-  #     ComparisonOperator: GreaterThanOrEqualToThreshold
-  #     Dimensions:
-  #       - Name: ClusterName
-  #         Value: !Ref ECSCluster
-  #       - Name: ServiceName
-  #         Value: !GetAtt AudiogramService.Name
-  #     EvaluationPeriods: "1"
-  #     MetricName: CPUUtilization
-  #     Namespace: AWS/ECS
-  #     Period: "60"
-  #     Statistic: Average
-  #     Threshold: "50"
-  #     Unit: Percent
-  # AudiogramScaleInAlarm:
-  #   Type: "AWS::CloudWatch::Alarm"
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmActions:
-  #       - !Ref AudiogramScaleInPolicy
-  #       - !Ref OpsDebugMessagesSNSTopicArn
-  #     AlarmDescription: >
-  #       The CPU utilization of the service has dropped below 10% for more than
-  #       five minutes. Breaching this alarm should trigger a service scale in.
-  #     ComparisonOperator: LessThanOrEqualToThreshold
-  #     Dimensions:
-  #       - Name: ClusterName
-  #         Value: !Ref ECSCluster
-  #       - Name: ServiceName
-  #         Value: !GetAtt AudiogramService.Name
-  #     EvaluationPeriods: "5"
-  #     MetricName: CPUUtilization
-  #     Namespace: AWS/ECS
-  #     Period: "60"
-  #     Statistic: Average
-  #     Threshold: "10"
-  #     Unit: Percent
 Outputs:
   DNSName:
     Description: The DNS name for the applications load balancer
