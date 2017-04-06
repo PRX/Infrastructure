@@ -23,11 +23,17 @@ Parameters:
     Type: String
   ECSServiceIAMRole:
     Type: String
-  PlatformLBArn:
+  PlatformALBDNSName:
     Type: String
-  PlatformLBDNSName:
+  PlatformALBCanonicalHostedZoneID:
     Type: String
-  PlatformLBCanonicalHostedZoneID:
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBHTTPListenerPriority:
+    Type: String
+  PlatformALBHTTPSListenerPriority:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
@@ -69,30 +75,8 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
-  # PublishSecurityGroup:
-  #   Type: "AWS::EC2::SecurityGroup"
-  #   Properties:
-  #     VpcId: !Ref VPC
-  #     GroupDescription: Allow web and SSH traffic to the ALB
-  #     SecurityGroupIngress:
-  #       - CidrIp: 0.0.0.0/0
-  #         IpProtocol: tcp
-  #         FromPort: 443
-  #         ToPort: 443
-  #       - CidrIp: 0.0.0.0/0
-  #         IpProtocol: tcp
-  #         FromPort: 80
-  #         ToPort: 80
-  #       - CidrIp: 0.0.0.0/0
-  #         IpProtocol: tcp
-  #         FromPort: 22
-  #         ToPort: 22
-  #     Tags:
-  #       - Key: Name
-  #         Value: !Sub ${RootStackName} Publish ALB
   PublishALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    # DependsOn: PublishALB
     Properties:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
@@ -101,38 +85,18 @@ Resources:
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
-  # PublishALB:
-  #   Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
-  #   Properties:
-  #     Scheme: internet-facing
-  #     SecurityGroups:
-  #       - !Ref PublishSecurityGroup
-  #     Subnets:
-  #       - !Ref VPCSubnet1
-  #       - !Ref VPCSubnet2
-  #     Tags:
-  #       - Key: Project
-  #         Value: publish.prx.org
-  PublishALBHTTPListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+  PublishALBHTTPHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
-      LoadBalancerArn: !Ref PlatformLBArn
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref PublishALBTargetGroup
-  PublishALBHTTPSListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      Certificates:
-        - CertificateArn: !Ref VPCCertificateArn
-      LoadBalancerArn: !Ref PlatformLBArn
-      Port: 443
-      Protocol: HTTPS
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref PublishALBTargetGroup
+      Actions:
+        - TargetGroupArn: !Ref PublishALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-publish.${VPC}.prx.tech.
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Ref PlatformALBHTTPListenerPriority
   PublishTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -197,7 +161,6 @@ Resources:
       TaskDefinition: !Ref PublishTaskDefinition
   PublishWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
-    # DependsOn: PublishALB
     Properties:
       Comment: Record sets for dualstack web traffic to an publish instance
       HostedZoneName: prx.tech.
@@ -205,8 +168,8 @@ Resources:
         - Type: A
           Name: !Sub ${EnvironmentTypeAbbreviation}-publish.${VPC}.prx.tech.
           AliasTarget:
-            DNSName: !Ref PlatformLBDNSName
-            HostedZoneId: !Ref PlatformLBCanonicalHostedZoneID
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
 Outputs:
   # DNSName:
   #   Description: The DNS name for the applications load balancer

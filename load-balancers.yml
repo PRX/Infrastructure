@@ -9,6 +9,8 @@ Parameters:
     Type: "AWS::EC2::Subnet::Id"
   VPCSubnet2:
     Type: "AWS::EC2::Subnet::Id"
+  VPCCertificateArn:
+    Type: String
 Resources:
   PlatformSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -31,6 +33,13 @@ Resources:
       # Tags:
       #   - Key: Name
       #     Value: !Sub ${RootStackName} Plaform ALB
+  PlatformALBDefaultTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: !Sub default-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
   PlatformALB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -43,13 +52,39 @@ Resources:
       Tags:
         - Key: Project
           Value: platform.prx.org
+  PlatformALBHTTPListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref PlatformALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref PlatformALBDefaultTargetGroup
+  PlatformALBHTTPSListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref VPCCertificateArn
+      LoadBalancerArn: !Ref PlatformALB
+      Port: 443
+      Protocol: HTTPS
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref PlatformALBDefaultTargetGroup
 Outputs:
-  PlatformArn:
+  PlatformALBArn:
     Description: The ARN for the application load balancer
     Value: !Ref PlatformALB
-  PlatformDNSName:
+  PlatformALBDNSName:
     Description: The DNS name for the application load balancer
     Value: !GetAtt PlatformALB.DNSName
-  PlatformCanonicalHostedZoneID:
+  PlatformALBCanonicalHostedZoneID:
     Description: The hosted zone ID for the application load balancer
     Value: !GetAtt PlatformALB.CanonicalHostedZoneID
+  PlatformALBHTTPListenerArn:
+    Description: The ARN for the HTTP listener
+    Value: !Ref PlatformALBHTTPListener
+  PlatformALBHTTPSListenerArn:
+    Description: The ARN for the HTTPS listener
+    Value: !Ref PlatformALBHTTPSListener
