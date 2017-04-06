@@ -7,12 +7,20 @@ Mappings:
 Parameters:
   VPC:
     Type: "AWS::EC2::VPC::Id"
-  VPCSubnet1:
-    Type: "AWS::EC2::Subnet::Id"
-  VPCSubnet2:
-    Type: "AWS::EC2::Subnet::Id"
-  VPCCertificateArn:
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
     Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBHTTPListenerPriority:
+    Type: String
+  PlatformALBHTTPSListenerPriority:
+    Type: String
+  ##############################################################################
   RootStackName:
     Type: String
   ECSCluster:
@@ -34,27 +42,6 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
-  AudiogramSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId: !Ref VPC
-      GroupDescription: Allow web and SSH traffic to the ALB
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-      Tags:
-        - Key: Name
-          Value: !Sub ${RootStackName} Audiogram ALB
   AudiogramALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: AudiogramALB
@@ -66,38 +53,30 @@ Resources:
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
-  AudiogramALB:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+  AudiogramALBHTTPHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
-      Scheme: internet-facing
-      SecurityGroups:
-        - !Ref AudiogramSecurityGroup
-      Subnets:
-        - !Ref VPCSubnet1
-        - !Ref VPCSubnet2
-      Tags:
-        - Key: Project
-          Value: audiogram
-  AudiogramALBHTTPListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Ref PlatformALBHTTPListenerPriority
+  AudiogramALBHTTPSHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
-      LoadBalancerArn: !Ref AudiogramALB
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AudiogramALBTargetGroup
-  AudiogramALBHTTPSListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      Certificates:
-        - CertificateArn: !Ref VPCCertificateArn
-      LoadBalancerArn: !Ref AudiogramALB
-      Port: 443
-      Protocol: HTTPS
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref AudiogramALBTargetGroup
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Ref PlatformALBHTTPSListenerPriority
   AudiogramTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
