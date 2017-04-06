@@ -44,7 +44,6 @@ Resources:
       RetentionInDays: 14
   AudiogramALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    DependsOn: AudiogramALB
     Properties:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
@@ -99,9 +98,6 @@ Resources:
               ContainerPort: 8888
   AudiogramService:
     Type: "AWS::ECS::Service"
-    DependsOn:
-      - AudiogramALBHTTPListener
-      - AudiogramALBHTTPSListener
     Properties:
       Cluster: !Ref ECSCluster
       DeploymentConfiguration:
@@ -116,7 +112,6 @@ Resources:
       TaskDefinition: !Ref AudiogramTaskDefinition
   AudiogramWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
-    DependsOn: AudiogramALB
     Properties:
       Comment: Record sets for dualstack web traffic to an audiogram instance
       HostedZoneName: prx.tech.
@@ -125,8 +120,8 @@ Resources:
           Name: !Sub |
             ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech.
           AliasTarget:
-            DNSName: !GetAtt AudiogramALB.DNSName
-            HostedZoneId: !GetAtt AudiogramALB.CanonicalHostedZoneID
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
   # AudiogramScalableTarget:
   #   Type: "AWS::ApplicationAutoScaling::ScalableTarget"
   #   Properties:
@@ -216,9 +211,6 @@ Resources:
     # Properties:
       # Statistic: Sum
 Outputs:
-  DNSName:
-    Description: The DNS name for the applications load balancer
-    Value: !GetAtt AudiogramALB.DNSName
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
