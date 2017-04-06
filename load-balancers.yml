@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates application load balancers that can be reused for multiple
+  applications, using host- and path-based routing rules.
+Parameters:
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+Resources:
+  PlatformSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow web and SSH traffic to the ALB
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      # Tags:
+      #   - Key: Name
+      #     Value: !Sub ${RootStackName} Plaform ALB
+  PlatformALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref PlatformSecurityGroup
+      Subnets:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet2
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+Outputs:
+  Arn:
+    Description: The ARN for the applications load balancer
+    Value: !Ref PlatformALB
+  DNSName:
+    Description: The DNS name for the applications load balancer
+    Value: !GetAtt PlatformALB.DNSName
