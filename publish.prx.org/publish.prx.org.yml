@@ -90,7 +90,7 @@ Resources:
   #     Tags:
   #       - Key: Name
   #         Value: !Sub ${RootStackName} Publish ALB
-  PublishALBTargetGroup:
+  PublishALBTargetGroupA:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     # DependsOn: PublishALB
     Properties:
@@ -113,7 +113,7 @@ Resources:
   #     Tags:
   #       - Key: Project
   #         Value: publish.prx.org
-  PublishALBHTTPListener:
+  PublishALBHTTPListenerA:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref PlatformLBArn
@@ -121,8 +121,8 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref PublishALBTargetGroup
-  PublishALBHTTPSListener:
+          TargetGroupArn: !Ref PublishALBTargetGroupA
+  PublishALBHTTPSListenerA:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       Certificates:
@@ -132,7 +132,7 @@ Resources:
       Protocol: HTTPS
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref PublishALBTargetGroup
+          TargetGroupArn: !Ref PublishALBTargetGroupA
   PublishTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -181,8 +181,8 @@ Resources:
   PublishService:
     Type: "AWS::ECS::Service"
     DependsOn:
-      - PublishALBHTTPListener
-      - PublishALBHTTPSListener
+      - PublishALBHTTPListenerA
+      - PublishALBHTTPSListenerA
     Properties:
       Cluster: !Ref ECSCluster
       DeploymentConfiguration:
@@ -192,7 +192,7 @@ Resources:
       LoadBalancers:
         - ContainerName: !FindInMap [ContainerNameMap, PublishApp, name]
           ContainerPort: 4200
-          TargetGroupArn: !Ref PublishALBTargetGroup
+          TargetGroupArn: !Ref PublishALBTargetGroupA
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref PublishTaskDefinition
   PublishWebRecordSetGroup:

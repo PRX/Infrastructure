@@ -78,15 +78,8 @@ The first is a template the defines the infrastructure needed to host the app. F
 
 For most applications, an additional template will be built to support the CI/CD aspects of that particular app. For a Docker app, that may be a CodePipeline which includes CodeBuild projects that build and test the Docker image, and other actions to push the image to ECR and update infrastructure config files to reflect the new app code.
 
-## Template Configuration Parameters
+## Miscellaneous
 
-- `BootstrapStackName`: The name of the bootstrap stack that will launch a root stack using this config file. This is used mainly so the root stack can find the S3 bucket where infrastructure code is copied to, which is created by the bootstrap stack.
-- `ASGKeyPairName`: The name of an EC2 key pair that will be used by instances launched by Auto Scale groups
-- `RootEnvironmentType`: either `Production` or `Staging` (case sensitive) to describe the type environment being launched with this config
-- `GitHubOAuthToken`: A GitHub token that has pull access to the PRX/Infrastructure repository
-- `AutoScalingSlackWebhookURL`: A Slack webhook URL to which messages about autoscaling can be sent
-- `CloudWatchSlackWebhookURL`: A Slack webhook URL to which messages about CloudWatch Alarms can be sent
-- `CodePipelineSlackWebhookURL`: A Slack webhook URL to which messages about CodePipeline events can be sent
-- `AudiogramECRRegion`: The AWS region that audiogram docker images are stored
-- `AudiogramECRRepositoryName`: The name of the ECR repository with audiogram docker images
-- `AudiogramECRImageTag`: The current docker image tag to use for audiogram deployments (this is incremented automatically by the audiogram pipeline build process)
+### Load Balancers
+
+Resources associated with load balancers (eg, target groups, listeners) can have a hard time being reallocated on the fly. If you need to move a target group to a different ALB or similar, you should create a new resource. This could be done simply by giving an existing resource a new logical ID (CloudFormation will treat that as a new resource – tear down the old resource, and create a new one), or adding a new resource in one deploy and removing the old unused resource in a later deploy.
