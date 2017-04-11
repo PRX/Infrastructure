@@ -402,6 +402,38 @@ Resources:
               OutputArtifacts:
                 - Name: StagingTemplateSyncArtifact
               RunOrder: 1
+            - Name: ProxyCMSStagingStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: Proxy-CMS-Staging
+                TemplateConfiguration: TemplateConfigZipArtifact::cms-staging.json
+                TemplatePath: InfrastructureRepoSourceArtifact::cms-proxy.yml
+              InputArtifacts:
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 2
+            - Name: ProxyCMSProductionStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: Proxy-CMS-Production
+                TemplateConfiguration: TemplateConfigZipArtifact::cms-production.json
+                TemplatePath: InfrastructureRepoSourceArtifact::cms-proxy.yml
+              InputArtifacts:
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 2
         - Name: Staging
           Actions:
             - Name: CreateChangeSet
@@ -453,6 +485,9 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${RootStackName}-Staging
               RunOrder: 4
+        ########################################################################
+        ## TESTING #############################################################
+        ########################################################################
         - Name: Testing
           Actions:
             - Name: Acceptance
@@ -588,6 +623,12 @@ Resources:
             Value: https://dovetail-staging.prxu.org
           - Name: DOVETAIL_PROD
             Value: https://dovetail.prxu.org
+          - Name: FEEDER_HOST
+            Value: feeder-staging.prx.tech
+          - Name: PUBLISH_HOST
+            Value: !Join ["", ["Fn::ImportValue": !Sub "${RootStackName}-Staging-PublishHostedZoneDNSName"]]
+          - Name: PUBLISH_USER
+            Value: test@test.com
         Image: aws/codebuild/ruby:2.3.1
         Type: LINUX_CONTAINER
       Name: !Sub acceptance-test-${AWS::Region}
