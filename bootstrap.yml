@@ -182,13 +182,17 @@ Resources:
               - Effect: Allow
                 Action:
                   - "cloudformation:DescribeStacks"
+                  - "cloudformation:CreateStack"
+                  - "cloudformation:UpdateStack"
                   - "cloudformation:DescribeChangeSet"
                   - "cloudformation:CreateChangeSet"
                   - "cloudformation:ExecuteChangeSet"
                   - "cloudformation:DeleteChangeSet"
                 Resource:
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Staging/*
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Production/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Staging/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-CMS-Staging/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-CMS-Production/*
         - PolicyName: CodePipelineRolePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -416,8 +420,9 @@ Resources:
                 TemplateConfiguration: TemplateConfigZipArtifact::cms-staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::cms-proxy.yml
               InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigZipArtifact
-              RunOrder: 2
+              RunOrder: 1
             - Name: ProxyCMSProductionStack
               ActionTypeId:
                 Category: Deploy
@@ -432,8 +437,9 @@ Resources:
                 TemplateConfiguration: TemplateConfigZipArtifact::cms-production.json
                 TemplatePath: InfrastructureRepoSourceArtifact::cms-proxy.yml
               InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigZipArtifact
-              RunOrder: 2
+              RunOrder: 1
         - Name: Staging
           Actions:
             - Name: CreateChangeSet
