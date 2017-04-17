@@ -193,6 +193,8 @@ Resources:
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${RootStackName}-Staging/*
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-CMS-Staging/*
                   - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-CMS-Production/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-Castle-Staging/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/Proxy-Castle-Production/*
         - PolicyName: CodePipelineRolePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -436,6 +438,40 @@ Resources:
                 StackName: Proxy-CMS-Production
                 TemplateConfiguration: TemplateConfigZipArtifact::cms-production.json
                 TemplatePath: InfrastructureRepoSourceArtifact::cms-proxy.yml
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 1
+            - Name: ProxyCastleStagingStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: Proxy-Castle-Staging
+                TemplateConfiguration: TemplateConfigZipArtifact::castle-staging.json
+                TemplatePath: InfrastructureRepoSourceArtifact::castle.prx.org/castle-proxy.yml
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 1
+            - Name: ProxyCastleProductionStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: Proxy-Castle-Production
+                TemplateConfiguration: TemplateConfigZipArtifact::castle-production.json
+                TemplatePath: InfrastructureRepoSourceArtifact::castle.prx.org/castle-proxy.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigZipArtifact
