@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CodePipeline that is used to handle CI/CD for the castle app
+Parameters:
+  CodePipelineArtifactStore:
+    Type: String
+  OpsDebugMessagesSNSTopicArn:
+    Type: String
+  GitHubOAuthToken:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  RootStackTemplateConfigBucket:
+    Type: String
+  RootStackTemplateConfigArchive:
+    Type: String
+  ECRRegion:
+    Type: String
+  CastleECRImageTag:
+    Type: String
+Resources:
+  CodePipelineIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: ArtifactStoreFullAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:*"
+                Resource:
+                  - !Sub arn:aws:s3:::${CodePipelineArtifactStore}
+                  - !Sub arn:aws:s3:::${CodePipelineArtifactStore}/*
+        - PolicyName: CodePipelineRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                  - "s3:GetBucketVersioning"
+                Resource: "*" # TODO Really?
+              - Effect: Allow
+                Action:
+                  - "codebuild:BatchGetBuilds"
+                  - "codebuild:StartBuild"
+                Resource: "*" # TODO Really?
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:*" # TODO Really?
+                Resource: "*" # TODO Really?
+  CodeBuildIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: CodeBuildLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  # NOTE When this policy is created by the AWS console during
+                  # CodeBuild project creation, the log resources are tightly
+                  # scoped to the project (eg log-group:/aws/codebuild/projName)
+                  # but right now the name of that project isn't available until
+                  # the project resource is created, and it relies on this IAM
+                  # role. Need some way of that not being circular
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+        - PolicyName: ECRBasicAcces
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:*RepositoryPolicy"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:PutImage"
+                # TODO maybe make name a template config param?
+                Resource: "arn:aws:ecr:us-east-1:561178107736:repository/castle.prx.org"
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+        - PolicyName: ArtifactStoreBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource: !Sub arn:aws:s3:::${CodePipelineArtifactStore}/*
+        - PolicyName: TemplateConfigStoreBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource: !Sub arn:aws:s3:::${RootStackTemplateConfigBucket}/*
+  Pipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties:
+      ArtifactStore:
+        Location: !Ref CodePipelineArtifactStore
+        Type: S3
+      RestartExecutionOnUpdate: false
+      RoleArn: !GetAtt CodePipelineIAMRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: PRX
+                Repo: castle.prx.org
+                Branch: master
+                OAuthToken: !Ref GitHubOAuthToken
+              OutputArtifacts:
+                - Name: GitHubSourceArtifact
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: Dockerize
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref DockerBuildProject
+              InputArtifacts:
+                - Name: GitHubSourceArtifact
+              OutputArtifacts:
+                - Name: DockerBuildArtifact
+              RunOrder: 1
+  DockerBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Tests, builds, and publishes a Docker image
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: TEMPLATE_CONFIG_BUCKET
+            Value: !Ref RootStackTemplateConfigBucket
+          - Name: TEMPLATE_CONFIG_ARTIFACT
+            Value: !Ref RootStackTemplateConfigArchive
+          - Name: ECR_REGION
+            Value: !Ref ECRRegion
+          - Name: ECR_REPOSITORY_NAME
+            Value: castle.prx.org
+          - Name: ECR_IMAGE_TAG
+            Value: !Ref CastleECRImageTag
+        Image: aws/codebuild/docker:1.12.1
+        Type: LINUX_CONTAINER
+      Name: !Sub castle-${AWS::Region}-${EnvironmentTypeAbbreviation}
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Source:
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      TimeoutInMinutes: 15

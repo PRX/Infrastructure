@@ -1,0 +1,176 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: castle.prx.org application running in Docker
+Mappings:
+  ContainerNameMap:
+    CastleApp:
+      name: castle-phoenix
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBHTTPListenerPriority:
+    Type: String
+  PlatformALBHTTPSListenerPriority:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  RootStackName:
+    Type: String
+  OpsDebugMessagesSNSTopicArn:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  ECRRegion:
+    Type: String
+  # Shared ENV #################################################################
+  # Castle ECS #################################################################
+  CastleECRImageTag:
+    Type: String
+  # Castle ENV #################################################################
+  CastleEnvBasicAuthPass:
+    Type: String
+  CastleEnvBasicAuthUser:
+    Type: String
+  CastleEnvBqClientEmail:
+    Type: String
+  CastleEnvBqDataset:
+    Type: String
+  CastleEnvBqDownloadsTable:
+    Type: String
+  CastleEnvBqImpressionsTable:
+    Type: String
+  CastleEnvBqPrivateKey:
+    Type: String
+  CastleEnvBqProjectId:
+    Type: String
+  CastleEnvRedisHost:
+    Type: String
+  CastleEnvRedisPoolSize:
+    Type: String
+  CastleEnvRedisPort:
+    Type: String
+Resources:
+  CastleLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  CastleALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub castle-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+  CastleALBHTTPHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Ref PlatformALBHTTPListenerPriority
+  CastleALBHTTPSHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Ref PlatformALBHTTPSListenerPriority
+  CastleTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 128
+          Environment:
+            - Name: BASIC_AUTH_PASS
+              Value: !Ref CastleEnvBasicAuthPass
+            - Name: BASIC_AUTH_USER
+              Value: !Ref CastleEnvBasicAuthUser
+            - Name: BQ_CLIENT_EMAIL
+              Value: !Ref CastleEnvBqClientEmail
+            - Name: BQ_DATASET
+              Value: !Ref CastleEnvBqDataset
+            - Name: BQ_DOWNLOADS_TABLE
+              Value: !Ref CastleEnvBqDownloadsTable
+            - Name: BQ_IMPRESSIONS_TABLE
+              Value: !Ref CastleEnvBqImpressionsTable
+            - Name: BQ_PRIVATE_KEY
+              Value: !Ref CastleEnvBqPrivateKey
+            - Name: BQ_PROJECT_ID
+              Value: !Ref CastleEnvBqProjectId
+            - Name: REDIS_HOST
+              Value: !Ref CastleEnvRedisHost
+            - Name: REDIS_POOL_SIZE
+              Value: !Ref CastleEnvRedisPoolSize:
+            - Name: REDIS_PORT
+              Value: !Ref CastleEnvRedisPort
+          Essential: true
+          # TODO
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${ECRRegion}.amazonaws.com/castle.prx.org:${CastleECRImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CastleLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 128
+          Name: !FindInMap [ContainerNameMap, CastleApp, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4000
+  CastleService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !FindInMap [ContainerNameMap, CastleApp, name]
+          ContainerPort: 4000
+          TargetGroupArn: !Ref CastleALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref CastleTaskDefinition
+  CastleWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to a castle instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech.
