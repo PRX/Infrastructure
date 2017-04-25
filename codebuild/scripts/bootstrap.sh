@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 TEST_FILE=".prxci"
 
@@ -51,7 +51,7 @@ fi
 if [ -z "$PRX_COMMIT" ]; then
   sns_error "You must set a \$PRX_COMMIT"
 fi
-if [[ -n "$PRX_ECR_TAG" && -z "$PRX_ECR_REGION" ]]; then
+if [ -n "$PRX_ECR_TAG" ] && [ -z "$PRX_ECR_REGION" ]; then
   sns_error "You must set a \$PRX_ECR_REGION"
 fi
 
@@ -64,11 +64,11 @@ fi
 if [ ! -f .env ]; then
   echo "" > .env
 fi
-if [[ -n "$(grep docker-compose $TEST_FILE)" && -z "$(command -v docker-compose)" ]]; then
+if [ -n "$(grep docker-compose $TEST_FILE)" ] && [ -z "$(command -v docker-compose)" ]; then
   COMPOSE="https://github.com/docker/compose/releases/download/1.11.2/docker-compose-$(uname -s)-$(uname -m)"
   curl -L $COMPOSE -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
 fi
-if [[ -n "$PRX_ECR_TAG" ]]; then
+if [ -n "$PRX_ECR_TAG" ]; then
   echo "Logging into ECR..."
   $(aws ecr get-login --region $PRX_ECR_REGION)
 fi
