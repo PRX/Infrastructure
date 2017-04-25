@@ -69,7 +69,7 @@ if [ -n "$(grep docker-compose $TEST_FILE)" ] && [ -z "$(command -v docker-compo
   COMPOSE="https://github.com/docker/compose/releases/download/1.11.2/docker-compose-$(uname -s)-$(uname -m)"
   curl -sL $COMPOSE -o /usr/local/bin/docker-compose
   chmod +x /usr/local/bin/docker-compose
-  echo "  installed $(docker-compose -v)"
+  echo "  successfully installed $(docker-compose -v)"
 fi
 if [ -n "$PRX_ECR_TAG" ]; then
   echo "Logging into ECR..."
@@ -82,7 +82,7 @@ fi
 set +e
 while read LINE; do
   echo "--- PRXCI: $LINE ---"
-  ("$LINE")
+  eval $LINE
   CODE=$?
   if [ $CODE -ne 0 ]; then
     sns_error "Command exited with $CODE: $LINE"
