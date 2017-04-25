@@ -26,7 +26,6 @@ sns_message() {
   CODE=$?
   if [ $CODE -eq 0 ]; then
     echo "Sent SNS message: $MSG"
-    exit 0
   else
     echo "Failed to send SNS message: $MSG"
     exit $CODE
