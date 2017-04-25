@@ -59,7 +59,7 @@ fi
 # dependencies
 #
 if [ ! -f $TEST_FILE ]; then
-  sns_error "Repo is missing a \"$TEST_FILE\" test script"
+  sns_error "Repo is missing a $TEST_FILE test script"
 fi
 if [ ! -f .env ]; then
   echo "" > .env
