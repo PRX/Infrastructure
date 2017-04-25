@@ -76,15 +76,6 @@ if [ -n "$PRX_ECR_TAG" ]; then
   $(aws ecr get-login --region $PRX_ECR_REGION)
 fi
 
-echo "ls -lA ..."
-ls -lA
-echo "echo \$PATH ..."
-echo $PATH
-echo "command -v docker ..."
-command -v docker
-echo "command -v docker-compose ..."
-command -v docker-compose
-
 #
 # run tests
 #
@@ -105,6 +96,7 @@ set -e
 #
 if [ -n "$PRX_ECR_TAG" ]; then
   echo "TODO: guess which image it was, retag it, and push to ECR"
+  docker images
 fi
 
 sns_callback
