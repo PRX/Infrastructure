@@ -64,22 +64,12 @@ fi
 if [ ! -f .env ]; then
   echo "" > .env
 fi
-
-if [ -n "$(grep docker-compose $TEST_FILE)" ]; then
-  echo "  --need docker-compose"
-else
-  echo "  --noneed docker-compose"
-fi
-if [ -z "$(command -v docker-compose 2>&1)" ]; then
-  echo "  --nohave docker-compose"
-else
-  echo "  --have docker-compose"
-fi
-
 if [ -n "$(grep docker-compose $TEST_FILE)" ] && [ -z "$(command -v docker-compose 2>&1)" ]; then
   echo "Installing docker-compose..."
   COMPOSE="https://github.com/docker/compose/releases/download/1.11.2/docker-compose-$(uname -s)-$(uname -m)"
-  curl -L $COMPOSE -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
+  curl -sL $COMPOSE -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+  echo "  installed $(docker-compose -v)"
 fi
 if [ -n "$PRX_ECR_TAG" ]; then
   echo "Logging into ECR..."
