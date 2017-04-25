@@ -70,7 +70,7 @@ if [[ -n "$(grep docker-compose $TEST_FILE)" && -z "$(command -v docker-compose)
 fi
 if [[ -n "$PRX_ECR_TAG" ]]; then
   echo "Logging into ECR..."
-  $(aws ecr get-login --region $ECR_REGION)
+  $(aws ecr get-login --region $PRX_ECR_REGION)
 fi
 
 #
