@@ -5,9 +5,6 @@ TEST_FILE=".prxci"
 #
 # PRX codebuild test bootstrapping
 #
-# Usage:
-#   curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/codebuild_scripts/codebuild/scripts/bootstrap.sh && sh bootstrap.sh
-#
 
 # sns callback helpers
 if [ -z "$SNS_CALLBACK" ]; then
