@@ -2,6 +2,13 @@
 set -e
 TEST_FILE=".prxci"
 
+#
+# PRX codebuild test bootstrapping
+#
+# Usage:
+#   curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/codebuild_scripts/codebuild/scripts/bootstrap.sh && sh bootstrap.sh
+#
+
 # sns callback helpers
 if [ -z "$SNS_CALLBACK" ]; then
   echo "You must define an \$SNS_CALLBACK"
@@ -11,9 +18,9 @@ sns_message() {
   MSG="'{\"success\":$1,\"reason\":\"$2\""
   [ -z "$PRX_REPO" ] || MSG="$MSG,\"prxRepo\":\"$PRX_REPO\""
   [ -z "$PRX_COMMIT" ] || MSG="$MSG,\"prxCommit\":$PRX_COMMIT"
-  [ -z "$PRX_ECR_TAG" ] || MSG="$PRX_ECR_TAG,\"prxEcrTag\":$PRX_ECR_TAG"
-  [ -z "$PRX_ECR_REGION" ] || MSG="$PRX_ECR_REGION,\"prxEcrRegion\":$PRX_ECR_REGION"
-  [ -z "$CODEBUILD_BUILD_ARN" ] || MSG="$CODEBUILD_BUILD_ARN,\"buildArn\":$CODEBUILD_BUILD_ARN"
+  [ -z "$PRX_ECR_TAG" ] || MSG="$MSG,\"prxEcrTag\":$PRX_ECR_TAG"
+  [ -z "$PRX_ECR_REGION" ] || MSG="$MSG,\"prxEcrRegion\":$PRX_ECR_REGION"
+  [ -z "$CODEBUILD_BUILD_ARN" ] || MSG="$MSG,\"buildArn\":$CODEBUILD_BUILD_ARN"
   MSG="$MSG}'"
   OUT=$(aws sns publish --topic-arn "$SNS_CALLBACK" --message "$MSG")
   CODE=$?
@@ -26,12 +33,12 @@ sns_message() {
   fi
 }
 sns_callback() {
-  echo "Sending success to SNS..."
+  echo "Success!"
   sns_message true
   exit 0
 }
 sns_error() {
-  echo "Sending error to SNS..."
+  echo "Failure: $1"
   sns_message false "$1"
   exit 1
 }
