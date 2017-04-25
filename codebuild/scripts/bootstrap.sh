@@ -95,8 +95,14 @@ set -e
 # optionally push to ECR
 #
 if [ -n "$PRX_ECR_TAG" ]; then
-  echo "TODO: guess which image it was, retag it, and push to ECR"
-  docker images
+  IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}")
+  if [ -z "$IMAGE_ID" ]; then
+    sns_error "Dockerfile needs an org.prx.app label"
+  else
+    echo "Pushing image to ECR..."
+    docker tag $IMAGE_ID $PRX_ECR_TAG
+    docker push $PRX_ECR_TAG
+  fi
 fi
 
 sns_callback
