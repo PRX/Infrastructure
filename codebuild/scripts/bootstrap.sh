@@ -76,6 +76,15 @@ if [ -n "$PRX_ECR_TAG" ]; then
   $(aws ecr get-login --region $PRX_ECR_REGION)
 fi
 
+echo "ls -lA ..."
+ls -lA
+echo "echo \$PATH ..."
+echo $PATH
+echo "command -v docker ..."
+command -v docker
+echo "command -v docker-compose ..."
+command -v docker-compose
+
 #
 # run tests
 #
