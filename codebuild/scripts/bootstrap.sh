@@ -17,10 +17,10 @@ fi
 sns_message() {
   MSG="'{\"success\":$1,\"reason\":\"$2\""
   [ -z "$PRX_REPO" ] || MSG="$MSG,\"prxRepo\":\"$PRX_REPO\""
-  [ -z "$PRX_COMMIT" ] || MSG="$MSG,\"prxCommit\":$PRX_COMMIT"
-  [ -z "$PRX_ECR_TAG" ] || MSG="$MSG,\"prxEcrTag\":$PRX_ECR_TAG"
-  [ -z "$PRX_ECR_REGION" ] || MSG="$MSG,\"prxEcrRegion\":$PRX_ECR_REGION"
-  [ -z "$CODEBUILD_BUILD_ARN" ] || MSG="$MSG,\"buildArn\":$CODEBUILD_BUILD_ARN"
+  [ -z "$PRX_COMMIT" ] || MSG="$MSG,\"prxCommit\":\"$PRX_COMMIT\""
+  [ -z "$PRX_ECR_TAG" ] || MSG="$MSG,\"prxEcrTag\":\"$PRX_ECR_TAG\""
+  [ -z "$PRX_ECR_REGION" ] || MSG="$MSG,\"prxEcrRegion\":\"$PRX_ECR_REGION\""
+  [ -z "$CODEBUILD_BUILD_ARN" ] || MSG="$MSG,\"buildArn\":\"$CODEBUILD_BUILD_ARN\""
   MSG="$MSG}'"
   OUT=$(aws sns publish --topic-arn "$SNS_CALLBACK" --message "$MSG")
   CODE=$?
