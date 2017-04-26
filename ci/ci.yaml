@@ -1,3 +1,4 @@
+# This stack should generally only be launched once globally, and be named: ci
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates a continuous integration system to handle testing, building, and
@@ -14,6 +15,14 @@ Parameters:
   LambdaCodeBucket:
     Type: String
 Resources:
+  # ACM Certificates
+  CiCertificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
+      DomainValidationOptions:
+        - ValidationDomain: prx.tech
+          DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
   # S3 Buckets
   SourceArchiveBucket:
     Type: "AWS::S3::Bucket"
@@ -236,8 +245,10 @@ Resources:
   RestApi:
     Type: "AWS::ApiGateway::RestApi"
     Properties:
-      Name: !Sub "CI-${AWS::StackName}"
-      Description: "API used by CI system"
+      Name: !Sub "${AWS::StackName} API"
+      Description: >
+        Provides an API for inbound requests used by the CI system, such as
+        GitHub event webhooks
   ## /v1
   RestApiV1Resource:
     Type: "AWS::ApiGateway::Resource"
@@ -319,3 +330,11 @@ Resources:
         - Key: Project
           Value: CI
       TimeoutInMinutes: 16
+# TODO Output a pretty URL for the webbook endpoint,
+# like ci-us-east-2.prx.tech/v1/github/webhook
+# Outputs:
+#   StagingTemplateBucket:
+#     Description: >
+#       The name of the bucket that templates have been synced to, to be used
+#       in a staging environment
+#     Value: !Ref StagingTemplateBucket
