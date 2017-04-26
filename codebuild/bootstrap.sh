@@ -56,7 +56,13 @@ fi
 # dependencies
 #
 if [ ! -f $TEST_FILE ]; then
-  sns_error "Repo is missing a $TEST_FILE test script"
+  SUBDIR=$(find . -name "PRX-*" | head -n 1)
+  if [ -n "$SUBDIR" ]; then
+    cd $SUBDIR
+  fi
+  if [ ! -f $TEST_FILE ]; then
+    sns_error "Repo is missing a $TEST_FILE test script"
+  fi
 fi
 if [ ! -f .env ]; then
   echo "" > .env
@@ -92,7 +98,7 @@ set -e
 # optionally push to ECR
 #
 if [ -n "$PRX_ECR_TAG" ]; then
-  IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}")
+  IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
   if [ -z "$IMAGE_ID" ]; then
     sns_error "Dockerfile needs an org.prx.app label"
   else
