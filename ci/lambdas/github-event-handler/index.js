@@ -258,9 +258,35 @@ function copyToS3(file, event, callback) {
 function triggerBuild(versionId, event, callback) {
     console.log('...Starting CodeBuild run...');
 
+    // ECR tagging
+    const awsId = process.env.AWS_ACCOUNT_ID;
+    const ecrRegion = 'us-east-1';
+    const repo = event.repository.full_name.split('/')[1];
+    const ref = (event.after || event.pull_request.head.sha)
+    const sha = ref.substring(0,7);
+    const tag = `${awsId}.dkr.ecr.${ecrRegion}.amazonaws.com/${repo}:${sha}`;
+
     codebuild.startBuild({
         projectName: process.env.CODEBUILD_PROJECT_NAME,
-        sourceVersion: versionId
+        sourceVersion: versionId,
+        environmentVariablesOverride: [
+            {
+                name: 'SNS_CALLBACK',
+                value: process.env.CODEBUILD_CALLBACK_TOPIC_ARN
+            }, {
+                name: 'PRX_REPO',
+                value: event.repository.full_name
+            }, {
+                name: 'PRX_COMMIT',
+                value: ref
+            }, {
+                name: 'PRX_ECR_TAG',
+                value:tag
+            }, {
+                name: 'PRX_ECR_REGION',
+                value: ecrRegion
+            }
+        ]
     }, (err, data) => {
         if (err) {
             console.error('...CodeBuild failed to start!');

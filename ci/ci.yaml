@@ -36,6 +36,8 @@ Resources:
   # SNS Topics
   GitHubEventSNSTopic:
     Type: "AWS::SNS::Topic"
+  CodeBuildCallbackSNSTopic:
+    Type: "AWS::SNS::Topic"
   CiStatusSNSTopic:
     Type: "AWS::SNS::Topic"
   # SNS Subscriptions
@@ -178,6 +180,8 @@ Resources:
             CODEBUILD_PROJECT_NAME: !Ref CodeBuildProject
             SOURCE_ARCHIVE_BUCKET: !Ref SourceArchiveBucket
             SOURCE_ARCHIVE_KEY: !FindInMap [Shared, SourceArchives, Key]
+            CODEBUILD_CALLBACK_TOPIC_ARN: !Ref CodeBuildCallbackSNSTopic
+            AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -320,7 +324,7 @@ Resources:
         Image: "aws/codebuild/docker:1.12.1"
         Type: LINUX_CONTAINER
       # NOTE If Name changes, the CodeBuild Role Logs policy also must change
-      Name: !Sub ${AWS::StackName}-CI
+      Name: !Sub ${AWS::StackName}-Runner
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
         BuildSpec: "version: 0.1\n\nphases:\n  build:\n    commands:\n      - curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/codebuild/scripts/bootstrap.sh && sh bootstrap.sh"
