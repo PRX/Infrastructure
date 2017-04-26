@@ -12,12 +12,19 @@
 
 const url = require('url');
 const https = require('https');
+const fs = require('fs');
 const AWS = require('aws-sdk');
 
 const codebuild = new AWS.CodeBuild({apiVersion: '2016-10-06'});
 const sns = new AWS.SNS({apiVersion: '2010-03-31'});
+const s3 = new AWS.S3({apiVersion: '2006-03-01'});
 
 const USER_AGENT = 'PRX/Infrastructure (github-event-handler)';
+const GITHUB_HEADERS = {
+    'Authorization': `token ${process.env.GITHUB_ACCESS_TOKEN}`,
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': USER_AGENT
+};
 
 exports.handler = (event, context, callback) => {
     try {
@@ -29,21 +36,19 @@ exports.handler = (event, context, callback) => {
 };
 
 function main(event, context, callback) {
-    const messageAttributes = event.Records[0].Sns.MessageAttributes;
-    const githubEvent = messageAttributes.githubEvent.Value;
-    const githubDeliveryId = messageAttributes.githubDeliveryId.Value;
+    const sns = event.Records[0].Sns;
 
-    const json = event.Records[0].Sns.Message;
-    const payload = JSON.parse(json);
+    const githubEvent = sns.MessageAttributes.githubEvent.Value;
+    const githubEventObj = JSON.parse(sns.Message);
 
     console.log(`Received message for event: ${githubEvent}...`);
 
     switch (githubEvent) {
         case 'push':
-            handlePushEvent(payload, callback);
+            handlePushEvent(githubEventObj, callback);
             break;
         case 'pull_request':
-            handlePullRequestEvent(payload, callback);
+            handlePullRequestEvent(githubEventObj, callback);
             break;
         default:
             console.log('...Ignoring this event type!');
@@ -59,13 +64,15 @@ function main(event, context, callback) {
 function handlePushEvent(event, callback) {
     console.log('...Handling push event...');
 
-    if (event.ref !== 'refs/heads/master') {
-        // Blackhole all push events not on master
-        console.log('...Ignoring this push!');
-        callback(null);
-    } else {
-        console.log('...Push event was for master branch...');
-        checkCodeBuildSupport(event, callback);
+    switch (event.ref) {
+      case 'refs/heads/master':
+          console.log('...Push event was for master branch...');
+          checkCodeBuildSupport(event, callback);
+          break;
+      default:
+          // Blackhole all push events not on master
+          console.log('...Ignoring this push!');
+          callback(null);
     }
 }
 
@@ -104,11 +111,7 @@ function checkCodeBuildSupport(event, callback) {
     const apiUrl = `https://${api}/repos/${repo}/contents/${path}?ref=${ref}`;
     const options = url.parse(apiUrl);
     options.method = 'GET';
-    options.headers = {
-        'Authorization': `token ${process.env.GITHUB_ACCESS_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': USER_AGENT
-    };
+    options.headers = GITHUB_HEADERS;
 
     // Request with response handler
     console.log(`...Calling contents API: ${apiUrl}...`);
@@ -121,7 +124,7 @@ function checkCodeBuildSupport(event, callback) {
             switch (res.statusCode) {
                 case 200:
                     console.log('...Found CodeBuild support...');
-                    triggerBuild(event, callback);
+                    getSourceArchiveLink(event, callback);
                     break;
                 case 404:
                     console.log('...No CodeBuild support!');
@@ -142,11 +145,122 @@ function checkCodeBuildSupport(event, callback) {
     req.end();
 }
 
+// The zipball request returns a 301, and because I'm too lazy to install a
+// better HTTP library, I'm just making a second request
+function getSourceArchiveLink(event, callback) {
+    console.log(`...Getting source code archive URL...`);
+
+    // Get request properties
+    const api = 'api.github.com';
+    const repo = event.repository.full_name;
+    const sha = event.after || event.pull_request.head.sha;
+
+    // Setup request options
+    const apiUrl = `https://${api}/repos/${repo}/zipball/${sha}`;
+    const options = url.parse(apiUrl);
+    options.method = 'GET';
+    options.headers = GITHUB_HEADERS;
+
+    // Request with response handler
+    console.log(`...Calling archive link API: ${apiUrl}...`);
+    let req = https.request(options, res => {
+        res.setEncoding('utf8');
+
+        let json = '';
+        res.on('data', chunk => json += chunk);
+        res.on('end', () => {
+            switch (res.statusCode) {
+                case 302:
+                    console.log('...GitHub archive URL found...');
+                    const location = res.headers.location;
+                    getSourceArchive(location, event, callback);
+                    break;
+                default:
+                    console.error('...GitHub status update failed...');
+                    console.error(`...HTTP ${res.statusCode}...`);
+                    console.error(json);
+                    callback(new Error('GitHub archive link request failed!'));
+            }
+        });
+    });
+
+    // Generic request error handling
+    req.on('error', e => reject(e));
+
+    req.write('');
+    req.end();
+}
+
+function getSourceArchive(location, event, callback) {
+    console.log(`...Saving source archive...`);
+
+    // Setup request options
+    const options = url.parse(location);
+    options.method = 'GET';
+    options.headers = GITHUB_HEADERS;
+
+    // Setup write stream
+    const dest = `/tmp/${Date.now()}`;
+    const file = fs.createWriteStream(dest);
+
+    // Request with response handler
+    let req = https.request(options, res => {
+        if (res.statusCode !== 200) {
+            console.error('...Source archive request failed!');
+            callback(new Error('Could not get source archive'));
+        } else {
+            res.pipe(file);
+
+            file.on('finish', () => {
+                file.close(() => {
+                    console.log('...Finished downloading archive...');
+                    copyToS3(dest, event, callback);
+                });
+            });
+        }
+    });
+
+    // Generic request error handling
+    req.on('error', e => reject(e));
+
+    // Generic file error handling
+    file.on('error', e => { // Handle errors
+        fs.unlink(dest);
+        callback(e);
+    });
+
+    req.write('');
+    req.end();
+}
+
+function copyToS3(file, event, callback) {
+    console.log('...Copying archive to S3...');
+
+    const params = {
+        Bucket: process.env.SOURCE_ARCHIVE_BUCKET,
+        Key: process.env.SOURCE_ARCHIVE_KEY,
+        Body: fs.createReadStream(file)
+    };
+
+    s3.putObject(params, (err, data) => {
+        if (err) {
+            console.error('...S3 copy failed!');
+            callback(err);
+        } else {
+            console.error('...Finished copying to S3...');
+            triggerBuild(data.VersionId, event, callback)
+        }
+    });
+}
+
 // `startBuild` returns a Build object
 // https://docs.aws.amazon.com/codebuild/latest/APIReference/API_Build.html
-function triggerBuild(event, callback) {
-    codebuild.startBuild({
+function triggerBuild(versionId, event, callback) {
+    console.log('...Starting CodeBuild run...');
 
+    codebuild.startBuild({
+        projectName: process.env.CODEBUILD_PROJECT_NAME,
+        sourceVersion: versionId
     }, (err, data) => {
         if (err) {
             console.error('...CodeBuild failed to start!');
@@ -154,8 +268,8 @@ function triggerBuild(event, callback) {
         } else {
             console.error('...CodeBuild started...');
 
-            const status = updateGitHubStatus(event);
-            const notification = postNotification(event);
+            const status = updateGitHubStatus(event, data.build);
+            const notification = postNotification(event, data.build);
 
             Promise.all([status, notification])
                 .then(() => {
@@ -172,7 +286,7 @@ function triggerBuild(event, callback) {
 
 // Note: The response to this request should be a 201
 // https://developer.github.com/v3/repos/statuses/#create-a-status
-function updateGitHubStatus(event) {
+function updateGitHubStatus(event, build) {
     return (new Promise((resolve, reject) => {
         console.log(`...Updating GitHub status...`);
 
@@ -181,10 +295,15 @@ function updateGitHubStatus(event) {
         const repo = event.repository.full_name;
         const sha = event.after || event.pull_request.head.sha;
 
+        const arn = build.arn;
+        const region = arn.split(':')[3];
+        const buildId = arn.split('/')[1];
+        const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
+
         const payload = {
             state: 'pending',
-            target_url: 'https://example.com/build/status',
-            description: 'The build is starting soon...',
+            target_url: buildUrl,
+            description: 'Build has started running in CodeBuild',
             context: 'continuous-integration/prxci'
         };
         const json = JSON.stringify(payload);
@@ -193,12 +312,8 @@ function updateGitHubStatus(event) {
         const apiUrl = `https://${api}/repos/${repo}/statuses/${sha}`;
         const options = url.parse(apiUrl);
         options.method = 'POST';
-        options.headers = {
-            'Authorization': `token ${process.env.GITHUB_ACCESS_TOKEN}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Length': Buffer.byteLength(json),
-            'User-Agent': USER_AGENT
-        };
+        options.headers = GITHUB_HEADERS;
+        options.headers['Content-Length'] = Buffer.byteLength(json);
 
         // Request with response handler
         console.log(`...Calling statuses API: ${apiUrl}...`);
@@ -230,22 +345,21 @@ function updateGitHubStatus(event) {
     }));
 }
 
-function postNotification(event) {
+function postNotification(event, build) {
     return (new Promise((resolve, reject) => {
         console.log(`...Posting build status notification...`);
-        resolve(event)
 
-        // TODO This should send some structured data about the event and repo
-        // so the subscribers to the topic can send quality notifications
-        // sns.publish({
-        //     TopicArn: process.env.CI_STATUS_TOPIC_ARN,
-        //     Message: event.body,
-        //     MessageAttributes: {
-        //         githubEvent: {
-        //             DataType: 'String',
-        //             StringValue: event.headers['X-GitHub-Event']
-        //         }
-        //     }
-        // }, (e, data) => e ? reject(e) : resolve(event));
+        sns.publish({
+            TopicArn: process.env.CI_STATUS_TOPIC_ARN,
+            Message: JSON.stringify({ event: event, build: build })
+        }, (err, data) => {
+            if (err) {
+                console.error('...Status notification posted...');
+                reject(e);
+            } else {
+                console.log('...Status notification posted...');
+                resolve(event);
+            }
+        });
     }));
 }
