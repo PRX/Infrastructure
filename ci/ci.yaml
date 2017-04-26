@@ -1,0 +1,186 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a continuous integration system to handle testing, building, and
+  pushing assets in response to changes on GitHub
+Parameters:
+  GitHubToken:
+     Type: String
+  GitHubWebhookSecret:
+    Type: String
+  LambdaCodeBucket:
+    Type: String
+Resources:
+  # SNS Topics
+  GitHubEventSNSTopic:
+    Type: "AWS::SNS::Topic"
+  CiStatusSNSTopic:
+    Type: "AWS::SNS::Topic"
+  # SNS Subscriptions
+  GitHubEventTopicFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt GitHubEventHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref GitHubEventSNSTopic
+  # Lambda Permssions for SNS
+  GitHubEventTopicInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GitHubEventHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref GitHubEventSNSTopic
+  # IAM Roles
+  LambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: XrayTracePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource:
+                  - "*"
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref GitHubEventSNSTopic
+                  - !Ref CiStatusSNSTopic
+        # - PolicyName: CodeBuildPolicy
+        #   PolicyDocument:
+        #     Version: "2012-10-17"
+        #     Statement:
+        #       - Effect: Allow
+        #         Action:
+        #           - "codebuild:StartBuild"
+        #         Resource:
+        #           - !Ref GitHubEventSNSTopic
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  # Lambda Functions
+  GitHubWebhookEndpointLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: "exports.handler = (event, context, callback) => {}"
+      Description: Backs the GitHub webook payload requests endpoint
+      Environment:
+        Variables:
+          GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
+          GITHUB_EVENT_HANDLER_TOPIC_ARN: !Ref GitHubEventSNSTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 3
+  GitHubEventHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: "exports.handler = (event, context, callback) => {}"
+      Description: Handles GitHub events forwarded from the endpoint
+      Environment:
+        Variables:
+            GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+            CI_STATUS_TOPIC_ARN: !Ref # TODO
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 3
+  CodeBuildCallbackHanlderLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: "exports.handler = (event, context, callback) => {}"
+      Description: Handles GitHub events forwarded from the endpoint
+      Environment:
+        Variables:
+          GITHUB_TOKEN: !Ref GitHubToken
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 3
+  # API Gateway Deployments
+  ## /
+  RestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: !Sub "CI-${AWS::StackName}"
+      Description: "API used by CI system"
+  ## /v1
+  RestApiV1Resource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "v1"
+  ## /v1/github
+  RestApiV1GitHubResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiV1Resource
+      PathPart: "github"
+  ## /v1/github/webhook
+  RestApiV1GitHubWebhookResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiV1GitHubResource
+      PathPart: "webhook"
+  ### /v1/github/webhook POST
+  RestApiV1GitHubWebhookPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestApiV1GitHubWebhookResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GitHubWebhookEndpointLambdaFunction.Arn}/invocations
+  ## Deployments
+  RestApiDeployment:
+    DependsOn:
+      - RestApiV1GitHubWebhookPostMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: "API deployment"
+  RestApiProdStage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: prod
+      Description: "Production stage"
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+  # Lambda Permissions for API Gateway
+  GitHubWebhookRequestPostMethodInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GitHubWebhookEndpointLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiProdStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
