@@ -137,8 +137,8 @@ Resources:
                   # NOTE The project name in this ARN must stay in sync with the
                   # actual project name, but can't be referenced because of
                   # a circular dep.
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-CI
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-CI:*
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Runner
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Runner:*
         - PolicyName: SourceArchiveBucketBasicAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -149,6 +149,34 @@ Resources:
                   - "s3:GetObjectVersion"
                 Resource:
                   - !Sub arn:aws:s3:::${SourceArchiveBucket}/*
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref CiStatusSNSTopic
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "ecr:*RepositoryPolicy"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:PutImage"
+                Resource:
+                  - !Sub "arn:aws:ecr:us-east-1:${AWS::AccountId}:repository/*"
   # Lambda Functions
   GitHubWebhookEndpointLambdaFunction:
     Type: "AWS::Lambda::Function"
@@ -183,7 +211,7 @@ Resources:
             CODEBUILD_CALLBACK_TOPIC_ARN: !Ref CodeBuildCallbackSNSTopic
             AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Handler: index.handler
-      MemorySize: 128
+      MemorySize: 256
       Role: !GetAtt LambdaExecutionIAMRole.Arn
       Runtime: nodejs6.10
       Timeout: 16
@@ -327,7 +355,7 @@ Resources:
       Name: !Sub ${AWS::StackName}-Runner
       ServiceRole: !GetAtt CodeBuildIAMRole.Arn
       Source:
-        BuildSpec: "version: 0.1\n\nphases:\n  build:\n    commands:\n      - curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/codebuild/scripts/bootstrap.sh && sh bootstrap.sh"
+        BuildSpec: "version: 0.1\n\nphases:\n  build:\n    commands:\n      - curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/master/codebuild/bootstrap.sh && sh bootstrap.sh"
         Location: !Join ["", ["arn:aws:s3:::", !Ref SourceArchiveBucket, "/", !FindInMap [Shared, SourceArchives, Key]]]
         Type: S3
       Tags:
