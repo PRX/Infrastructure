@@ -231,13 +231,13 @@ function attachmentsForAlarm(event) {
 }
 
 function colorForAlarm(alarm) {
-    switch (alarm.NewStateValuession) {
+    switch (alarm.NewStateValue) {
         case 'ALARM':
             return '#cc0000';
         case 'OK':
             return '#019933';
-      default:
-          return '#e07701';
+        default:
+            return '#e07701';
     }
 }
 
