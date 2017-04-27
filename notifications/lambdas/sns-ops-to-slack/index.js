@@ -174,10 +174,11 @@ function attachmentsForCiStart(event, build) {
 
     if (event.pull_request) {
         const pr = event.pull_request;
+        const action = event.action.charAt(0).toUpperCase() + event.action.slice(1);
 
         attachment.fallback = `Building ${repo} #${pr.number} with commit ${sha7}`;
         attachment.title = `Building <${buildUrl}|${repo}> with commit <${commitUrl}|${sha7}>`;
-        attachment.text = `<${pr.html_url}|#${pr.number}> ${pr.title} – ${pr.user.login}`;
+        attachment.text = `${action} <${pr.html_url}|#${pr.number}> ${pr.title} – ${pr.user.login}`;
     } else {
         attachment.fallback = `Building ${repo}:${branch} with commit ${sha7}`;
         attachment.title = `Building <${buildUrl}|${repo}:${branch}> with commit <${commitUrl}|${sha7}>`;
