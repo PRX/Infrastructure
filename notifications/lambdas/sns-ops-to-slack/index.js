@@ -170,7 +170,7 @@ function attachmentsForCiStart(event, build) {
         footer: branch,
         color: 'warning',
         mrkdwn_in: ['text']
-    }
+    };
 
     if (event.pull_request) {
         const pr = event.pull_request;
@@ -192,7 +192,7 @@ function attachmentsForCiStart(event, build) {
             text.push(`<${commit.url}|\`${commit.id.substring(0, 7)}\`> ${commit.author.username}:${commit.message}`);
         });
 
-        attachment.text = text.join('\n');;
+        attachment.text = text.join('\n');
     }
 
     return [attachment];
