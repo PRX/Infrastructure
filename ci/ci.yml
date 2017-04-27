@@ -14,6 +14,8 @@ Parameters:
     Type: String
   LambdaCodeBucket:
     Type: String
+  NotificationsStackName:
+    Type: String
 Resources:
   # ACM Certificates
   CiCertificate:
@@ -34,11 +36,11 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
   # SNS Topics
-  GitHubEventSNSTopic:
+  GitHubEventSnsTopic:
     Type: "AWS::SNS::Topic"
-  CodeBuildCallbackSNSTopic:
+  CodeBuildCallbackSnsTopic:
     Type: "AWS::SNS::Topic"
-  CiStatusSNSTopic:
+  CiStatusSnsTopic:
     Type: "AWS::SNS::Topic"
   # SNS Subscriptions
   GitHubEventTopicFunctionSubscription:
@@ -46,7 +48,15 @@ Resources:
     Properties:
       Endpoint: !GetAtt GitHubEventHandlerLambdaFunction.Arn
       Protocol: lambda
-      TopicArn: !Ref GitHubEventSNSTopic
+      TopicArn: !Ref GitHubEventSnsTopic
+  CiStatusTopicRelayFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
+      Protocol: lambda
+      TopicArn: !Ref CiStatusSnsTopic
   # Lambda Permssions for SNS
   GitHubEventTopicInvokeFunctionPermission:
     Type: "AWS::Lambda::Permission"
@@ -54,7 +64,16 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref GitHubEventHandlerLambdaFunction
       Principal: sns.amazonaws.com
-      SourceArn: !Ref GitHubEventSNSTopic
+      SourceArn: !Ref GitHubEventSnsTopic
+  CiStatusTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CiStatusSnsTopic
   # IAM Roles
   LambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
@@ -88,8 +107,8 @@ Resources:
                 Action:
                   - "sns:Publish"
                 Resource:
-                  - !Ref GitHubEventSNSTopic
-                  - !Ref CiStatusSNSTopic
+                  - !Ref GitHubEventSnsTopic
+                  - !Ref CiStatusSnsTopic
         - PolicyName: S3Policy
           PolicyDocument:
             Version: "2012-10-17"
@@ -157,7 +176,7 @@ Resources:
                 Action:
                   - "sns:Publish"
                 Resource:
-                  - !Ref CiStatusSNSTopic
+                  - !Ref CiStatusSnsTopic
         - PolicyName: ECRAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -188,7 +207,7 @@ Resources:
       Environment:
         Variables:
           GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
-          GITHUB_EVENT_HANDLER_TOPIC_ARN: !Ref GitHubEventSNSTopic
+          GITHUB_EVENT_HANDLER_TOPIC_ARN: !Ref GitHubEventSnsTopic
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -204,11 +223,11 @@ Resources:
       Environment:
         Variables:
             GITHUB_ACCESS_TOKEN: !Ref GitHubToken
-            CI_STATUS_TOPIC_ARN: !Ref CiStatusSNSTopic
+            CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
             CODEBUILD_PROJECT_NAME: !Ref CodeBuildProject
             SOURCE_ARCHIVE_BUCKET: !Ref SourceArchiveBucket
             SOURCE_ARCHIVE_KEY: !FindInMap [Shared, SourceArchives, Key]
-            CODEBUILD_CALLBACK_TOPIC_ARN: !Ref CodeBuildCallbackSNSTopic
+            CODEBUILD_CALLBACK_TOPIC_ARN: !Ref CodeBuildCallbackSnsTopic
             AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Handler: index.handler
       MemorySize: 256
@@ -225,7 +244,7 @@ Resources:
       Environment:
         Variables:
           GITHUB_TOKEN: !Ref GitHubToken
-          CI_STATUS_TOPIC_ARN: !Ref CiStatusSNSTopic
+          CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -237,8 +256,15 @@ Resources:
     Properties:
       ActionsEnabled: true
       AlarmName: GitHub Webhook Endpoint Lambda Errors
-      # AlarmActions:
-      #   - !Ref OpsWarnMessagesSNSTopicArn
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the GitHub webhook endpoint lambda has exceeded 0 in
         the last five minutes.
@@ -257,8 +283,15 @@ Resources:
     Properties:
       ActionsEnabled: true
       AlarmName: GitHub Event Handler Lambda Errors
-      # AlarmActions:
-      #   - !Ref OpsWarnMessagesSNSTopicArn
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the GitHub event handler lambda has exceeded 0 in
         the last five minutes.

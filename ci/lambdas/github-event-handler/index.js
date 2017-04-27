@@ -112,6 +112,7 @@ function checkCodeBuildSupport(event, callback) {
     const options = url.parse(apiUrl);
     options.method = 'GET';
     options.headers = GITHUB_HEADERS;
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
     // Request with response handler
     console.log(`...Calling contents API: ${apiUrl}...`);
@@ -160,6 +161,7 @@ function getSourceArchiveLink(event, callback) {
     const options = url.parse(apiUrl);
     options.method = 'GET';
     options.headers = GITHUB_HEADERS;
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
     // Request with response handler
     console.log(`...Calling archive link API: ${apiUrl}...`);
@@ -198,6 +200,7 @@ function getSourceArchive(location, event, callback) {
     const options = url.parse(location);
     options.method = 'GET';
     options.headers = GITHUB_HEADERS;
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
     // Setup write stream
     const dest = `/tmp/${Date.now()}`;
@@ -263,7 +266,7 @@ function triggerBuild(versionId, event, callback) {
     const ecrRegion = 'us-east-1';
     const repo = event.repository.full_name.split('/')[1];
     const ref = (event.after || event.pull_request.head.sha)
-    const sha = ref.substring(0,7);
+    const sha = ref.substring(0, 7);
     const tag = `${awsId}.dkr.ecr.${ecrRegion}.amazonaws.com/${repo}:${sha}`;
 
     codebuild.startBuild({
