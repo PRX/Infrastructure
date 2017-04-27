@@ -7,19 +7,20 @@ TEST_FILE=".prxci"
 #
 
 # sns callback helpers
-if [ -z "$SNS_CALLBACK" ]; then
-  echo "You must define an \$SNS_CALLBACK"
+if [ -z "$PRX_SNS_CALLBACK" ]; then
+  echo "You must define a \$PRX_SNS_CALLBACK"
   exit 1
 fi
 sns_message() {
-  MSG="'{\"success\":$1,\"reason\":\"$2\""
+  MSG="{\"success\":$1,\"reason\":\"$2\""
   [ -z "$PRX_REPO" ] || MSG="$MSG,\"prxRepo\":\"$PRX_REPO\""
   [ -z "$PRX_COMMIT" ] || MSG="$MSG,\"prxCommit\":\"$PRX_COMMIT\""
+  [ -z "$PRX_GITHUB_PR" ] || MSG="$MSG,\"prxGithubPr\":\"$PRX_GITHUB_PR\""
   [ -z "$PRX_ECR_TAG" ] || MSG="$MSG,\"prxEcrTag\":\"$PRX_ECR_TAG\""
   [ -z "$PRX_ECR_REGION" ] || MSG="$MSG,\"prxEcrRegion\":\"$PRX_ECR_REGION\""
   [ -z "$CODEBUILD_BUILD_ARN" ] || MSG="$MSG,\"buildArn\":\"$CODEBUILD_BUILD_ARN\""
-  MSG="$MSG}'"
-  OUT=$(aws sns publish --topic-arn "$SNS_CALLBACK" --message "$MSG")
+  MSG="$MSG}"
+  OUT=$(aws sns publish --topic-arn "$PRX_SNS_CALLBACK" --message "$MSG")
   CODE=$?
   if [ $CODE -eq 0 ]; then
     echo "Sent SNS message: $MSG"
@@ -74,7 +75,7 @@ if [ -n "$(grep docker-compose $TEST_FILE)" ] && [ -z "$(command -v docker-compo
   chmod +x /usr/local/bin/docker-compose
   echo "  successfully installed $(docker-compose -v)"
 fi
-if [ -n "$PRX_ECR_TAG" ]; then
+if [ -n "$PRX_ECR_TAG" ] && [ -f "Dockerfile" ]; then
   echo "Logging into ECR..."
   $(aws ecr get-login --region $PRX_ECR_REGION)
 fi
@@ -97,7 +98,7 @@ set -e
 #
 # optionally push to ECR
 #
-if [ -n "$PRX_ECR_TAG" ]; then
+if [ -n "$PRX_ECR_TAG" ] && [ -f "Dockerfile" ]; then
   IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
   if [ -z "$IMAGE_ID" ]; then
     sns_error "Dockerfile needs an org.prx.app label"
