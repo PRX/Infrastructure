@@ -216,16 +216,29 @@ function attachmentForCloudFormation(event) {
 
 function attachmentsForAlarm(event) {
     const alarm = JSON.parse(event.Records[0].Sns.Message);
+    const trigger = alarm.Trigger;
 
     return [
         {
-            fallback: `${alarm.NewStateValue} – ${alarm.AlarmDescription}`,
+            fallback: `${alarm.NewStateValue} – ${alarm.AlarmName}`,
             color: colorForAlarm(alarm),
-            author_name: alarm.AlarmName,
-            title: alarm.AlarmDescription,
-            text: alarm.NewStateReason,
+            author_name: `${trigger.Namespace}`,
+            title: `${alarm.NewStateValue} – ${alarm.AlarmName}`,
+
+            text: `${trigger.MetricName}: ${alarm.NewStateReason}`,
             footer: alarm.Region,
-            ts: (Date.now() / 1000 | 0)
+            ts: (Date.parse(alarm.StateChangeTime) / 1000 | 0),
+            fields: [
+                {
+                    title: `Evaluation`,
+                    value: `${trigger.Statistic} – ${trigger.EvaluationPeriods} × ${trigger.Period}`,
+                    short: true
+                }, {
+                    title: 'Threshold',
+                    value: trigger.Threshold,
+                    short: true
+                }
+            ]
         }
     ];
 }
