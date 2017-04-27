@@ -49,6 +49,12 @@ Resources:
       Endpoint: !GetAtt GitHubEventHandlerLambdaFunction.Arn
       Protocol: lambda
       TopicArn: !Ref GitHubEventSnsTopic
+  CodeBuildCallbackTopicFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CodeBuildCallbackHanlderLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref CodeBuildCallbackSnsTopic
   CiStatusTopicRelayFunctionSubscription:
     Type: "AWS::SNS::Subscription"
     Properties:
@@ -65,6 +71,13 @@ Resources:
       FunctionName: !Ref GitHubEventHandlerLambdaFunction
       Principal: sns.amazonaws.com
       SourceArn: !Ref GitHubEventSnsTopic
+  CodeBuildCallbackTopicInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CodeBuildCallbackHanlderLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CodeBuildCallbackSnsTopic
   CiStatusTopicInvokeRelayFunctionPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
@@ -177,6 +190,7 @@ Resources:
                   - "sns:Publish"
                 Resource:
                   - !Ref CiStatusSnsTopic
+                  - !Ref CodeBuildCallbackSnsTopic
         - PolicyName: ECRAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -243,7 +257,7 @@ Resources:
       Description: Handles GitHub events forwarded from the endpoint
       Environment:
         Variables:
-          GITHUB_TOKEN: !Ref GitHubToken
+          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
           CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
       Handler: index.handler
       MemorySize: 128

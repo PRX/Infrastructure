@@ -120,7 +120,10 @@ function checkCodeBuildSupport(event, callback) {
         res.setEncoding('utf8');
 
         let json = '';
-        res.on('data', chunk => json += chunk);
+        res.on('data', chunk => {
+            console.log(chunk);
+            json += chunk;
+        });
         res.on('end', () => {
             switch (res.statusCode) {
                 case 200:
@@ -137,6 +140,10 @@ function checkCodeBuildSupport(event, callback) {
                     callback(new Error('Contents request failed!'));
             }
         });
+    });
+
+    req.setTimeout(1000, () => {
+        console.log('========= request timed out');
     });
 
     // Generic request error handling
@@ -274,7 +281,7 @@ function triggerBuild(versionId, event, callback) {
         sourceVersion: versionId,
         environmentVariablesOverride: [
             {
-                name: 'SNS_CALLBACK',
+                name: 'PRX_SNS_CALLBACK',
                 value: process.env.CODEBUILD_CALLBACK_TOPIC_ARN
             }, {
                 name: 'PRX_REPO',
@@ -284,7 +291,7 @@ function triggerBuild(versionId, event, callback) {
                 value: ref
             }, {
                 name: 'PRX_ECR_TAG',
-                value:tag
+                value: tag
             }, {
                 name: 'PRX_ECR_REGION',
                 value: ecrRegion

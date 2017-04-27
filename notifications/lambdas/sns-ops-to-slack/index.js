@@ -77,7 +77,7 @@ function channelForEvent(event) {
     } else if (topicArn.search('OpsStatus') !== -1) {
         return '#ops-status';
     } else if (topicArn.search('CiStatus') !== -1) {
-        return '#ops-debug';
+        return '#ops-status';
     } else {
         return '#ops-debug';
     }
@@ -133,21 +133,8 @@ function attachmentsForCiStatus(event) {
     if (data.event && data.build) {
         return attachmentsForCiStart(data.event, data.build);
     } else {
-        // return attachmentsForCiEnd(data.event, data.build);
+        return attachmentsForCiCallback(data.callback);
     }
-
-    return [
-        {
-            fallback: `A build has started`,
-            color: 'warning',
-            text: `Building <${buildUrl}|${repo}> with commit <${commitUrl}|${sha}>`,
-            // author_name: alarm.AlarmName,
-            // title: alarm.AlarmDescription,
-            // text: alarm.NewStateReason,
-            footer: region,
-            ts: (Date.parse(build.startTime) / 1000 | 0)
-        }
-    ];
 }
 
 // Event here is the GitHub event, not the Lambda event
@@ -191,6 +178,51 @@ function attachmentsForCiStart(event, build) {
         event.commits.forEach(commit => {
             text.push(`<${commit.url}|\`${commit.id.substring(0, 7)}\`> ${commit.author.username}:${commit.message}`);
         });
+
+        attachment.text = text.join('\n');
+    }
+
+    return [attachment];
+}
+
+function attachmentsForCiCallback(data) {
+    console.log(data);
+    const repo = data.prxRepo;
+    const sha = data.prxCommit;
+    const sha7 = sha.substring(0, 7);
+
+    const arn = data.buildArn;
+    const region = arn.split(':')[3];
+    const buildId = arn.split('/')[1];
+
+    const commitUrl = `https://github.com/${repo}/commit/${sha7}`;
+    const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
+
+    const attachment = {
+        ts: (Date.now() / 1000 | 0),
+        // footer: branch,
+        mrkdwn_in: ['text']
+    };
+
+    let pr = '';
+
+    if (data.prxGithubPr) {
+        const num = data.prxGithubPr;
+        const prUrl = `https://github.com/${repo}/pull/${num}`;
+        pr = ` <${prUrl}|#${num}>`;
+    }
+
+    if (data.success) {
+        attachment.color = 'good',
+        attachment.fallback = `Build ${repo} with commit ${sha7} succeeded`;
+        attachment.text = `Build <${buildUrl}|${repo}>${pr} with commit <${commitUrl}|${sha7}> succeeded`;
+    } else {
+        attachment.color = 'danger',
+        attachment.fallback = `Building ${repo} with commit ${sha7} failed`;
+
+        const text = [];
+        text.push(`Building <${buildUrl}|${repo}>${pr} with commit <${commitUrl}|${sha7}> failed`);
+        text.push(`> _${data.reason}_`)
 
         attachment.text = text.join('\n');
     }
