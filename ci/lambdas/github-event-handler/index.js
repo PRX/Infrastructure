@@ -276,27 +276,30 @@ function triggerBuild(versionId, event, callback) {
     const sha = ref.substring(0, 7);
     const tag = `${awsId}.dkr.ecr.${ecrRegion}.amazonaws.com/${repo}:${sha}`;
 
+    const environmentVariables = [
+        {
+            name: 'PRX_SNS_CALLBACK',
+            value: process.env.CODEBUILD_CALLBACK_TOPIC_ARN
+        }, {
+            name: 'PRX_REPO',
+            value: event.repository.full_name
+        }, {
+            name: 'PRX_COMMIT',
+            value: ref
+        }
+    ];
+
+    // event.after is only available for push events, and we only handle push
+    // events for master branches
+    if (event.after) {
+        environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
+        environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
+    }
+
     codebuild.startBuild({
         projectName: process.env.CODEBUILD_PROJECT_NAME,
         sourceVersion: versionId,
-        environmentVariablesOverride: [
-            {
-                name: 'PRX_SNS_CALLBACK',
-                value: process.env.CODEBUILD_CALLBACK_TOPIC_ARN
-            }, {
-                name: 'PRX_REPO',
-                value: event.repository.full_name
-            }, {
-                name: 'PRX_COMMIT',
-                value: ref
-            }, {
-                name: 'PRX_ECR_TAG',
-                value: tag
-            }, {
-                name: 'PRX_ECR_REGION',
-                value: ecrRegion
-            }
-        ]
+        environmentVariablesOverride: environmentVariables
     }, (err, data) => {
         if (err) {
             console.error('...CodeBuild failed to start!');
