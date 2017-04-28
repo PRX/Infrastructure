@@ -10,7 +10,7 @@ exports.handler = (event, context, callback) => {
     const params = {
         CopySource: `${s3Location.bucketName}/${s3Location.objectKey}`,
         Bucket: process.env.INFRASTRUCTURE_CODE_BUCKET,
-        Key: 'tktktktk'
+        Key: s3Location.objectKey
     };
 
     s3.copyObject(params, (err, data) => {
