@@ -204,27 +204,38 @@ function attachmentsForCiCallback(data) {
         mrkdwn_in: ['text']
     };
 
-    let pr = '';
+    let extra = '';
 
     if (data.prxGithubPr) {
         const num = data.prxGithubPr;
         const prUrl = `https://github.com/${repo}/pull/${num}`;
-        pr = ` <${prUrl}|#${num}>`;
+        extra = ` <${prUrl}|#${num}>`;
+    } else {
+        // This assumes that anything other than PR is master, which, for the
+        // time being, is true. But that may not always be the case
+        extra = `:master`;
     }
 
     if (data.success) {
-        attachment.color = 'good',
-        attachment.fallback = `Build ${repo} with commit ${sha7} succeeded`;
-        attachment.text = `Build <${buildUrl}|${repo}>${pr} with commit <${commitUrl}|${sha7}> succeeded`;
+        attachment.color = 'good';
+        attachment.fallback = `Built ${repo}${extra} with commit ${sha7}`;
+        attachment.title = `Built <${buildUrl}|${repo}>${extra} with commit <${commitUrl}|${sha7}>`;
+
+        if (data.prxGithubPr) {
+            const num = data.prxGithubPr;
+            const prUrl = `https://github.com/${repo}/pull/${num}`;
+            attachment.text = `<${prUrl}|${prUrl}>`;
+        } else if (data.prxEcrTag) {
+            const ecrUrl = `https://console.aws.amazon.com/ecs/home?region=${data.prxEcrRegion}#/repositories/${repo}`;
+            attachment.text = `Docker image pushed to <${ecrUrl}|ECR> with tag \`${sha7}\``;
+        } else {
+            attachment.text = `Tktktk Lambda deploy`;
+        }
     } else {
-        attachment.color = 'danger',
-        attachment.fallback = `Building ${repo} with commit ${sha7} failed`;
-
-        const text = [];
-        text.push(`Building <${buildUrl}|${repo}>${pr} with commit <${commitUrl}|${sha7}> failed`);
-        text.push(`> _${data.reason}_`)
-
-        attachment.text = text.join('\n');
+        attachment.color = 'danger';
+        attachment.fallback = `Failed to build ${repo}${extra} with commit ${sha7}`;
+        attachment.title = `Failed to build <${buildUrl}|${repo}>${extra} with commit <${commitUrl}|${sha7}>`
+        attachment.text = `> _${data.reason}_`;
     }
 
     return [attachment];
