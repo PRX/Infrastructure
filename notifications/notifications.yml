@@ -106,6 +106,31 @@ Resources:
       FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
       Principal: sns.amazonaws.com
       SourceArn: !Ref OpsFatalMessagesSnsTopic
+  # Lambda Alarms
+  SlackRelayErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Slack Relay Lambda Errors
+      AlarmActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      OKActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Slack relay lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SnsOpsMessagesToSlackLambdaFunction
   # SNS Subscriptions
   RelayFunctionDebugSubscription:
     Type: "AWS::SNS::Subscription"
