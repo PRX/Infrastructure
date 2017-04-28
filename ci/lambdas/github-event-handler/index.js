@@ -294,6 +294,9 @@ function triggerBuild(versionId, event, callback) {
     if (event.after) {
         environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
         environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
+    } else {
+        const num = event.pull_request.number;
+        environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
     }
 
     codebuild.startBuild({
