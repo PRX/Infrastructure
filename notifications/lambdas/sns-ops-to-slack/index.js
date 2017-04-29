@@ -243,16 +243,79 @@ function attachmentsForCiCallback(data) {
 
 // CLOUDFORMATION //////////////////////////////////////////////////////////////
 
-// TODO
 function attachmentForCloudFormation(event) {
+    const note = event.Records[0].Sns.Message;
+
+    // Each event includes information about the stack where the change is
+    // happening
+    const stackId = note.match(/StackId='([a-zA-Z0-9-\:\/]+)'\n/)[1];
+    const stackName = note.match(/StackName='([a-zA-Z0-9-]+)'\n/)[1];
+    const timestamp = note.match(/Timestamp='([0-9TZ.:-]+)'\n/)[1];
+
+    // And information about the resource that is actually changing
+    const resourceType = note.match(/ResourceType='([a-zA-Z0-9-\:]+)'\n/)[1];
+    const resourceId = note.match(/LogicalResourceId='(.+)'\n/)[1];
+    const resourceStatus = note.match(/ResourceStatus='([a-zA-Z_]+)'\n/)[1];
+    const resourceReason = note.match(/ResourceStatusReason='(.*)'\n/)[1];
+
+    const region = stackId.split(':')[3];
+    const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home#/stack/detail?stackId=${stackId}`;
+
     return [
         {
-            fallback: 'CloudFormation notification',
-            title: 'CloudFormation notification',
-            text:  event.Records[0].Sns.Message,
-            footer: 'These need to be parsed better'
+            color: colorForCloudFormation(resourceStatus),
+            fallback: `${stackName}:${resourceId} – ${resourceStatus}`,
+            author_name: stackName,
+            author_link: stackUrl,
+            title: `${resourceType} – ${resourceId}`,
+            text: `Status: ${resourceStatus}\n>_${resourceReason}_`,
+            footer: region,
+            ts: (Date.parse(timestamp) / 1000 | 0),
+            mrkdwn_in: ['text']
         }
     ];
+}
+
+// These colors match events in the CloudFormation console
+function colorForCloudFormation(status) {
+    const green = [
+        'CREATE_COMPLETE',
+        'ROLLBACK_COMPLETE',
+        'UPDATE_COMPLETE',
+        'UPDATE_ROLLBACK_COMPLETE',
+    ];
+
+    const yellow = [
+        'CREATE_IN_PROGRESS',
+        'DELETE_IN_PROGRESS',
+        'REVIEW_IN_PROGRESS',
+        'ROLLBACK_IN_PROGRESS',
+        'UPDATE_IN_PROGRESS',
+        'UPDATE_COMPLETE_CLEANUP_IN_PROGRESS'
+    ]
+
+    const red = [
+        'CREATE_FAILED',
+        'DELETE_FAILED',
+        'ROLLBACK_FAILED',
+        'UPDATE_ROLLBACK_FAILED',
+        'UPDATE_ROLLBACK_IN_PROGRESS',
+        'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS'
+    ]
+
+    const grey = [
+        'DELETE_COMPLETE'
+    ]
+
+    if (green.indexOf(status) !== -1) {
+       return 'good';
+    } else if (yellow.indexOf(status) !== -1) {
+        return 'warning';
+    } else if (red.indexOf(status) !== -1) {
+        return 'danger';
+    } else {
+        return '#AAAAAA';
+    }
 }
 
 // CLOUDWATCH ALARM ////////////////////////////////////////////////////////////
