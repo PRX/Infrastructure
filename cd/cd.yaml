@@ -1,3 +1,12 @@
+# TODO Somehow the root stack needs to know where to look for nested (app) stack
+# teplates. The templates need to be directly available somewhere (not in a
+# zipped artifact or file).
+# Current plan: the git SHA is available on the Infrastructure repo artifact
+# when it gets passed to Lambda. The Lambda can write the SHA to a JSON file,
+# zip that file, and return it as an output artifact. Then a CFN reference
+# function can be used to extract that value and pass it as a parameter
+# override to the pipeline actions that are updating the root stacks
+
 # This creates a CodePipeline pipeline (and associates resources) for handling
 # deployments and testing of the platform. It watches three sources for changes,
 # which trigger the pipeline: the meta.prx.org repo (used for acceptance
@@ -99,6 +108,7 @@ Resources:
                   - !Sub arn:aws:s3:::${InfrastructureCodeBucket}/*
               - Effect: Allow
                 Action:
+                  - "s3:putObject"
                   - "s3:getObject"
                 Resource:
                   - !Sub arn:aws:s3:::${ArtifactStore}/*
@@ -360,6 +370,34 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 3
+  # Lambda Alarms
+  SlackRelayErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Infrastructure S3 Sync Lambda Errors
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the S3 Sync lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureRepoSourceS3SyncFuncton
   # Pipelines
   Pipeline:
     Type: "AWS::CodePipeline::Pipeline"
@@ -423,6 +461,8 @@ Resources:
                 FunctionName: !Ref InfrastructureRepoSourceS3SyncFuncton
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+              OutputArtifacts:
+                - Name: RepoStateArtifact
               RunOrder: 2
         - Name: Staging
           Actions:
@@ -439,15 +479,17 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-staging
                 ParameterOverrides: !Sub |
-                  {
-                    "NotificationsStackName": "${NotificationsStackName}",
-                    "InfrastructureCodeBucket": "${InfrastructureCodeBucket}"
-                  }
+                    {
+                      "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
+                      "NotificationsStackName": "${NotificationsStackName}",
+                      "InfrastructureCodeBucket": "${InfrastructureCodeBucket}"
+                    }
                 TemplateConfiguration: TemplateConfigZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
                 - Name: TemplateConfigZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: RepoStateArtifact
               RunOrder: 1
         - Name: Testing
           Actions:
