@@ -6,7 +6,7 @@
 // pull requests (for repositories that are designed to work with CodeBuild).
 // Broadly, it does the following:
 // 1. Check to make sure this event should trigger a build
-// 2. Trigger a CodeBuild with the current code
+// 2. Trigger a CodeBuild by copying current code to S3 (the CodeBuild source)
 // 3. Send a notification that the build is starting (for Slack/etc)
 // 4. Set the GitHub status to 'pending' for the sha
 
