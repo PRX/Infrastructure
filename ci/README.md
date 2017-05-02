@@ -14,15 +14,16 @@ notifications to Slack/etc.
 
 ## Setup
 
-Most of the setup is done by launching a stack using the CloudFormation
+Most of the setup is done by launching a stack using the `ci.yml` CloudFormation
 template. There is a prerequisite that code for the Lambda functions has been
 copied to S3. There's a basic deploy script that will do that for you. This
-stack also requires a Infrastructure/notifications stack; you must pass in the
+stack also requires an Infrastructure/notifications stack; you must pass in the
 name of an already-launched notifications stack.
 
 When launching the stack, you will need to provide a GitHub access token, the
-secret that was set for the GitHub webhook, and the name of the S3 bucket where
-the Lambda function code can be found.
+secret that was set for the GitHub webhook, the name of the S3 bucket where
+the Lambda function code can be found, and the URL of the shell script that
+CodeBuild will use to bootstrap the build process.
 
 For now the expectation is that this stack will only be launched once, and the
 GitHub webhook will be setup at the organization level, for all repositories.
