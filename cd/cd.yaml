@@ -306,8 +306,10 @@ Resources:
             Action:
               - "sts:AssumeRole"
       Path: "/"
+      # TODO This will need access to S3 buckets where Lambda code archives are
+      # stored at some point
       Policies:
-        #
+        # Nested stack templates are accessed through S3
         - PolicyName: TemplateBucketAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -317,20 +319,12 @@ Resources:
                   - "s3:GetObject"
                 Resource:
                   - !Sub arn:aws:s3:::${InfrastructureCodeBucket}/sync/Infrastructure*
-        # - PolicyName: CodeBucketAccess
-        #   PolicyDocument:
-        #     Version: "2012-10-17"
-        #     Statement:
-        #       - Effect: Allow
-        #         Action:
-        #           - "s3:GetObject"
-        #         Resource:
-        #           - !Sub arn:aws:s3:::${StagingCodeBucket}/*
-        #           - !Sub arn:aws:s3:::${ProductionCodeBucket}/*
-        - PolicyName: CloudFormationRolePolicy
+        # Give CloudFormation full access except deleting stacks
+        - PolicyName: StackManipulationPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              #
               - Effect: Allow
                 Action:
                   - "cloudformation:*"
@@ -342,30 +336,37 @@ Resources:
                 Action:
                   - "cloudformation:DeleteStack"
                 Resource: "*"
+        # Need to CRUD all resources included in root and nested stacks
+        # NOTE: THIS IS VERY POWERFUL
+        - PolicyName: ResourceManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Be very explicit with S3 policies; CloudFormation never deletes
+              # S3 buckets anyway
               - Effect: Allow
                 Action:
                   - s3:CreateBucket
                   - s3:PutLifecycleConfiguration
-                Resource: "*" # TODO Really? What's this for?
+                Resource: "*"
+              # Only include services that root stack or its nested stacks
+              # actually use
               - Effect: Allow
-                # TODO Dangerous!
                 Action:
-                  - "ec2:*"
-                  - "ecs:*"
-                  - "iam:*"
-                  - "autoscaling:*"
-                  - "cloudwatch:*"
-                  - "logs:*"
-                  - "elasticloadbalancing:*"
-                  - "route53:*"
-                  - "application-autoscaling:*"
-                  - "lambda:*"
-                  - "sns:*"
-                  - "codepipeline:*"
-                  - "codebuild:*"
                   - "acm:*"
                   - "apigateway:*"
-                Resource: "*" # TODO Really?
+                  - "application-autoscaling:*"
+                  - "autoscaling:*"
+                  - "cloudwatch:*"
+                  - "ec2:*"
+                  - "ecs:*"
+                  - "elasticloadbalancing:*"
+                  - "iam:*"
+                  - "lambda:*"
+                  - "logs:*"
+                  - "route53:*"
+                  - "sns:*"
+                Resource: "*"
   # Lambda Functions
   InfrastructureRepoSourceS3SyncFuncton:
     Type: "AWS::Lambda::Function"
