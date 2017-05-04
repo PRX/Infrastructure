@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates foundational resources needed to handle infrastructure-related
+  messaging and notifications
+Parameters:
+  LambdaCodeBucket:
+    Type: String
+  AutoScalingSlackWebhookURL:
+    Type: String
+  CloudWatchSlackWebhookURL:
+    Type: String
+  CloudFormationSlackWebhookURL:
+    Type: String
+  CodePipelineSlackWebhookURL:
+    Type: String
+  CodeBuildSlackWebhookURL:
+    Type: String
+  # IkeSlackSlackWebhookURL:
+  #   Type: String
+  # IkeSlackVerificationToken:
+    Type: String
+Resources:
+  # SNS Topics
+  OpsDebugMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsInfoMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsWarnMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsErrorMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsFatalMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  # IAM Roles
+  LambdaBasicExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  # Lambda Functions
+  SnsOpsMessagesToSlackLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: "notifications/sns-ops-to-slack.zip"
+      Description: >
+        Relays messages, which are produced by various AWS services and posted
+        to SNS, to the channels in Slack
+      Environment:
+        Variables:
+          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookURL
+          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookURL
+          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookURL
+          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookURL
+          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookURL
+          # IKE_SLACK_WEBHOOK_URL: !Ref IkeSlackSlackWebhookURL
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  # Lambda Permssions for SNS
+  OpsDebugTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsDebugMessagesSnsTopic
+  OpsInfoTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsInfoMessagesSnsTopic
+  OpsWarnTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsWarnMessagesSnsTopic
+  OpsErrorTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsErrorMessagesSnsTopic
+  OpsFatalTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsFatalMessagesSnsTopic
+  # Lambda Alarms
+  SlackRelayErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Slack Relay Lambda Errors
+      AlarmActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      OKActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Slack relay lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SnsOpsMessagesToSlackLambdaFunction
+  # SNS Subscriptions
+  RelayFunctionDebugSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsDebugMessagesSnsTopic
+  RelayFunctionInfoSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsInfoMessagesSnsTopic
+  RelayFunctionWarnSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsWarnMessagesSnsTopic
+  RelayFunctionErrorSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsErrorMessagesSnsTopic
+  RelayFunctionFatalSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsFatalMessagesSnsTopic
+Outputs:
+  SnsOpsMessagesToSlackLambdaFunctionName:
+    Value: !Ref SnsOpsMessagesToSlackLambdaFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-SnsOpsMessagesToSlackLambdaFunctionName
+  SnsOpsMessagesToSlackLambdaFunctionArn:
+    Value: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+    Export:
+      Name: !Sub ${AWS::StackName}-SnsOpsMessagesToSlackLambdaFunctionArn
+  OpsDebugMessagesSnsTopicArn:
+    Value: !Ref OpsDebugMessagesSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OpsDebugMessagesSnsTopicArn
+  OpsInfoMessagesSnsTopicArn:
+    Value: !Ref OpsInfoMessagesSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OpsInfoMessagesSnsTopicArn
+  OpsWarnMessagesSnsTopicArn:
+    Value: !Ref OpsWarnMessagesSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OpsWarnMessagesSnsTopicArn
+  OpsErrorMessagesSnsTopicArn:
+    Value: !Ref OpsErrorMessagesSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OpsErrorMessagesSnsTopicArn
+  OpsFatalMessagesSnsTopicArn:
+    Value: !Ref OpsFatalMessagesSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-OpsFatalMessagesSnsTopicArn
