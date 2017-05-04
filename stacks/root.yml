@@ -31,6 +31,7 @@ Parameters:
     Type: String
   SecretsBase:
     Type: String
+  # Application Specific
   AudiogramECRImageTag:
     Type: String
   AudiogramSecretsVersion:
@@ -38,6 +39,9 @@ Parameters:
   CastleECRImageTag:
     Type: String
   CastleSecretsVersion:
+    Type: String
+  # For testing
+  Foo:
     Type: String
 Mappings:
   EnvironmentTypeAbbreviationMap:
@@ -65,14 +69,16 @@ Resources:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/Infrastructure/${InfrastructureGitCommit}/stacks/root-vpc.yml"
       TimeoutInMinutes: "5"
   CertificateStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
       TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/Infrastructure/${InfrastructureGitCommit}/stacks/certificate.yml"
@@ -82,7 +88,8 @@ Resources:
     DependsOn: VPCStack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         KeyPairName: !Ref ASGKeyPairName
         EnvironmentType: !Ref EnvironmentType
@@ -91,15 +98,20 @@ Resources:
         VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
         VPCSubnet1AZ: !GetAtt VPCStack.Outputs.Subnet1AvailabilityZone
         VPCSubnet2AZ: !GetAtt VPCStack.Outputs.Subnet2AvailabilityZone
-        OpsDebugMessagesSNSTopicArn: Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        OpsErrorMessagesSNSTopicArn: Fn::ImportValue: !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
       TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/Infrastructure/${InfrastructureGitCommit}/stacks/ecs.yml"
       TimeoutInMinutes: "5"
   LoadBalancersStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
         VPC: !GetAtt VPCStack.Outputs.VPC
@@ -116,7 +128,8 @@ Resources:
     DependsOn: ECSClusterStack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
@@ -128,11 +141,13 @@ Resources:
         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
         ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsDebugMessagesSNSTopicArn: Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
         ECRRegion: !Ref ECRRegion
         SecretsBase: !Ref SecretsBase
-        CastleECRImageTag: !Join ["", ["Fn::ImportValue": !Sub "${AWS::Region}-${EnvironmentType}-CastleECRImageTag"]]
+        CastleECRImageTag: !Ref CastleECRImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
       TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/Infrastructure/${InfrastructureGitCommit}/stacks/castle.prx.org.yml"
       TimeoutInMinutes: "5"
@@ -144,7 +159,8 @@ Resources:
     DependsOn: ECSClusterStack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
@@ -158,7 +174,10 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
         ECRRegion: !Ref ECRRegion
-        OpsDebugMessagesSNSTopicArn: Fn::ImportValue: !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        SecretsBase: !Ref SecretsBase
         AudiogramECRImageTag: !Ref AudiogramECRImageTag
         AudiogramSecretsVersion: !Ref AudiogramSecretsVersion
       TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/Infrastructure/${InfrastructureGitCommit}/stacks/audiogram.yml"
@@ -242,7 +261,7 @@ Outputs:
 #   #   DependsOn: ECSClusterStack
 #   #   Properties:
 #   #     NotificationARNs:
-#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #   #     Parameters:
 #   #       VPC: !GetAtt VPCStack.Outputs.VPC
 #   #       VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
@@ -253,7 +272,7 @@ Outputs:
 #   #       ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
 #   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
 #   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
-#   #       OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#   #       OpsDebugMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #   #       ECRRegion: !Ref ECRRegion
 #   #       CmsECRImageTag: !Ref CmsECRImageTag
 #   #       CmsEnvAwsAccessKeyId: !Ref CmsEnvAwsAccessKeyId
@@ -289,11 +308,11 @@ Outputs:
 #     DependsOn: ECSClusterStack
 #     Properties:
 #       NotificationARNs:
-#         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #       Parameters:
 #         VPC: !GetAtt VPCStack.Outputs.VPC
 #         RootStackName: !Ref AWS::StackName
-#         OpsDebugMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#         OpsDebugMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
 #         ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
 #         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
@@ -325,7 +344,7 @@ Outputs:
 #   #   Type: "AWS::CloudFormation::Stack"
 #   #   Properties:
 #   #     NotificationARNs:
-#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #   #     Parameters:
 #   #       CodeBucket: !Join ["", ["Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-CodeBucket"]]
 #   #       LambdaFunctionCodeS3Key: !Ref CmsAudioLambdaZipName
@@ -335,7 +354,7 @@ Outputs:
 #   #   Type: "AWS::CloudFormation::Stack"
 #   #   Properties:
 #   #     NotificationARNs:
-#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #   #     Parameters:
 #   #       CodeBucket: !Join ["", ["Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-CodeBucket"]]
 #   #       LambdaFunctionCodeS3Key: !Ref CmsImageLambdaZipName
@@ -345,9 +364,9 @@ Outputs:
 #     Type: "AWS::CloudFormation::Stack"
 #     Properties:
 #       NotificationARNs:
-#         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSNSTopicArn
+#         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
 #       Parameters:
-#         OpsWarnMessagesSNSTopicArn: !GetAtt NotificationsStack.Outputs.OpsWarnMessagesSNSTopicArn
+#         OpsWarnMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsWarnMessagesSnsTopicArn
 #         BootstrapStackName: !Ref BootstrapStackName
 #         PRXUploadAccessKey: !Ref PRXUploadAccessKey
 #         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
