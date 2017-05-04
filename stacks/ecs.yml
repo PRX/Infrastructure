@@ -29,9 +29,13 @@ Parameters:
     Type: "AWS::EC2::AvailabilityZone::Name"
   VPCSubnet2AZ:
     Type: "AWS::EC2::AvailabilityZone::Name"
-  OpsDebugMessagesSNSTopicArn:
+  OpsDebugMessagesSnsTopicArn:
     Type: String
-  OpsErrorMessagesSNSTopicArn:
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  SecretsBase:
+    Type: String
+  SecretsKey:
     Type: String
 Mappings:
   InstanceTypeMap:
@@ -153,6 +157,25 @@ Resources:
             Action:
               - "sts:AssumeRole"
       Path: "/"
+      Policies:
+        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-decrypt-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kms:Decrypt"
+                Resource:
+                  - Sub! arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/${SecretsKey}
+        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-access-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub arn:aws:s3:::${SecretsBase}-secrets/*
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
   ECSInstanceProfile:
@@ -285,12 +308,12 @@ Resources:
         - Granularity: 1Minute
       MinSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MinSize]
       NotificationConfigurations:
-        - TopicARN: !Ref OpsDebugMessagesSNSTopicArn
+        - TopicARN: !Ref OpsDebugMessagesSnsTopicArn
           NotificationTypes:
             - "autoscaling:EC2_INSTANCE_LAUNCH"
             - "autoscaling:EC2_INSTANCE_TERMINATE"
             - "autoscaling:TEST_NOTIFICATION"
-        - TopicARN: !Ref OpsErrorMessagesSNSTopicArn
+        - TopicARN: !Ref OpsErrorMessagesSnsTopicArn
           NotificationTypes:
             - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
             - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
