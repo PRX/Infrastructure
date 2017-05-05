@@ -1,8 +1,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: castle.prx.org application running in Docker
 Mappings:
-  ContainerNameMap:
-    CastleApp:
+  Shared:
+    Project:
+      name: castle.prx.org
+    Container:
       name: castle-phoenix
 Parameters:
   # VPC ########################################################################
@@ -58,6 +60,13 @@ Resources:
       Name: !Sub castle-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Castle-${EnvironmentType}
       VpcId: !Ref VPC
   CastleALBHTTPHostListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
@@ -106,7 +115,7 @@ Resources:
               awslogs-group: !Ref CastleLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 128
-          Name: !FindInMap [ContainerNameMap, CastleApp, name]
+          Name: !FindInMap [Shared, Container, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 4000
@@ -119,7 +128,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 1
       LoadBalancers:
-        - ContainerName: !FindInMap [ContainerNameMap, CastleApp, name]
+        - ContainerName: !FindInMap [Shared, Container, name]
           ContainerPort: 4000
           TargetGroupArn: !Ref CastleALBTargetGroup
       Role: !Ref ECSServiceIAMRole

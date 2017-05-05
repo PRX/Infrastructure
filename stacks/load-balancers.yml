@@ -3,6 +3,8 @@ Description: >
   Creates application load balancers that can be reused for multiple
   applications, using host- and path-based routing rules.
 Parameters:
+  EnvironmentType:
+    Type: String
   EnvironmentTypeAbbreviation:
     Type: String
   VPC:
@@ -32,15 +34,26 @@ Resources:
           IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-      # Tags:
-      #   - Key: Name
-      #     Value: !Sub ${RootStackName} Plaform ALB
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-LB-web_ssh
   PlatformALBDefaultTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
       Name: !Sub default-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}
       VpcId: !Ref VPC
   PlatformALB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
@@ -54,6 +67,10 @@ Resources:
       Tags:
         - Key: Project
           Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}
   PlatformALBHTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
