@@ -38,23 +38,21 @@ Parameters:
   SecretsKey:
     Type: String
 Mappings:
-  InstanceTypeMap:
-    Staging:
-      InstanceType: t2.micro
-    Production:
-      InstanceType: t2.small
-  ASGSizingMap:
+  EnvironmentTypeMap:
     Testing:
+      InstanceType: t2.micro
       MinSize: "1"
       DefaultDesiredCapacity: "1"
       WarningThreshold: "2"
       MaxSize: "3"
     Staging:
+      InstanceType: t2.micro
       MinSize: "1"
       DefaultDesiredCapacity: "1"
       WarningThreshold: "1"
       MaxSize: "1"
     Production:
+      InstanceType: t2.small
       MinSize: "4"
       DefaultDesiredCapacity: "8"
       WarningThreshold: "100"
@@ -278,7 +276,7 @@ Resources:
       AssociatePublicIpAddress: true
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", ImageId]
       IamInstanceProfile: !Ref ECSInstanceProfile
-      InstanceType: !FindInMap [InstanceTypeMap, !Ref EnvironmentType, InstanceType]
+      InstanceType: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceType]
       InstanceMonitoring: false
       SecurityGroups:
         - !Ref ECSInstanceWebTrafficSecurityGroup
@@ -299,14 +297,14 @@ Resources:
         - !Ref VPCSubnet1AZ
         - !Ref VPCSubnet2AZ
       Cooldown: "240"
-      DesiredCapacity: !FindInMap [ASGSizingMap, !Ref EnvironmentType, DefaultDesiredCapacity]
+      DesiredCapacity: !FindInMap [EnvironmentType, !Ref EnvironmentType, DefaultDesiredCapacity]
       HealthCheckGracePeriod: 512
       HealthCheckType: EC2
       LaunchConfigurationName: !Ref ECSClusterASGLaunchConfiguration
-      MaxSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MaxSize]
+      MaxSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, MaxSize]
       MetricsCollection:
         - Granularity: 1Minute
-      MinSize: !FindInMap [ASGSizingMap, !Ref EnvironmentType, MinSize]
+      MinSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, MinSize]
       NotificationConfigurations:
         - TopicARN: !Ref OpsDebugMessagesSnsTopicArn
           NotificationTypes:
