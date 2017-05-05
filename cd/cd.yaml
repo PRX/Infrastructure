@@ -32,7 +32,7 @@ Parameters:
     Type: String
   TemplateConfigBucket:
     Type: String
-  TemplateConfigKey:
+  TemplateConfigStagingKey:
     Type: String
 Resources:
   # S3 Buckets
@@ -175,7 +175,7 @@ Resources:
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                 Resource:
-                  - !Sub arn:aws:s3:::${TemplateConfigBucket}/${TemplateConfigKey}
+                  - !Sub arn:aws:s3:::${TemplateConfigBucket}/${TemplateConfigStagingKey}
         # For Approval actions
         - PolicyName: SnsApprovalsPolicy
           PolicyDocument:
@@ -461,9 +461,9 @@ Resources:
                 Version: 1
               Configuration:
                 S3Bucket: !Ref TemplateConfigBucket
-                S3ObjectKey: !Ref TemplateConfigKey
+                S3ObjectKey: !Ref TemplateConfigStagingKey
               OutputArtifacts:
-                - Name: TemplateConfigZipArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
         - Name: Housekeeping
           Actions:
@@ -502,10 +502,10 @@ Resources:
                     "InfrastructureGitCommit": "latest",
                     "Foo": "Bar"
                   }
-                TemplateConfiguration: TemplateConfigZipArtifact::staging.json
+                TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
-                - Name: TemplateConfigZipArtifact
+                - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: RepoStateArtifact
               RunOrder: 1
@@ -543,10 +543,10 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-production
-                TemplateConfiguration: TemplateConfigZipArtifact::production.json
+                TemplateConfiguration: TemplateConfigStagingZipArtifact::production.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
-                - Name: TemplateConfigZipArtifact
+                - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
             - Name: ApproveChangeSet
