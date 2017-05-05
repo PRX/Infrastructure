@@ -85,7 +85,8 @@ function uploadFile(path, revision) {
     return (new Promise((resolve, reject) => {
         // Remove tmp dir path part from path
         const file = path.replace(/\/tmp\/[A-Za-z0-9]+\//, '');
-        const key = `sync/Infrastructure/${revision}/${file}`;
+        // const key = `sync/Infrastructure/${revision}/${file}`; TODO
+        const key = `sync/Infrastructure/latest/${file}`;
 
         const stream = fs.createReadStream(path);
 
