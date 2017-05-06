@@ -289,14 +289,12 @@ function triggerBuild(versionId, event, callback) {
         }
     ];
 
-    // event.after is only available for push events, and we only handle push
-    // events for master branches
-    if (event.after) {
-        environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
-        environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
-    } else {
+    if (event.pull_request) {
         const num = event.pull_request.number;
         environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+    } else {
+        environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
+        environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
     }
 
     codebuild.startBuild({
