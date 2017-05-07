@@ -64,19 +64,19 @@ function messageForEvent(event) {
 function channelForEvent(event) {
     const topicArn = event.Records[0].Sns.TopicArn;
 
-    if (topicArn.search('OpsFatal') !== -1) {
+    if (/OpsFatal/.test(topicArn)) {
         return '#ops-fatal';
-    } else if (topicArn.search('OpsError') !== -1) {
+    } else if (/OpsError/.test(topicArn)) {
         return '#ops-error';
-    } else if (topicArn.search('OpsWarn') !== -1) {
+    } else if (/OpsWarn/.test(topicArn)) {
         return '#ops-warn';
-    } else if (topicArn.search('OpsInfo') !== -1) {
+    } else if (/OpsInfo/.test(topicArn)) {
         return '#ops-info';
-    } else if (topicArn.search('OpsDebug') !== -1) {
+    } else if (/OpsDebug/.test(topicArn)) {
         return '#ops-debug';
-    } else if (topicArn.search('OpsStatus') !== -1) {
+    } else if (/OpsStatus/.test(topicArn)) {
         return '#ops-status';
-    } else if (topicArn.search('CiStatus') !== -1) {
+    } else if (/CiStatus/.test(topicArn)) {
         return '#ops-status';
     } else {
         return '#ops-debug';
@@ -87,9 +87,9 @@ function attachmentsForEvent(event) {
     const sns = event.Records[0].Sns;
 
     // First deal with events that can be routed without parsing the SNS message
-    if (sns.TopicArn.search('CiStatus') !== -1) {
+    if (/CiStatus/.test(sns.TopicArn)) {
         return attachmentsForCiStatus(event);
-    } else if (sns.Message.search(`StackId='arn:aws:cloudformation`) !== -1) {
+    } else if (/StackId='arn:aws:cloudformation/.test(sns.Message)) {
         return attachmentForCloudFormation(event);
     } else {
         // Then try parsing the message as JSON
@@ -379,7 +379,7 @@ function attachmentsForAutoScaling(event) {
 }
 
 function colorForAutoScaling(scaling) {
-    if (scaling.Event.search('EC2_INSTANCE_TERMINATE') !== -1) {
+    if (/EC2_INSTANCE_TERMINATE/.test(scaling.Event)) {
         return '#FF8400';
     } else {
         return '#0099FF';
@@ -468,7 +468,7 @@ function webhookForEvent(event) {
       const sns = event.Records[0].Sns;
 
       // Some webhooks can be determined without trying to parse the message
-      if (sns.TopicArn.search('CiStatus') !== -1) {
+      if (/CiStatus/.test(sns.TopicArn)) {
           resolve(process.env.CODEBUILD_SLACK_WEBHOOK_URL);
       } else if (sns.Subject === 'AWS CloudFormation Notification') {
           resolve(process.env.CFN_SLACK_WEBHOOK_URL);
