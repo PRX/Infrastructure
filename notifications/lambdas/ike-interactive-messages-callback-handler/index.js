@@ -1,3 +1,10 @@
+// Invoked by: API Gateway
+// Returns: Error, or API Gateway proxy response object
+//
+// When a user acts on an interactive message in Slack (eg., clicks a button),
+// Slack will send a request to a callback This function handles those requests,
+// such as for approving CloudFormation deploys through CodePipeline.
+
 const url = require('url');
 const https = require('https');
 const querystring = require('querystring');

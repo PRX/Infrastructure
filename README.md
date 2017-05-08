@@ -19,36 +19,39 @@ This system is designed to provide CI and CD for applications as well as the inf
 - [AWS CodeBuild Build Phase Transitions ](https://docs.aws.amazon.com/codebuild/latest/userguide/view-build-details.html#view-build-details-phases)
 - [AWS CodeBuild Environment Variables in Build Environments ](https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html#build-env-ref-env-vars)
 
-## Bootstrap
+## Components
 
-The bootstrapping part of the system is a CodePipeline that has two main roles.
+There are three main components to the infrastructure system as a whole: **Notifications**, **CI**, and **CD**. Each is defined as its own CloudFormation template. Launching either the CI or CD stack require a preexisting Notifications stacks, but otherwise are entirely independent. They generally will be launched together, and their operations do overlap in some ways, but there are not hard dependencies between the two.
 
-First is to pull in infrastructure source code (from GitHub and S3), and ensure that it is available to other parts of the system (either as CodePipeline artifacts, or files on S3).
+### Notifications
 
-Second is the orchestrate deployments of **root stacks** using the infrastructure code for various environments. Deployments are generally protected by manual approval actions.
+The **Notifications** stack is largely responsible for messaging both within the system, and to and from external sources. Messages are passed around using API Gateways and SNS topics. Lambda functions either back the API Gateway methods or subscribe to the SNS topics in order to act on the Messages.
 
-The bootstrap process is itself defined as a CloudFormation template, but generally a bootstrap stack will be launched manually. Once a bootstrap stack has been launched in a region, all the standard environments (staging, production, etc) will be handled mainly by automated processes, including changes to both infrastructure and app code.
+### Continuous Integration
 
-Launching a bootstrap stack can be done via the command line, using a command such as:
+The **CI** stack launches a set of resources that handle code commit related events coming from the GitHub webhook API, and prepare that code to be deployed. The CI setup handles master branch commits, as well as code changes for pull requests. Only mast branch code changes will package code to be deployable (for instance, pushing a Docker image to ECR).
 
-```
-aws cloudformation create-stack --stack-name Bootstrap --template-body file:///path/to/the/bootstrap.yml --parameters ParameterKey=GitHubOAuthToken,ParameterValue=123456789abcdef ParameterKey=RootStackName,ParameterValue=Root ParameterKey=RootStackTemplateConfigArchive,ParameterValue=us-east-1.zip ParameterKey=RootStackTemplateConfigBucket,ParameterValue=infrastructure-template-config-archives
+At a high level, the system involves: an organization-level webhook configuration on GitHub sending events for activity on all PRX repositories; whose events are handled (via API Gateway) by a Lambda function; which triggers a CodeBuild project that is builds, tests, and packages the applications.
 
-```
+When a new packaged version of an app is pushed out (eg., to ECR), the CI process also updates the staging environment's template configuration file to reference the new version.
 
-All parameters are required to launch a bootstrap stack, and descriptions of each can be found in `bootstrap.yml`.
+### Continuous Delivery
 
-### Template Configuration Files
+The **CD** stack takes care of launched and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration. When either of these sources are updated, the pipeline deploys the changes to a staging environment. Acceptance tests are run against staging, and if they pass the updates can then be deployed to the production environment.
 
-When the bootstrapping process launches a root stack, it must provide values for all of the parameters the root stack template expects. These values are provided by a _template configuration file_, and can include values that are used by the root stack, stacks nested in the root stack, or images or applications that those stacks launch (eg environment variables).
+Whenever an environment is successfully deployed, the CD pipeline also captures the state of the infrastructure and configuration, so that known good states can be rolled back to if necessary.
 
-The location of the config files is set when launching a stack from the `bootstrap.yml` template. The location points to a .zip archive which contains individual config files. The bootstrap CodePipeline will select the appropriate file when launching stacks for different environments. (Eg, the `staging.json` file in the archive will be used when launching a root stack for staging). This allows you to, for example, configure an ASG to use micro instances in staging, and medium instances for production.
+## Template Configuration Files
+
+When the CD pipeline deploys to an environment, it is actually launching (or updating) a root stack. The deployment process must provide values for all of the parameters the root stack template expects. These values are provided by a _template configuration file_. This config file contains some general purpose values that are used by the CD process itself, as well as versioning information that indicates which version (eg, Docker image) and which configuration should be used to deploy each app nested within the root stack.
+
+As part of the **CI** process, whenever a new version on an application is available, such as when a new Docker image is pushed to ECR, the staging template configuration file is updated. Because the CD pipeline watches that file for changes, a loose link between the two processes exists. In most cases, a change app code (eg, a merge or commit to the master branch of some app repo), will trigger CI and CD automatically.
 
 ## Root Stack
 
 Root stacks are launched by the bootstrapping process. A root stack represents a specific environment type (eg staging, production, etc). The root stack is responsible for launching additional stacks for specific platforms, services, and applications.
 
-By using the root stack model, the bootstrapping process only needs to be directly aware of a single template, and can generate CloudFormation change sets around a single stack which can subsequently update many other stacks.
+By using the root stack model, the CD process only needs to be directly aware of a single template, and can generate CloudFormation change sets around a single stack which can subsequently update many other stacks.
 
 The values from the template configuration files stored securely in S3 get passed to the root stack. It's the up to the root stack template to pass individual values to the nested stacks that need them.
 
@@ -77,6 +80,16 @@ Several things are necessary for applications to work within this system.
 The first is a template the defines the infrastructure needed to host the app. For a Docker application this may include things like: an ECS service and task definition, and ALB, various IAM roles, CloudWatch alarms, and Route53 DNS records. This template would look very similar to the template that would be created if the application were to be launched through CloudFormation outside of this CI/CD system.
 
 For most applications, an additional template will be built to support the CI/CD aspects of that particular app. For a Docker app, that may be a CodePipeline which includes CodeBuild projects that build and test the Docker image, and other actions to push the image to ECR and update infrastructure config files to reflect the new app code.
+
+## Setup
+
+Both the CI and CD stacks rely on an existing Notifications stack. Create a Notifications stack before trying to launch either the CI or CD stacks. The parameters required for the Notifications stack are mainly webhooks for third party services that notifications are sent to.
+
+Launching a CI stack will require the name of the previously created Notifications stack, as well as a GitHub access token and webhook secret for getting data into and out of GitHub API's. Because the CI process is triggered by GitHub `push` and `pull_request` events, and the end result is either tests passing, or a deployable package being push to, for example, ECR, there is no reason for CI to be launched in multiple regions. If it were, each instance of CI stack would be trying to accomplish the same thing.
+
+Unlike the CI stack, the CD stack must be launched in any region where applications need to be deployed. Deployments made by any given CD stack can only ever impact the region where the CD stack itself is located.
+
+If the goal is to have apps replicated in both us-east-1 and us-west-2, there should be a CD stack in both. A CI stack would only exist in, say, us-east-1. When CI updates a template configuration in us-east-1, some other process (S3 replication, etc) could update the template config in us-west-2, which would trigger CD in the west region.
 
 ## Miscellaneous
 

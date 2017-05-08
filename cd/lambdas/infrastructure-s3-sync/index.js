@@ -1,3 +1,13 @@
+// Invoked by: CodePipelin
+// Returns: Error or status message
+//
+// In order for the root stack to launch nested stacks, the tempates for those
+// nested stacks much be available on S3. This function copies all the files in
+// the stacks/ dir of the Infrastructure repo artifact to S3 for that purpose.
+//
+// This should always callback to the CodePipeline API to indicate success or
+// failure.
+
 const AWS = require('aws-sdk');
 const fs = require('fs');
 const unzip = require('unzipper');

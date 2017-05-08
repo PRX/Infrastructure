@@ -1,3 +1,6 @@
+// Invoked by: SNS Subscription
+// Returns: Error or status message
+//
 // This is intended to handle any sort of alerts or notifications that may
 // result from deploying and maintaining the infrastructure, or from the apps
 // and services that are deployed. It is subscribed to the main SNS topics that
