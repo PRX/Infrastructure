@@ -78,6 +78,8 @@ function channelForEvent(event) {
         return '#ops-status';
     } else if (/CiStatus/.test(topicArn)) {
         return '#ops-status';
+    } else if (/CodePipelineApprovals/.test(topicArn)) {
+        return '#ops-deploys';
     } else {
         return '#ops-debug';
     }
@@ -125,9 +127,6 @@ function attachmentsForEvent(event) {
 // GitHub event that triggered the build, and the build itself.
 // eg { event: {...}, build: {...} }
 function attachmentsForCiStatus(event) {
-    // TODO This is only true for message sent by the GitHub Event Handler;
-    // those sent by the CodeBuild Callback Handler will be different
-
     const data = JSON.parse(event.Records[0].Sns.Message);
 
     if (data.event && data.build) {
@@ -226,7 +225,7 @@ function attachmentsForCiCallback(data) {
             const prUrl = `https://github.com/${repo}/pull/${num}`;
             attachment.text = `<${prUrl}|${prUrl}>`;
         } else if (data.prxEcrTag) {
-            const ecrUrl = `https://console.aws.amazon.com/ecs/home?region=${data.prxEcrRegion}#/repositories/${repo}`;
+            const ecrUrl = `https://console.aws.amazon.com/ecs/home?region=${data.prxEcrRegion}#/repositories/${repo.split('/')[1]}`;
             attachment.text = `Docker image pushed to <${ecrUrl}|ECR> with tag \`${sha7}\``;
         } else {
             attachment.text = `Tktktk Lambda deploy`;
