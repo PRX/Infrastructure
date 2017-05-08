@@ -89,15 +89,15 @@ const handleCodePipelineApproval = (payload, callback) => {
 
             switch (extractedParams.value) {
                 case REJECTED:
-                    msg.text = `*Rejected* by @${payload.user.name}`;
+                    attachment.text = attachment.text + `\n*@${payload.user.name} rejected this deploy*`;
                     attachment.color = '#de0e0e';
                     break;
                 case APPROVED:
-                    msg.text = `*Approved* by @${payload.user.name}`;
+                    attachment.text = attachment.text + `\n:white_check_mark: *@${payload.user.name} approved this deploy*`;
                     attachment.color = '#15da34';
                     break;
                 default:
-                    msg.text = `*Unknown action!*`;
+                    attachment.text = attachment.text + `\nUnknown action by @${payload.user.name}`;
                     attachment.color = '#cd0ede';
             }
 

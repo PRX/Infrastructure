@@ -15,7 +15,7 @@
 // - PIPELINE_SLACK_WEBHOOK_URL
 // - CODEBUILD_SLACK_WEBHOOK_URL
 // - CFN_SLACK_WEBHOOK_URL
-// - IKE_SLACK_WEBHOOK_URL
+// - IKE_DEPLOYS_SLACK_WEBHOOK_URL
 
 const url = require('url');
 const https = require('https');
@@ -419,21 +419,21 @@ function attachmentsForCodePipelineApproval(event) {
             actions: [
                 {
                     type: 'button',
-                    name: 'decision',
-                    text: 'Reject',
-                    value: JSON.stringify(Object.assign({value: REJECTED}, params))
-                }, {
-                    type: 'button',
                     style: 'primary',
                     name: 'decision',
                     text: 'Approve',
                     value: JSON.stringify(Object.assign({value: APPROVED}, params)),
                     confirm: {
-                        title: 'Are you sure?',
-                        text: 'This will initiate a production deploy',
-                        ok_text: 'Yes',
-                        dismiss_text: 'Abort'
+                        title: 'Production Deploy Approval',
+                        text: 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
+                        ok_text: 'Deploy',
+                        dismiss_text: 'Cancel'
                     }
+                }, {
+                    type: 'button',
+                    name: 'decision',
+                    text: 'Reject',
+                    value: JSON.stringify(Object.assign({value: REJECTED}, params))
                 }
             ]
         }
@@ -469,6 +469,8 @@ function webhookForEvent(event) {
       // Some webhooks can be determined without trying to parse the message
       if (/CiStatus/.test(sns.TopicArn)) {
           resolve(process.env.CODEBUILD_SLACK_WEBHOOK_URL);
+      } else if (/CodePipelineApprovals/.test(sns.TopicArn)) {
+          resolve(process.env.IKE_DEPLOYS_SLACK_WEBHOOK_URL);
       } else if (sns.Subject === 'AWS CloudFormation Notification') {
           resolve(process.env.CFN_SLACK_WEBHOOK_URL);
       } else {
@@ -484,11 +486,11 @@ function webhookForEvent(event) {
                   resolve(process.env.CW_SLACK_WEBHOOK_URL);
               } else {
                   // This is a JSON message that we don't handle explicitly
-                  resolve(process.env.IKE_SLACK_WEBHOOK_URL);
+                  resolve(process.env.IKE_DEPLOYS_SLACK_WEBHOOK_URL);
               }
           } catch (e) {
               // Some message don't use JSON, and have to be handled differently
-              resolve(process.env.IKE_SLACK_WEBHOOK_URL);
+              resolve(process.env.IKE_DEPLOYS_SLACK_WEBHOOK_URL);
           }
       }
   }));
