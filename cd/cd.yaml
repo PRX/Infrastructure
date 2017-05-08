@@ -107,6 +107,7 @@ Resources:
                 Action:
                   - "s3:putObject"
                 Resource:
+                  - !Sub arn:aws:s3:::${CapturedStatesBucket}/*
                   - !Sub arn:aws:s3:::${InfrastructureCodeBucket}/*
               - Effect: Allow
                 Action:
@@ -232,6 +233,7 @@ Resources:
                   - "lambda:InvokeFunction"
                 Resource:
                   - !GetAtt InfrastructureRepoSourceS3SyncFuncton.Arn
+                  - !GetAtt EnvironmentStateCaptureFunction.Arn
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
@@ -573,17 +575,31 @@ Resources:
           Actions:
             - Name: Acceptance
               ActionTypeId:
-                Category: Build
+                Category: Invoke
                 Owner: AWS
-                Provider: CodeBuild
+                Provider: Lambda
                 Version: 1
               Configuration:
-                ProjectName: !Ref AcceptanceTestBuildProject
+                FunctionName: !Ref EnvironmentStateCaptureFunction
               InputArtifacts:
-                - Name: MetaRepoSourceArtifact
-              OutputArtifacts:
-                - Name: AcceptanceTestArtifact
-              RunOrder: 1
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 2
+        # - Name: Testing
+        #   Actions:
+        #     - Name: Acceptance
+        #       ActionTypeId:
+        #         Category: Build
+        #         Owner: AWS
+        #         Provider: CodeBuild
+        #         Version: 1
+        #       Configuration:
+        #         ProjectName: !Ref AcceptanceTestBuildProject
+        #       InputArtifacts:
+        #         - Name: MetaRepoSourceArtifact
+        #       OutputArtifacts:
+        #         - Name: AcceptanceTestArtifact
+        #       RunOrder: 1
         - Name: Production
           Actions:
             - Name: CreateChangeSet
@@ -599,11 +615,13 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "NotificationsStackName": "${NotificationsStackName}",
-                    "InfrastructureCodeBucket": "${InfrastructureCodeBucket}"
+                    "InfrastructureCodeBucket": "${InfrastructureCodeBucket}",
+                    "InfrastructureGitCommit": "latest",
+                    "Foo": "Bar"
                   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-production
-                TemplateConfiguration: TemplateConfigStagingZipArtifact::production.json
+                TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json # TODO
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact

@@ -1,5 +1,3 @@
-'use strict';
-
 const url = require('url');
 const https = require('https');
 const querystring = require('querystring');
@@ -91,11 +89,11 @@ const handleCodePipelineApproval = (payload, callback) => {
 
             switch (extractedParams.value) {
                 case REJECTED:
-                    msg.text = `*Rejected* by ${payload.user.name}`;
+                    msg.text = `*Rejected* by @${payload.user.name}`;
                     attachment.color = '#de0e0e';
                     break;
                 case APPROVED:
-                    msg.text = `*Approved* by ${payload.user.name}`;
+                    msg.text = `*Approved* by @${payload.user.name}`;
                     attachment.color = '#15da34';
                     break;
                 default:
