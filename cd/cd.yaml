@@ -586,6 +586,33 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref EnvironmentStateCaptureFunction
+  PseudoSourceErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: CD Pseudo Source Lambda Errors
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the pseudo source lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProductionConfigPseudoSourceFunction
   # Pipelines
   Pipeline:
     Type: "AWS::CodePipeline::Pipeline"
