@@ -6,7 +6,6 @@
 # the stacks/ dir of the Infrastructure repo artifact to S3 for that purpose.
 # Those files are copied to the InfrastructureSourceBucket bucket, with an
 # object prefix of the Git commit hash.
-# TODO currently this is using `latest` as the prefix
 #
 # This should always callback to the CodePipeline API to indicate success or
 # failure.
@@ -61,12 +60,8 @@ def sync_source(job):
 
         f = archive.open(name)
 
-        # TODO
-        # output_key = "{0}/{1}".format(sha, name)
-        # s3.upload_fileobj(f, output_bucket, output_key)
-
-        temp_output_key = "latest/{0}".format(name)
-        s3.upload_fileobj(f, output_bucket, temp_output_key)
+        output_key = "{0}/{1}".format(sha, name)
+        s3.upload_fileobj(f, output_bucket, output_key)
 
 def lambda_handler(event, context):
     try:
