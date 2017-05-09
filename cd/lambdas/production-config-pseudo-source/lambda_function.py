@@ -69,10 +69,50 @@ def update_production_config(production_config, staging_config):
 
     for key, value in production_config['Parameters'].items():
         if re.search("ECRImageTag", key):
-            print(f"...Updating {key}: from {value} to {new_value}...")
             new_value = staging_config['Parameters'][key]
+            print(f"...Updating {key}: from {value} to {new_value}...")
+            production_config['Parameters'][key] = new_value
 
     return production_config
+
+def upload_artifact(production_config, job):
+    body = json.dumps(production_config)
+
+    print("...Generating output artifact...")
+
+    archive_path = "/tmp/{0}".format(uuid.uuid4())
+
+    # TODO Should be able to do this all in memory
+    archive = zipfile.ZipFile(archive_path, mode='w')
+    archive.writestr('production.json', body, compress_type=zipfile.ZIP_DEFLATED)
+    archive.close()
+
+    output_artifact = job['data']['outputArtifacts'][0]
+    output_location = output_artifact['location']['s3Location']
+    output_bucket = output_location['bucketName']
+    output_key = output_location['objectKey']
+    s3.upload_file(archive_path, output_bucket, output_key)
+
+    print(f"...Wrote artifact to {output_bucket}/{output_key}...")
+
+def upload_config(production_config):
+    body = json.dumps(production_config)
+
+    print("...Generating template config version...")
+
+    archive_path = "/tmp/2{0}".format(uuid.uuid4())
+
+    # TODO Should be able to do this all in memory
+    archive = zipfile.ZipFile(archive_path, mode='w')
+    archive.writestr('production.json', body, compress_type=zipfile.ZIP_DEFLATED)
+    archive.close()
+
+    source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
+    source_key = os.environ['INFRASTRUCTURE_CONFIG_PRODUCTION_KEY']
+
+    s3.upload_file(archive_path, source_bucket, source_key)
+
+    print(f"...Wrote update to {source_bucket}/{source_key}...")
 
 def lambda_handler(event, context):
     try:
@@ -85,22 +125,11 @@ def lambda_handler(event, context):
 
         config = update_production_config(production_config, staging_config)
 
-        body = json.dumps(config);
-
-        archive_path = "/tmp/{0}".format(uuid.uuid4())
-
-        # TODO Should be able to do this all in memory
-        archive = zipfile.ZipFile(archive_path, mode='w')
-        archive.writestr('production.json', body, compress_type=zipfile.ZIP_DEFLATED)
-        archive.close()
-
-        output_artifact = job['data']['outputArtifacts'][0]
-        output_location = output_artifact['location']['s3Location']
-        output_bucket = output_location['bucketName']
-        output_key = output_location['objectKey']
-        s3.upload_file(archive_path, output_bucket, output_key)
-
-        print(f"...Wrote update to {output_bucket}/{output_key}...")
+        # Needs to generate an output artifact so the rest of the pipeline has
+        # access to the config, but also write the new config back to the
+        # INFRASTRUCTURE_CONFIG_BUCKET production zip
+        upload_artifact(config, job)
+        upload_config(config)
 
         put_job_success(job, '')
 
