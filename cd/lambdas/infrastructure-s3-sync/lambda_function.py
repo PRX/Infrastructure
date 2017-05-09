@@ -91,8 +91,9 @@ def sync_source(job):
 
         f = archive.open(name)
 
-        output_key = "{0}/{1}".format(sha, name)
-        s3.upload_fileobj(f, output_bucket, output_key)
+        # TODO
+        # output_key = "{0}/{1}".format(sha, name)
+        # s3.upload_fileobj(f, output_bucket, output_key)
 
         temp_output_key = "latest/{0}".format(name)
         s3.upload_fileobj(f, output_bucket, temp_output_key)
