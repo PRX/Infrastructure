@@ -1,9 +1,16 @@
-// Invoked by: CodePipelin
+// Invoked by: CodePipeline
 // Returns: Error or status message
 //
 // In order for the root stack to launch nested stacks, the tempates for those
 // nested stacks much be available on S3. This function copies all the files in
 // the stacks/ dir of the Infrastructure repo artifact to S3 for that purpose.
+// Those files are copied to the InfrastructureSourceBucket bucket, with an
+// object prefix of the Git commit hash.
+// TODO currently this is using `latest` as the prefix
+//
+// This function also creates an output artifact, which is a zipped JSON file
+// that contains the Git commit hash of the input repo artifact. The destination
+// bucket for that is the native CodePipeline artifact store bucket.
 //
 // This should always callback to the CodePipeline API to indicate success or
 // failure.
@@ -101,7 +108,7 @@ function uploadFile(path, revision) {
         const stream = fs.createReadStream(path);
 
         s3.putObject({
-            Bucket: process.env.INFRASTRUCTURE_CODE_BUCKET,
+            Bucket: process.env.INFRASTRUCTURE_SOURCE_BUCKET,
             Key: key,
             Body: stream
         }, (err, data) => {
