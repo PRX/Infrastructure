@@ -1,6 +1,8 @@
 // Invoked by: CodePipelin
 // Returns: Error or status message
 //
+// The only S3 bucket this function touches is InfrastructureSnapshotsBucket
+//
 // Used to capture the state of deploys as they happen as part of a CodePipeline
 // deployment. This function can be used to capture state for multiple
 // environments, based on the input artifacts that are provided to the Invoke
@@ -51,7 +53,7 @@ exports.handler = (event, context, callback) => {
         console.log(`...S3 object: ${key}...`);
 
         s3.putObject({
-            Bucket: process.env.CAPTURED_STATES_BUCKET,
+            Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
             Key: key,
             Body: capture
         }, (err, data) => {

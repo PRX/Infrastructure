@@ -2,20 +2,59 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates foundational resources needed to handle infrastructure-related
   messaging and notifications
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Storage Stack
+        Parameters:
+          - InfrastructureStorageStackName
+      - Label:
+          default: Slack Tokens
+        Parameters:
+          - IkeSlackVerificationToken
+      - Label:
+          default: Slack Webhooks
+        Parameters:
+          - AutoScalingSlackWebhookUrl
+          - CloudFormationSlackWebhookUrl
+          - CloudWatchSlackWebhookUrl
+          - CodeBuildSlackWebhookUrl
+          - CodePipelineSlackWebhookUrl
+          - IkeDeploysSlackSlackWebhookUrl
+    ParameterLabels:
+      InfrastructureStorageStackName:
+        default: Storage stack name
+      AutoScalingSlackWebhookUrl:
+        default: Auto Scaling
+      CloudWatchSlackWebhookUrl:
+        default: CloudWatch
+      CloudFormationSlackWebhookUrl:
+        default: CloudFormation
+      CodePipelineSlackWebhookUrl:
+        default: CodePipeline
+      CodeBuildSlackWebhookUrl:
+        default: CodeBuild
+      IkeDeploysSlackSlackWebhookUrl:
+        default: Ike Deploys
+      IkeSlackVerificationToken:
+        default: Ike Verification Token
 Parameters:
-  LambdaCodeBucket:
+  InfrastructureStorageStackName:
+    Default: infrastructure-storage
+    Description: The name of a previously launched infrastructure storage stack
     Type: String
-  AutoScalingSlackWebhookURL:
+  AutoScalingSlackWebhookUrl:
     Type: String
-  CloudWatchSlackWebhookURL:
+  CloudWatchSlackWebhookUrl:
     Type: String
-  CloudFormationSlackWebhookURL:
+  CloudFormationSlackWebhookUrl:
     Type: String
-  CodePipelineSlackWebhookURL:
+  CodePipelineSlackWebhookUrl:
     Type: String
-  CodeBuildSlackWebhookURL:
+  CodeBuildSlackWebhookUrl:
     Type: String
-  IkeDeploysSlackSlackWebhookURL:
+  IkeDeploysSlackSlackWebhookUrl:
     Type: String
   IkeSlackVerificationToken:
     Type: String
@@ -32,7 +71,7 @@ Resources:
   OpsFatalMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
   # IAM Roles
-  LambdaBasicExecutionIAMRole:
+  LambdaBasicExecutionIamRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -47,7 +86,7 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  IkeCallbackHandlerLambdaIAMRole:
+  IkeCallbackHandlerLambdaIamRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -77,22 +116,24 @@ Resources:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: "notifications/sns-ops-to-slack.zip"
       Description: >
         Relays messages, which are produced by various AWS services and posted
         to SNS, to the channels in Slack
       Environment:
         Variables:
-          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookURL
-          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookURL
-          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookURL
-          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookURL
-          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookURL
-          IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookURL
+          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookUrl
+          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookUrl
+          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookUrl
+          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
+          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookUrl
+          IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookUrl
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
       Runtime: nodejs6.10
       Tags:
         - Key: Project
@@ -102,7 +143,9 @@ Resources:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: "notifications/sns-ops-to-slack.zip"
       Description: >
         Handles requests from Slack for interactive messages
@@ -111,7 +154,7 @@ Resources:
           SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt IkeCallbackHandlerLambdaIAMRole.Arn
+      Role: !GetAtt IkeCallbackHandlerLambdaIamRole.Arn
       Runtime: nodejs6.10
       Tags:
         - Key: Project
@@ -186,6 +229,30 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref SnsOpsMessagesToSlackLambdaFunction
+  IkeCallbackHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Ike Callback Handler Lambda Errors
+      AlarmActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      OKActions:
+        - !Ref OpsDebugMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Ike callback handler lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IkeCallbackHandlerLambdaFunction
   # SNS Subscriptions
   RelayFunctionDebugSubscription:
     Type: "AWS::SNS::Subscription"
@@ -296,5 +363,5 @@ Outputs:
     Value: !Ref OpsFatalMessagesSnsTopic
     Export:
       Name: !Sub ${AWS::StackName}-OpsFatalMessagesSnsTopicArn
-  IkeCodePipelineApprovalHandlerCallbackURL:
+  IkeCodePipelineApprovalHandlerCallbackUrl:
     Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${RestApiStage}/ike/codepipeline/approval"

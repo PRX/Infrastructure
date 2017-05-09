@@ -247,8 +247,8 @@ function copyToS3(file, event, callback) {
     console.log('...Copying archive to S3...');
 
     const params = {
-        Bucket: process.env.SOURCE_ARCHIVE_BUCKET,
-        Key: process.env.SOURCE_ARCHIVE_KEY,
+        Bucket: process.env.CODEBUILD_SOURCE_ARCHIVE_BUCKET,
+        Key: process.env.CODEBUIL_SOURCE_ARCHIVE_KEY,
         Body: fs.createReadStream(file)
     };
 

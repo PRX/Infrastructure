@@ -18,23 +18,55 @@
 # In order for the root stack to launch the nested stacks, the templates for
 # those stacks must be available in S3. This pipeline copies the entire
 # Infrastructure artifact to S3 (into a bucket defined by the
-# InfrastructureCodeBucket parameter) for that purpose.
+# InfrastructureSourceBucket parameter) for that purpose.
 # This would be deployed in any region where you want to deploy the platform
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates CodePipeline to handle infrastructure testing and deploys
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureStorageStackName
+          - NotificationsStackName
+      - Label:
+          default: GitHub API
+        Parameters:
+          - GitHubToken
+      - Label:
+          default: Infrastructure Config
+        Parameters:
+          - InfrastructureConfigStagingKey
+    ParameterLabels:
+      InfrastructureStorageStackName:
+        default: Storage stack name
+      NotificationsStackName:
+        default: Notifications stack name
+      GitHubToken:
+        default: Access token
+      InfrastructureConfigStagingKey:
+        default: Staging S3 object key
 Parameters:
+  InfrastructureStorageStackName:
+    Default: infrastructure-storage
+    Description: The name of a previously launched infrastructure storage stack
+    Type: String
   NotificationsStackName:
+    Default: notifications
+    Description: The name of a previously launched notifications stack
     Type: String
   GitHubToken:
+    Description: >
+      A GitHub access token with permissions to update statuses, request
+      content, etc
     Type: String
-  InfrastructureCodeBucket:
-    Type: String
-  TemplateConfigBucket:
-    Type: String
-  TemplateConfigStagingKey:
-    Type: String
-  CapturedStatesBucket:
+  InfrastructureConfigStagingKey:
+    Default: template-config-staging.zip
+    Description: >
+      The S3 object key for the staging template configuration file archive
+      (.zip), inside the InfrastructureConfigBucket
     Type: String
 Resources:
   # S3 Buckets
@@ -107,8 +139,8 @@ Resources:
                 Action:
                   - "s3:putObject"
                 Resource:
-                  - !Sub arn:aws:s3:::${CapturedStatesBucket}/*
-                  - !Sub arn:aws:s3:::${InfrastructureCodeBucket}/*
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
               - Effect: Allow
                 Action:
                   - "s3:putObject"
@@ -172,13 +204,13 @@ Resources:
                 Action:
                   - "s3:GetBucketVersioning"
                 Resource:
-                  - !Sub arn:aws:s3:::${TemplateConfigBucket}
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket"]]
               - Effect: Allow
                 Action:
                   - "s3:GetObject"
                   - "s3:GetObjectVersion"
                 Resource:
-                  - !Sub arn:aws:s3:::${TemplateConfigBucket}/${TemplateConfigStagingKey}
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
         # For Approval actions
         - PolicyName: SnsApprovalsPolicy
           PolicyDocument:
@@ -322,7 +354,7 @@ Resources:
                 Action:
                   - "s3:GetObject"
                 Resource:
-                  - !Sub arn:aws:s3:::${InfrastructureCodeBucket}/sync/Infrastructure*
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
         # Give CloudFormation full access except deleting stacks
         - PolicyName: StackManipulationPolicy
           PolicyDocument:
@@ -376,31 +408,39 @@ Resources:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
-        S3Bucket: !Ref InfrastructureCodeBucket
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: cd/infrastructure-s3-sync.zip
       Description: Copies Infrastructure repo artifact to S3
       Environment:
         Variables:
-          INFRASTRUCTURE_CODE_BUCKET: !Ref InfrastructureCodeBucket
-      Handler: index.handler
-      MemorySize: 128
+          INFRASTRUCTURE_SOURCE_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
       Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: nodejs6.10
+      Runtime: python3.6
       Tags:
         - Key: Project
           Value: Infrastructure
-      Timeout: 3
+      Timeout: 8
   EnvironmentStateCaptureFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
-        S3Bucket: !Ref InfrastructureCodeBucket
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: cd/environment-state-capture.zip
       Description: >
         Capture template and config version data for deployed environments
       Environment:
         Variables:
-          CAPTURED_STATES_BUCKET: !Ref CapturedStatesBucket
+          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -510,8 +550,10 @@ Resources:
                 Provider: S3
                 Version: 1
               Configuration:
-                S3Bucket: !Ref TemplateConfigBucket
-                S3ObjectKey: !Ref TemplateConfigStagingKey
+                S3Bucket:
+                  Fn::ImportValue:
+                    !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+                S3ObjectKey: !Ref InfrastructureConfigStagingKey
               OutputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
@@ -547,8 +589,8 @@ Resources:
                  # TODO This should use the git commit hash from the artifact
                 ParameterOverrides: !Sub |
                   {
+                    "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${NotificationsStackName}",
-                    "InfrastructureCodeBucket": "${InfrastructureCodeBucket}",
                     "InfrastructureGitCommit": "latest",
                     "Foo": "Bar"
                   }
@@ -614,8 +656,8 @@ Resources:
                 ChangeSetName: !Sub ${AWS::StackName}RootProductionChangeSet
                 ParameterOverrides: !Sub |
                   {
+                    "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${NotificationsStackName}",
-                    "InfrastructureCodeBucket": "${InfrastructureCodeBucket}",
                     "InfrastructureGitCommit": "latest",
                     "Foo": "Bar"
                   }
@@ -650,6 +692,18 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-production
               RunOrder: 3
+            - Name: CaptureProductionState
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref EnvironmentStateCaptureFunction
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 4
   # CodeBuild Projects
   AcceptanceTestBuildProject:
     Type: "AWS::CodeBuild::Project"
