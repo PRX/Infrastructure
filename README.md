@@ -23,6 +23,8 @@ This system is designed to provide CI and CD for applications as well as the inf
 
 There are three main components to the infrastructure system as a whole: **Notifications**, **CI**, and **CD**. Each is defined as its own CloudFormation template. Launching either the CI or CD stack require a preexisting Notifications stacks, but otherwise are entirely independent. They generally will be launched together, and their operations do overlap in some ways, but there are not hard dependencies between the two.
 
+There is also a very lightweight **Storge** stack that creates a few necessary, shared S3 buckets.
+
 ### Notifications
 
 The **Notifications** stack is largely responsible for messaging both within the system, and to and from external sources. Messages are passed around using API Gateways and SNS topics. Lambda functions either back the API Gateway methods or subscribe to the SNS topics in order to act on the Messages.
@@ -49,13 +51,15 @@ As part of the **CI** process, whenever a new version on an application is avail
 
 ## Root Stack
 
-Root stacks are launched by the bootstrapping process. A root stack represents a specific environment type (eg staging, production, etc). The root stack is responsible for launching additional stacks for specific platforms, services, and applications.
+Root stacks are launched by the CD process. A root stack represents a specific environment type (eg staging, production, etc). The root stack is responsible for launching additional stacks for specific platforms, services, and applications.
 
 By using the root stack model, the CD process only needs to be directly aware of a single template, and can generate CloudFormation change sets around a single stack which can subsequently update many other stacks.
 
 The values from the template configuration files stored securely in S3 get passed to the root stack. It's the up to the root stack template to pass individual values to the nested stacks that need them.
 
 The root stack also handles shuttling values and resources between its nested stacks. For example, many application stacks that the root stack launch will require a VPC or Subnets. The root stack can pull those values out of the VPC stack and pass them back into the other stacks that require them. This keeps individual stacks from needing to be tightly coupled to any other specific stack, even if it depends on resources provided by that stack.
+
+Once a root stack has been launched, it is not tied directly to the CD stack, but the IAM role that is associated with any nested stacks does come from the CD stack. If you remove the CD stack, and thus that IAM role, tearing down the root stack's nested stacks and be difficult. 
 
 ### Application, Service, and Resource Stacks
 
@@ -83,6 +87,8 @@ For most applications, an additional template will be built to support the CI/CD
 
 ## Setup
 
+First, launch a storage stack. This exports a number of S3 bucket names, which will be used throughout the remaining components of the system. The exports are in the format `{stack name}-{identifier}`. Passing the storage stack name as a parameter to the other stacks will allow it to find the exports.s
+
 Both the CI and CD stacks rely on an existing Notifications stack. Create a Notifications stack before trying to launch either the CI or CD stacks. The parameters required for the Notifications stack are mainly webhooks for third party services that notifications are sent to.
 
 Launching a CI stack will require the name of the previously created Notifications stack, as well as a GitHub access token and webhook secret for getting data into and out of GitHub API's. Because the CI process is triggered by GitHub `push` and `pull_request` events, and the end result is either tests passing, or a deployable package being push to, for example, ECR, there is no reason for CI to be launched in multiple regions. If it were, each instance of CI stack would be trying to accomplish the same thing.
@@ -90,6 +96,18 @@ Launching a CI stack will require the name of the previously created Notificatio
 Unlike the CI stack, the CD stack must be launched in any region where applications need to be deployed. Deployments made by any given CD stack can only ever impact the region where the CD stack itself is located.
 
 If the goal is to have apps replicated in both us-east-1 and us-west-2, there should be a CD stack in both. A CI stack would only exist in, say, us-east-1. When CI updates a template configuration in us-east-1, some other process (S3 replication, etc) could update the template config in us-west-2, which would trigger CD in the west region.
+
+### S3 Buckets
+
+There are many S3 buckets used as part of the CI/CD that are defined within CloudFormation templates, and don't need to be managed separately. A few buckets, though, must exist prior to launching any parts of this system, and must be configured correctly. The following are examples of each of those buckets:
+
+`prx-infrastructure-support-us-east-1`: **InfrastructureSupportBucket** Holds miscellaneous resources that are needed at various points of the setup and deployment process, such as zip files for Lambda function code used by the Notifications, CI, and CD stacks themselves.
+
+`prx-infrastructure-source-us-east-1`: **InfrastructureSourceBucket** Holds copies of the Infrastructure repository, prefixed with the Git commit hash from when the copy was made. The root stack template points to files in this bucket for nested templates. It does not need S3 versioning.
+
+`prx-infrastructure-template-config-us-east-1`: **InfrastructureConfigBucket** Holds one zip file per environment, each which holds a single JSON file. Eg. `template-config-production.zip` and `template-config-staging.zip`. Versioning is required; these files are updated in place whenever the configuration changes. Versioning is used to rollback to good states.
+
+`prx-infrastructure-snapshots-us-east-1`: **{InfrastructureSnapshotsBucket}** Holds JSON files used to capture code and configuration states when deploys occur. Eg. `staging/1389173987.json`, `production/1276476413.json`. Versioning is not required.
 
 ## Miscellaneous
 
