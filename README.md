@@ -59,7 +59,7 @@ The values from the template configuration files stored securely in S3 get passe
 
 The root stack also handles shuttling values and resources between its nested stacks. For example, many application stacks that the root stack launch will require a VPC or Subnets. The root stack can pull those values out of the VPC stack and pass them back into the other stacks that require them. This keeps individual stacks from needing to be tightly coupled to any other specific stack, even if it depends on resources provided by that stack.
 
-Once a root stack has been launched, it is not tied directly to the CD stack, but the IAM role that is associated with any nested stacks does come from the CD stack. If you remove the CD stack, and thus that IAM role, tearing down the root stack's nested stacks and be difficult. 
+Once a root stack has been launched, it is not tied directly to the CD stack, but the IAM role that is associated with any nested stacks does come from the CD stack. If you remove the CD stack, and thus that IAM role, tearing down the root stack's nested stacks and be difficult.
 
 ### Application, Service, and Resource Stacks
 
@@ -87,7 +87,19 @@ For most applications, an additional template will be built to support the CI/CD
 
 ## Setup
 
-First, launch a storage stack. This exports a number of S3 bucket names, which will be used throughout the remaining components of the system. The exports are in the format `{stack name}-{identifier}`. Passing the storage stack name as a parameter to the other stacks will allow it to find the exports.s
+First, launch a storage stack. This exports a number of S3 bucket names, which will be used throughout the remaining components of the system. The exports are in the format `{stack name}-{identifier}`. Passing the storage stack name as a parameter to the other stacks will allow them to find the exports.
+
+Once the storage buckets have been created, use the `setup.sh` shell script to zip and upload Lambda function code needed by the remaining Infrastructure stacks to the _support_ bucket. **Make sure the `s3 sync` command is pointing at the correct bucket.**
+
+Create zip archives for staging and production template configurations in the _config_ bucket. Each of these should contain a single file (`staging.json` and `production.json`, respectively). They should both contain exactly the same keys, which must match the parameters in `root.yml` (other than those flagged as _parameter overrides_).
+
+> _Note: there is a root level `Parameters` key in all template configuration files_
+
+- `EnvironmentType` must be `Staging` or `Production`
+- `ASGKeyPairName` must be an **existing** key pair name
+- `ECRRegion` is where all ECS task definitions will look for images, regardless of their region
+- `{AppName}ECRImageTag` will exist for each Docker app
+- See the secrets Readme for info about all `Secrets` values
 
 Both the CI and CD stacks rely on an existing Notifications stack. Create a Notifications stack before trying to launch either the CI or CD stacks. The parameters required for the Notifications stack are mainly webhooks for third party services that notifications are sent to.
 
@@ -96,6 +108,28 @@ Launching a CI stack will require the name of the previously created Notificatio
 Unlike the CI stack, the CD stack must be launched in any region where applications need to be deployed. Deployments made by any given CD stack can only ever impact the region where the CD stack itself is located.
 
 If the goal is to have apps replicated in both us-east-1 and us-west-2, there should be a CD stack in both. A CI stack would only exist in, say, us-east-1. When CI updates a template configuration in us-east-1, some other process (S3 replication, etc) could update the template config in us-west-2, which would trigger CD in the west region.
+
+Once these four stacks are launched, the system should be operational. It's a good idea to: manually set a `Notification ARN` for each of these stacks (you can use an SNS topic created by the Notification stack itself); set the CloudWatch log retention period on log groups that get created; set the Insufficient Data handling on CloudWatch alarms to _ok_.
+
+There may be some external services (Slack, etc) that need to be updated with API endpoint URL's that get created through launching these stacks.
+
+### Multi-region support
+
+_Coming soon..._
+
+## Destruction
+
+If you want to remove everything created by Infrastructure, do so in this order:
+
+- Delete CI stack
+- Delete production root stack
+- Delete staging root stack
+- Delete CD stack
+- Delete Notifications stack
+- Delete Storage stack
+- Delete CD pipeline artifacts store bucket (`cd-artifactstore-...`)
+- Delete CI CodeBuild source bucket (`ci-cicodebuildsourcearchivebucket-...`)
+- Delete the four buckets created by the Storage stack
 
 ### S3 Buckets
 
