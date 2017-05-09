@@ -109,7 +109,7 @@ Unlike the CI stack, the CD stack must be launched in any region where applicati
 
 If the goal is to have apps replicated in both us-east-1 and us-west-2, there should be a CD stack in both. A CI stack would only exist in, say, us-east-1. When CI updates a template configuration in us-east-1, some other process (S3 replication, etc) could update the template config in us-west-2, which would trigger CD in the west region.
 
-Once these four stacks are launched, the system should be operational. It's a good idea to: manually set a `Notification ARN` for each of these stacks (you can use an SNS topic created by the Notification stack itself); set the CloudWatch log retention period on log groups that get created; set the Insufficient Data handling on CloudWatch alarms to _ok_.
+Once these four stacks are launched, the system should be operational. It's a good idea to: manually set a `Notification ARN` for each of these stacks (you can use an SNS topic created by the Notification stack itself); tag each stack with `Project:Infrastructure`; set the CloudWatch log retention period on log groups that get created; set the Insufficient Data handling on CloudWatch alarms to _ok_.
 
 There may be some external services (Slack, etc) that need to be updated with API endpoint URL's that get created through launching these stacks.
 
