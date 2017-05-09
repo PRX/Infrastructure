@@ -1,0 +1,400 @@
+# Generally this template is used to launch stacks from the bootstrapping
+# CodePipeline. Primarily is is simply a wrapper around individial app- and
+# service-specific templates, which get nested into this template and are
+# launched when this one is. The CodePiple also passes in a template
+# configuration file, which includes parameter values for this and all nested
+# templates. This root template MUST define all parameters that are included in
+# the config file. It can then pass along select values to nested stacks that
+# require them.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Launches stacks for a number of applications and services that are maintained
+  in separate templates.
+Parameters:
+  AsgKeyPairName:
+    Description: >
+      The EC2 key pair used for instances in the Auto Scaling
+      group (region-specific)
+    Type: "AWS::EC2::KeyPair::KeyName"
+  EcrRegion:
+    Type: String
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  SecretsBase:
+    Type: String
+  SecretsKey:
+    Type: String
+  # Application Specific
+  AudiogramEcrImageTag:
+    Type: String
+  AudiogramSecretsVersion:
+    Type: String
+  CastleEcrImageTag:
+    Type: String
+  CastleSecretsVersion:
+    Type: String
+  # Coming Soon
+  # UploadGitCommit:
+  #   Type: String
+  # PRXUploadAccessKey:
+  #   Type: String
+  # Parameter Overrides
+  InfrastructureStorageStackName:
+    Type: String
+  NotificationsStackName:
+    Type: String
+  InfrastructureGitCommit:
+    Type: String
+Mappings:
+  EnvironmentTypeMap:
+    Testing:
+      abbreviation: test
+    Beta:
+      abbreviation: beta
+    Staging:
+      abbreviation: stag
+    Production:
+      abbreviation: prod
+  ALBListenerRulePriorityMap:
+    Publish:
+      http: 1
+      https: 1
+    Audiogram:
+      http: 2
+      https: 2
+    Castle:
+      http: 3
+      https: 3
+Resources:
+  VPCStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/vpc.yml"]]
+      TimeoutInMinutes: "5"
+  CertificateStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        VPC: !GetAtt VPCStack.Outputs.VPC
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/certificate.yml"]]
+      TimeoutInMinutes: "5"
+  ECSClusterStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: VPCStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        KeyPairName: !Ref AsgKeyPairName
+        EnvironmentType: !Ref EnvironmentType
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet1AZ: !GetAtt VPCStack.Outputs.Subnet1AvailabilityZone
+        VPCSubnet2AZ: !GetAtt VPCStack.Outputs.Subnet2AvailabilityZone
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        SecretsBase: !Ref SecretsBase
+        SecretsKey: !Ref SecretsKey
+        SecretsRegion: !Ref EcrRegion
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/ecs.yml"]]
+      TimeoutInMinutes: "5"
+  LoadBalancersStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.CertificateArn
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/load-balancers.yml"]]
+      TimeoutInMinutes: "5"
+  ##############################################################################
+  #### CASTLE ##################################################################
+  ##############################################################################
+  CastleStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBHTTPListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Castle, http]
+        PlatformALBHTTPSListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Castle, https]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        SecretsRegion: !Ref EcrRegion
+        CastleEcrImageTag: !Ref CastleEcrImageTag
+        CastleSecretsVersion: !Ref CastleSecretsVersion
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
+      TimeoutInMinutes: "5"
+  ##############################################################################
+  #### AUDIOGRAMS ##############################################################
+  ##############################################################################
+  AudiogramStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBHTTPListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Audiogram, http]
+        PlatformALBHTTPSListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Audiogram, https]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        SecretsRegion: !Ref EcrRegion
+        AudiogramEcrImageTag: !Ref AudiogramEcrImageTag
+        AudiogramSecretsVersion: !Ref AudiogramSecretsVersion
+      TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/audiogram.yml"]]
+      TimeoutInMinutes: "5"
+  ##############################################################################
+  # upload.prx.org #############################################################
+  ##############################################################################
+  # TODO TemplateURL needs to look in InfrastructureCodeBucket for some object
+  #  labeled with the lambda code version (probably git commit sha)
+  # UploadLambdaStack:
+  #   Type: "AWS::CloudFormation::Stack"
+  #   Properties:
+  #     NotificationARNs:
+  #       - Fn::ImportValue:
+  #           !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+  #     Parameters:
+  #       OpsWarnMessagesSnsTopicArn:
+  #         - Fn::ImportValue:
+  #             !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+  #       PRXUploadAccessKey: !Ref PRXUploadAccessKey
+  #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeAbbreviationMap, !Ref EnvironmentType, abbreviation]
+  #       CodeBucket: !Ref InfrastructureCodeBucket
+  #       LambdaFunctionCodeS3Key: !Ref UploadLambdaZipName
+  #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/upload.prx.org/upload.prx.org.yml"]]
+  #     TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/upload.prx.org/${UploadGitCommit}.zip"
+  #     TimeoutInMinutes: "5"
+Outputs:
+  VPCCertificateArn:
+    Description: The ARN for the wildcard certificate for the VPC
+    Value: !GetAtt CertificateStack.Outputs.CertificateArn
+  # AudiogramHostedZoneDNSName:
+  #   Description: Domain name for audiogram app
+  #   Value: !GetAtt AudiogramStack.Outputs.HostedZoneDNSName
+  # PublishHostedZoneDNSName:
+  #   Description: Domain name for publish app
+  #   Value: !GetAtt PublishStack.Outputs.HostedZoneDNSName
+  #   Export:
+  #     Name: !Sub "${AWS::StackName}-PublishHostedZoneDNSName"
+  # CmsHostedZoneDNSName:
+  #   Description: Domain name for CMS app
+  #   Value: !GetAtt CmsStack.Outputs.HostedZoneDNSName
+
+
+
+
+##### OLD ######
+
+#   ##############################################################################
+#   ## SHARED ENVs ###############################################################
+#   ##############################################################################
+#   EnvCmsHost:
+#     Type: String
+#   EnvPlayHost:
+#     Type: String
+#   EnvIdHost:
+#     Type: String
+#   EnvFeederHost:
+#     Type: String
+#   EnvMetaHost:
+#     Type: String
+#   EnvPrxHost:
+#     Type: String
+#   ##############################################################################
+#   ##############################################################################
+#   ##############################################################################
+#   AudiogramEcrImageTag:
+#     Type: String
+#   PublishECRImageTag:
+#     Type: String
+#   PublishCodecovToken:
+#     Type: String
+#   PublishEnvAuthClientId:
+#     Type: String
+#   PublishEnvAwsKey:
+#     Type: String
+#   PublishEnvAwsUrl:
+#     Type: String
+#   PublishEnvBucketFolder:
+#     Type: String
+#   PublishEnvBucketName:
+#     Type: String
+#   PublishEnvGaKey:
+#     Type: String
+#   PublishEnvNewRelicAppName:
+#     Type: String
+#   PublishEnvNewRelicLicenseKey:
+#     Type: String
+#   PublishEnvSignUrl:
+#     Type: String
+#   PublishEnvUseCloudfront:
+#     Type: String
+#   CmsAudioLambdaZipName:
+#     Type: String
+#   CmsImageLambdaZipName:
+#     Type: String
+#   UploadLambdaZipName:
+#     Type: String
+#   PRXUploadAccessKey:
+#     Type: String
+# Resources:
+#   # CmsStack:
+#   #   Type: "AWS::CloudFormation::Stack"
+#   #   DependsOn: ECSClusterStack
+#   #   Properties:
+#   #     NotificationARNs:
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#   #     Parameters:
+#   #       VPC: !GetAtt VPCStack.Outputs.VPC
+#   #       VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+#   #       VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+#   #       VPCCertificateArn: !GetAtt CertificateStack.Outputs.CertificateArn
+#   #       RootStackName: !Ref AWS::StackName
+#   #       ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+#   #       ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+#   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+#   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+#   #       OpsDebugMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#   #       EcrRegion: !Ref EcrRegion
+#   #       CmsECRImageTag: !Ref CmsECRImageTag
+#   #       CmsEnvAwsAccessKeyId: !Ref CmsEnvAwsAccessKeyId
+#   #       CmsEnvAwsBucket: !Ref CmsEnvAwsBucket
+#   #       CmsEnvAwsRegion: !Ref CmsEnvAwsRegion
+#   #       CmsEnvAwsSecretAccessKey: !Ref CmsEnvAwsSecretAccessKey
+#   #       EnvCmsHost: !Ref EnvCmsHost
+#   #       CmsEnvDatabasePoolSize: !Ref CmsEnvDatabasePoolSize
+#   #       CmsEnvDbEnvMysqlDatabase: !Ref CmsEnvDbEnvMysqlDatabase
+#   #       CmsEnvDbEnvMysqlPassword: !Ref CmsEnvDbEnvMysqlPassword
+#   #       CmsEnvDbEnvMysqlUser: !Ref CmsEnvDbEnvMysqlUser
+#   #       CmsEnvDbPort3306TcpAddr: !Ref CmsEnvDbPort3306TcpAddr
+#   #       CmsEnvDbPort3306TcpPort: !Ref CmsEnvDbPort3306TcpPort
+#   #       EnvFeederHost: !Ref EnvFeederHost
+#   #       EnvIdHost: !Ref EnvIdHost
+#   #       CmsEnvMemcacheServers: !Ref CmsEnvMemcacheServers
+#   #       EnvMetaHost: !Ref EnvMetaHost
+#   #       CmsEnvMysqlAllowEmptyPassword: !Ref CmsEnvMysqlAllowEmptyPassword
+#   #       CmsEnvNewRelicKey: !Ref CmsEnvNewRelicKey
+#   #       CmsEnvNewRelicName: !Ref CmsEnvNewRelicName
+#   #       EnvPrxHost: !Ref EnvPrxHost
+#   #       CmsEnvPrxSecret: !Ref CmsEnvPrxSecret
+#   #       CmsEnvPublicAssetSecret: !Ref CmsEnvPublicAssetSecret
+#   #       CmsEnvRailsEnv: !Ref CmsEnvRailsEnv
+#   #       CmsEnvRailsSecretKey: !Ref CmsEnvRailsSecretKey
+#   #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/cms.prx.org/cms.prx.org.yml"]]
+#   #     TimeoutInMinutes: "5"
+# ################################################################################
+# #### PUBLISH ###################################################################
+# ################################################################################
+#   PublishStack:
+#     Type: "AWS::CloudFormation::Stack"
+#     DependsOn: ECSClusterStack
+#     Properties:
+#       NotificationARNs:
+#         - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#       Parameters:
+#         VPC: !GetAtt VPCStack.Outputs.VPC
+#         RootStackName: !Ref AWS::StackName
+#         OpsDebugMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+#         ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+#         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+#         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+#         PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+#         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+#         PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+#         PlatformALBHTTPListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Publish, http]
+#         PlatformALBHTTPSListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Publish, https]
+#         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+#         EcrRegion: !Ref EcrRegion
+#         EnvCmsHost: !Ref EnvCmsHost
+#         EnvIdHost: !Ref EnvIdHost
+#         EnvPlayHost: !Ref EnvPlayHost
+#         PublishECRImageTag: !Ref PublishECRImageTag
+#         PublishEnvAuthClientId: !Ref PublishEnvAuthClientId
+#         PublishEnvAwsKey: !Ref PublishEnvAwsKey
+#         PublishEnvAwsUrl: !Ref PublishEnvAwsUrl
+#         PublishEnvBucketFolder: !Ref PublishEnvBucketFolder
+#         PublishEnvBucketName: !Ref PublishEnvBucketName
+#         PublishEnvGaKey: !Ref PublishEnvGaKey
+#         PublishEnvNewRelicAppName: !Ref PublishEnvNewRelicAppName
+#         PublishEnvNewRelicLicenseKey: !Ref PublishEnvNewRelicLicenseKey
+#         PublishEnvSignUrl: !Ref PublishEnvSignUrl
+#         PublishEnvUseCloudfront: !Ref PublishEnvUseCloudfront
+#       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/publish.prx.org/publish.prx.org.yml"]]
+#       TimeoutInMinutes: "5"
+#   # CmsAudioLambdaStack:
+#   #   Type: "AWS::CloudFormation::Stack"
+#   #   Properties:
+#   #     NotificationARNs:
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#   #     Parameters:
+#   #       CodeBucket: !Join ["", ["Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-CodeBucket"]]
+#   #       LambdaFunctionCodeS3Key: !Ref CmsAudioLambdaZipName
+#   #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/cms-audio-lambda/cms-audio-lambda.yml"]]
+#   #     TimeoutInMinutes: "5"
+#   # CmsImageLambdaStack:
+#   #   Type: "AWS::CloudFormation::Stack"
+#   #   Properties:
+#   #     NotificationARNs:
+#   #       - !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
+#   #     Parameters:
+#   #       CodeBucket: !Join ["", ["Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-CodeBucket"]]
+#   #       LambdaFunctionCodeS3Key: !Ref CmsImageLambdaZipName
+#   #     TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/cms-image-lambda/cms-image-lambda.yml"]]
+#   #     TimeoutInMinutes: "5"

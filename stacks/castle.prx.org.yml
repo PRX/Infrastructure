@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: castle.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: castle.prx.org
+    Container:
+      name: castle-phoenix
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBHTTPListenerPriority:
+    Type: String
+  PlatformALBHTTPSListenerPriority:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  OpsDebugMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  SecretsRegion:
+    Type: String
+  # Shared ENV #################################################################
+  # Castle ECS #################################################################
+  CastleEcrImageTag:
+    Type: String
+  # Castle ENV #################################################################
+  CastleSecretsVersion:
+    Type: String
+Resources:
+  CastleLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  CastleALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub castle-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Castle-${EnvironmentType}
+      VpcId: !Ref VPC
+  CastleALBHTTPHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Ref PlatformALBHTTPListenerPriority
+  CastleALBHTTPSHostListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Ref PlatformALBHTTPSListenerPriority
+  CastleTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 128
+          Environment:
+            - Name: APP_NAME
+              Value: "castle"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref CastleSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref SecretsRegion
+          Essential: true
+          # TODO
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/castle.prx.org:${CastleEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CastleLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 128
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4000
+  CastleService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 4000
+          TargetGroupArn: !Ref CastleALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref CastleTaskDefinition
+  CastleWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to a castle instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech.

@@ -1,0 +1,498 @@
+# This stack should generally only be launched once globally, and be named: ci
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a continuous integration system to handle testing, building, and
+  pushing assets in response to changes on GitHub
+Mappings:
+  Shared:
+    SourceArchives:
+      Key: github-source-archive.zip
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureStorageStackName
+          - NotificationsStackName
+      - Label:
+          default: Template Configuration
+        Parameters:
+          - InfrastructureConfigStagingKey
+      - Label:
+          default: GitHub API
+        Parameters:
+          - GitHubToken
+          - GitHubWebhookSecret
+      - Label:
+          default: CodeBuild
+        Parameters:
+          - CodeBuildBootstrapUrl
+    ParameterLabels:
+      InfrastructureStorageStackName:
+        default: Storage stack name
+      NotificationsStackName:
+        default: Notifications stack name
+      InfrastructureConfigStagingKey:
+        default: Staging S3 object key
+      GitHubToken:
+        default: Access token
+      GitHubWebhookSecret:
+        default: Webhook secret
+      CodeBuildBootstrapUrl:
+        default: Bootstrap script URL
+Parameters:
+  InfrastructureStorageStackName:
+    Default: infrastructure-storage
+    Description: The name of a previously launched infrastructure storage stack
+    Type: String
+  NotificationsStackName:
+    Default: notifications
+    Description: The name of a previously launched notifications stack
+    Type: String
+  InfrastructureConfigStagingKey:
+    Default: template-config-staging.zip
+    Description: >
+      The S3 object key for the staging template configuration file archive
+      (.zip), inside the InfrastructureConfigBucket
+    Type: String
+  GitHubToken:
+    Description: >
+      A GitHub access token with permissions to update statuses, request
+      content, etc
+    Type: String
+  GitHubWebhookSecret:
+    Description: >
+      The secret provided by GitHub for the push and pull request events webhook
+    Type: String
+  CodeBuildBootstrapUrl:
+    Description: >
+      URL of the bootstrap shell script that the CI runner CodeBuild project
+      will install and execute
+    Type: String
+Resources:
+  # ACM Certificates
+  CiCertificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
+      DomainValidationOptions:
+        - ValidationDomain: prx.tech
+          DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
+  # S3 Buckets
+  CiCodeBuildSourceArchiveBucket:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
+    Properties:
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      VersioningConfiguration:
+        Status: Enabled
+  # SNS Topics
+  GitHubEventSnsTopic:
+    Type: "AWS::SNS::Topic"
+  CodeBuildCallbackSnsTopic:
+    Type: "AWS::SNS::Topic"
+  CiStatusSnsTopic:
+    Type: "AWS::SNS::Topic"
+  # SNS Subscriptions
+  GitHubEventTopicFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt GitHubEventHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref GitHubEventSnsTopic
+  CodeBuildCallbackTopicFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CodeBuildCallbackHanlderLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref CodeBuildCallbackSnsTopic
+  CiStatusTopicRelayFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint:
+        Fn::ImportValue:
+          !Sub ${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn
+      Protocol: lambda
+      TopicArn: !Ref CiStatusSnsTopic
+  # Lambda Permssions for SNS
+  GitHubEventTopicInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GitHubEventHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref GitHubEventSnsTopic
+  CodeBuildCallbackTopicInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CodeBuildCallbackHanlderLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CodeBuildCallbackSnsTopic
+  CiStatusTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::ImportValue:
+          !Sub ${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CiStatusSnsTopic
+  # IAM Roles
+  LambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: XrayTracePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource:
+                  - "*"
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref GitHubEventSnsTopic
+                  - !Ref CiStatusSnsTopic
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:getObject"
+                  - "s3:putObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
+              - Effect: Allow
+                Action:
+                  - "s3:putObject"
+                Resource:
+                  - !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codebuild:StartBuild"
+                Resource:
+                  - !GetAtt CodeBuildProject.Arn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  CodeBuildIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: CodeBuildLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource:
+                  # NOTE The project name in this ARN must stay in sync with the
+                  # actual project name, but can't be referenced because of
+                  # a circular dep.
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Runner
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Runner:*
+        - PolicyName: CiCodeBuildSourceArchiveBucketBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource:
+                  - !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref CiStatusSnsTopic
+                  - !Ref CodeBuildCallbackSnsTopic
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecr:GetAuthorizationToken"
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - "ecr:*RepositoryPolicy"
+                  - "ecr:BatchCheckLayerAvailability"
+                  - "ecr:GetAuthorizationToken"
+                  - "ecr:InitiateLayerUpload"
+                  - "ecr:CompleteLayerUpload"
+                  - "ecr:UploadLayerPart"
+                  - "ecr:PutImage"
+                Resource:
+                  - !Sub "arn:aws:ecr:us-east-1:${AWS::AccountId}:repository/*"
+  # Lambda Functions
+  GitHubWebhookEndpointLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: ci/github-webhook-endpoint.zip
+      Description: Backs the GitHub webhook payload requests endpoint
+      Environment:
+        Variables:
+          GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
+          GITHUB_EVENT_HANDLER_TOPIC_ARN: !Ref GitHubEventSnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  GitHubEventHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: ci/github-event-handler.zip
+      Description: Handles GitHub events forwarded from the endpoint
+      Environment:
+        Variables:
+            GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+            CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
+            CODEBUILD_PROJECT_NAME: !Ref CodeBuildProject
+            CODEBUILD_SOURCE_ARCHIVE_BUCKET: !Ref CiCodeBuildSourceArchiveBucket
+            CODEBUIL_SOURCE_ARCHIVE_KEY: !FindInMap [Shared, SourceArchives, Key]
+            CODEBUILD_CALLBACK_TOPIC_ARN: !Ref CodeBuildCallbackSnsTopic
+            AWS_ACCOUNT_ID: !Ref AWS::AccountId
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  CodeBuildCallbackHanlderLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: ci/codebuild-callback-handler.zip
+      Description: Handles GitHub events forwarded from the endpoint
+      Environment:
+        Variables:
+          CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
+          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  # Lambda Alarms
+  GitHubWebhookEndpointErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: GitHub Webhook Endpoint Lambda Errors
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      AlarmDescription: >
+        The error rate on the GitHub webhook endpoint lambda has exceeded 0 in
+        the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GitHubWebhookEndpointLambdaFunction
+  GitHubEventHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: GitHub Event Handler Lambda Errors
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
+      AlarmDescription: >
+        The error rate on the GitHub event handler lambda has exceeded 0 in
+        the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GitHubEventHandlerLambdaFunction
+  # API Gateway Deployments
+  ## /
+  RestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: !Sub "${AWS::StackName} API"
+      Description: >
+        Provides an API for inbound requests used by the CI system, such as
+        GitHub event webhooks
+  ## /v1
+  RestApiV1Resource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "v1"
+  ## /v1/github
+  RestApiV1GitHubResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiV1Resource
+      PathPart: "github"
+  ## /v1/github/webhook
+  RestApiV1GitHubWebhookResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiV1GitHubResource
+      PathPart: "webhook"
+  ### /v1/github/webhook POST
+  RestApiV1GitHubWebhookPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestApiV1GitHubWebhookResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GitHubWebhookEndpointLambdaFunction.Arn}/invocations
+  ## Deployments
+  RestApiDeployment:
+    DependsOn:
+      - RestApiV1GitHubWebhookPostMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: "API deployment"
+  RestApiProdStage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: prod
+      Description: "Production stage"
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+  # Lambda Permissions for API Gateway
+  GitHubWebhookRequestPostMethodInvokeFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GitHubWebhookEndpointLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiProdStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
+  # CodeBuild Projects
+  CodeBuildProject:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Artifacts:
+        Type: NO_ARTIFACTS
+      # Description: String
+      # EncryptionKey: String
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        # EnvironmentVariables:
+        #   - EnvironmentVariables
+        Image: "aws/codebuild/docker:1.12.1"
+        Type: LINUX_CONTAINER
+      # NOTE If Name changes, the CodeBuild Role Logs policy also must change
+      Name: !Sub ${AWS::StackName}-Runner
+      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Source:
+        BuildSpec: !Sub "version: 0.1\n\nphases:\n  build:\n    commands:\n      - curl -sO ${CodeBuildBootstrapUrl} && sh bootstrap.sh"
+        Location: !Join ["", ["arn:aws:s3:::", !Ref CiCodeBuildSourceArchiveBucket, "/", !FindInMap [Shared, SourceArchives, Key]]]
+        Type: S3
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      TimeoutInMinutes: 16
+# TODO Output a pretty URL for the webbook endpoint,
+# like ci-us-east-2.prx.tech/v1/github/webhook
+# Outputs:
+#   StagingTemplateBucket:
+#     Description: >
+#       The name of the bucket that templates have been synced to, to be used
+#       in a staging environment
+#     Value: !Ref StagingTemplateBucket
