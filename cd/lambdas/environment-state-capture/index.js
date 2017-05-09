@@ -29,72 +29,111 @@ const codepipeline = new AWS.CodePipeline();
 exports.handler = (event, context, callback) => {
     const job = event['CodePipeline.job'];
 
-    console.log(job);
-
     try {
         console.log('Starting capture...');
 
-        const artifacts = job.data.inputArtifacts;
+        makeSnapshot(job, context, callback, (env, snapshot) => {
+            console.log(`...Capturing: ${snapshot}...`);
 
-        const repo = artifacts.find(e => /RepoSource/.test(e.name));
-        const config = artifacts.find(e => /TemplateConfig/.test(e.name));
+            // Snapshots are named with a timestamp, eg staging/123456.json
+            const ts = Date.now();
+            const key = `${env}/${ts}.json`;
 
-        const capture = JSON.stringify({
-          TemplateConfigArchiveS3Version: config.revision,
-          InfrastructureGitCommit: repo.revision
-        });
+            console.log(`...S3 object: ${key}...`);
 
-        console.log(`...Capturing: ${capture}...`);
-
-        const env = /Staging/.test(config.name) ? 'staging' : 'production';
-        const ts = Date.now();
-        const key = `${env}/${ts}.json`;
-
-        console.log(`...S3 object: ${key}...`);
-
-        s3.putObject({
-            Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
-            Key: key,
-            Body: capture
-        }, (err, data) => {
-            if (err) {
-                console.error(`...S3 putObject failed!`);
-                failPipelineAction(job, context, callback, err);
-            } else {
-                console.log('...Notifying CodePipeline job of success...');
-                codepipeline.putJobSuccessResult({ jobId: job.id }, (e, d) => {
-                    if (e) {
-                        console.error('CodePipeline result failed!');
-                        callback(e);
-                    } else {
-                        callback(null, '...Done!');
-                    }
-                });
-            }
+            s3.putObject({
+                Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
+                Key: key,
+                Body: snapshot
+            }, (err, data) => {
+                if (err) {
+                    console.error(`...S3 putObject failed!`);
+                    failPipelineAction(job, context, callback, err);
+                } else {
+                    console.log('...Notifying CodePipeline job of success...');
+                    codepipeline.putJobSuccessResult({
+                        jobId: job.id
+                    }, (e, d) => {
+                        if (e) {
+                            console.error('CodePipeline result failed!');
+                            callback(e);
+                        } else {
+                            callback(null, '...Done!');
+                        }
+                    });
+                }
+            });
         });
     } catch (e) {
         console.error('...Unhandled error!');
         failPipelineAction(job, context, callback, e);
     }
-};
+}
+
+function makeSnapshot(job, context, callback, cb) {
+    const artifacts = job.data.inputArtifacts;
+
+    console.log(`...Found ${artifacts.length} artifacts...`);
+
+    let snapshot;
+    let env;
+
+    const repo = artifacts.find(a => /RepoSource/.test(a.name));
+
+    // If we're capturing Staging state, there will be two artifacts, and
+    // we need to record the artifact revision value of both: the
+    // Infrastructure repo artifact (Git SHA), and the staging template config
+    // artifact (S3 version ID)
+    if (artifacts.length === 2) {
+        console.log(`...Creating staging snapshot...`);
+
+        env = 'staging';
+
+        const config = artifacts.find(a => /TemplateConfig/.test(a.name));
+
+        cb(env, JSON.stringify({
+            InfrastructureGitCommit: repo.revision,
+            TemplateConfigArchiveS3Version: config.revision
+        }));
+    } else {
+        // For production state, only the Infrastructure repo artifact is
+        // immediately available.
+        console.log(`...Creating production snapshot...`);
+
+        env = 'production';
+
+        // To get the config version, ask S3 for the version ID of the most
+        // recent version
+        // TODO This is potentially inaccurate; there may be a better way
+        console.log('...Getting production config version ID...');
+        s3.headObject({
+            Bucket: process.env.INFRASTRUCTURE_CONFIG_BUCKET,
+            Key: process.env.INFRASTRUCTURE_CONFIG_PRODUCTION_KEY,
+        }, (err, data) => {
+            if (err) {
+                console.error(`...S3 headObject failed!`);
+                failPipelineAction(job, context, callback, err);
+            } else {
+                cb(env, JSON.stringify({
+                    InfrastructureGitCommit: repo.revision,
+                    TemplateConfigArchiveS3Version: data.VersionId
+                }));
+            }
+        });
+    }
+}
 
 function failPipelineAction(job, context, callback, err) {
     console.log('...Notifying CodePipeline job of failure!');
 
-    const params = {
+    codepipeline.putJobFailureResult({
         jobId: job.id,
         failureDetails: {
             message: JSON.stringify(err),
             type: 'JobFailed',
             externalExecutionId: context.invokeid
         }
-    };
-
-    codepipeline.putJobFailureResult(params, (e, d) => {
-        if (e) {
-            callback(e);
-        } else {
-            callback(null, err);
-        }
+    }, (e, d) => {
+        e ? callback(e) : callback(null, err);
     });
 }
