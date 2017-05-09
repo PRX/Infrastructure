@@ -11,12 +11,12 @@ Description: >
   Launches stacks for a number of applications and services that are maintained
   in separate templates.
 Parameters:
-  ASGKeyPairName:
+  AsgKeyPairName:
     Description: >
       The EC2 key pair used for instances in the Auto Scaling
       group (region-specific)
     Type: "AWS::EC2::KeyPair::KeyName"
-  ECRRegion:
+  EcrRegion:
     Type: String
   EnvironmentType:
     Type: String
@@ -28,11 +28,11 @@ Parameters:
   SecretsKey:
     Type: String
   # Application Specific
-  AudiogramECRImageTag:
+  AudiogramEcrImageTag:
     Type: String
   AudiogramSecretsVersion:
     Type: String
-  CastleECRImageTag:
+  CastleEcrImageTag:
     Type: String
   CastleSecretsVersion:
     Type: String
@@ -98,7 +98,7 @@ Resources:
         - Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
-        KeyPairName: !Ref ASGKeyPairName
+        KeyPairName: !Ref AsgKeyPairName
         EnvironmentType: !Ref EnvironmentType
         VPC: !GetAtt VPCStack.Outputs.VPC
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
@@ -113,7 +113,7 @@ Resources:
             !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
         SecretsBase: !Ref SecretsBase
         SecretsKey: !Ref SecretsKey
-        SecretsRegion: !Ref ECRRegion
+        SecretsRegion: !Ref EcrRegion
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/ecs.yml"]]
       TimeoutInMinutes: "5"
   LoadBalancersStack:
@@ -157,10 +157,10 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        ECRRegion: !Ref ECRRegion
+        EcrRegion: !Ref EcrRegion
         SecretsBase: !Ref SecretsBase
-        SecretsRegion: !Ref ECRRegion
-        CastleECRImageTag: !Ref CastleECRImageTag
+        SecretsRegion: !Ref EcrRegion
+        CastleEcrImageTag: !Ref CastleEcrImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
       TimeoutInMinutes: "5"
@@ -187,14 +187,14 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        ECRRegion: !Ref ECRRegion
+        EcrRegion: !Ref EcrRegion
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        ECRRegion: !Ref ECRRegion
+        EcrRegion: !Ref EcrRegion
         SecretsBase: !Ref SecretsBase
-        SecretsRegion: !Ref ECRRegion
-        AudiogramECRImageTag: !Ref AudiogramECRImageTag
+        SecretsRegion: !Ref EcrRegion
+        AudiogramEcrImageTag: !Ref AudiogramEcrImageTag
         AudiogramSecretsVersion: !Ref AudiogramSecretsVersion
       TemplateURL: !Join ["", ["http://s3-", !Ref "AWS::Region", ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/audiogram.yml"]]
       TimeoutInMinutes: "5"
@@ -259,7 +259,7 @@ Outputs:
 #   ##############################################################################
 #   ##############################################################################
 #   ##############################################################################
-#   AudiogramECRImageTag:
+#   AudiogramEcrImageTag:
 #     Type: String
 #   PublishECRImageTag:
 #     Type: String
@@ -311,7 +311,7 @@ Outputs:
 #   #       ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
 #   #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
 #   #       OpsDebugMessagesSnsTopicArn: !GetAtt NotificationsStack.Outputs.OpsDebugMessagesSnsTopicArn
-#   #       ECRRegion: !Ref ECRRegion
+#   #       EcrRegion: !Ref EcrRegion
 #   #       CmsECRImageTag: !Ref CmsECRImageTag
 #   #       CmsEnvAwsAccessKeyId: !Ref CmsEnvAwsAccessKeyId
 #   #       CmsEnvAwsBucket: !Ref CmsEnvAwsBucket
@@ -361,7 +361,7 @@ Outputs:
 #         PlatformALBHTTPListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Publish, http]
 #         PlatformALBHTTPSListenerPriority: !FindInMap [ALBListenerRulePriorityMap, Publish, https]
 #         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-#         ECRRegion: !Ref ECRRegion
+#         EcrRegion: !Ref EcrRegion
 #         EnvCmsHost: !Ref EnvCmsHost
 #         EnvIdHost: !Ref EnvIdHost
 #         EnvPlayHost: !Ref EnvPlayHost
