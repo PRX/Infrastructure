@@ -264,7 +264,8 @@ Resources:
                 Action:
                   - "lambda:InvokeFunction"
                 Resource:
-                  - !GetAtt InfrastructureRepoSourceS3SyncFuncton.Arn
+                  - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
+                  - !GetAtt InfrastructureCommitProxyFunction.Arn
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
         - PolicyName: CodeBuildPolicy
@@ -404,7 +405,7 @@ Resources:
                   - "sns:*"
                 Resource: "*"
   # Lambda Functions
-  InfrastructureRepoSourceS3SyncFuncton:
+  InfrastructureRepoSourceS3SyncFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
@@ -426,6 +427,23 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 8
+  InfrastructureCommitProxyFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/infrastructure-commit-proxy.zip
+      Description: Copies Infrastructure repo artifact to S3
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
   EnvironmentStateCaptureFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -450,7 +468,7 @@ Resources:
           Value: Infrastructure
       Timeout: 3
   # Lambda Alarms
-  SlackRelayErrorAlarm:
+  SourceSyncErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
@@ -476,7 +494,34 @@ Resources:
       Threshold: "0"
       Dimensions:
         - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFuncton
+          Value: !Ref InfrastructureRepoSourceS3SyncFunction
+  CommitProxyErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Infrastructure Commit Proxy Lambda Errors
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the S3 commit proxy lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureCommitProxyFunction
   StateCaptureErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
@@ -566,7 +611,18 @@ Resources:
                 Provider: Lambda
                 Version: 1
               Configuration:
-                FunctionName: !Ref InfrastructureRepoSourceS3SyncFuncton
+                FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            - Name: InfrastructureCommit
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref InfrastructureCommitProxyFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               OutputArtifacts:
