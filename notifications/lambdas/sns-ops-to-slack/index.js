@@ -83,6 +83,8 @@ function channelForEvent(event) {
         return '#ops-builds';
     } else if (/CodePipelineApprovals/.test(topicArn)) {
         return '#ops-deploys';
+    } else if (/DeployNotification/.test(topicArn)) {
+        return '#ops-deploys';
     } else {
         return '#ops-debug';
     }
@@ -474,6 +476,8 @@ function webhookForEvent(event) {
           resolve(process.env.CODEBUILD_SLACK_WEBHOOK_URL);
       } else if (/CodePipelineApprovals/.test(sns.TopicArn)) {
           resolve(process.env.IKE_DEPLOYS_SLACK_WEBHOOK_URL);
+      } else if (/DeployNotification/.test(sns.TopicArn)) {
+          resolve(process.env.PIPELINE_SLACK_WEBHOOK_URL);
       } else if (sns.Subject === 'AWS CloudFormation Notification') {
           resolve(process.env.CFN_SLACK_WEBHOOK_URL);
       } else {
