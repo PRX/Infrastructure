@@ -80,7 +80,7 @@ function channelForEvent(event) {
     } else if (/OpsStatus/.test(topicArn)) {
         return '#ops-status';
     } else if (/CiStatus/.test(topicArn)) {
-        return '#ops-status';
+        return '#ops-builds';
     } else if (/CodePipelineApprovals/.test(topicArn)) {
         return '#ops-deploys';
     } else {
