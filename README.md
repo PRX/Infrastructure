@@ -31,7 +31,7 @@ The **Notifications** stack is largely responsible for messaging both within the
 
 ### Continuous Integration
 
-The **CI** stack launches a set of resources that handle code commit related events coming from the GitHub webhook API, and prepare that code to be deployed. The CI setup handles master branch commits, as well as code changes for pull requests. Only mast branch code changes will package code to be deployable (for instance, pushing a Docker image to ECR).
+The **CI** stack launches a set of resources that handle code commit related events coming from the GitHub webhook API, and prepare that code to be deployed. The CI setup handles master branch commits, as well as code changes for pull requests. Only master branch code changes will package code to be deployable (for instance, pushing a Docker image to ECR).
 
 At a high level, the system involves: an organization-level webhook configuration on GitHub sending events for activity on all PRX repositories; whose events are handled (via API Gateway) by a Lambda function; which triggers a CodeBuild project that is builds, tests, and packages the applications.
 
@@ -39,7 +39,7 @@ When a new packaged version of an app is pushed out (eg., to ECR), the CI proces
 
 ### Continuous Delivery
 
-The **CD** stack takes care of launched and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration. When either of these sources are updated, the pipeline deploys the changes to a staging environment. Acceptance tests are run against staging, and if they pass the updates can then be deployed to the production environment.
+The **CD** stack takes care of launching and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration. When either of these sources are updated, the pipeline deploys the changes to a staging environment. Acceptance tests are run against staging, and if they pass the updates can then be deployed to the production environment.
 
 Whenever an environment is successfully deployed, the CD pipeline also captures the state of the infrastructure and configuration, so that known good states can be rolled back to if necessary.
 
