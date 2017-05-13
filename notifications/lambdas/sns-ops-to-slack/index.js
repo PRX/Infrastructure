@@ -96,6 +96,8 @@ function attachmentsForEvent(event) {
     // First deal with events that can be routed without parsing the SNS message
     if (/CiStatus/.test(sns.TopicArn)) {
         return attachmentsForCiStatus(event);
+    } else if (/DeployNotification/.test(sns.TopicArn)) {
+        return attachmentsForCdDeploy(event);
     } else if (/StackId='arn:aws:cloudformation/.test(sns.Message)) {
         return attachmentForCloudFormation(event);
     } else {
@@ -441,6 +443,29 @@ function attachmentsForCodePipelineApproval(event) {
                     value: JSON.stringify(Object.assign({value: REJECTED}, params))
                 }
             ]
+        }
+    ];
+}
+
+function attachmentsForCdDeploy(event) {
+    const message = JSON.parse(event.Records[0].Sns.Message);
+
+    const env = message.environment;
+    const commit = message.commit;
+    const region = message.region;
+
+    const url = `https://github.com/PRX/Infrastructure/commit/${commit}`
+
+    const color = (env === 'Production') ? 'good' : 'warning';
+
+    return [
+        {
+            fallback: `${env} deploy complete. Infrastructure revision ${commit}`,
+            color: color,
+            text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>`,
+            footer: region,
+            ts: (Date.now() / 1000 | 0),
+            mrkdwn_in: ['text']
         }
     ];
 }

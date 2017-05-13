@@ -93,6 +93,8 @@ Resources:
   # SNS Topics
   CodePipelineApprovalsSnsTopic:
     Type: "AWS::SNS::Topic"
+  DeployNotificationsSnsTopic:
+    Type: "AWS::SNS::Topic"
   # SNS Subscriptions
   CodePipelineApprovalsTopicRelayFunctionSubscription:
     Type: "AWS::SNS::Subscription"
@@ -102,6 +104,14 @@ Resources:
           !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
       Protocol: lambda
       TopicArn: !Ref CodePipelineApprovalsSnsTopic
+  DeployNotificationsTopicRelayFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
+      Protocol: lambda
+      TopicArn: !Ref DeployNotificationsSnsTopic
   # Lambda Permssions for SNS
   CodePipelineApprovalsTopicInvokeRelayFunctionPermission:
     Type: "AWS::Lambda::Permission"
@@ -112,6 +122,15 @@ Resources:
           !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
       Principal: sns.amazonaws.com
       SourceArn: !Ref CodePipelineApprovalsSnsTopic
+  DeployNotificationsTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref DeployNotificationsSnsTopic
   # IAM Roles
   LambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
@@ -159,6 +178,15 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${ArtifactStore}/*
                   - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
+        - PolicyName: SnsApprovalsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref DeployNotificationsSnsTopic
         - PolicyName: CodePipelinePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -280,6 +308,7 @@ Resources:
                   - !GetAtt InfrastructureCommitProxyFunction.Arn
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
+                  - !GetAtt DeploymentNotificationFunction.Arn
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
@@ -508,6 +537,27 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 8
+  DeploymentNotificationFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/deployment-notification.zip
+      Description: >
+        Sends a message when deployments finish
+      Environment:
+        Variables:
+          DEPLOY_NOTIFICATION_TOPIC_ARN: !Ref DeployNotificationsSnsTopic
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
   # Lambda Alarms
   SourceSyncErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -735,6 +785,18 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 2
+            - Name: DeploymentNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref DeploymentNotificationFunction
+                UserParameters: Staging
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 2
         # - Name: Testing
         #   Actions:
         #     - Name: Acceptance
@@ -821,6 +883,7 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref EnvironmentStateCaptureFunction
+                UserParameters: Production
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 5
