@@ -6,6 +6,9 @@ Mappings:
       name: audiogram
     Container:
       name: server-worker-combined
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   VPC:
     Type: "AWS::EC2::VPC::Id"
@@ -18,9 +21,7 @@ Parameters:
     Type: String
   PlatformALBHTTPSListenerArn:
     Type: String
-  PlatformALBHTTPListenerPriority:
-    Type: String
-  PlatformALBHTTPSListenerPriority:
+  PlatformALBListenerPriorityPrefix:
     Type: String
   ##############################################################################
   ECSCluster:
@@ -69,7 +70,8 @@ Resources:
         - Key: Name
           Value: !Sub Audiogram-${EnvironmentType}
       VpcId: !Ref VPC
-  AudiogramALBHTTPHostListenerRule:
+  # ALB Listener Rules
+  AudiogramALBHTTPHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -80,8 +82,34 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Ref PlatformALBHTTPListenerPriority
-  AudiogramALBHTTPSHostListenerRule:
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
+  AudiogramALBHTTPHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - audiogram.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
+  AudiogramALBHTTPHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - audiogram-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+  AudiogramALBHTTPSHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -92,7 +120,34 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Ref PlatformALBHTTPSListenerPriority
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
+  AudiogramALBHTTPSHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - audiogram.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
+  AudiogramALBHTTPSHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref AudiogramALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - audiogram-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+  # ECS Service
   AudiogramTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:

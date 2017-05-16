@@ -6,6 +6,9 @@ Mappings:
       name: castle.prx.org
     Container:
       name: castle-phoenix
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -19,9 +22,7 @@ Parameters:
     Type: String
   PlatformALBHTTPSListenerArn:
     Type: String
-  PlatformALBHTTPListenerPriority:
-    Type: String
-  PlatformALBHTTPSListenerPriority:
+  PlatformALBListenerPriorityPrefix:
     Type: String
   # ECS Cluster ################################################################
   ECSCluster:
@@ -72,7 +73,8 @@ Resources:
         - Key: Name
           Value: !Sub Castle-${EnvironmentType}
       VpcId: !Ref VPC
-  CastleALBHTTPHostListenerRule:
+  # ALB Listener Rules
+  CastleALBHTTPHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -83,8 +85,34 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Ref PlatformALBHTTPListenerPriority
-  CastleALBHTTPSHostListenerRule:
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
+  CastleALBHTTPHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - castle.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
+  CastleALBHTTPHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - castle-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+  CastleALBHTTPSHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -95,7 +123,34 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-castle.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Ref PlatformALBHTTPSListenerPriority
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
+  CastleALBHTTPSHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - castle.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
+  CastleALBHTTPSHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref CastleALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - castle-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+  # ECS Service
   CastleTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
