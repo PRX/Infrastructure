@@ -1,9 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: publish.prx.org application running in Docker
 Mappings:
-  ContainerNameMap:
-    PublishApp:
+  Shared:
+    Project:
+      name: publish.prx.org
+    Container:
       name: publish-express
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -17,9 +22,7 @@ Parameters:
     Type: String
   PlatformALBHTTPSListenerArn:
     Type: String
-  PlatformALBHTTPListenerPriority:
-    Type: String
-  PlatformALBHTTPSListenerPriority:
+  PlatformALBListenerPriorityPrefix:
     Type: String
   # ECS Cluster ################################################################
   ECSCluster:
@@ -29,44 +32,24 @@ Parameters:
   ECSServiceIAMRole:
     Type: String
   # Misc #######################################################################
-  RootStackName:
-    Type: String
   OpsDebugMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
-  ECRRegion:
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  SecretsRegion:
     Type: String
   # Shared ENV #################################################################
-  EnvCmsHost:
-    Type: String
-  EnvIdHost:
-    Type: String
-  EnvPlayHost:
-    Type: String
   # Publish ECS ################################################################
-  PublishECRImageTag:
+  PublishEcrImageTag:
     Type: String
   # Publish ENV ################################################################
-  PublishEnvAuthClientId:
-    Type: String
-  PublishEnvAwsKey:
-    Type: String
-  PublishEnvAwsUrl:
-    Type: String
-  PublishEnvBucketFolder:
-    Type: String
-  PublishEnvBucketName:
-    Type: String
-  PublishEnvGaKey:
-    Type: String
-  PublishEnvNewRelicAppName:
-    Type: String
-  PublishEnvNewRelicLicenseKey:
-    Type: String
-  PublishEnvSignUrl:
-    Type: String
-  PublishEnvUseCloudfront:
+  PublishSecretsVersion:
     Type: String
 Resources:
   PublishLogGroup:
@@ -82,8 +65,16 @@ Resources:
       Name: !Sub publish-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Publish-${EnvironmentType}
       VpcId: !Ref VPC
-  PublishALBHTTPHostListenerRule:
+  # ALB Listener Rules
+  PublishALBHTTPHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -94,8 +85,34 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-publish.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Ref PlatformALBHTTPListenerPriority
-  PublishALBHTTPSHostListenerRule:
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
+  PublishALBHTTPHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PublishALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - publish.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
+  PublishALBHTTPHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PublishALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - publish-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+  PublishALBHTTPSHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -106,49 +123,60 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-publish.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Ref PlatformALBHTTPSListenerPriority
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
+  PublishALBHTTPSHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PublishALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - publish.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
+  PublishALBHTTPSHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PublishALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - publish-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+  # ECS Service
   PublishTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
         - Cpu: 64
           Environment:
-            - Name: AUTH_CLIENT_ID
-              Value: !Ref PublishEnvAuthClientId
-            - Name: AUTH_HOST
-              Value: !Ref EnvIdHost
-            - Name: AWS_KEY
-              Value: !Ref PublishEnvAwsKey
-            - Name: AWS_URL
-              Value: !Ref PublishEnvAwsUrl
-            - Name: BUCKET_FOLDER
-              Value: !Ref PublishEnvBucketFolder
-            - Name: BUCKET_NAME
-              Value: !Ref PublishEnvBucketName
-            - Name: CMS_HOST
-              Value: !Ref EnvCmsHost
-            - Name: GA_KEY
-              Value: !Ref PublishEnvGaKey
-            - Name: NEW_RELIC_APP_NAME
-              Value: !Ref PublishEnvNewRelicAppName
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref PublishEnvNewRelicLicenseKey
-            - Name: PLAY_HOST
-              Value: !Ref EnvPlayHost
-            - Name: SIGN_URL
-              Value: !Ref PublishEnvSignUrl
-            - Name: USE_CLOUDFRONT
-              Value: !Ref PublishEnvUseCloudfront
+            - Name: APP_NAME
+              Value: "publish"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref PublishSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref SecretsRegion
           Essential: true
           # TODO
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${ECRRegion}.amazonaws.com/publish.prx.org:${PublishECRImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${PublishEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref PublishLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 128
-          Name: !FindInMap [ContainerNameMap, PublishApp, name]
+          Name: !FindInMap [Shared, Container, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 4200
@@ -161,7 +189,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 1
       LoadBalancers:
-        - ContainerName: !FindInMap [ContainerNameMap, PublishApp, name]
+        - ContainerName: !FindInMap [Shared, Container, name]
           ContainerPort: 4200
           TargetGroupArn: !Ref PublishALBTargetGroup
       Role: !Ref ECSServiceIAMRole
