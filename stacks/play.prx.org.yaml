@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: play.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: play.prx.org
+    Container:
+      name: play-express
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBListenerPriorityPrefix:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  OpsDebugMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  SecretsRegion:
+    Type: String
+  # Shared ENV #################################################################
+  # Play ECS ################################################################
+  PlayEcrImageTag:
+    Type: String
+  # Play ENV ################################################################
+  PlaySecretsVersion:
+    Type: String
+Resources:
+  PlayLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  PlayALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub play-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Play-${EnvironmentType}
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 15
+      VpcId: !Ref VPC
+  # ALB Listener Rules
+  PlayALBHTTPHostVPCListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
+  PlayALBHTTPHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
+  PlayALBHTTPHostProductionGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateProductionResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
+  PlayALBHTTPHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+  PlayALBHTTPHostProductionGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.prx.org
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+  PlayALBHTTPSHostVPCListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
+  PlayALBHTTPSHostStagingGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
+  PlayALBHTTPSHostProductionGenericListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateProductionResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
+  PlayALBHTTPSHostStagingGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play-staging.prx.tech
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+  PlayALBHTTPSHostProductionGenericAltListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.prx.org
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+  # ECS Service
+  PlayTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 64
+          Environment:
+            - Name: APP_NAME
+              Value: "play"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref PlaySecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref SecretsRegion
+          Essential: true
+          # TODO
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/play.prx.org:${PlayEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PlayLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 128
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4200
+  PlayService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 4200
+          TargetGroupArn: !Ref PlayALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref PlayTaskDefinition
+  PlayWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to an play instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech.

@@ -75,6 +75,8 @@ Mappings:
       prefix: 20
     Castle:
       prefix: 10
+    Play:
+      prefix: 40
 Resources:
   VPCStack:
     Type: "AWS::CloudFormation::Stack"
@@ -257,6 +259,38 @@ Resources:
   #     TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${BootstrapStackName}-${EnvironmentType}-TemplateBucket", "/upload.prx.org/upload.prx.org.yml"]]
   #     TemplateURL: !Sub "http://s3-${AWS::Region}.amazonaws.com/${InfrastructureCodeBucket}/sync/upload.prx.org/${UploadGitCommit}.zip"
   #     TimeoutInMinutes: "5"
+  ##############################################################################
+  #### PLAY ####################################################################
+  ##############################################################################
+  PlayStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Play, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        SecretsRegion: !Ref EcrRegion
+        PlayEcrImageTag: !Ref PlayEcrImageTag
+        PlaySecretsVersion: !Ref PlaySecretsVersion
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/play.prx.org.yml"]]
+      TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
     Description: The ARN for the wildcard certificate for the VPC
@@ -270,6 +304,9 @@ Outputs:
   PublishHostedZoneDNSName:
     Description: Domain name for publish app
     Value: !GetAtt PublishStack.Outputs.HostedZoneDNSName
+  PlayHostedZoneDNSName:
+    Description: Domain name for play app
+    Value: !GetAtt PlayStack.Outputs.HostedZoneDNSName
   # CmsHostedZoneDNSName:
   #   Description: Domain name for CMS app
   #   Value: !GetAtt CmsStack.Outputs.HostedZoneDNSName
