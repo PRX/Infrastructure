@@ -456,18 +456,29 @@ function attachmentsForCdDeploy(event) {
 
     const url = `https://github.com/PRX/Infrastructure/commit/${commit}`
 
-    const color = (env === 'Production') ? 'good' : 'warning';
-
-    return [
-        {
-            fallback: `${env} deploy complete. Infrastructure revision ${commit}`,
-            color: color,
-            text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>`,
-            footer: region,
-            ts: (Date.now() / 1000 | 0),
-            mrkdwn_in: ['text']
-        }
-    ];
+    if (env === 'Start') {
+        return [
+            {
+                fallback: `Starting deploy. Infrastructure revision ${commit}`,
+                color: `#A807E8`,
+                text: `Starting deploy pipeline.\nInfrastructure revision <${url}|\`${commit}\`>`,
+                footer: region,
+                ts: (Date.now() / 1000 | 0),
+                mrkdwn_in: ['text']
+            }
+        ];
+    } else {
+        return [
+            {
+                fallback: `${env} deploy complete. Infrastructure revision ${commit}`,
+                color: (env === 'Production') ? 'good' : 'warning',
+                text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>`,
+                footer: region,
+                ts: (Date.now() / 1000 | 0),
+                mrkdwn_in: ['text']
+            }
+        ];
+    }
 }
 
 // UNKNOWN /////////////////////////////////////////////////////////////////////
