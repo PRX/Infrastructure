@@ -5,6 +5,7 @@ import os
 
 code_pipeline = boto3.client('codepipeline')
 sns = boto3.client('sns')
+cloudwatch = boto3.client('cloudwatch')
 
 def put_job_success(job, message):
     print('Putting job success')
@@ -26,6 +27,8 @@ def lambda_handler(event, context):
 
         env = job['data']['actionConfiguration']['configuration']['UserParameters']
 
+        # Publish to SNS Topic
+
         topic_arn = os.environ['DEPLOY_NOTIFICATION_TOPIC_ARN']
         message = json.dumps({
             'environment': env,
@@ -34,6 +37,31 @@ def lambda_handler(event, context):
         })
 
         sns.publish(TopicArn=topic_arn, Message=message)
+
+        # Log a custom metric data point with CloudWatch
+
+        stack_name = os.environ['CD_STACK_NAME']
+        cloudwatch.put_metric_data(
+            Namespace='PRX/CD',
+            MetricData=[
+                {
+                    'MetricName': 'Deploys',
+                    'Dimensions': [
+                        {
+                            'Name': 'Environment',
+                            'Value': env
+                        }, {
+                            'Name': 'StackName',
+                            'Value': stack_name
+                        }
+                    ],
+                    'Value': 1,
+                    'Unit': 'Count'
+                },
+            ]
+        )
+
+        # Cleanup
 
         put_job_success(job, '')
 
