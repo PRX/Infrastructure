@@ -40,7 +40,7 @@ def lambda_handler(event, context):
 
         # Log a custom metric data point with CloudWatch
 
-        if env == 'Staging' or env = 'Production':
+        if (env == 'Staging') or (env == 'Production'):
             stack_name = os.environ['CD_STACK_NAME']
             cloudwatch.put_metric_data(
                 Namespace='PRX/CD',
