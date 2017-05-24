@@ -39,6 +39,8 @@ Metadata:
           default: Infrastructure Config
         Parameters:
           - InfrastructureConfigStagingKey
+          - InfrastructureConfigProductionKey
+          - SecretsBase
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
@@ -50,6 +52,8 @@ Metadata:
         default: Staging S3 object key
       InfrastructureConfigProductionKey:
         default: Production S3 object key
+      SecretsBase:
+        default: Secrets base name
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -75,6 +79,11 @@ Parameters:
     Description: >
       The S3 object key for the production template configuration file archive
       (.zip), inside the InfrastructureConfigBucket
+    Type: String
+  SecretsBase:
+    Default: prx_apps
+    Description: >
+      Base name for aws-secrets, add "-secrets" suffix for secrets bucket name.
     Type: String
 Resources:
   # S3 Buckets
@@ -180,6 +189,12 @@ Resources:
                 Resource:
                   - !Sub arn:aws:s3:::${ArtifactStore}/*
                   - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
+              - Effect: Allow
+                Action:
+                  - "s3:getObject"
+                  - "s3:getObjectVersion"
+                Resource:
+                  - !Sub arn:aws:s3:::${SecretsBase}-secrets/*
         - PolicyName: SnsApprovalsPolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -539,6 +554,31 @@ Resources:
             Fn::ImportValue:
               !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
           INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 8
+  SecretsS3UpdateFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/secrets-s3-update-source.zip
+      Description: >
+        Updates template config when secrets change
+      Environment:
+        Variables:
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Role: !GetAtt LambdaExecutionIAMRole.Arn
