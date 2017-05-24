@@ -49,7 +49,7 @@ def get_secrets_changes(event):
 def get_config(env):
     environment = env_abbr_to_full(env)
     source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
-    source_key = "template-config-%s.zip" % environment
+    source_key = os.environ["INFRASTRUCTURE_CONFIG_%s_KEY" % environment.upper()]
 
     archive_path = temp_file_path()
 
@@ -85,7 +85,7 @@ def upload_config(env, config):
     archive.close()
 
     source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
-    source_key = "template-config-%s.zip" % environment
+    source_key = os.environ["INFRASTRUCTURE_CONFIG_%s_KEY" % environment.upper()]
 
     s3.upload_file(archive_path, source_bucket, source_key)
 
@@ -115,6 +115,7 @@ def lambda_handler(event, context):
 # local test
 ################################################################################
 if os.environ.get('LOCAL_TEST'):
+    os.environ['INFRASTRUCTURE_CONFIG_DEVELOPMENT_KEY'] = 'template-config-development.zip'
     os.environ['INFRASTRUCTURE_CONFIG_BUCKET'] = 'prx-infrastructure-us-east-1-config'
     test_event = {
         'Records' : [
