@@ -33,11 +33,7 @@ Parameters:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
-  SecretsBase:
-    Type: String
-  SecretsKey:
-    Type: String
-  SecretsRegion:
+  InfrastructureStorageStackName:
     Type: String
 Mappings:
   EnvironmentTypeMap:
@@ -158,25 +154,10 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-decrypt-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "kms:Decrypt"
-                Resource:
-                  - !Sub arn:aws:kms:${SecretsRegion}:${AWS::AccountId}:key/${SecretsKey}
-        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-access-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource:
-                  - !Sub arn:aws:s3:::${SecretsBase}-secrets/*
+        - Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-SecretsInstanceDecryptPolicy"
+        - Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-SecretsInstanceAccessPolicy"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
   ECSInstanceProfile:
