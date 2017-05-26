@@ -68,7 +68,7 @@ def update_production_config(production_config, staging_config):
     print('...Updating production config...')
 
     for key, value in production_config['Parameters'].items():
-        if re.search("ECRImageTag", key):
+        if re.search("EcrImageTag", key):
             new_value = staging_config['Parameters'][key]
             print(f"...Updating {key}: from {value} to {new_value}...")
             production_config['Parameters'][key] = new_value
