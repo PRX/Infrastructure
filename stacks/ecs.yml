@@ -35,9 +35,11 @@ Parameters:
     Type: String
   SecretsBase:
     Type: String
-  SecretsKey:
-    Type: String
   SecretsRegion:
+    Type: String
+  SecretsInstanceDecryptPolicyArn:
+    Type: String
+  SecretsInstanceAccessPolicyArn:
     Type: String
 Mappings:
   EnvironmentTypeMap:
@@ -157,28 +159,10 @@ Resources:
             Action:
               - "sts:AssumeRole"
       Path: "/"
-      Policies:
-        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-decrypt-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "kms:Decrypt"
-                Resource:
-                  - !Sub arn:aws:kms:${SecretsRegion}:${AWS::AccountId}:key/${SecretsKey}
-        - PolicyName: !Sub key-${SecretsBase}-secrets-instance-access-policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource:
-                  - !Sub arn:aws:s3:::${SecretsBase}-secrets/*
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        - !Ref SecretsInstanceDecryptPolicyArn
+        - !Ref SecretsInstanceAccessPolicyArn
   ECSInstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
     Properties:

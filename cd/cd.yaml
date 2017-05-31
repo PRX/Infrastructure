@@ -31,6 +31,7 @@ Metadata:
         Parameters:
           - InfrastructureStorageStackName
           - NotificationsStackName
+          - SecretsStackName
       - Label:
           default: GitHub API
         Parameters:
@@ -39,11 +40,14 @@ Metadata:
           default: Infrastructure Config
         Parameters:
           - InfrastructureConfigStagingKey
+          - InfrastructureConfigProductionKey
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
       NotificationsStackName:
         default: Notifications stack name
+      SecretsStackName:
+        default: Secrets stack name
       GitHubToken:
         default: Access token
       InfrastructureConfigStagingKey:
@@ -56,8 +60,12 @@ Parameters:
     Description: The name of a previously launched infrastructure storage stack
     Type: String
   NotificationsStackName:
-    Default: notifications
+    Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
+    Type: String
+  SecretsStackName:
+    Default: infrastructure-secrets
+    Description: The name of a previously launched secrets stack
     Type: String
   GitHubToken:
     Description: >
@@ -118,7 +126,7 @@ Resources:
   CodePipelineApprovalsTopicInvokeRelayFunctionPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
-      Action: lambda:InvokeFunction
+      Action: "lambda:InvokeFunction"
       FunctionName:
         Fn::ImportValue:
           !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
@@ -127,7 +135,7 @@ Resources:
   DeployNotificationsTopicInvokeRelayFunctionPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
-      Action: lambda:InvokeFunction
+      Action: "lambda:InvokeFunction"
       FunctionName:
         Fn::ImportValue:
           !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
@@ -814,6 +822,7 @@ Resources:
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${NotificationsStackName}",
+                    "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]}
                   }
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
@@ -891,6 +900,7 @@ Resources:
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${NotificationsStackName}",
+                    "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]}
                   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
