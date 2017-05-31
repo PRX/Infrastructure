@@ -54,17 +54,9 @@ Parameters:
     Type: String
   SecretsStackName:
     Type: String
-  InfrastructureGitCommit:
-    Type: String
-  SecretsBase:
-    Default: prx-infrastructure
-    Description: >
-      Base string value for secrets resource names
-    Type: String
   SecretsRegion:
-    Default: us-east-1
-    Description: >
-      Region where secrets related resources exist
+    Type: String
+  InfrastructureGitCommit:
     Type: String
 Mappings:
   EnvironmentTypeMap:
@@ -128,9 +120,16 @@ Resources:
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        SecretsBase: !Ref SecretsBase
         SecretsRegion: !Ref SecretsRegion
-        SecretsStackName: !Ref SecretsStackName
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-${SecretsRegion}-SecretsBase"
+        SecretsInstanceDecryptPolicyArn:
+          Fn::ImportValue:
+            !Sub "${SecretsStackName}-${SecretsRegion}-SecretsInstanceDecryptPolicyArn"
+        SecretsInstanceAccessPolicyArn:
+          Fn::ImportValue:
+            !Sub "${SecretsStackName}-${SecretsRegion}-SecretsInstanceAccessPolicyArn"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/ecs.yml"]]
       TimeoutInMinutes: "5"
   LoadBalancersStack:
@@ -174,7 +173,9 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
-        SecretsBase: !Ref SecretsBase
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-${SecretsRegion}-SecretsBase"
         SecretsRegion: !Ref SecretsRegion
         PublishEcrImageTag: !Ref PublishEcrImageTag
         PublishSecretsVersion: !Ref PublishSecretsVersion
@@ -206,7 +207,9 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
-        SecretsBase: !Ref SecretsBase
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-${SecretsRegion}-SecretsBase"
         SecretsRegion: !Ref SecretsRegion
         CastleEcrImageTag: !Ref CastleEcrImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
@@ -239,7 +242,9 @@ Resources:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
         EcrRegion: !Ref EcrRegion
-        SecretsBase: !Ref SecretsBase
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-${SecretsRegion}-SecretsBase"
         SecretsRegion: !Ref SecretsRegion
         AudiogramEcrImageTag: !Ref AudiogramEcrImageTag
         AudiogramSecretsVersion: !Ref AudiogramSecretsVersion
@@ -293,7 +298,9 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
-        SecretsBase: !Ref SecretsBase
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-${SecretsRegion}-SecretsBase"
         SecretsRegion: !Ref SecretsRegion
         PlayEcrImageTag: !Ref PlayEcrImageTag
         PlaySecretsVersion: !Ref PlaySecretsVersion
