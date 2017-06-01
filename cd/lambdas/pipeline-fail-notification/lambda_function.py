@@ -13,9 +13,16 @@ from datetime import datetime, timedelta
 code_pipeline = boto3.client('codepipeline')
 sns = boto3.client('sns')
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return json.JSONEncoder.default(self, o)
+
 def post_notification(action_state):
     topic_arn = os.environ['CODEPIPELINE_FAILURES_TOPIC_ARN']
-    message = json.dumps(action_state)
+    message = json.dumps(action_state, cls=DateTimeEncoder)
 
     sns.publish(TopicArn=topic_arn, Message=message)
 

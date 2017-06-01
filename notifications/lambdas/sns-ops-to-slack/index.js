@@ -85,6 +85,8 @@ function channelForEvent(event) {
         return '#ops-deploys';
     } else if (/DeployNotification/.test(topicArn)) {
         return '#ops-deploys';
+    } else if (/CodePipelineFailures/.test(topicArn)) {
+        return '#ops-deploys';
     } else {
         return '#ops-debug';
     }
@@ -98,6 +100,8 @@ function attachmentsForEvent(event) {
         return attachmentsForCiStatus(event);
     } else if (/DeployNotification/.test(sns.TopicArn)) {
         return attachmentsForCdDeploy(event);
+    } else if (/CodePipelineFailures/.test(sns.TopicArn)) {
+        return attachmentsForCdFail(event);
     } else if (/StackId='arn:aws:cloudformation/.test(sns.Message)) {
         return attachmentForCloudFormation(event);
     } else {
@@ -481,6 +485,23 @@ function attachmentsForCdDeploy(event) {
     }
 }
 
+function attachmentsForCdFail(event) {
+    const message = JSON.parse(event.Records[0].Sns.Message);
+
+    return [
+        {
+            color: `danger`,
+            fallback: `Deploy pipeline failed on ${message.actionName}`,
+            title: `Deploy pipeline failed on ${message.actionName}`,
+            title_link: message.latestExecution.externalExecutionUrl,
+            text: `> ${message.latestExecution.errorDetails.code} – ${message.latestExecution.errorDetails.message}`,
+            // footer: region,
+            ts: (Date.parse(message.latestExecution.lastStatusChange) / 1000 | 0),
+            mrkdwn_in: ['text']
+        }
+    ];
+}
+
 // UNKNOWN /////////////////////////////////////////////////////////////////////
 
 function attachmentsForUnknown(event) {
@@ -512,6 +533,8 @@ function webhookForEvent(event) {
           resolve(process.env.CODEBUILD_SLACK_WEBHOOK_URL);
       } else if (/CodePipelineApprovals/.test(sns.TopicArn)) {
           resolve(process.env.IKE_DEPLOYS_SLACK_WEBHOOK_URL);
+      } else if (/CodePipelineFailures/.test(sns.TopicArn)) {
+          resolve(process.env.PIPELINE_SLACK_WEBHOOK_URL);
       } else if (/DeployNotification/.test(sns.TopicArn)) {
           resolve(process.env.PIPELINE_SLACK_WEBHOOK_URL);
       } else if (sns.Subject === 'AWS CloudFormation Notification') {
