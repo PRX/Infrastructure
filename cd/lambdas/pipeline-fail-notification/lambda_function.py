@@ -23,19 +23,21 @@ def lambda_handler(event, context):
     try:
         print('Checking pipeline state...')
 
-        period_start = datetime.now() - timedelta(seconds=60)
-
         pipeline_name = os.environ['PIPELINE_NAME']
 
         pipeline_state = code_pipeline.get_pipeline_state(name=pipeline_name)
 
         for stage_state in pipeline_state['stageStates']:
             for action_state in stage_state['actionStates']:
-                exec = action_state['latestExecution']
+                if 'latestExecution' in action_state:
+                    execution = action_state['latestExecution']
 
-                if execution['lastStatusChange'] > period_start:
-                    if execution['status'] == 'Failed':
-                        post_notification(action_state)
+                    timezone = execution['lastStatusChange'].tzinfo
+                    period_start = datetime.now(timezone) - timedelta(seconds=60)
+
+                    if execution['lastStatusChange'] > period_start:
+                        if execution['status'] == 'Failed':
+                            post_notification(action_state)
 
         return '...Done'
 
@@ -43,4 +45,3 @@ def lambda_handler(event, context):
         print('Function failed due to exception.')
         print(e)
         traceback.print_exc()
-        put_job_failure(job, 'Function exception: ' + str(e))
