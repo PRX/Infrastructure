@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: fourohfour.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: fourohfour.prx.org
+    Container:
+      name: fourohfour-express
+Parameters:
+  # Load Balancer ##############################################################
+  PlatformALBDefaultTargetGroupArn:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # ECR ########################################################################
+  EcrRegion:
+    Type: String
+  FourohfourEcrImageTag:
+    Type: String
+Resources:
+  FourohfourLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  # ECS Service
+  FourohfourTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 16
+          Environment:
+            - Name: APP_NAME
+              Value: "fourohfour"
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          # TODO
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/fourohfour.prx.org:${FourohfourEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref FourohfourLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 128
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4040
+  FourohfourService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 4040
+          TargetGroupArn: !Ref PlatformALBDefaultTargetGroupArn
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref FourohfourTaskDefinition
