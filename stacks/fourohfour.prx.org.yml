@@ -6,27 +6,9 @@ Mappings:
       name: fourohfour.prx.org
     Container:
       name: fourohfour-express
-Conditions:
-  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
-  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
-  # VPC ########################################################################
-  VPC:
-    Type: "AWS::EC2::VPC::Id"
   # Load Balancer ##############################################################
-  PlatformALBDNSName:
-    Type: String
-  PlatformALBFullName:
-    Type: String
-  PlatformALBCanonicalHostedZoneID:
-    Type: String
   PlatformALBDefaultTargetGroupArn:
-    Type: String
-  PlatformALBHTTPListenerArn:
-    Type: String
-  PlatformALBHTTPSListenerArn:
-    Type: String
-  PlatformALBListenerPriorityPrefix:
     Type: String
   # ECS Cluster ################################################################
   ECSCluster:
@@ -35,25 +17,10 @@ Parameters:
     Type: String
   ECSServiceIAMRole:
     Type: String
-  # Misc #######################################################################
-  OpsDebugMessagesSnsTopicArn:
-    Type: String
-  OpsErrorMessagesSnsTopicArn:
-    Type: String
-  EnvironmentType:
-    Type: String
-  EnvironmentTypeAbbreviation:
-    Type: String
+  # ECR ########################################################################
   EcrRegion:
     Type: String
-  SecretsBase:
-    Type: String
-  # Shared ENV #################################################################
-  # Play ECS ################################################################
   FourohfourEcrImageTag:
-    Type: String
-  # Play ENV ################################################################
-  FourohfourSecretsVersion:
     Type: String
 Resources:
   FourohfourLogGroup:
@@ -69,13 +36,11 @@ Resources:
           Environment:
             - Name: APP_NAME
               Value: "fourohfour"
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
           Essential: true
           # TODO
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/fourohfour.prx.org:${PlayEcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/fourohfour.prx.org:${FourohfourEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
