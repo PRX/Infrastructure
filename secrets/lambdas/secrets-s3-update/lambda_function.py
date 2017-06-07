@@ -53,7 +53,7 @@ def get_config(env):
 
     archive_path = temp_file_path()
 
-    print("...Getting %s config: %s/%s..." %(environment, source_bucket, source_key))
+    print("...Getting %s config: %s/%s..." % (environment, source_bucket, source_key))
     print("...Writing file to %s..." % archive_path)
 
     s3.download_file(source_bucket, source_key, archive_path)
@@ -69,7 +69,7 @@ def update_config(env, changes):
         app_key = change['app'].title() + 'SecretsVersion'
         current_val = env_config['Parameters'][app_key]
         new_val = change['version']
-        print "...Set %s from %s to %s..." % (app_key, current_val, new_val)
+        print("...Set %s from %s to %s..." % (app_key, current_val, new_val))
         env_config['Parameters'][app_key] = new_val
     return env_config
 
