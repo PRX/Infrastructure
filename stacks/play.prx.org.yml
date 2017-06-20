@@ -79,6 +79,31 @@ Resources:
           Value: 15
       VpcId: !Ref VPC
   # ALB Listener Rules
+  PlayALBHTTPSHostWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.*
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
+  PlayALBHTTPHostStagingWildcardRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PlayALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - play.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
   PlayALBHTTPHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
@@ -90,59 +115,7 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
-  PlayALBHTTPHostStagingGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
-  PlayALBHTTPHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
-  PlayALBHTTPHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 04]]
-  PlayALBHTTPHostProductionGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.org
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 05]]
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 999]]
   PlayALBHTTPSHostVPCListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
@@ -154,59 +127,7 @@ Resources:
           Values:
             - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
-  PlayALBHTTPSHostStagingGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
-  PlayALBHTTPSHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
-  PlayALBHTTPSHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 14]]
-  PlayALBHTTPSHostProductionGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.org
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 15]]
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 999]]
   # ECS Service
   PlayTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
