@@ -9,6 +9,8 @@ Parameters:
      Type: "AWS::EC2::VPC::Id"
   EnvironmentType:
     Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
 Resources:
   VpcCertificate:
     Type: "AWS::CertificateManager::Certificate"
@@ -17,6 +19,24 @@ Resources:
       DomainValidationOptions:
         - ValidationDomain: prx.tech
           DomainName: !Sub "*.${VPC}.prx.tech"
+      SubjectAlternativeNames:
+        - "*.prx.org"
+        - "*.prx.tech"
+        - "*.staging.prx.tech"
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub "${EnvironmentType} ${VPC} wildcard"
+  VpcWildcardCertificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Sub "*.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+      DomainValidationOptions:
+        - ValidationDomain: prx.tech
+          DomainName: !Sub "*.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
       SubjectAlternativeNames:
         - "*.prx.org"
         - "*.prx.tech"
