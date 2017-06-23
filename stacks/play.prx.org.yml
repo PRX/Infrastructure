@@ -149,6 +149,7 @@ Resources:
           TargetGroupArn: !Ref PlayALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref PlayTaskDefinition
+  # Route 53
   PlayWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -160,6 +161,17 @@ Resources:
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  PlayCdnWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for CloudFront distribution
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+          AliasTarget:
+            DNSName: !GetAtt PlayCloudFrontDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
   # CloudFront
   PlayCloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
@@ -263,3 +275,7 @@ Outputs:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
       play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+  CdnHostedZoneDNSName:
+    Description: Convenience domain name for the CDN in a hosted zone
+    Value: !Sub |
+      play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
