@@ -13,6 +13,8 @@ Parameters:
   # VPC ########################################################################
   VPC:
     Type: "AWS::EC2::VPC::Id"
+  VPCCertificateArn:
+    Type: String
   # Load Balancer ##############################################################
   PlatformALBDNSName:
     Type: String
@@ -158,6 +160,70 @@ Resources:
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  # CloudFront
+  PlayCloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+          - "play.staging.prx.tech"
+          - "play.prx.tech"
+          - "play.prx.org"
+        # CacheBehaviors:
+          # CacheBehavior
+        # Comment: String
+        # CustomErrorResponses:
+        #   CustomErrorResponse
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          # DefaultTTL: Number
+          ForwardedValues:
+             Cookies:
+            #   Cookies
+            # Headers:
+            #   - String
+            QueryString: true
+            # QueryStringCacheKeys:
+            #   - String
+          # MaxTTL: Number
+          # MinTTL: Number
+          # SmoothStreaming: Boolean
+          TargetOriginId: !FindInMap [Shared, Project, name]
+          # TrustedSigners:
+          #   - String
+          ViewerProtocolPolicy : redirect-to-https
+        # DefaultRootObject: "index.html"
+        Enabled: true
+        HttpVersion: http2
+        # Logging:
+        #   Logging
+        Origins:
+          CustomOriginConfig:
+            Custom Origin
+          DomainName: String
+          Id: !FindInMap [Shared, Project, name]
+          # OriginCustomHeaders:
+          #   - OriginCustomHeader
+          # OriginPath: String
+          # S3OriginConfig:
+          #   S3 Origin
+        PriceClass: PriceClass_All
+        # Restrictions:
+        #   Restriction
+        ViewerCertificate:
+          AcmCertificateArn: VPCCertificateArn
+          # CloudFrontDefaultCertificate: Boolean
+          # IamCertificateId: String
+          # MinimumProtocolVersion: String
+          SslSupportMethod: sni-only
+        # WebACLId: String
   # CloudWatch Alarms
   PlayALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
