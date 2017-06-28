@@ -291,8 +291,12 @@ function triggerBuild(versionId, event, callback) {
 
     if (event.pull_request) {
         const num = event.pull_request.number;
+        const branch = event.pull_request.head.ref;
         environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
     } else {
+        const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
         environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
         environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
     }
