@@ -72,15 +72,22 @@ Mappings:
       abbreviation: stag
     Production:
       abbreviation: prod
+  # Each app should be given a listener rule priority prefix between 10 and 99.
+  # In nested stacks, listener rule priorities are created by combining the
+  # prefix with either two (eg 01) or three (eg 765) more digits. Wildcard rules
+  # should use two digits, and VPC-based domains should use three digits.
+  #
+  # Higher-traffic apps should be given a higher priority (lower number) to
+  # reduce the number of rules evaluations needed for more common requests
   ALBListenerRulePriorityMap:
+    Play:
+      prefix: 10
     Publish:
-      prefix: 30
-    Audiogram:
       prefix: 20
     Castle:
-      prefix: 10
-    Play:
-      prefix: 40
+      prefix: 30
+    Audiogram:
+      prefix: 49
     Crier:
       prefix: 50
 Resources:
@@ -102,6 +109,7 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         VPC: !GetAtt VPCStack.Outputs.VPC
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/certificate.yml"]]
       TimeoutInMinutes: "5"
@@ -146,7 +154,7 @@ Resources:
         VPC: !GetAtt VPCStack.Outputs.VPC
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
         VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-        VPCCertificateArn: !GetAtt CertificateStack.Outputs.CertificateArn
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
@@ -183,7 +191,7 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
         PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
         PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
@@ -220,7 +228,7 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
         PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
         PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
@@ -257,7 +265,7 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
         PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
         PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
@@ -313,7 +321,8 @@ Resources:
             !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
         PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
         PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
@@ -384,7 +393,14 @@ Resources:
 Outputs:
   VPCCertificateArn:
     Description: The ARN for the wildcard certificate for the VPC
-    Value: !GetAtt CertificateStack.Outputs.CertificateArn
+    Value: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+  PlatformALBDNSName:
+    Description: The DNS name for the platform application load balancer
+    Value: !GetAtt LoadBalancersStack.Outputs.PlatformALBDNSName
+  PlatformALBDualstackDNSName:
+    Description: >
+      The dualstack DNS name for the platform application load balancer
+    Value: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
   AudiogramHostedZoneDNSName:
     Description: Domain name for audiogram app
     Value: !GetAtt AudiogramStack.Outputs.HostedZoneDNSName

@@ -69,7 +69,7 @@ Resources:
           Value: !Sub Audiogram-${EnvironmentType}
       VpcId: !Ref VPC
   # ALB Listener Rules
-  AudiogramALBHTTPHostVPCListenerRule:
+  AudiogramALBHTTPSHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -78,63 +78,11 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
-  AudiogramALBHTTPHostStagingGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - audiogram.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
-  AudiogramALBHTTPHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - audiogram-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
-  AudiogramALBHTTPHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - audiogram.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
-  AudiogramALBHTTPSHostVPCListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Sub ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech
+            - audiogram.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
-  AudiogramALBHTTPSHostStagingGenericListenerRule:
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
+  AudiogramALBHTTPHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
     Properties:
       Actions:
         - TargetGroupArn: !Ref AudiogramALBTargetGroup
@@ -142,35 +90,9 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - audiogram.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
-  AudiogramALBHTTPSHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - audiogram.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
-  AudiogramALBHTTPSHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref AudiogramALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - audiogram-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
+            - audiogram.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
   # ECS Service
   AudiogramTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
@@ -214,7 +136,7 @@ Resources:
       RecordSets:
         - Type: A
           Name: !Sub |
-            ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech.
+            audiogram.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
@@ -310,4 +232,4 @@ Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
-      ${EnvironmentTypeAbbreviation}-audiogram.${VPC}.prx.tech.
+      audiogram.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.

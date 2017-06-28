@@ -9,18 +9,21 @@ Parameters:
      Type: "AWS::EC2::VPC::Id"
   EnvironmentType:
     Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
 Resources:
-  VpcCertificate:
+  VpcWildcardCertificate:
     Type: "AWS::CertificateManager::Certificate"
     Properties:
-      DomainName: !Sub "*.${VPC}.prx.tech"
+      DomainName: !Sub "*.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
       DomainValidationOptions:
         - ValidationDomain: prx.tech
-          DomainName: !Sub "*.${VPC}.prx.tech"
+          DomainName: !Sub "*.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
       SubjectAlternativeNames:
         - "*.prx.org"
         - "*.prx.tech"
         - "*.staging.prx.tech"
+        - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -29,6 +32,6 @@ Resources:
         - Key: Name
           Value: !Sub "${EnvironmentType} ${VPC} wildcard"
 Outputs:
-  CertificateArn:
+  WildcardCertificateArn:
     Description: The ARN for the wildcard certificate
-    Value: !Ref VpcCertificate
+    Value: !Ref VpcWildcardCertificate

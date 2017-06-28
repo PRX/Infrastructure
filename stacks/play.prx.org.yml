@@ -13,6 +13,8 @@ Parameters:
   # VPC ########################################################################
   VPC:
     Type: "AWS::EC2::VPC::Id"
+  VPCCertificateArn:
+    Type: String
   # Load Balancer ##############################################################
   PlatformALBDNSName:
     Type: String
@@ -79,7 +81,7 @@ Resources:
           Value: 15
       VpcId: !Ref VPC
   # ALB Listener Rules
-  PlayALBHTTPHostVPCListenerRule:
+  PlayALBHTTPSHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -88,76 +90,11 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
-  PlayALBHTTPHostStagingGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
-  PlayALBHTTPHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
-  PlayALBHTTPHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 04]]
-  PlayALBHTTPHostProductionGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.org
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 05]]
-  PlayALBHTTPSHostVPCListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech
+            - play.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 11]]
-  PlayALBHTTPSHostStagingGenericListenerRule:
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
+  PlayALBHTTPHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
     Properties:
       Actions:
         - TargetGroupArn: !Ref PlayALBTargetGroup
@@ -165,48 +102,9 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - play.staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 12]]
-  PlayALBHTTPSHostProductionGenericListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 13]]
-  PlayALBHTTPSHostStagingGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play-staging.prx.tech
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 14]]
-  PlayALBHTTPSHostProductionGenericAltListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref PlayALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - play.prx.org
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 15]]
+            - play.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
   # ECS Service
   PlayTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
@@ -251,6 +149,7 @@ Resources:
           TargetGroupArn: !Ref PlayALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref PlayTaskDefinition
+  # Route 53
   PlayWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -258,10 +157,90 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: A
-          Name: !Sub ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech.
+          Name: !Sub play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  PlayCdnWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for CloudFront distribution
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+          AliasTarget:
+            DNSName: !GetAtt PlayCloudFrontDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+  # CloudFront
+  PlayCloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+          - !If [CreateProductionResources, "play.prx.tech", "play.staging.prx.tech"]
+          - !If [CreateProductionResources, "play.prx.org", "play.staging.prx.org"]
+        # CacheBehaviors:
+          # CacheBehavior
+        # Comment: String
+        # CustomErrorResponses:
+        #   CustomErrorResponse
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          # DefaultTTL: Number
+          ForwardedValues:
+            # Cookies:
+            #   Cookies
+            # Headers:
+            #   - String
+            QueryString: true
+            QueryStringCacheKeys:
+              - url
+          # MaxTTL: Number
+          # MinTTL: Number
+          # SmoothStreaming: Boolean
+          TargetOriginId: !FindInMap [Shared, Project, name]
+          # TrustedSigners:
+          #   - String
+          ViewerProtocolPolicy : redirect-to-https
+        # DefaultRootObject: "index.html"
+        Enabled: true
+        HttpVersion: http2
+        # Logging:
+        #   Logging
+        Origins:
+          - CustomOriginConfig:
+              # HTTPPort: Integer
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+                - TLSv1.1
+                - TLSv1
+            DomainName: !Sub "play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
+            Id: !FindInMap [Shared, Project, name]
+            # OriginCustomHeaders:
+            #   - OriginCustomHeader
+            # OriginPath: String
+            # S3OriginConfig:
+            #   S3 Origin
+        PriceClass: PriceClass_All
+        # Restrictions:
+        #   Restriction
+        ViewerCertificate:
+          AcmCertificateArn: !Ref VPCCertificateArn
+          # CloudFrontDefaultCertificate: Boolean
+          # IamCertificateId: String
+          # MinimumProtocolVersion: String
+          SslSupportMethod: sni-only
+        # WebACLId: String
   # CloudWatch Alarms
   PlayALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -294,4 +273,8 @@ Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
-      ${EnvironmentTypeAbbreviation}-play.${VPC}.prx.tech.
+      play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+  CdnHostedZoneDNSName:
+    Description: Convenience domain name for the CDN in a hosted zone
+    Value: !Sub |
+      play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
