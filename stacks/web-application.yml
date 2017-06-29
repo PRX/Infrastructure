@@ -62,7 +62,6 @@ Parameters:
     Type: String
     Default: /api/v1
 Resources:
-# Web Resources
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
@@ -84,7 +83,7 @@ Resources:
           Value: !Sub ${AppName}-${EnvironmentType}
       VpcId: !Ref VPC
   # ALB Listener Rules
-  ALBHTTPHostEnvAppListenerRule:
+  ALBHTTPSHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -93,22 +92,10 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${EnvironmentTypeAbbreviation}-${AppName}.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 01]]
-  ALBHTTPHostAppEnvListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Sub ${AppName}-${EnvironmentTypeAbbreviation}.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 02]]
-  ALBHTTPHostAppListenerRule:
+            - !Sub ${AppName}.*
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
+  ALBHTTPHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
@@ -119,7 +106,8 @@ Resources:
           Values:
             - !Sub ${AppName}.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 03]]
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, 00]]
+  # CloudWatch Alarms
   ALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -147,7 +135,7 @@ Resources:
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
           Value: !GetAtt ALBTargetGroup.TargetGroupFullName
-  # ECS Service
+  # ECS Service - Web
   WebLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
@@ -196,6 +184,7 @@ Resources:
           TargetGroupArn: !Ref ALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref WebTaskDefinition
+  # Route 53
   WebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -203,11 +192,11 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: A
-          Name: !Sub ${EnvironmentTypeAbbreviation}-${AppName}.${VPC}.prx.tech.
+          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
-# Worker Resources
+  # ECS Service - Worker
   WorkerLogGroup:
     Condition: CreateWorkerResources
     Type: "AWS::Logs::LogGroup"
@@ -255,4 +244,4 @@ Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
-      ${EnvironmentTypeAbbreviation}-${AppName}.${VPC}.prx.tech.
+      ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
