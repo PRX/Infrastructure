@@ -38,13 +38,17 @@ Parameters:
     Type: String
   CrierSecretsVersion:
     Type: String
-  PublishEcrImageTag:
+  FeederEcrImageTag:
     Type: String
-  PublishSecretsVersion:
+  FeederSecretsVersion:
     Type: String
   PlayEcrImageTag:
     Type: String
   PlaySecretsVersion:
+    Type: String
+  PublishEcrImageTag:
+    Type: String
+  PublishSecretsVersion:
     Type: String
   FourohfourEcrImageTag:
     Type: String
@@ -80,8 +84,10 @@ Mappings:
   # Higher-traffic apps should be given a higher priority (lower number) to
   # reduce the number of rules evaluations needed for more common requests
   ALBListenerRulePriorityMap:
-    Play:
+    Feeder:
       prefix: 10
+    Play:
+      prefix: 15
     Publish:
       prefix: 20
     Castle:
@@ -390,6 +396,49 @@ Resources:
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
+  ##############################################################################
+  #### FEEDER ###################################################################
+  ##############################################################################
+  FeederStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Feeder, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-SecretsBaseRegion"
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref FeederEcrImageTag
+        SecretsVersion: !Ref FeederSecretsVersion
+        AppName: "feeder"
+        CreateWorker: "false"
+        ContainerPort: 3000
+        ContainerMemory: 500
+        ContainerCpu: 128
+        HealthCheckPath: "/api/v1"
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
     Description: The ARN for the wildcard certificate for the VPC
@@ -416,6 +465,9 @@ Outputs:
   CrierHostedZoneDNSName:
     Description: Domain name for crier app
     Value: !GetAtt CrierStack.Outputs.HostedZoneDNSName
+  FeederHostedZoneDNSName:
+    Description: Domain name for feeder app
+    Value: !GetAtt FeederStack.Outputs.HostedZoneDNSName
   # CmsHostedZoneDNSName:
   #   Description: Domain name for CMS app
   #   Value: !GetAtt CmsStack.Outputs.HostedZoneDNSName
