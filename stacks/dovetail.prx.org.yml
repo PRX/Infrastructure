@@ -102,6 +102,7 @@ Resources:
           TargetGroupArn: !Ref DovetailALBTargetGroup
   DovetailALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: DovetailALB
     Properties:
       HealthCheckIntervalSeconds: 30
       HealthCheckTimeoutSeconds: 10
@@ -156,6 +157,9 @@ Resources:
               ContainerPort: 8080
   DovetailService:
     Type: "AWS::ECS::Service"
+    DependsOn:
+      - DovetailALBHTTPListener
+      - DovetailALBHTTPSListener
     Properties:
       Cluster: !Ref ECSCluster
       DeploymentConfiguration:
@@ -173,6 +177,7 @@ Resources:
       TaskDefinition: !Ref DovetailTaskDefinition
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
+    DependsOn: DovetailALB
     Properties:
       Comment: Record sets for dualstack web traffic to a dovetail instance
       HostedZoneName: prx.tech.
@@ -184,6 +189,7 @@ Resources:
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
   DovetailALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
+    DependsOn: DovetailALB
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
