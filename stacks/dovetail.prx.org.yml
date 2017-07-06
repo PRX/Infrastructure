@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: dovetail.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: dovetail.prx.org
+    Container:
+      name: dovetail-express
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCCertificateArn:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  OpsDebugMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  # Dovetail ###################################################################
+  DovetailEcrImageTag:
+    Type: String
+  DovetailSecretsVersion:
+    Type: String
+Resources:
+  DovetailSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow web and SSH traffic to the ALB
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-${EnvironmentType}-LB-web_ssh
+  DovetailALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref DovetailSecurityGroup
+      Subnets:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet2
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-${EnvironmentType}
+  DovetailALBHTTPListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref DovetailALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DovetailALBTargetGroup
+  DovetailALBHTTPSListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref VPCCertificateArn
+      LoadBalancerArn: !Ref DovetailALB
+      Port: 443
+      Protocol: HTTPS
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DovetailALBTargetGroup
+  DovetailALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckPath: /ping
+      Name: !Sub dovetail-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 20
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-${EnvironmentType}
+      VpcId: !Ref VPC
+  DovetailLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  DovetailTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 256
+          Environment:
+            - Name: APP_NAME
+              Value: "dovetail"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref DovetailSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.prx.org:${DovetailEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DovetailLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 600
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 8080
+  DovetailService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      PlacementConstraints:
+        Type: "distinctInstance"
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 8080
+          TargetGroupArn: !Ref DovetailALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref DovetailTaskDefinition
+  DovetailWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to a dovetail instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            Value:
+            DNSName: !Sub dualstack.${DovetailALB.DNSName}
+            HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
+  DovetailALBTargetGroup500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Dovetail ALB Target Group HTTP 5XXs
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >
+        5XX server errors originating from the dovetail target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
