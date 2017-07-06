@@ -1,11 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: dovetail.prx.org application running in Docker
-Mappings:
-  Shared:
-    Project:
-      name: dovetail.prx.org
-    Container:
-      name: dovetail-express
 Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
@@ -156,7 +150,7 @@ Resources:
               awslogs-group: !Ref DovetailLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 600
-          Name: !FindInMap [Shared, Container, name]
+          Name: "dovetail-express"
           PortMappings:
             - HostPort: 0
               ContainerPort: 8080
@@ -172,7 +166,7 @@ Resources:
       # TODO: why do you hate me, cloudformation?
       DesiredCount: 2
       LoadBalancers:
-        - ContainerName: !FindInMap [Shared, Container, name]
+        - ContainerName: "dovetail-express"
           ContainerPort: 8080
           TargetGroupArn: !Ref DovetailALBTargetGroup
       Role: !Ref ECSServiceIAMRole
