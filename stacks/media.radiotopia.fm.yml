@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudFront distribution for media.radiotopia.fm, which is backed by
+  and S3 bucket
+Parameters:
+  RadiotopiaCertificateArn:
+    Type: String
+Resources:
+  # CloudFront
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - "media2.radiotopia.fm"
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          ForwardedValues:
+            QueryString: false
+          TargetOriginId: S3-media.radiotopia.fm
+          ViewerProtocolPolicy : redirect-to-https
+        # DefaultRootObject: "index.html"
+        Enabled: true
+        HttpVersion: http2
+        Origins:
+          - DomainName: media.radiotopia.fm.s3.amazonaws.com
+            Id: S3-media.radiotopia.fm
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref RadiotopiaCertificateArn
+          SslSupportMethod: sni-only
+  # Route 53
+  RecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record set for media.radiotopia.fm
+      HostedZoneName: radiotopia.fm.
+      RecordSets:
+        - Type: A
+          Name: media2.radiotopia.fm
+          AliasTarget:
+            DNSName: !GetAtt CloudFrontDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
