@@ -89,6 +89,18 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailALBTargetGroup
+  DovetailProxyALBHTTPListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /+/*
+      ListenerArn: !Ref DovetailALBHTTPListener
+      Priority: 10
   DovetailALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -100,6 +112,18 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailALBTargetGroup
+  DovetailProxyALBHTTPSListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /+/*
+      ListenerArn: !Ref DovetailALBHTTPSListener
+      Priority: 10
   DovetailALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: DovetailALB
@@ -123,7 +147,34 @@ Resources:
         - Key: Name
           Value: !Sub Dovetail-${EnvironmentType}
       VpcId: !Ref VPC
+  DovetailProxyALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: DovetailALB
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckPath: /ping
+      Name: !Sub dovetail-proxy-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-Proxy-${EnvironmentType}
+      VpcId: !Ref VPC
   DovetailLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  DovetailProxyLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
@@ -155,6 +206,34 @@ Resources:
           PortMappings:
             - HostPort: 0
               ContainerPort: 8080
+  DovetailProxyTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 256
+          Environment:
+            - Name: CACHE_INACTIVE
+              Value: "10h"
+            - Name: CACHE_MAX_SIZE
+              Value: "10g"
+            - Name: DOVETAIL_HOST
+              Value: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech
+            - Name: RESOLVER
+              Value: "8.8.8.8" # TODO does 172.16.0.23 work in this VPC?
+            - Name: STITCH_VALID
+              Value: "10h"
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.proxy:latest
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DovetailProxyLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 500
+          Name: "dovetail-nginx"
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 80
   DovetailService:
     Type: "AWS::ECS::Service"
     DependsOn:
@@ -175,6 +254,25 @@ Resources:
           TargetGroupArn: !Ref DovetailALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref DovetailTaskDefinition
+  DovetailProxyService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - DovetailALBHTTPListener
+      - DovetailALBHTTPSListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      PlacementConstraints:
+        - Type: "distinctInstance"
+      DesiredCount: 2
+      LoadBalancers:
+        - ContainerName: "dovetail-nginx"
+          ContainerPort: 80
+          TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref DovetailProxyTaskDefinition
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     DependsOn: DovetailALB
@@ -187,13 +285,13 @@ Resources:
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
-  DovetailALBTargetGroup500Alarm:
+  DovetailALB500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     DependsOn: DovetailALB
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: Dovetail ALB Target Group HTTP 5XXs
+      AlarmName: Dovetail ALB HTTP 5XXs
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -201,7 +299,7 @@ Resources:
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription: >
-        5XX server errors originating from the dovetail target group exceeded 0
+        5XX server errors originating from the dovetail ALB exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
       MetricName: HTTPCode_Target_5XX_Count
