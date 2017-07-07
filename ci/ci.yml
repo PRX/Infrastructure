@@ -490,12 +490,33 @@ Resources:
       Description: "Production stage"
       RestApiId: !Ref RestApi
       DeploymentId: !Ref RestApiDeployment
-  # API Gatewat Domains
+  # API Gateway Domains
   RestApiDomainName:
     Type: "AWS::ApiGateway::DomainName"
     Properties:
       CertificateArn: !Ref CiCertificate
       DomainName: !Sub "api.${AWS::Region}.${AWS::StackName}.prx.tech"
+  RestApiDomainNameBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Properties:
+      # BasePath: !Ref basePath
+      DomainName: !Ref RestApiDomainName
+      RestApiId: !Ref RestApi
+  RestApiDomainNameRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for CI API
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub "api.${AWS::Region}.${AWS::StackName}.prx.tech."
+          AliasTarget:
+            # DNSName: !GetAtt RestApiDomainName.DistributionDomainName
+            # TODO DistributionDomainName isn't being recognized by
+            # CloudFormation, which seems like a bug. Switch back to GetAtt once
+            # that is resolved.
+            DNSName: d1ant2cyw4q4ab.cloudfront.net
+            HostedZoneId: Z2FDTNDATAQYW2
   # Lambda Permissions for API Gateway
   GitHubWebhookRequestPostMethodInvokeFunctionPermission:
     Type: "AWS::Lambda::Permission"
