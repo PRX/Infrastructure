@@ -41,18 +41,21 @@ Mappings:
   EnvironmentTypeMap:
     Testing:
       InstanceType: t2.micro
+      InstanceStorage: 22
       MinSize: "1"
       DefaultDesiredCapacity: "1"
       WarningThreshold: "2"
       MaxSize: "3"
     Staging:
       InstanceType: t2.small
+      InstanceStorage: 22
       MinSize: "2"
       DefaultDesiredCapacity: "4"
       WarningThreshold: "9"
       MaxSize: "10"
     Production:
       InstanceType: t2.medium
+      InstanceStorage: 72
       MinSize: "4"
       DefaultDesiredCapacity: "4"
       WarningThreshold: "35"
@@ -247,6 +250,13 @@ Resources:
               command: !Sub |
                 #!/bin/bash
                 echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+                echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=10m >> /etc/ecs/ecs.config
+            02_cloudwatch_disk_usage:
+              # monitor actual thin pool usage
+              command: "(crontab -uroot -l 2> /dev/null; echo '* * * * * /root/cwdiskusage.sh') | crontab -u root -"
+            03_fstrim_reclaim_disk:
+              # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
+              command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format="{{ .State.Pid }}" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
           files:
             "/etc/cfn/cfn-hup.conf":
               content: !Sub |
@@ -263,6 +273,34 @@ Resources:
                 path=Resources.ECSClusterASGLaunchConfiguration.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
                 runas=root
+            "/root/cwdiskusage.sh":
+              content: |
+                #!/bin/bash
+                if [ ! -f /usr/bin/aws ]; then yum -qy -d 0 -e 0 install aws-cli; fi
+                if [ ! -f /usr/bin/bc ]; then yum -qy -d 0 -e 0 install bc; fi
+                if [ ! -f /usr/bin/jq ]; then yum -qy -d 0 -e 0 install jq; fi
+                AWSREGION=`curl -ss http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region`
+                AWSINSTANCEID=`curl -ss http://169.254.169.254/latest/meta-data/instance-id`
+                AWSASG=`aws ec2 describe-tags --region=$AWSREGION --filters Name=resource-type,Values=instance,Name=resource-id,Values=$AWSINSTANCEID | jq -r '.Tags[] | select(.Key == "aws:autoscaling:groupName") | .Value'`
+                function convertUnits {
+                  if [ "$1" == "b" ] ; then echo $2;
+                  elif [ "$1" == "kb" ] ; then echo "$2*1000" | bc | awk '{print $1}' FS=".";
+                  elif [ "$1" == "mb" ] ; then echo "$2*1000*1000" | bc | awk '{print $1}' FS=".";
+                  elif [ "$1" == "gb" ] ; then echo "$2*1000*1000*1000" | bc | awk '{print $1}' FS=".";
+                  elif [ "$1" == "tb" ] ; then echo "$2*1000*1000*1000*1000" | bc | awk '{print $1}' FS=".";
+                  else echo "Unknown unit $1"; exit 1; fi
+                }
+                function getMetric {
+                  if [ "$1" == "Data" ] || [ "$1" == "Metadata" ] ; then echo $(docker info | grep "$1 Space Available" | awk '{print tolower($5), $4}');
+                  else echo "Metric must be either 'Data' or 'Metadata'"; exit 1; fi
+                }
+                data=$(convertUnits `getMetric Data`)
+                aws cloudwatch put-metric-data --namespace EC2 --dimensions InstanceId=$AWSINSTANCEID --value $data --unit Bytes --metric-name DockerAvailableSpace --region $AWSREGION
+                aws cloudwatch put-metric-data --namespace EC2 --dimensions AutoScalingGroup=$AWSASG --value $data --unit Bytes --metric-name DockerAvailableSpace --region $AWSREGION
+                data=$(convertUnits `getMetric Metadata`)
+                aws cloudwatch put-metric-data --namespace EC2 --dimensions InstanceId=$AWSINSTANCEID --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
+                aws cloudwatch put-metric-data --namespace EC2 --dimensions AutoScalingGroup=$AWSASG --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
+              mode: "000755"
           services:
             sysvinit:
               cfn-hup:
@@ -283,12 +321,33 @@ Resources:
         - !Ref ECSInstanceReturnTrafficSecurityGroup
         - !Ref ECSInstanceOutboundSecurityGroup
       KeyName: !Ref KeyPairName
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: 8
+            VolumeType: "gp2"
+        - DeviceName: "/dev/xvdcz"
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage]
+            VolumeType: "gp2"
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          yum install -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+              MIME-Version: 1.0
+              --==BOUNDARY==
+              Content-Type: text/cloud-boothook; charset="us-ascii"
+              cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS} --storage-opt dm.basesize=${BaseSize}G"' >> /etc/sysconfig/docker
+              --==BOUNDARY==
+              Content-Type: text/x-shellscript; charset="us-ascii"
+              yum install -y aws-cfn-bootstrap
+              /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
+              --==BOUNDARY==--
+            - { BaseSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage] }
   ECSClusterASG:
     Type: "AWS::AutoScaling::AutoScalingGroup"
     Properties:
