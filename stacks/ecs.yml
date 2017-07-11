@@ -41,18 +41,21 @@ Mappings:
   EnvironmentTypeMap:
     Testing:
       InstanceType: t2.micro
+      InstanceStorage: 22
       MinSize: "1"
       DefaultDesiredCapacity: "1"
       WarningThreshold: "2"
       MaxSize: "3"
     Staging:
       InstanceType: t2.small
+      InstanceStorage: 22
       MinSize: "2"
       DefaultDesiredCapacity: "4"
       WarningThreshold: "9"
       MaxSize: "10"
     Production:
       InstanceType: t2.medium
+      InstanceStorage: 72
       MinSize: "4"
       DefaultDesiredCapacity: "4"
       WarningThreshold: "35"
@@ -283,6 +286,17 @@ Resources:
         - !Ref ECSInstanceReturnTrafficSecurityGroup
         - !Ref ECSInstanceOutboundSecurityGroup
       KeyName: !Ref KeyPairName
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: 8
+            VolumeType: "gp2"
+        - DeviceName: "/dev/xvdcz"
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage]
+            VolumeType: "gp2"
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash -xe
