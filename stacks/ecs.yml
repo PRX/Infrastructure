@@ -299,11 +299,21 @@ Resources:
             VolumeSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage]
             VolumeType: "gp2"
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          yum install -y aws-cfn-bootstrap
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
+        Fn::Base64:
+          Fn::Sub:
+            - |
+              Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+              MIME-Version: 1.0
+              --==BOUNDARY==
+              Content-Type: text/cloud-boothook; charset="us-ascii"
+              cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS} --storage-opt dm.basesize=${BaseSize}G"' >> /etc/sysconfig/docker
+              --==BOUNDARY==
+              Content-Type: text/x-shellscript; charset="us-ascii"
+              yum install -y aws-cfn-bootstrap
+              /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
+              --==BOUNDARY==--
+            - { BaseSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage] }
   ECSClusterASG:
     Type: "AWS::AutoScaling::AutoScalingGroup"
     Properties:
