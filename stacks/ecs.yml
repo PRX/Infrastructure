@@ -19,6 +19,10 @@ Parameters:
       The kind of environment this cluster is being used for (eg
       Production, Staging, etc)
     Type: String
+  NewRelicLicenseKey:
+    Description: An optional New Relic license key for the Infrastructure agent
+    Type: String
+    Default: ""
   VPC:
     Type: "AWS::EC2::VPC::Id"
   VPCSubnet1:
@@ -304,6 +308,11 @@ Resources:
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions InstanceId=$AWSINSTANCEID --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions AutoScalingGroup=$AWSASG --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
               mode: "000755"
+            "/etc/newrelic-infra.yml":
+              content: !Sub |
+                license_key: ${NewRelicLicenseKey}
+                custom_attributes:
+                  environment: ${EnvironmentType}
           commands:
             01_add_instance_to_cluster:
               command: !Sub |
@@ -316,6 +325,12 @@ Resources:
             03_fstrim_reclaim_disk:
               # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
               command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
+            04_set_newrelic_data:
+              command: "echo \"display_name: $(curl -ss http://169.254.169.254/latest/meta-data/instance-id)\" >> /etc/newrelic-infra.yml"
+            05_install_newrelic_infra:
+              sudo curl -o /etc/yum.repos.d/newrelic-infra.repo https://download.newrelic.com/infrastructure_agent/linux/yum/el/6/x86_64/newrelic-infra.repo
+              sudo yum -q makecache -y --disablerepo='*' --enablerepo='newrelic-infra'
+              sudo yum install newrelic-infra -y
           services:
             sysvinit:
               cfn-hup:
