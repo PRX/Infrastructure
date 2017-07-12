@@ -270,6 +270,11 @@ Resources:
             03_fstrim_reclaim_disk:
               # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
               command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
+          packages:
+            yum:
+              aws-cli: []
+              bc: []
+              jq: []
           files:
             "/etc/cfn/cfn-hup.conf":
               content: !Sub |
@@ -289,9 +294,6 @@ Resources:
             "/root/cwdiskusage.sh":
               content: |
                 #!/bin/bash
-                if [ ! -f /usr/bin/aws ]; then yum -qy -d 0 -e 0 install aws-cli; fi
-                if [ ! -f /usr/bin/bc ]; then yum -qy -d 0 -e 0 install bc; fi
-                if [ ! -f /usr/bin/jq ]; then yum -qy -d 0 -e 0 install jq; fi
                 AWSREGION=`curl -ss http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region`
                 AWSINSTANCEID=`curl -ss http://169.254.169.254/latest/meta-data/instance-id`
                 AWSASG=`aws ec2 describe-tags --region=$AWSREGION --filters Name=resource-type,Values=instance,Name=resource-id,Values=$AWSINSTANCEID | jq -r '.Tags[] | select(.Key == "aws:autoscaling:groupName") | .Value'`
