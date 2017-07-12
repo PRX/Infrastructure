@@ -38,6 +38,17 @@ Parameters:
     Type: String
   DovetailSecretsVersion:
     Type: String
+Mappings:
+  EnvironmentTypeMap:
+    Testing:
+      DovetailCount: 1
+      ProxyCount: 1
+    Staging:
+      DovetailCount: 2
+      ProxyCount: 2
+    Production:
+      DovetailCount: 8
+      ProxyCount: 4
 Resources:
   DovetailSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -246,8 +257,7 @@ Resources:
         MinimumHealthyPercent: 50
       PlacementConstraints:
         - Type: "distinctInstance"
-      # TODO: why do you hate me, cloudformation?
-      DesiredCount: 2
+      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailCount]
       LoadBalancers:
         - ContainerName: "dovetail-express"
           ContainerPort: 8080
@@ -266,7 +276,7 @@ Resources:
         MinimumHealthyPercent: 50
       PlacementConstraints:
         - Type: "distinctInstance"
-      DesiredCount: 2
+      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
       LoadBalancers:
         - ContainerName: "dovetail-nginx"
           ContainerPort: 80
