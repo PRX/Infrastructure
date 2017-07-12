@@ -466,7 +466,7 @@ function attachmentsForCdDeploy(event) {
             {
                 fallback: `Starting deploy. Infrastructure revision ${commit}. Config version ${config}`,
                 color: `#A807E8`,
-                text: `Starting deploy pipeline.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version ${config}`,
+                text: `Starting deploy pipeline.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version \`${config}\``,
                 footer: region,
                 ts: (Date.now() / 1000 | 0),
                 mrkdwn_in: ['text']
@@ -477,7 +477,7 @@ function attachmentsForCdDeploy(event) {
             {
                 fallback: `${env} deploy complete. Infrastructure revision ${commit}`,
                 color: (env === 'Production') ? 'good' : 'warning',
-                text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version ${config}`,
+                text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version \`${config}\``,
                 footer: region,
                 ts: (Date.now() / 1000 | 0),
                 mrkdwn_in: ['text']
