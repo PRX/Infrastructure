@@ -456,6 +456,7 @@ function attachmentsForCdDeploy(event) {
 
     const env = message.environment;
     const commit = message.commit;
+    const config = message.config;
     const region = message.region;
 
     const url = `https://github.com/PRX/Infrastructure/commit/${commit}`
@@ -463,9 +464,9 @@ function attachmentsForCdDeploy(event) {
     if (env === 'Start') {
         return [
             {
-                fallback: `Starting deploy. Infrastructure revision ${commit}`,
+                fallback: `Starting deploy. Infrastructure revision ${commit}. Config version ${config}`,
                 color: `#A807E8`,
-                text: `Starting deploy pipeline.\nInfrastructure revision <${url}|\`${commit}\`>`,
+                text: `Starting deploy pipeline.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version ${config}`,
                 footer: region,
                 ts: (Date.now() / 1000 | 0),
                 mrkdwn_in: ['text']
@@ -476,7 +477,7 @@ function attachmentsForCdDeploy(event) {
             {
                 fallback: `${env} deploy complete. Infrastructure revision ${commit}`,
                 color: (env === 'Production') ? 'good' : 'warning',
-                text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>`,
+                text: `*${env}* deploy complete.\nInfrastructure revision <${url}|\`${commit}\`>\nTemplate config version ${config}`,
                 footer: region,
                 ts: (Date.now() / 1000 | 0),
                 mrkdwn_in: ['text']

@@ -6,6 +6,7 @@ import os
 code_pipeline = boto3.client('codepipeline')
 sns = boto3.client('sns')
 cloudwatch = boto3.client('cloudwatch')
+s3 = boto3.client('s3')
 
 def put_job_success(job, message):
     print('Putting job success')
@@ -27,12 +28,27 @@ def lambda_handler(event, context):
 
         env = job['data']['actionConfiguration']['configuration']['UserParameters']
 
+        # Get the S3 version of the most recent config
+
+        if env == 'Production':
+            config_key = os.environ['INFRASTRUCTURE_CONFIG_PRODUCTION_KEY']
+        else:
+            config_key = os.environ['INFRASTRUCTURE_CONFIG_STAGING_KEY']
+
+        config_head = s3.head_object(
+            Bucket=os.environ['INFRASTRUCTURE_CONFIG_BUCKET'],
+            Key=config_key
+        )
+
+        config_version = config_head['VersionId']
+
         # Publish to SNS Topic
 
         topic_arn = os.environ['DEPLOY_NOTIFICATION_TOPIC_ARN']
         message = json.dumps({
             'environment': env,
             'commit': input_artifact['revision'],
+            'config': config_version,
             'region': os.environ['AWS_REGION']
         })
 
