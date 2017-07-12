@@ -258,18 +258,6 @@ Resources:
     Metadata:
       AWS::CloudFormation::Init:
         config:
-          commands:
-            01_add_instance_to_cluster:
-              command: !Sub |
-                #!/bin/bash
-                echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
-                echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=10m >> /etc/ecs/ecs.config
-            02_cloudwatch_disk_usage:
-              # monitor actual thin pool usage
-              command: "(crontab -uroot -l 2> /dev/null; echo '* * * * * /root/cwdiskusage.sh') | crontab -u root -"
-            03_fstrim_reclaim_disk:
-              # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
-              command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
           packages:
             yum:
               aws-cli: []
@@ -316,6 +304,18 @@ Resources:
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions InstanceId=$AWSINSTANCEID --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions AutoScalingGroup=$AWSASG --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
               mode: "000755"
+          commands:
+            01_add_instance_to_cluster:
+              command: !Sub |
+                #!/bin/bash
+                echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+                echo ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=10m >> /etc/ecs/ecs.config
+            02_cloudwatch_disk_usage:
+              # monitor actual thin pool usage
+              command: "(crontab -uroot -l 2> /dev/null; echo '* * * * * /root/cwdiskusage.sh') | crontab -u root -"
+            03_fstrim_reclaim_disk:
+              # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
+              command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
           services:
             sysvinit:
               cfn-hup:
