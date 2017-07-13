@@ -138,12 +138,12 @@ Resources:
           Value: !Sub ${AppName}-${EnvironmentType}
       VpcId: !Ref VPC
   # CloudWatch Alarms
-  ALB500Alarm:
+  ALBTarget500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub ${AppName} ALB HTTP 5XXs
+      AlarmName: !Sub ${AppName} Server 5XXs
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -151,7 +151,7 @@ Resources:
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription: !Sub |
-        5XX server errors originating from the ${AppName} load balancer exceeded 0
+        5XX server errors originating from the ${AppName} application
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
       MetricName: HTTPCode_Target_5XX_Count
@@ -159,6 +159,31 @@ Resources:
       Period: "60"
       Statistic: Sum
       Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ALB.LoadBalancerFullName
+  ALB500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AppName} Load Balancer 5XXs
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: !Sub |
+        5XX load balancer errors originating from the ${AppName} load balancer
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Statistic: Sum
+      Threshold: "2"
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
