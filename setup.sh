@@ -15,4 +15,8 @@ cd ./cd/lambdas; find * -maxdepth 0 -type d|while read dirname; do cd "$dirname"
 mkdir -p .deploy/secrets
 cd ./secrets/lambdas; find * -maxdepth 0 -type d|while read dirname; do cd "$dirname"; zip -r "$dirname" *; mv "$dirname".zip ../../../.deploy/secrets; cd ..; done; cd ..; cd ..
 
+mkdir -p .deploy/utility
+cd ./utility/lambdas; find * -maxdepth 0 -type d|while read dirname; do cd "$dirname"; zip -r "$dirname" *; mv "$dirname".zip ../../../.deploy/utility; cd ..; done; cd ..; cd ..
+
+
 aws s3 sync .deploy/ s3://prx-infrastructure-us-east-1-support/ --acl private --region us-east-1
