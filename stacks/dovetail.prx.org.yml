@@ -295,13 +295,12 @@ Resources:
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
-  DovetailALB500Alarm:
+  DovetailALBTarget500Alarm:
     Type: "AWS::CloudWatch::Alarm"
-    DependsOn: DovetailALB
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: Dovetail ALB HTTP 5XXs
+      AlarmName: Dovetail Server 5XXs
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -309,7 +308,7 @@ Resources:
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription: >
-        5XX server errors originating from the dovetail ALB exceeded 0
+        5XX server errors originating from the dovetail application
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
       MetricName: HTTPCode_Target_5XX_Count
@@ -317,6 +316,31 @@ Resources:
       Period: "60"
       Statistic: Sum
       Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
+  DovetailALB500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Dovetail Load Balancer 5XXs
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >
+        5XX load balancer errors originating from the dovetail load balancer
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: HTTPCode_ELB_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Statistic: Sum
+      Threshold: "2"
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
