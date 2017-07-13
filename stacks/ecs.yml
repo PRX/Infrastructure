@@ -9,6 +9,8 @@ Description: >
   Creates an ESC cluster and an associated Auto Scaling group into which
   Docker applications can be deployed
 Parameters:
+  InfrastructureStorageStackName:
+    Type: String
   KeyPairName:
     Description: >
      The EC2 key pair used for instances in the Auto Scaling
@@ -90,6 +92,65 @@ Mappings:
     ca-central-1:
       ImageId: ami-3da81759
 Resources:
+  # AMI Lookup Custom Resource
+  LambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: XrayTracePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource:
+                  - "*"
+        - PolicyName: EC2Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ec2:DescribeImages"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  ECSAmiLookupFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: utility/ecs-ami-lookup.zip
+      Description: Finds AMI ID for ECS optimized images in a given region
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 10
+  ECSAmiInfo:
+    Type: "Custom::EcsAmiLookup"
+    Properties:
+      ServiceToken: !GetAtt ECSAmiLookupFunction.Arn
+      Region: !Ref AWS::Region
+  # ECS Cluster and ASG
   ECSCluster:
     Type: "AWS::ECS::Cluster"
   ECSServiceIAMRole:
