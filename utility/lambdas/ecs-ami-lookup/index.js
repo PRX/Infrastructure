@@ -23,8 +23,11 @@ exports.handler = (event, context) => {
 
     const ec2 = new AWS.EC2({ region: event.ResourceProperties.Region });
 
+    let responseStatus = 'FAILED';
+    let responseData = {};
+
     const params = {
-        Filters: [{ Name: 'name', Values: ECS_AMI_FILTER }],
+        Filters: [{ Name: 'name', Values: [ECS_AMI_FILTER] }],
         Owners: ['amazon']
     };
 
