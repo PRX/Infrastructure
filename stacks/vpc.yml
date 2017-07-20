@@ -76,7 +76,6 @@ Resources:
       RouteTableId: !Ref RouteTable
       GatewayId: !Ref InternetGateway
       DestinationCidrBlock: 0.0.0.0/0
-  #
   Subnet1:
     Type: "AWS::EC2::Subnet"
     Properties:
@@ -103,6 +102,19 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub Platform-${EnvironmentType}-2
+  Subnet3:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !If [IsUsEast1, us-east-1d, !Join ["", [!Ref "AWS::Region", c]]]
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-3
   Subnet1RouteTableAssociation:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
     Properties:
@@ -112,6 +124,11 @@ Resources:
     Type: "AWS::EC2::SubnetRouteTableAssociation"
     Properties:
       SubnetId: !Ref Subnet2
+      RouteTableId: !Ref RouteTable
+  Subnet3RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref Subnet3
       RouteTableId: !Ref RouteTable
   NetworkAcl:
     Type: AWS::EC2::NetworkAcl
@@ -239,6 +256,11 @@ Resources:
     Properties:
       SubnetId: !Ref Subnet2
       NetworkAclId: !Ref NetworkAcl
+  Subnet3NetworkAclAssociation:
+    Type: "AWS::EC2::SubnetNetworkAclAssociation"
+    Properties:
+      SubnetId: !Ref Subnet3
+      NetworkAclId: !Ref NetworkAcl
   DHCPOptions:
     Type: "AWS::EC2::DHCPOptions"
     Properties:
@@ -270,6 +292,10 @@ Outputs:
     Description: >
       Resource ID (eg subnet-e19f0178) for subnet 2
     Value: !Ref Subnet2
+  Subnet3:
+    Description: >
+      Resource ID (eg subnet-e19f0178) for subnet 3
+    Value: !Ref Subnet3
   Subnet1AvailabilityZone:
     Description: >
       The availability zone (eg us-east-1a) for subnet 1
@@ -278,3 +304,7 @@ Outputs:
     Description: >
       The availability zone (eg us-east-1a) for subnet 2
     Value: !GetAtt Subnet2.AvailabilityZone
+  Subnet3AvailabilityZone:
+    Description: >
+      The availability zone (eg us-east-1a) for subnet 3
+    Value: !GetAtt Subnet3.AvailabilityZone
