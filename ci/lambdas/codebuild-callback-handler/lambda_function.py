@@ -37,7 +37,7 @@ def update_github_status(data):
     arn = data['buildArn']
     region = arn.split(':')[3]
     buildId = arn.split('/')[1]
-    buildUrl = "https://${0}.console.aws.amazon.com/codebuild/home#/builds/${1}/view/new".format(region, buildId)
+    buildUrl = "https://{0}.console.aws.amazon.com/codebuild/home#/builds/{1}/view/new".format(region, buildId)
 
     state = 'success' if data['success'] else 'failure'
     description = 'Build complete' if data['success'] else data['reason']
