@@ -45,6 +45,18 @@ Parameters:
     Type: String
   CreateWorker:
     Type:  String
+  DesiredWebs:
+    Type: String
+    Default: 2
+  DesiredWorkers:
+    Type: String
+    Default: 1
+  DesiredWebsProduction:
+    Type: String
+    Default: 2
+  DesiredWorkersProduction:
+    Type: String
+    Default: 1
   # App ENV #################################################################
   AppName:
     Type: String # castle, crier, cms, feeder
@@ -178,7 +190,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
       LoadBalancers:
         - ContainerName: !Sub ${AppName}-web
           ContainerPort: !Ref ContainerPort
@@ -244,7 +256,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 1
+      DesiredCount: !If [CreateProductionResources, !Ref DesiredWorkersProduction, !Ref DesiredWorkers]
       TaskDefinition: !Ref WorkerTaskDefinition
 Outputs:
   HostedZoneDNSName:
