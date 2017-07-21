@@ -37,6 +37,10 @@ Parameters:
     Type: String
   CastleSecretsVersion:
     Type: String
+  CmsEcrImageTag:
+    Type: String
+  CmsSecretsVersion:
+    Type: String
   CrierEcrImageTag:
     Type: String
   CrierSecretsVersion:
@@ -93,6 +97,8 @@ Mappings:
   # Higher-traffic apps should be given a higher priority (lower number) to
   # reduce the number of rules evaluations needed for more common requests
   ALBListenerRulePriorityMap:
+    Cms:
+      prefix: 15
     Play:
       prefix: 21
     Publish:
@@ -490,6 +496,47 @@ Resources:
         DovetailSecretsVersion: !Ref DovetailSecretsVersion
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail.prx.org.yml"]]
       TimeoutInMinutes: "5"
+  #### CMS #####################################################################
+  CmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-SecretsBaseRegion"
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref CmsEcrImageTag
+        SecretsVersion: !Ref CmsSecretsVersion
+        AppName: "cms"
+        CreateWorker: "true"
+        ContainerPort: 3000
+        ContainerMemory: 768
+        ContainerCpu: 128
+        HealthCheckPath: "/api/v1"
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
     Description: The ARN for the wildcard certificate for the VPC
@@ -522,3 +569,6 @@ Outputs:
   DovetailHostedZoneDNSName:
     Description: Domain name for dovetail app
     Value: !GetAtt DovetailStack.Outputs.HostedZoneDNSName
+  CmsHostedZoneDNSName:
+    Description: Domain name for cms app
+    Value: !GetAtt CmsStack.Outputs.HostedZoneDNSName
