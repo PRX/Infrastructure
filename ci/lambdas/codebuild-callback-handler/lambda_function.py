@@ -56,7 +56,7 @@ def update_github_status(data):
     urllib.request.urlopen(req)
 
 def update_staging_config_status(data):
-    if 'prxEcrTag' in data:
+    if (data['success']) and ('prxEcrTag' in data):
 
         print('...Updating Staging template config...')
 
