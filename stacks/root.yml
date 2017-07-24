@@ -55,6 +55,10 @@ Parameters:
     Type: String
   FeederSecretsVersion:
     Type: String
+  IdEcrImageTag:
+    Type: String
+  IdSecretsVersion:
+    Type: String
   PlayEcrImageTag:
     Type: String
   PlaySecretsVersion:
@@ -103,6 +107,8 @@ Mappings:
       prefix: 15
     Play:
       prefix: 21
+    Id:
+      prefix: 24
     Publish:
       prefix: 28
     Castle:
@@ -540,6 +546,48 @@ Resources:
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
+  #### ID ######################################################################
+  IdStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging # Staging only, for now
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Id, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-SecretsBaseRegion"
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref IdEcrImageTag
+        SecretsVersion: !Ref IdSecretsVersion
+        AppName: "id"
+        CreateWorker: "false"
+        ContainerPort: 3000
+        ContainerMemory: 512
+        ContainerCpu: 128
+        HealthCheckPath: "/api/v1/certs"
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
     Description: The ARN for the wildcard certificate for the VPC
@@ -576,3 +624,7 @@ Outputs:
     Condition: IsStaging
     Description: Domain name for cms app
     Value: !GetAtt CmsStack.Outputs.HostedZoneDNSName
+  IdHostedZoneDNSName:
+    Condition: IsStaging
+    Description: Domain name for id app
+    Value: !GetAtt IdStack.Outputs.HostedZoneDNSName
