@@ -462,6 +462,54 @@ Resources:
         - !Ref VPCSubnet1
         - !Ref VPCSubnet2
         - !Ref VPCSubnet3
+  # CloudWatch Events
+  CloudWatchEventsIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref OpsDebugMessagesSnsTopicArn
+  ESCClusterEventsToSnsRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: Sends ECS cluster events to an SNS topic
+      EventPattern:
+        Fn::Sub:
+          - |
+            {
+              "source": ["aws.ecs"],
+              "detail-type": [
+                "ECS Task State Change",
+                "ECS Container Instance State Change"
+              ],
+              "detail": {
+                "clusterArn": [
+                  "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}"
+                ]
+              }
+            }
+      State: ENABLED
+      Targets:
+        - Arn: !Ref OpsDebugMessagesSnsTopicArn
+          Id: !Sub "${AWS::StackName}.ECS-Cluster-Events"
+          RoleArn: !GetAtt CloudWatchEventsIAMRole.Arn
 Outputs:
   ECSCluster:
     Description: >
