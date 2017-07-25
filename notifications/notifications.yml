@@ -10,6 +10,10 @@ Metadata:
         Parameters:
           - InfrastructureStorageStackName
       - Label:
+          default: Infrastructure Config
+        Parameters:
+          - InfrastructureConfigStagingKey
+      - Label:
           default: Slack Tokens
         Parameters:
           - IkeSlackVerificationToken
@@ -25,6 +29,8 @@ Metadata:
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
+      InfrastructureConfigStagingKey:
+        default: Production S3 object key
       AutoScalingSlackWebhookUrl:
         default: Auto Scaling
       CloudWatchSlackWebhookUrl:
@@ -43,6 +49,12 @@ Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
+    Type: String
+  InfrastructureConfigStagingKey:
+    Default: template-config-staging.zip
+    Description: >
+      The S3 object key for the production template configuration file archive
+      (.zip), inside the InfrastructureConfigBucket
     Type: String
   AutoScalingSlackWebhookUrl:
     Type: String
@@ -86,7 +98,7 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  IkeCallbackHandlerLambdaIamRole:
+  IkeHandlerLambdaIamRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -109,6 +121,25 @@ Resources:
                   - "codepipeline:PutApprovalResult"
                 Resource:
                   - "*" # This should be okay
+        - PolicyName: S3ProductionConfigPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:List*"
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - "s3:Get*"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/*"]]
+              - Effect: Allow
+                Action:
+                  - "s3:Put*"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   # Lambda Functions
@@ -152,9 +183,38 @@ Resources:
       Environment:
         Variables:
           SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt IkeCallbackHandlerLambdaIamRole.Arn
+      Role: !GetAtt IkeHandlerLambdaIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  IkeSlashCommandsHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "notifications/ike-slash-commands-handler.zip"
+      Description: >
+        Handles requests from Slack for slash commands
+      Environment:
+        Variables:
+          SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+      Handler: index.handler
+      MemorySize: 512
+      Role: !GetAtt IkeHandlerLambdaIamRole.Arn
       Runtime: nodejs6.10
       Tags:
         - Key: Project
@@ -197,11 +257,18 @@ Resources:
       Principal: sns.amazonaws.com
       SourceArn: !Ref OpsFatalMessagesSnsTopic
   # Lambda Permissions for API Gateway
-  IkeCallbacHandlerRestApiLambdaPermission:
+  IkeCallbackHandlerRestApiLambdaPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
       Action: "lambda:InvokeFunction"
       FunctionName: !Ref IkeCallbackHandlerLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
+  IkeSlashCommandsHandlerRestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref IkeSlashCommandsHandlerLambdaFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
   # Lambda Alarms
@@ -255,6 +322,31 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref IkeCallbackHandlerLambdaFunction
+  IkeSlashCommandsHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Ike Slash Commands Lambda Errors
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Ike /commands handler lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref IkeSlashCommandsHandlerLambdaFunction
   # SNS Subscriptions
   RelayFunctionDebugSubscription:
     Type: "AWS::SNS::Subscription"
@@ -300,6 +392,23 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: "ike"
+  IkeSlashCommandsRestApiResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref IkeRestApiResource
+      PathPart: "slash-commands"
+  IkeSlashCommandsRestApiProxyMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref IkeSlashCommandsRestApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeSlashCommandsHandlerLambdaFunction.Arn}/invocations
   IkeCodePipelineRestApiResource:
     Type: "AWS::ApiGateway::Resource"
     Properties:
@@ -324,6 +433,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
   RestApiDeployment:
+    DependsOn: IkeSlashCommandsRestApiProxyMethod
     DependsOn: IkeCodePipelineApprovalRestApiProxyMethod
     Type: "AWS::ApiGateway::Deployment"
     Properties:
@@ -367,3 +477,5 @@ Outputs:
       Name: !Sub ${AWS::StackName}-OpsFatalMessagesSnsTopicArn
   IkeCodePipelineApprovalHandlerCallbackUrl:
     Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${RestApiStage}/ike/codepipeline/approval"
+  IkeSlashCommandsHandlerCallbackUrl:
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${RestApiStage}/ike/slash-commands"
