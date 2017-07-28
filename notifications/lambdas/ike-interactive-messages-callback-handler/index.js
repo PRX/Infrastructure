@@ -60,6 +60,17 @@ function processEvent(event, context, callback) {
 
 function handleRollbackCallback(payload, callback) {
     const action = payload.actions[0];
+
+    switch (action.name) {
+        case 'selection':
+            triggerRollback(payload, callback)
+            break;
+        default:
+            cancelRollback(payload, callback);
+    }
+}
+
+function triggerRollback(payload, callback) {
     const versionId = action.selected_options[0].value;
 
     const configBucket = process.env.INFRASTRUCTURE_CONFIG_BUCKET;
@@ -77,12 +88,21 @@ function handleRollbackCallback(payload, callback) {
         } else {
             const msg = {
                 text: `Rolling back to config version: ${versionId}`
-            }
+            };
 
             const body = JSON.stringify(msg);
             callback(null, { statusCode: 200, headers: {}, body: body });
         }
     });
+}
+
+function cancelRollback(payload, callback) {
+    const msg = {
+        text: '_Rollback canceled_'
+    };
+
+    const body = JSON.stringify(msg);
+    callback(null, { statusCode: 200, headers: {}, body: body });
 }
 
 function handleCodePipelineApproval(payload, callback) {

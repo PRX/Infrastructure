@@ -73,8 +73,13 @@ function handleRollbackRequest(payload, callback) {
                         color: '#3AA3E3',
                         attachment_type: 'default',
                         callback_id: ROLLBACK_VERSION_SELECTION_CALLBACK,
-                        actions: [
-                            {
+                        actions: [{
+                                name: 'cancel',
+                                text: 'Cancel',
+                                style: 'danger',
+                                type: 'button',
+                                value: 'cancel'
+                            }, {
                                 name: 'selection',
                                 text: 'Choose a configuration…',
                                 type: 'select',
