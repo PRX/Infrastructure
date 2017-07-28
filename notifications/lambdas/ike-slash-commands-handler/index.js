@@ -1,6 +1,9 @@
 // Invoked by: API Gateway
 // Returns: Error, or API Gateway proxy response object
 
+// The endpoint handler for Slack slash commands that configured through the Ike
+// app. This function can be used to handle multiple slash commands.
+
 const querystring = require('querystring');
 const AWS = require('aws-sdk');
 
