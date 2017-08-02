@@ -10,12 +10,15 @@ const https = require('https');
 const querystring = require('querystring');
 
 const aws = require('aws-sdk');
+const s3 = new aws.S3({apiVersion: '2006-03-01'});
 const codepipeline = new aws.CodePipeline({apiVersion: '2015-07-09'});
 
 const APPROVED = 'Approved';
 const REJECTED = 'Rejected';
 
 const CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = 'codepipeline-approval-action';
+
+const ROLLBACK_VERSION_SELECTION_CALLBACK = 'rollback-version-selection-action';
 
 exports.handler = (event, context, callback) => {
     try {
@@ -25,7 +28,7 @@ exports.handler = (event, context, callback) => {
     }
 };
 
-const processEvent = (event, context, callback) => {
+function processEvent(event, context, callback) {
     const body = querystring.parse(event.body);
 
     // The JSON object response from Slack
@@ -45,14 +48,64 @@ const processEvent = (event, context, callback) => {
             case CODEPIPELINE_MANUAL_APPROVAL_CALLBACK:
                 handleCodePipelineApproval(payload, callback);
                 break;
+            case ROLLBACK_VERSION_SELECTION_CALLBACK:
+                handleRollbackCallback(payload, callback);
+                break;
             default:
                 // Unknown message callback
                 callback(null, { statusCode: 400, headers: {}, body: null });
         }
     }
-};
+}
 
-const handleCodePipelineApproval = (payload, callback) => {
+function handleRollbackCallback(payload, callback) {
+    const action = payload.actions[0];
+
+    switch (action.name) {
+        case 'selection':
+            triggerRollback(payload, callback)
+            break;
+        default:
+            cancelRollback(payload, callback);
+    }
+}
+
+function triggerRollback(payload, callback) {
+    const versionId = action.selected_options[0].value;
+
+    const configBucket = process.env.INFRASTRUCTURE_CONFIG_BUCKET;
+    const configKey = process.env.INFRASTRUCTURE_CONFIG_STAGING_KEY;
+    const sourceUrl = `${configBucket}/${configKey}?versionId=${versionId}`;
+
+    s3.copyObject({
+        Bucket: configBucket,
+        CopySource: encodeURI(sourceUrl),
+        Key: configKey
+    }, (e, data) => {
+        if (e) {
+            console.error(e);
+            callback(null, { statusCode: 400, headers: {}, body: null });
+        } else {
+            const msg = {
+                text: `Rolling back to config version: ${versionId}`
+            };
+
+            const body = JSON.stringify(msg);
+            callback(null, { statusCode: 200, headers: {}, body: body });
+        }
+    });
+}
+
+function cancelRollback(payload, callback) {
+    const msg = {
+        text: '_Rollback canceled_'
+    };
+
+    const body = JSON.stringify(msg);
+    callback(null, { statusCode: 200, headers: {}, body: body });
+}
+
+function handleCodePipelineApproval(payload, callback) {
     const action = payload.actions[0];
 
     // The manual approval notifications params need to be extracted from
