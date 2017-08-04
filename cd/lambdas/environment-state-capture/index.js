@@ -1,4 +1,4 @@
-// Invoked by: CodePipelin
+// Invoked by: CodePipeline
 // Returns: Error or status message
 //
 // The only S3 bucket this function touches is InfrastructureSnapshotsBucket

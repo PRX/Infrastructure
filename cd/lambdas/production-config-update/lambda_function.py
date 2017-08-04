@@ -1,3 +1,11 @@
+# Invoked by: CodePipeline
+# Returns: Error or status message
+#
+# TBD
+#
+# This should always callback to the CodePipeline API to indicate success or
+# failure.
+
 import boto3
 import traceback
 

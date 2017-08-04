@@ -1,10 +1,9 @@
 # Invoked by: S3 Object Change
 # Returns: Error or status message
 #
-# Environment variables for applications are stored in encruypted s3 files.
+# Environment variables for applications are stored in encrypted s3 files.
 # When those files are updated, the env config file should be updated with the
 # current object version number for the application for that app and env
-#
 
 import zipfile
 import boto3

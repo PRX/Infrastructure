@@ -1,3 +1,17 @@
+# Invoked by: CodePipeline
+# Returns: Error or status message
+#
+# Publishes messages about the status of deployments in CodePipeline. The
+# messages are published to SNS, and generally forwarded to Slack via another
+# process. Some data used in the notifications are passed in from CodePipeline,
+# and others are queried.
+#
+# This function also sends some basic counting metrics about deployments to
+# CloudWatch.
+
+# This should always callback to the CodePipeline API to indicate success or
+# failure.
+
 import boto3
 import traceback
 import json

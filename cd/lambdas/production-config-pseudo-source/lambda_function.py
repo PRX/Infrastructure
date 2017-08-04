@@ -5,6 +5,9 @@
 # getting the existing production config from S3 and the staging config pipeline
 # artifact, and updating any app version information (ECR image tags, etc) from
 # staging to production. The result is written to the output artifact
+#
+# This should always callback to the CodePipeline API to indicate success or
+# failure.
 
 import boto3
 import traceback
