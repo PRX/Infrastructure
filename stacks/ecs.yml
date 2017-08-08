@@ -495,15 +495,13 @@ Resources:
     Type: "AWS::IAM::Role"
     Properties:
       Policies:
-        -
-          PolicyName: "drain-lambda-inline"
+        - PolicyName: "drain-lambda-inline"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
               - Effect: "Allow"
                 Resource: "*"
                 Action:
-                  - autoscaling:CompleteLifecycleAction
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
@@ -511,15 +509,25 @@ Resources:
                   - ec2:DescribeInstanceAttribute
                   - ec2:DescribeInstanceStatus
                   - ec2:DescribeHosts
+                  - ecs:DescribeContainerInstances
+                  - ecs:DescribeTasks
                   - ecs:ListContainerInstances
+                  - ecs:ListTasks
+                  - sns:ListSubscriptions
+              - Effect: "Allow"
+                Resource: !Ref ECSClusterASG
+                Action:
+                  - autoscaling:CompleteLifecycleAction
+              - Effect: "Allow"
+                Resource: !Ref ECSCluster
+                Action:
                   - ecs:SubmitContainerStateChange
                   - ecs:SubmitTaskStateChange
-                  - ecs:DescribeContainerInstances
                   - ecs:UpdateContainerInstancesState
-                  - ecs:ListTasks
-                  - ecs:DescribeTasks
+              - Effect: "Allow"
+                Resource: !Ref ECSDrainSNSTopic
+                Action:
                   - sns:Publish
-                  - sns:ListSubscriptions
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
