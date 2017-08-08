@@ -176,5 +176,5 @@ def lambda_handler(event, context):
                         InstanceId=Ec2InstanceId)
                     logger.info("Response received from complete_lifecycle_action %s",response)
                     logger.info("Completedlifecycle hook action")
-                except Exception, e:
+                except Exception as e:
                     print(str(e))
