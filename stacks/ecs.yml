@@ -446,6 +446,12 @@ Resources:
           NotificationTypes:
             - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
             - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
+        - TopicARN: !Ref ECSDrainSNSTopic
+          NotificationTypes:
+            - "autoscaling:EC2_INSTANCE_LAUNCH"
+            - "autoscaling:EC2_INSTANCE_LAUNCH_ERROR"
+            - "autoscaling:EC2_INSTANCE_TERMINATE"
+            - "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -462,6 +468,104 @@ Resources:
         - !Ref VPCSubnet1
         - !Ref VPCSubnet2
         - !Ref VPCSubnet3
+  # ECS task draining
+  ECSDrainSNSTopic:
+    Type: "AWS::SNS::Topic"
+    DependsOn: ECSDrainFunction
+    Properties:
+      Subscription:
+        - Endpoint: !GetAtt ECSDrainFunction.Arn
+          Protocol: "lambda"
+  ECSDrainSNSRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "autoscaling.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
+      Path: "/"
+  ECSDrainLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Policies:
+        -
+          PolicyName: "drain-lambda-inline"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Resource: "*"
+                Action:
+                  - autoscaling:CompleteLifecycleAction
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - ec2:DescribeInstances
+                  - ec2:DescribeInstanceAttribute
+                  - ec2:DescribeInstanceStatus
+                  - ec2:DescribeHosts
+                  - ecs:ListContainerInstances
+                  - ecs:SubmitContainerStateChange
+                  - ecs:SubmitTaskStateChange
+                  - ecs:DescribeContainerInstances
+                  - ecs:UpdateContainerInstancesState
+                  - ecs:ListTasks
+                  - ecs:DescribeTasks
+                  - sns:Publish
+                  - sns:ListSubscriptions
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
+      Path: "/"
+  ECSDrainHook:
+    Type: "AWS::AutoScaling::LifecycleHook"
+    DependsOn: "ECSDrainSNSTopic"
+    Properties:
+      AutoScalingGroupName: !Ref ECSClusterASG
+      DefaultResult: "ABANDON"
+      HeartbeatTimeout: "900"
+      LifecycleTransition: "autoscaling:EC2_INSTANCE_TERMINATING"
+      NotificationTargetARN: !Ref ECSDrainSNSTopic
+      RoleARN: !GetAtt ECSDrainSNSRole.Arn
+  ECSDrainLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+       FunctionName: !Ref ECSDrainFunction
+       Action: lambda:InvokeFunction
+       Principal: "sns.amazonaws.com"
+       SourceArn: !Ref ECSDrainSNSTopic
+  ECSDrainFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: utility/ecs-drain-tasks.zip
+      Description: Drain tasks off ECS instances before allowing them to terminate
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt ECSDrainLambdaRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 300
   # CloudWatch Events
   # CloudWatchEventsIAMRole:
   #   Type: "AWS::IAM::Role"
