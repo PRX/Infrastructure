@@ -1,11 +1,12 @@
 from __future__ import print_function
 import boto3
-from urlparse import urlparse
+from urllib.parse import urlparse
 import base64
 import json
 import datetime
 import time
 import logging
+import os
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -40,21 +41,8 @@ def publishToSNS(message, topicARN):
 """
 def checkContainerInstanceTaskStatus(Ec2InstanceId):
     containerInstanceId = None
-    clusterName = None
+    clusterName = os.environ["ECS_CLUSTER"]
     tmpMsgAppend = None
-
-    # Describe instance attributes and get the Clustername from userdata section which would have set ECS_CLUSTER name
-    ec2Resp = ec2Client.describe_instance_attribute(InstanceId=Ec2InstanceId, Attribute='userData')
-    userdataEncoded = ec2Resp['UserData']
-    userdataDecoded = base64.b64decode(userdataEncoded['Value'])
-    logger.debug("Describe instance attributes response %s", ec2Resp)
-
-    tmpList = userdataDecoded.split()
-    for token in tmpList:
-        if token.find("ECS_CLUSTER") > -1:
-            # Split and get the cluster name
-            clusterName = token.split('=')[1]
-            logger.info("Cluster name %s",clusterName)
 
     # Get list of container instance IDs from the clusterName
     clusterListResp = ecsClient.list_container_instances(cluster=clusterName)
@@ -110,7 +98,7 @@ def lambda_handler(event, context):
     TopicArn = event['Records'][0]['Sns']['TopicArn']
 
     lifecyclehookname = None
-    clusterName = None
+    clusterName = os.environ["ECS_CLUSTER"]
     tmpMsgAppend = None
     completeHook = 0
 
@@ -119,20 +107,8 @@ def lambda_handler(event, context):
     logger.debug("sns: %s",event['Records'][0]['Sns'])
     logger.debug("Message: %s",message)
     logger.debug("Ec2 Instance Id %s ,%s",Ec2InstanceId, asgGroupName)
+    logger.debug("Ecs Cluster Name %s", clusterName)
     logger.debug("SNS ARN %s",snsArn)
-
-    # Describe instance attributes and get the Clustername from userdata section which would have set ECS_CLUSTER name
-    ec2Resp = ec2Client.describe_instance_attribute(InstanceId=Ec2InstanceId, Attribute='userData')
-    logger.debug("Describe instance attributes response %s",ec2Resp)
-    userdataEncoded = ec2Resp['UserData']
-    userdataDecoded = base64.b64decode(userdataEncoded['Value'])
-
-    tmpList = userdataDecoded.split()
-    for token in tmpList:
-        if token.find("ECS_CLUSTER") > -1:
-            # Split and get the cluster name
-            clusterName = token.split('=')[1]
-            logger.debug("Cluster name %s",clusterName)
 
     # Get list of container instance IDs from the clusterName
     clusterListResp = ecsClient.list_container_instances(cluster=clusterName)
