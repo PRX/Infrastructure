@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for prx.mx
+Parameters:
+  Domain:
+    Default: prx.mx.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: Secondary Radiotopia domain
+      HostedZoneTags:
+        - Key: Project
+          Value: Remix
+      Name: !Ref Domain
+  Website:
+    Type: "AWS::Route53::RecordSetGroup"
+    DependsOn: HostedZone
+    Properties:
+      Comment: WWW
+      HostedZoneName: !Ref Domain
+      RecordSets:
+        - Type: A
+          Name: !Ref Domain
+          AliasTarget:
+            DNSName: s3-website-us-east-1.amazonaws.com.
+            # us-east-1 hosted zone ID
+            HostedZoneId: Z3AQBSTGFYJSTF
+        - ResourceRecords:
+            - wafflehammer-staging.herokuapp.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub www.${Domain}
+        - ResourceRecords:
+            - wafflehammer-staging.herokuapp.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub www2.${Domain}
