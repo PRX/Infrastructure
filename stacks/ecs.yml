@@ -64,7 +64,7 @@ Mappings:
       WarningThreshold: "9"
       MaxSize: "10"
     Production:
-      InstanceType: t2.medium
+      InstanceType: m4.large
       InstanceStorage: 72
       MinSize: "4"
       DefaultDesiredCapacity: "10"
@@ -520,7 +520,11 @@ Resources:
                 Action:
                   - autoscaling:CompleteLifecycleAction
               - Effect: "Allow"
-                Resource: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}"
+                Resource:
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container-instance/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:container/*"
+                  - !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/*"
                 Action:
                   - ecs:SubmitContainerStateChange
                   - ecs:SubmitTaskStateChange
@@ -567,6 +571,9 @@ Resources:
             !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: utility/ecs-drain-tasks.zip
       Description: Drain tasks off ECS instances before allowing them to terminate
+      Environment:
+        Variables:
+          ECS_CLUSTER: !Ref ECSCluster
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Role: !GetAtt ECSDrainLambdaRole.Arn
