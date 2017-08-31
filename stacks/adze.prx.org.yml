@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: adze.prx.org application running in Docker
+Description: jingle.prx.org application running in Docker
 Mappings:
   Shared:
     Project:
-      name: adze.prx.org
+      name: jingle.prx.org
     Container:
-      name: adze-phoenix
+      name: jingle-phoenix
 Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
@@ -47,24 +47,24 @@ Parameters:
   SecretsBase:
     Type: String
   # Shared ENV #################################################################
-  # Adze ECS #################################################################
-  AdzeEcrImageTag:
+  # Jingle ECS #################################################################
+  JingleEcrImageTag:
     Type: String
-  # Adze ENV #################################################################
-  AdzeSecretsVersion:
+  # Jingle ENV #################################################################
+  JingleSecretsVersion:
     Type: String
 Resources:
-  AdzeLogGroup:
+  JingleLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
-  AdzeALBTargetGroup:
+  JingleALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
       HealthCheckIntervalSeconds: 60
       UnhealthyThresholdCount: 10
       HealthCheckPath: /api/v1
-      Name: !Sub adze-${EnvironmentTypeAbbreviation}-${VPC}
+      Name: !Sub jingle-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -76,64 +76,64 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub Adze-${EnvironmentType}
+          Value: !Sub Jingle-${EnvironmentType}
       VpcId: !Ref VPC
   # ALB Listener Rules
-  AdzeALBHTTPSHostWildcardListenerRule:
+  JingleALBHTTPSHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref AdzeALBTargetGroup
+        - TargetGroupArn: !Ref JingleALBTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
           Values:
-            - adze.*
+            - jingle.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
-  AdzeALBHTTPHostWildcardListenerRule:
+  JingleALBHTTPHostWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref AdzeALBTargetGroup
+        - TargetGroupArn: !Ref JingleALBTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
           Values:
-            - adze.*
+            - jingle.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   # ECS Service
-  AdzeTaskDefinition:
+  JingleTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
         - Cpu: 128
           Environment:
             - Name: APP_NAME
-              Value: "adze"
+              Value: "jingle"
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
               Value: !Ref SecretsBase
             - Name: AWS_SECRETS_VERSION
-              Value: !Ref AdzeSecretsVersion
+              Value: !Ref JingleSecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
           Essential: true
           # TODO
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/adze.prx.org:${AdzeEcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/jingle.prx.org:${JingleEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref AdzeLogGroup
+              awslogs-group: !Ref JingleLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: 128
           Name: !FindInMap [Shared, Container, name]
           PortMappings:
             - HostPort: 0
               ContainerPort: 4000
-  AdzeService:
+  JingleService:
     Type: "AWS::ECS::Service"
     Properties:
       Cluster: !Ref ECSCluster
@@ -144,32 +144,32 @@ Resources:
       LoadBalancers:
         - ContainerName: !FindInMap [Shared, Container, name]
           ContainerPort: 4000
-          TargetGroupArn: !Ref AdzeALBTargetGroup
+          TargetGroupArn: !Ref JingleALBTargetGroup
       Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref AdzeTaskDefinition
-  AdzeWebRecordSetGroup:
+      TaskDefinition: !Ref JingleTaskDefinition
+  JingleWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
-      Comment: Record sets for dualstack web traffic to a adze instance
+      Comment: Record sets for dualstack web traffic to a jingle instance
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: AAAA
-          Name: !Sub adze.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub jingle.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
         - Type: A
-          Name: !Sub adze.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub jingle.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
   # CloudWatch Alarms
-  AdzeALBTargetGroup500Alarm:
+  JingleALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: Adze ALB Target Group HTTP 5XXs
+      AlarmName: Jingle ALB Target Group HTTP 5XXs
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -177,7 +177,7 @@ Resources:
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription: >
-        5XX server errors originating from the adze target group exceeded 0
+        5XX server errors originating from the jingle target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
       MetricName: HTTPCode_Target_5XX_Count
@@ -190,9 +190,9 @@ Resources:
         - Name: LoadBalancer
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
-          Value: !GetAtt adzeALBTargetGroup.TargetGroupFullName
+          Value: !GetAtt jingleALBTargetGroup.TargetGroupFullName
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
-      adze.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+      jingle.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
