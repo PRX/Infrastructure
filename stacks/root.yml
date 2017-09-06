@@ -35,6 +35,10 @@ Parameters:
     Type: String
   AudiogramSecretsVersion:
     Type: String
+  JingleEcrImageTag:
+    Type: String
+  JingleSecretsVersion:
+    Type: String
   CastleEcrImageTag:
     Type: String
   CastleSecretsVersion:
@@ -113,6 +117,8 @@ Mappings:
       prefix: 28
     Castle:
       prefix: 35
+    Jingle:
+      prefix: 38
     Crier:
       prefix: 42
     Audiogram:
@@ -298,6 +304,41 @@ Resources:
         CastleEcrImageTag: !Ref CastleEcrImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
+      TimeoutInMinutes: "5"
+  #### JINGLE ##################################################################
+  JingleStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Jingle, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-SecretsBaseRegion"
+        JingleEcrImageTag: !Ref JingleEcrImageTag
+        JingleSecretsVersion: !Ref JingleSecretsVersion
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/jingle.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### AUDIOGRAM ###############################################################
   AudiogramStack:
@@ -605,6 +646,9 @@ Outputs:
   CastleHostedZoneDNSName:
     Description: Domain name for castle app
     Value: !GetAtt CastleStack.Outputs.HostedZoneDNSName
+  JingleHostedZoneDNSName:
+    Description: Domain name for jingle app
+    Value: !GetAtt JingleStack.Outputs.HostedZoneDNSName
   PublishHostedZoneDNSName:
     Description: Domain name for publish app
     Value: !GetAtt PublishStack.Outputs.HostedZoneDNSName
