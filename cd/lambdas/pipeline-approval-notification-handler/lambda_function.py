@@ -146,7 +146,7 @@ def sns_message_attributes():
     return {
         'WebhookURL': {
             'DataType': 'String',
-            'StringValue': os.environ['PIPELINE_SLACK_WEBHOOK_URL']
+            'StringValue': os.environ['IKE_DEPLOYS_SLACK_WEBHOOK_URL']
         }
     }
 
