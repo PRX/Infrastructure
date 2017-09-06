@@ -10,6 +10,7 @@
 import boto3
 import json
 import os
+import re
 
 cloudformation = boto3.client('cloudformation')
 sns = boto3.client('sns')
@@ -59,7 +60,15 @@ def parameters_delta_attachment(notification):
         elif v['StackValue'] != v['ChangeSetValue']:
             before = v['StackValue']
             after = v['ChangeSetValue']
-            deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
+
+            if re.search(r'EcrImageTag', k):
+                base = 'https://github.com/PRX'
+                slug = k.replace('EcrImageTag', '')
+                repo = f'{slug}.prx.org'
+                url = f'{base}/{repo}/compare/{before}...{after}'
+                deltas.append(f"*{k}*: `{before}` ➡ `<{url}|{after}>`")
+            else:
+                deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
 
     unchanged_count = len(parameters) - len(deltas)
 
