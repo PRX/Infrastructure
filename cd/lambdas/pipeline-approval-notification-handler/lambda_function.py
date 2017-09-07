@@ -73,7 +73,7 @@ def parameters_delta_attachment(notification):
             if re.search(r'EcrImageTag', k) or re.search(r'GitCommit', k):
                 base = 'https://github.com/PRX'
                 slug = k.replace('EcrImageTag', '').replace('GitCommit', '')
-                repo = f'{slug}.prx.org'
+                repo = f'{slug}.prx.org'.replace('Infrastructure.prx.org', 'Infrastructure')
                 url = f'{base}/{repo}/compare/{before}...{after}'
                 deltas.append(f"*{k}*: `{before}` ➡ `<{url}|{after}>`")
             else:
