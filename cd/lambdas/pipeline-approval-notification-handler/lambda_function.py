@@ -57,7 +57,7 @@ def parameters_delta_attachment(notification):
     deltas = []
 
     for k, v in parameters.items():
-        if v == 'PipelineExecutionNonce':
+        if k == 'PipelineExecutionNonce':
             continue
 
         elif 'StackValue' not in v:
@@ -70,9 +70,9 @@ def parameters_delta_attachment(notification):
             before = v['StackValue']
             after = v['ChangeSetValue']
 
-            if re.search(r'EcrImageTag', k):
+            if re.search(r'EcrImageTag', k) or re.search(r'InfrastructureGitCommit', k):
                 base = 'https://github.com/PRX'
-                slug = k.replace('EcrImageTag', '')
+                slug = k.replace('EcrImageTag', '').replace('InfrastructureGitCommit', '')
                 repo = f'{slug}.prx.org'
                 url = f'{base}/{repo}/compare/{before}...{after}'
                 deltas.append(f"*{k}*: `{before}` ➡ `<{url}|{after}>`")
