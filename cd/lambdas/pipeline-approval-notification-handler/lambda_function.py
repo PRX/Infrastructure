@@ -11,6 +11,7 @@ import boto3
 import json
 import os
 import re
+import time
 
 cloudformation = boto3.client('cloudformation')
 sns = boto3.client('sns')
@@ -25,15 +26,18 @@ def parameters_delta_attachment(notification):
     stack_name = custom_data['StackName']
     change_set_name = custom_data['ChangeSetName']
 
+    # Get current stack parameter values
     stack = cloudformation.describe_stacks(StackName=stack_name)['Stacks'][0]
     stack_parameters = stack['Parameters']
 
+    # Get new parameter values from change set
     change_set = cloudformation.describe_change_set(
         ChangeSetName=change_set_name,
         StackName=stack_name
     )
     change_set_parameters = change_set['Parameters']
 
+    # Combine parameters from stack and change set
     parameters = {}
 
     for p in stack_parameters:
@@ -48,10 +52,15 @@ def parameters_delta_attachment(notification):
 
         parameters[p['ParameterKey']]['ChangeSetValue'] = p['ParameterValue']
 
+    # Find values that have changed, and build strings that will be included in
+    # the Slack message describing the changes
     deltas = []
 
     for k, v in parameters.items():
-        if 'StackValue' not in v:
+        if v == 'PipelineExecutionNonce':
+            continue
+
+        elif 'StackValue' not in v:
             deltas.append(f"*{k}*: ❔ ➡ `{v['ChangeSetValue']}`")
 
         elif 'ChangeSetValue' not in v:
@@ -112,7 +121,7 @@ def approval_action_attachment(notification):
         'title_link': notification['approval']['approvalReviewLink'],
         'text': 'Manual approval required to trigger *ExecuteChangeSet*',
         'footer': notification['region'],
-        # ts: (Date.now() / 1000 | 0),
+        'ts': int(time.time()),
         'mrkdwn_in': ['text'],
         'callback_id': CODEPIPELINE_MANUAL_APPROVAL_CALLBACK,
         'actions': [
