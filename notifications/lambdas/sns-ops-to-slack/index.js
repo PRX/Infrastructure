@@ -22,6 +22,7 @@
 
 const url = require('url');
 const https = require('https');
+const AWS = require('aws-sdk');
 
 const APPROVED = 'Approved';
 const REJECTED = 'Rejected';
@@ -568,38 +569,30 @@ function webhookForEvent(event) {
 ////////////////////////////////////////////////////////////////////////////////
 
 function postMessage(inputs) {
+    // TODO move this to the top; need to get rid of other `sns` vars
+    const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
     return (new Promise((resolve, reject) => {
         const message = inputs[0];
         const webhook = inputs[1];
 
-        const json = JSON.stringify(message);
+        const messageJson = JSON.stringify(message);
 
-        // Setup request options
-        const options = url.parse(webhook);
-        options.method = 'POST';
-        options.headers = {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(json),
-        };
-
-        let req = https.request(options, res => {
-            res.setEncoding('utf8');
-
-            let json = '';
-            res.on('data', chunk => json += chunk);
-            res.on('end', () => {
-                if (res.statusCode < 500) {
-                    resolve();
-                } else {
-                    reject(new Error('Server Error'));
+        sns.publish({
+            TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+            Message: messageJson,
+            MessageAttributes: {
+                WebhookURL: {
+                    DataType: 'String',
+                    StringValue: webhook
                 }
-            });
+            }
+        }, (err, data) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve();
+            }
         });
-
-        // Generic request error handling
-        req.on('error', e => reject(e));
-
-        req.write(json);
-        req.end();
     }));
 }

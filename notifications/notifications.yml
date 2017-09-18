@@ -98,6 +98,16 @@ Resources:
             Action:
               - "sts:AssumeRole"
       Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelaySnsTopic
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   IkeHandlerLambdaIamRole:
@@ -183,6 +193,7 @@ Resources:
           CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
           CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookUrl
           IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookUrl
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaBasicExecutionIamRole.Arn
