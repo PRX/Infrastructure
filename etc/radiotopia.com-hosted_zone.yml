@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for radiotopia.com
+Parameters:
+  Domain:
+    Default: radiotopia.com.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: Secondary Radiotopia domain
+      HostedZoneTags:
+        - Key: Project
+          Value: radiotopia.fm
+      Name: !Ref Domain
+  Website:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: WWW
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Type: A
+          Name: !Ref Domain
+          AliasTarget:
+            DNSName: s3-website-us-east-1.amazonaws.com.
+            # us-east-1 hosted zone ID
+            HostedZoneId: Z3AQBSTGFYJSTF
+        - Type: A
+          Name: !Sub www.${Domain}
+          AliasTarget:
+            DNSName: s3-website-us-east-1.amazonaws.com.
+            # us-east-1 hosted zone ID
+            HostedZoneId: Z3AQBSTGFYJSTF
+  Text:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - '"google-site-verification=H6g01JYxody2U98gTwUZVFY1kDz1miktW9DIEDh_f1I"'
+          TTL: "300"
+          Type: TXT
+          Name: !Ref Domain
+  GSuite:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: G Suite
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "1 ASPMX.L.GOOGLE.COM."
+            - "5 ALT1.ASPMX.L.GOOGLE.COM."
+            - "5 ALT2.ASPMX.L.GOOGLE.COM."
+            - "10 ASPMX2.GOOGLEMAIL.COM."
+            - "10 ASPMX3.GOOGLEMAIL.COM."
+          TTL: "300"
+          Type: MX
+          Name: !Ref Domain

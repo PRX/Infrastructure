@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for prxu.org
+Parameters:
+  Domain:
+    Default: prxu.org.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: User-generated Content
+      # HostedZoneTags:
+      #   - Key: Project
+      #     Value: radiotopia.fm
+      Name: !Ref Domain
+  Text:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - '"R69rwoxwHEe6ubbq/suATEEFndpJN2M/uGpqqmP4kHE="'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub _amazonses.${Domain}
+        - ResourceRecords:
+            - '"Kr2tQaG5"'
+          TTL: "1800"
+          Type: TXT
+          Name: !Sub dzc.${Domain}
+  Dovetail:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Dovetail
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Type: A
+          Name: !Sub dovetail.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1jujps3p3xej3-652325001.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+        - Type: AAAAA
+          Name: !Sub dovetail.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1jujps3p3xej3-652325001.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+        - Type: A
+          Name: !Sub tal.dovetail.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1jujps3p3xej3-652325001.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+        - Type: AAAAA
+          Name: !Sub tal.dovetail.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1jujps3p3xej3-652325001.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+        - Type: A
+          Name: !Sub dovetail.staging.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1y2ncjszlrdmz-1988316390.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+        - Type: AAAAA
+          Name: !Sub dovetail.staging.${Domain}
+          AliasTarget:
+            DNSName: dualstack.infra-dovet-1y2ncjszlrdmz-1988316390.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K
+  Mx:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: MX Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "10 inbound-smtp.us-east-1.amazonaws.com."
+          TTL: "300"
+          Type: MX
+          Name: !Ref Domain
+  CloudFront:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: CloudFront
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - dsn15m3yob5tf.cloudfront.net.
+          TTL: "300"
+          Type: CNAME # TODO Could be A ALIAS
+          Name: !Sub userupload.${Domain}
+  Highwinds:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Highwinds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - cds.q5s4q5h8.hwcdn.net.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub cdn-ad-files.${Domain}
+        - ResourceRecords:
+            - cds.z6t4p6w9.hwcdn.net.
+          TTL: "86400"
+          Type: CNAME
+          Name: !Sub cdn-dovetail-staging.${Domain}
+        - ResourceRecords:
+            - cds.m9p3n2z3.hwcdn.net.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub cdn-dovetail.${Domain}
+        - ResourceRecords:
+            - cds.m9p3n2z3.hwcdn.net.
+          TTL: "86400"
+          Type: CNAME
+          Name: !Sub cdn.dovetail.${Domain}
+        - ResourceRecords:
+            - cds.m3g3q4x6.hwcdn.net.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub f-staging.${Domain}
+        - ResourceRecords:
+            - cds.y9f3h4p4.hwcdn.net.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub f.${Domain}
