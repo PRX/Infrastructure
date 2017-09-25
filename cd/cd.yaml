@@ -457,7 +457,7 @@ Resources:
       # TODO This will need access to S3 buckets where Lambda code archives are
       # stored at some point
       Policies:
-        # Lambda archives are accessed through S3
+        # Lambda functions used by CI/CD; archives are accessed through S3
         - PolicyName: SupportBucketAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -467,6 +467,16 @@ Resources:
                   - "s3:GetObject"
                 Resource:
                   - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSupportBucket", "/*"]]
+        # Lambda application code is accessed through S3
+        - PolicyName: CodeBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
         # Nested stack templates are accessed through S3
         - PolicyName: TemplateBucketAccess
           PolicyDocument:
