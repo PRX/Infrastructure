@@ -1,15 +1,14 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: File upload Lambda function
 Parameters:
   OpsWarnMessagesSnsTopicArn:
     Type: String
-  CodeBucket:
+  CodeS3Bucket:
     Type: String
-  LambdaFunctionCodeS3Key:
+  CodeS3ObjectVersion:
     Type: String
   PRXUploadAccessKey:
-    Type: String
-  BootstrapStackName:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
@@ -30,86 +29,14 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  # API Gateway
-  UploadRestApi:
-    Type: "AWS::ApiGateway::RestApi"
-    Properties:
-      Name: !Sub "${BootstrapStackName}-${EnvironmentTypeAbbreviation}-Upload"
-      Description: "Api used by PRX Upload Lambda"
-  UploadRestApiSignatureResource:
-    Type: "AWS::ApiGateway::Resource"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ParentId: !GetAtt UploadRestApi.RootResourceId
-      PathPart: "signature"
-  UploadRestApiSignatureMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ResourceId: !Ref UploadRestApiSignatureResource
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambdaFunction.Arn}/invocations
-  UploadRestApiOptionsMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ResourceId: !Ref UploadRestApiSignatureResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ''
-            StatusCode: '200'
-        PassthroughBehavior: NEVER
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - ResponseModels:
-            application/json: Empty
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-          StatusCode: '200'
-  UploadRestApiDeployment:
-    DependsOn:
-      - UploadRestApiSignatureMethod
-      - UploadRestApiOptionsMethod
-    Type: "AWS::ApiGateway::Deployment"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-  UploadRestApiStage:
-    Type: "AWS::ApiGateway::Stage"
-    Properties:
-      StageName: prod
-      Description: production stage for upload lambda gateway integration
-      RestApiId: !Ref UploadRestApi
-      DeploymentId: !Ref UploadRestApiDeployment
-  # Lambda Permissions
-  UploadRestApiLambdaPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref UploadLambdaFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
   # Lambda Functions
   UploadLambdaFunction:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
       Code:
-        S3Bucket: !Ref CodeBucket
-        S3Key: !Ref LambdaFunctionCodeS3Key
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Sub "lambda/PRX-upload.prx.org.zip"
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: File upload Lambda function
       Environment:
         Variables:
@@ -119,6 +46,12 @@ Resources:
       Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
       Runtime: nodejs6.10
       Timeout: 5
+      Events:
+        SignatureGet:
+          Type: Api
+          Properties:
+            Path: /signature
+            Method: GET
   # Lambda Alarms
   UploadErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
