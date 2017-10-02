@@ -104,15 +104,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
-  DovetailDeuxALBHTTPListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      LoadBalancerArn: !Ref DovetailALB
-      Port: 8888
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
   DovetailProxyALBHTTPListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
@@ -148,29 +139,6 @@ Resources:
             - /+/*
       ListenerArn: !Ref DovetailALBHTTPSListener
       Priority: 10
-  DovetailALBTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    DependsOn: DovetailALB
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
-      HealthCheckPath: /ping
-      Name: !Sub dovetail-${EnvironmentTypeAbbreviation}-${VPC}
-      Port: 80
-      Protocol: HTTP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 20
-      Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub Dovetail-${EnvironmentType}
-      VpcId: !Ref VPC
   DovetailDeuxALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: DovetailALB
@@ -281,25 +249,6 @@ Resources:
           PortMappings:
             - HostPort: 0
               ContainerPort: 80
-  DovetailService:
-    Type: "AWS::ECS::Service"
-    DependsOn:
-      - DovetailALBHTTPListener
-      - DovetailALBHTTPSListener
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      PlacementConstraints:
-        - Type: "distinctInstance"
-      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailCount]
-      LoadBalancers:
-        - ContainerName: "dovetail-express"
-          ContainerPort: 8080
-          TargetGroupArn: !Ref DovetailALBTargetGroup
-      Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref DovetailTaskDefinition
   DovetailDeuxService:
     Type: "AWS::ECS::Service"
     DependsOn:
