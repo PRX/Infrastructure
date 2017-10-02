@@ -103,7 +103,7 @@ Resources:
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref DovetailALBTargetGroup
+          TargetGroupArn: !Ref DovetailALBTargetGroup # TODO: change to deux
   DovetailProxyALBHTTPListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
@@ -126,7 +126,7 @@ Resources:
       Protocol: HTTPS
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref DovetailALBTargetGroup
+          TargetGroupArn: !Ref DovetailALBTargetGroup # TODO: change to deux
   DovetailProxyALBHTTPSListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
@@ -161,6 +161,29 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub Dovetail-${EnvironmentType}
+      VpcId: !Ref VPC
+  DovetailDeuxALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: DovetailALB
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckPath: /ping
+      Name: !Sub dovetail-deux-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 20
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub DovetailDeux-${EnvironmentType}
       VpcId: !Ref VPC
   DovetailProxyALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -266,6 +289,23 @@ Resources:
         - ContainerName: "dovetail-express"
           ContainerPort: 8080
           TargetGroupArn: !Ref DovetailALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref DovetailTaskDefinition
+  DovetailDeuxService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - DovetailALBHTTPListener
+      - DovetailALBHTTPSListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailCount]
+      LoadBalancers:
+        - ContainerName: "dovetail-express"
+          ContainerPort: 8080
+          TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref DovetailTaskDefinition
   DovetailProxyService:
