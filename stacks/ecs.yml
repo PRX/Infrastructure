@@ -564,10 +564,10 @@ Resources:
   ECSDrainLambdaPermission:
     Type: "AWS::Lambda::Permission"
     Properties:
-       FunctionName: !Ref ECSDrainFunction
-       Action: lambda:InvokeFunction
-       Principal: "sns.amazonaws.com"
-       SourceArn: !Ref ECSDrainSNSTopic
+      FunctionName: !Ref ECSDrainFunction
+      Action: lambda:InvokeFunction
+      Principal: "sns.amazonaws.com"
+      SourceArn: !Ref ECSDrainSNSTopic
   ECSDrainFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -588,55 +588,6 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 300
-  # CloudWatch Events
-  # CloudWatchEventsIAMRole:
-  #   Type: "AWS::IAM::Role"
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: "2012-10-17"
-  #       Statement:
-  #         - Effect: "Allow"
-  #           Principal:
-  #             Service:
-  #               - "events.amazonaws.com"
-  #           Action:
-  #             - "sts:AssumeRole"
-  #     Path: "/"
-  #     Policies:
-  #       - PolicyName: LambdaPolicy
-  #         PolicyDocument:
-  #           Version: "2012-10-17"
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - "sns:Publish"
-  #               Resource:
-  #                 - !Ref OpsDebugMessagesSnsTopicArn
-  ESCClusterEventsToSnsRule:
-    Condition: IsProduction
-    Type: "AWS::Events::Rule"
-    Properties:
-      Description: Sends ECS cluster events to an SNS topic
-      EventPattern:
-        Fn::Sub:
-          - |
-            {
-              "source": ["aws.ecs"],
-              "detail-type": [
-                "ECS Task State Change"
-              ],
-              "detail": {
-                "clusterArn": [
-                  "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}"
-                ]
-              }
-            }
-          - {}
-      State: DISABLED
-  #     Targets:
-  #       - Arn: !Ref OpsDebugMessagesSnsTopicArn
-  #         Id: !Sub "${AWS::StackName}.ECS-Cluster-Events"
-  #         RoleArn: !GetAtt CloudWatchEventsIAMRole.Arn
 Outputs:
   ECSCluster:
     Description: >
