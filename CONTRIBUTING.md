@@ -11,3 +11,9 @@ from that.
   npm info "$PKG@latest" peerDependencies --json | command sed 's/[\{\},]//g ; s/: /@/g' | xargs npm install --save-dev "$PKG@latest"
 )
 ```
+
+Python code shoud be follow the default Flake8 settings.
+
+Ensure that Flake8 is installed.
+
+`pip install flake8`
