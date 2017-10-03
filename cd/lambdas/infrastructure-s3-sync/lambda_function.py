@@ -13,24 +13,26 @@
 import zipfile
 import boto3
 import traceback
-import json
-import zlib
-import uuid
 import os
 from botocore.client import Config
 
 s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
 code_pipeline = boto3.client('codepipeline')
 
+
 def put_job_success(job, message):
     print('Putting job success')
     print(message)
     code_pipeline.put_job_success_result(jobId=job['id'])
 
+
 def put_job_failure(job, message):
     print('Putting job failure')
     print(message)
-    code_pipeline.put_job_failure_result(jobId=job['id'], failureDetails={'message': message, 'type': 'JobFailed'})
+    code_pipeline.put_job_failure_result(
+        jobId=job['id'],
+        failureDetails={'message': message, 'type': 'JobFailed'})
+
 
 def sync_source(job):
     print(f"...Syncing repository source...")
@@ -62,6 +64,7 @@ def sync_source(job):
 
         output_key = "{0}/{1}".format(sha, name)
         s3.upload_fileobj(f, output_bucket, output_key)
+
 
 def lambda_handler(event, context):
     try:
