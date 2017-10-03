@@ -10,16 +10,46 @@ const AWS = require('aws-sdk');
 
 const OK_RESPONSE = { statusCode: 200, headers: {}, body: null };
 
-const sns = new AWS.SNS({apiVersion: '2010-03-31'});
+const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
-exports.handler = (event, context, callback) => {
-    try {
-        main(event, context, callback);
-    } catch(e) {
-        console.error('Unhandled exception!');
-        callback(e);
+function publishEvent(event, callback) {
+    console.log('...Publishing event to SNS...');
+
+    sns.publish({
+        TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
+        Message: event.body,
+        MessageAttributes: {
+            githubEvent: {
+                DataType: 'String',
+                StringValue: event.headers['X-GitHub-Event'],
+            },
+            githubDeliveryId: {
+                DataType: 'String',
+                StringValue: event.headers['X-GitHub-Delivery'],
+            },
+        },
+    }, (err) => {
+        if (err) {
+            console.error('...Publishing event failed!');
+            callback(err);
+        } else {
+            console.log('...Event published!');
+            callback(null, OK_RESPONSE);
+        }
+    });
+}
+
+function handleEvent(event, callback) {
+    console.log(`...Handling event: ${event.headers['X-GitHub-Event']}...`);
+    switch (event.headers['X-GitHub-Event']) {
+        case 'ping':
+            // Blackhole `ping` events
+            callback(null, OK_RESPONSE);
+            break;
+        default:
+            publishEvent(event, callback);
     }
-};
+}
 
 function main(event, context, callback) {
     const githubSignature = event.headers['X-Hub-Signature'].split('=')[1];
@@ -40,40 +70,11 @@ function main(event, context, callback) {
     }
 }
 
-function handleEvent(event, callback) {
-    console.log(`...Handling event: ${event.headers['X-GitHub-Event']}...`);
-    switch (event.headers['X-GitHub-Event']) {
-        case 'ping':
-            // Blackhole `ping` events
-            callback(null, OK_RESPONSE);
-            break;
-        default:
-            publishEvent(event, callback);
+exports.handler = (event, context, callback) => {
+    try {
+        main(event, context, callback);
+    } catch (e) {
+        console.error('Unhandled exception!');
+        callback(e);
     }
-}
-
-function publishEvent(event, callback) {
-    console.log(`...Publishing event to SNS...`);
-
-    sns.publish({
-        TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
-        Message: event.body,
-        MessageAttributes: {
-            githubEvent: {
-                DataType: 'String',
-                StringValue: event.headers['X-GitHub-Event']
-            }, githubDeliveryId: {
-                DataType: 'String',
-                StringValue: event.headers['X-GitHub-Delivery']
-            }
-        }
-    }, (err, data) => {
-        if (err) {
-            console.error(`...Publishing event failed!`);
-            callback(err);
-        } else {
-            console.log(`...Event published!`);
-            callback(null, OK_RESPONSE);
-        }
-    });
-}
+};
