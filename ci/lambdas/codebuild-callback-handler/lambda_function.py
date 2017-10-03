@@ -5,12 +5,9 @@
 # the GitHub status, and sending some notifications.
 
 import boto3
-import traceback
 import os
-import zlib
 import zipfile
 import json
-import re
 import uuid
 import urllib.request
 from botocore.client import Config
@@ -19,6 +16,7 @@ s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
 sns = boto3.client('sns')
 
 USER_AGENT = 'PRX/Infrastructure (codebuild-callback-handler)'
+
 
 def update_github_status(data):
     print('...Updating GitHub status...')
@@ -37,7 +35,8 @@ def update_github_status(data):
     arn = data['buildArn']
     region = arn.split(':')[3]
     buildId = arn.split('/')[1]
-    buildUrl = "https://{0}.console.aws.amazon.com/codebuild/home#/builds/{1}/view/new".format(region, buildId)
+    path = 'console.aws.amazon.com/codebuild/home#/builds'
+    buildUrl = "https://{0}.{1}/{2}/view/new".format(region, path, buildId)
 
     state = 'success' if data['success'] else 'failure'
     description = 'Build complete' if data['success'] else data['reason']
@@ -54,6 +53,7 @@ def update_github_status(data):
     print(f"...Requesting {api_url}...")
     req = urllib.request.Request(api_url, data=json_body, headers=headers)
     urllib.request.urlopen(req)
+
 
 def update_staging_config_status(data):
     if (data['success']) and ('prxEcrTag' in data):
@@ -95,7 +95,10 @@ def update_staging_config_status(data):
 
         # TODO Should be able to do this all in memory
         archive = zipfile.ZipFile(new_archive_path, mode='w')
-        archive.writestr('staging.json', body, compress_type=zipfile.ZIP_DEFLATED)
+        archive.writestr(
+            'staging.json',
+            body,
+            compress_type=zipfile.ZIP_DEFLATED)
         archive.close()
 
         # Send back to S3
@@ -104,13 +107,15 @@ def update_staging_config_status(data):
 
         s3.upload_file(new_archive_path, source_bucket, source_key)
 
+
 def post_notification_status(data):
     print('...Posting build status notification...')
 
     topic_arn = os.environ['CI_STATUS_TOPIC_ARN']
-    message = json.dumps({ 'callback': data })
+    message = json.dumps({'callback': data})
 
     sns.publish(TopicArn=topic_arn, Message=message)
+
 
 def lambda_handler(event, context):
     callback_object = json.loads(event['Records'][0]['Sns']['Message'])
