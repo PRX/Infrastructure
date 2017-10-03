@@ -1,10 +1,11 @@
 # Invoked by: CodePipeline
 # Returns: Error or status message
 #
-# Creates an output artifact for the production template config. It does that by
-# getting the existing production config from S3 and the staging config pipeline
-# artifact, and updating any app version information (ECR image tags, etc) from
-# staging to production. The result is written to the output artifact
+# Creates an output artifact for the production template config. It does that
+# by getting the existing production config from S3 and the staging config
+# pipeline artifact, and updating any app version information (ECR image
+#  tags, etc) from staging to production. The result is written to the output
+# artifact
 #
 # This should always callback to the CodePipeline API to indicate success or
 # failure.
@@ -12,7 +13,6 @@
 import boto3
 import traceback
 import os
-import zlib
 import zipfile
 import json
 import re
@@ -22,15 +22,20 @@ from botocore.client import Config
 s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
 code_pipeline = boto3.client('codepipeline')
 
+
 def put_job_success(job, message):
     print('Putting job success')
     print(message)
     code_pipeline.put_job_success_result(jobId=job['id'])
 
+
 def put_job_failure(job, message):
     print('Putting job failure')
     print(message)
-    code_pipeline.put_job_failure_result(jobId=job['id'], failureDetails={'message': message, 'type': 'JobFailed'})
+    code_pipeline.put_job_failure_result(
+        jobId=job['id'],
+        failureDetails={'message': message, 'type': 'JobFailed'})
+
 
 def get_staging_config(job):
     input_artifact = job['data']['inputArtifacts'][0]
@@ -51,6 +56,7 @@ def get_staging_config(job):
 
     return staging_config
 
+
 def get_production_config(job):
     source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
     source_key = os.environ['INFRASTRUCTURE_CONFIG_PRODUCTION_KEY']
@@ -67,6 +73,7 @@ def get_production_config(job):
 
     return production_config
 
+
 def update_production_config(production_config, staging_config):
     print('...Updating production config...')
 
@@ -78,6 +85,7 @@ def update_production_config(production_config, staging_config):
 
     return production_config
 
+
 def upload_artifact(production_config, job):
     body = json.dumps(production_config)
 
@@ -87,7 +95,10 @@ def upload_artifact(production_config, job):
 
     # TODO Should be able to do this all in memory
     archive = zipfile.ZipFile(archive_path, mode='w')
-    archive.writestr('production.json', body, compress_type=zipfile.ZIP_DEFLATED)
+    archive.writestr(
+        'production.json',
+        body,
+        compress_type=zipfile.ZIP_DEFLATED)
     archive.close()
 
     output_artifact = job['data']['outputArtifacts'][0]
@@ -98,6 +109,7 @@ def upload_artifact(production_config, job):
 
     print(f"...Wrote artifact to {output_bucket}/{output_key}...")
 
+
 def upload_config(production_config):
     body = json.dumps(production_config)
 
@@ -107,7 +119,10 @@ def upload_config(production_config):
 
     # TODO Should be able to do this all in memory
     archive = zipfile.ZipFile(archive_path, mode='w')
-    archive.writestr('production.json', body, compress_type=zipfile.ZIP_DEFLATED)
+    archive.writestr(
+        'production.json',
+        body,
+        compress_type=zipfile.ZIP_DEFLATED)
     archive.close()
 
     source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
@@ -116,6 +131,7 @@ def upload_config(production_config):
     s3.upload_file(archive_path, source_bucket, source_key)
 
     print(f"...Wrote update to {source_bucket}/{source_key}...")
+
 
 def lambda_handler(event, context):
     try:
