@@ -22,15 +22,20 @@ sns = boto3.client('sns')
 cloudwatch = boto3.client('cloudwatch')
 s3 = boto3.client('s3')
 
+
 def put_job_success(job, message):
     print('Putting job success')
     print(message)
     code_pipeline.put_job_success_result(jobId=job['id'])
 
+
 def put_job_failure(job, message):
     print('Putting job failure')
     print(message)
-    code_pipeline.put_job_failure_result(jobId=job['id'], failureDetails={'message': message, 'type': 'JobFailed'})
+    code_pipeline.put_job_failure_result(
+        jobId=job['id'],
+        failureDetails={'message': message, 'type': 'JobFailed'})
+
 
 def lambda_handler(event, context):
     try:
@@ -40,7 +45,8 @@ def lambda_handler(event, context):
 
         input_artifact = job['data']['inputArtifacts'][0]
 
-        env = job['data']['actionConfiguration']['configuration']['UserParameters']
+        cfg = job['data']['actionConfiguration']['configuration']
+        env = cfg['UserParameters']
 
         # Get the S3 version of the most recent config
 
