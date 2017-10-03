@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 code_pipeline = boto3.client('codepipeline')
 sns = boto3.client('sns')
 
+
 class DateTimeEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):
@@ -20,11 +21,13 @@ class DateTimeEncoder(json.JSONEncoder):
 
         return json.JSONEncoder.default(self, o)
 
+
 def post_notification(action_state):
     topic_arn = os.environ['CODEPIPELINE_FAILURES_TOPIC_ARN']
     message = json.dumps(action_state, cls=DateTimeEncoder)
 
     sns.publish(TopicArn=topic_arn, Message=message)
+
 
 def lambda_handler(event, context):
     try:
@@ -39,8 +42,8 @@ def lambda_handler(event, context):
                 if 'latestExecution' in action_state:
                     execution = action_state['latestExecution']
 
-                    timezone = execution['lastStatusChange'].tzinfo
-                    period_start = datetime.now(timezone) - timedelta(seconds=60)
+                    tz = execution['lastStatusChange'].tzinfo
+                    period_start = datetime.now(tz) - timedelta(seconds=60)
 
                     if execution['lastStatusChange'] > period_start:
                         if execution['status'] == 'Failed':
