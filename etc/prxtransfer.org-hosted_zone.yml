@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for prxtransfer.org
+Parameters:
+  Domain:
+    Default: prxtransfer.org.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  East2HealthCheck:
+    Type: "AWS::Route53::HealthCheck"
+    Properties:
+      HealthCheckConfig:
+        FailureThreshold: 3
+        FullyQualifiedDomainName: east2.prxtransfer.org
+        Inverted: false
+        MeasureLatency: false
+        Port: 21
+        RequestInterval: 30
+        Type: TCP
+      HealthCheckTags:
+        - Key: Name
+          Value: East2 FTPD
+  East3HealthCheck:
+    Type: "AWS::Route53::HealthCheck"
+    Properties:
+      HealthCheckConfig:
+        FailureThreshold: 3
+        FullyQualifiedDomainName: east3.prxtransfer.org
+        Inverted: false
+        MeasureLatency: false
+        Port: 21
+        RequestInterval: 30
+        Type: TCP
+      HealthCheckTags:
+        - Key: Name
+          Value: East3 FTPD
+  West3HealthCheck:
+    Type: "AWS::Route53::HealthCheck"
+    Properties:
+      HealthCheckConfig:
+        FailureThreshold: 3
+        Inverted: false
+        IPAddress: "184.169.214.189"
+        MeasureLatency: false
+        Port: 21
+        RequestInterval: 30
+        Type: TCP
+      HealthCheckTags:
+        - Key: Name
+          Value: West3 FTPD
+  West4HealthCheck:
+    Type: "AWS::Route53::HealthCheck"
+    Properties:
+      HealthCheckConfig:
+        FailureThreshold: 3
+        FullyQualifiedDomainName: west4.prxtransfer.org
+        Inverted: false
+        MeasureLatency: false
+        Port: 21
+        RequestInterval: 30
+        Type: TCP
+      HealthCheckTags:
+        - Key: Name
+          Value: West4 FTPD
+  HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: PRXBD FTP Pull Delivery
+      HostedZoneTags:
+        - Key: Project
+          Value: PRXBD
+      Name: !Ref Domain
+  Servers:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: FTP servers
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "54.82.22.155"
+          TTL: "300"
+          Type: A
+          Name: !Sub east2.${Domain}
+        - ResourceRecords:
+            - "107.20.242.177"
+          TTL: "300"
+          Type: A
+          Name: !Sub east3.${Domain}
+        - ResourceRecords:
+            - "184.169.214.189"
+          TTL: "300"
+          Type: A
+          Name: !Sub west3.${Domain}
+        - ResourceRecords:
+            - "54.203.196.133"
+          TTL: "300"
+          Type: A
+          Name: !Sub west4.${Domain}
+  Web:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: www
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - !Ref Domain
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub www.${Domain}
