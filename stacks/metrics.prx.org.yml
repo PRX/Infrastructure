@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: metrics.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: metrics.prx.org
+    Container:
+      name: metrics-express
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBFullName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBListenerPriorityPrefix:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  OpsDebugMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  # Shared ENV #################################################################
+  # Metrics ECS ################################################################
+  MetricsEcrImageTag:
+    Type: String
+  # Metrics ENV ################################################################
+  MetricsSecretsVersion:
+    Type: String
+Resources:
+  MetricsLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  MetricsALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 60
+      UnhealthyThresholdCount: 10
+      HealthCheckPath: /
+      Name: !Sub metrics-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 15
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Metrics-${EnvironmentType}
+      VpcId: !Ref VPC
+  # ALB Listener Rules
+  MetricsALBHTTPSHostWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref MetricsALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - metrics.*
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  MetricsALBHTTPHostWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref MetricsALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - metrics.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  # ECS Service
+  MetricsTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 64
+          Environment:
+            - Name: APP_NAME
+              Value: "metrics"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref MetricsSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          # TODO
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/metrics.prx.org:${MetricsEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MetricsLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 128
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4202
+  MetricsService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 4202
+          TargetGroupArn: !Ref MetricsALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref MetricsTaskDefinition
+  MetricsWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to a metrics instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !Sub metrics.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+        - Type: A
+          Name: !Sub metrics.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  # CloudWatch Alarms
+  MetricsALBTargetGroup500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Metrics ALB Target Group HTTP 5XXs
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref PlatformALBFullName
+        - Name: TargetGroup
+          Value: !GetAtt MetricsALBTargetGroup.TargetGroupFullName
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      metrics.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
