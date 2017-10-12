@@ -75,8 +75,9 @@ exports.handler = (event, context) => {
         services: [event.ResourceProperties.ServiceName],
     }, (err, data) => {
         if (err) {
+            const defaultCount = process.env.DEFAULT_DESIRED_COUNT;
             const responseData = {
-                [RESPONSE_DATA_KEY_DESIRED_COUNT]: 10,
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: defaultCount,
             };
 
             sendResponse(event, context, STATUS_SUCCESS, responseData);
