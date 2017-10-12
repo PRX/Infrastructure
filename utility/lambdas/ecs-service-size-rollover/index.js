@@ -9,12 +9,18 @@
 
 const https = require('https');
 const url = require('url');
-// const AWS = require('aws-sdk');
+const AWS = require('aws-sdk');
+
+const ecs = new AWS.ECS();
+
+const REQUEST_TYPE_DELETE = 'Delete';
 
 const STATUS_SUCCESS = 'SUCCESS';
-// const STATUS_FAILED = 'FAILED';
+const STATUS_FAILED = 'FAILED';
 
 const HTTP_PUT = 'PUT';
+
+const RESPONSE_DATA_KEY_DESIRED_COUNT = 'DesiredCount';
 
 // Send response to the pre-signed S3 URL
 function sendResponse(event, context, responseStatus, responseData) {
@@ -59,15 +65,27 @@ function sendResponse(event, context, responseStatus, responseData) {
 
 exports.handler = (event, context) => {
     // For Delete requests, immediately send a SUCCESS response.
-    if (event.RequestType === 'Delete') {
+    if (event.RequestType === REQUEST_TYPE_DELETE) {
         sendResponse(event, context, STATUS_SUCCESS);
         return;
     }
 
-    const responseData = {
-        foo: 'bar',
-    };
+    ecs.describeServices({
+        cluster: event.ResourceProperties.ClusterName,
+        services: [event.ResourceProperties.ServiceName]
+    }, (err, data) => {
+        if (err) {
+            //  TODO
+            sendResponse(event, context, STATUS_FAILED);
+        } else {
+            const service = data.services[0];
 
-    sendResponse(event, context, STATUS_SUCCESS, responseData);
+            const responseData = {
+                RESPONSE_DATA_KEY_DESIRED_COUNT: service.desiredCount,
+            };
+
+            sendResponse(event, context, STATUS_SUCCESS, responseData);
+        }
+    });
 };
 
