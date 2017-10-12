@@ -74,18 +74,18 @@ exports.handler = (event, context) => {
         cluster: event.ResourceProperties.ClusterName,
         services: [event.ResourceProperties.ServiceName],
     }, (err, data) => {
-        if (err) {
-            const defaultCount = process.env.DEFAULT_DESIRED_COUNT || 2;
-            const responseData = {
-                [RESPONSE_DATA_KEY_DESIRED_COUNT]: defaultCount,
-            };
-
-            sendResponse(event, context, STATUS_SUCCESS, responseData);
-        } else {
+        if (data && data.services && data.services[0]) {
             const service = data.services[0];
 
             const responseData = {
                 [RESPONSE_DATA_KEY_DESIRED_COUNT]: service.desiredCount,
+            };
+
+            sendResponse(event, context, STATUS_SUCCESS, responseData);
+        } else {
+            const defaultCount = process.env.DEFAULT_DESIRED_COUNT || 2;
+            const responseData = {
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: defaultCount,
             };
 
             sendResponse(event, context, STATUS_SUCCESS, responseData);
