@@ -72,11 +72,14 @@ exports.handler = (event, context) => {
 
     ecs.describeServices({
         cluster: event.ResourceProperties.ClusterName,
-        services: [event.ResourceProperties.ServiceName]
+        services: [event.ResourceProperties.ServiceName],
     }, (err, data) => {
         if (err) {
-            //  TODO
-            sendResponse(event, context, STATUS_FAILED);
+            const responseData = {
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: 10,
+            };
+
+            sendResponse(event, context, STATUS_SUCCESS, responseData);
         } else {
             const service = data.services[0];
 
