@@ -16,7 +16,7 @@ const ecs = new AWS.ECS();
 const REQUEST_TYPE_DELETE = 'Delete';
 
 const STATUS_SUCCESS = 'SUCCESS';
-const STATUS_FAILED = 'FAILED';
+// const STATUS_FAILED = 'FAILED';
 
 const HTTP_PUT = 'PUT';
 
