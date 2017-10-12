@@ -351,6 +351,61 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt DovetailALB.LoadBalancerFullName
+  # Application
+  DovetailApplicationALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: DovetailALB
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckPath: /ping
+      Name: !Sub dovetail-app-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 20
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub DovetailApp-${EnvironmentType}
+      VpcId: !Ref VPC
+  DovetailApplicationALBHTTPListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref DovetailALB
+      Port: 8888
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+  DovetailApplicationService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - DovetailALBHTTPListener
+      - DovetailALBHTTPSListener
+      - DovetailApplicationALBHTTPListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: !GetAtt DovetailServiceDesiredCountRolloverResource.DesiredCount
+      LoadBalancers:
+        - ContainerName: "dovetail-express"
+          ContainerPort: 8080
+          TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+      PlacementStrategies:
+        - Type: spread
+          Field: instanceId
+      Role: !Ref ECSServiceIAMRole
+      ServiceName: !Sub ${AWS::StackName}-DovetailApp
+      TaskDefinition: !Ref DovetailTaskDefinition
   # Config Persistence
   DovetailServiceDesiredCountRolloverIamRole:
     Type: "AWS::IAM::Role"
