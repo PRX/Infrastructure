@@ -16,7 +16,7 @@ const ecs = new AWS.ECS();
 const REQUEST_TYPE_DELETE = 'Delete';
 
 const STATUS_SUCCESS = 'SUCCESS';
-const STATUS_FAILED = 'FAILED';
+// const STATUS_FAILED = 'FAILED';
 
 const HTTP_PUT = 'PUT';
 
@@ -72,16 +72,20 @@ exports.handler = (event, context) => {
 
     ecs.describeServices({
         cluster: event.ResourceProperties.ClusterName,
-        services: [event.ResourceProperties.ServiceName]
+        services: [event.ResourceProperties.ServiceName],
     }, (err, data) => {
         if (err) {
-            //  TODO
-            sendResponse(event, context, STATUS_FAILED);
+            const defaultCount = process.env.DEFAULT_DESIRED_COUNT || 2;
+            const responseData = {
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: defaultCount,
+            };
+
+            sendResponse(event, context, STATUS_SUCCESS, responseData);
         } else {
             const service = data.services[0];
 
             const responseData = {
-                RESPONSE_DATA_KEY_DESIRED_COUNT: service.desiredCount,
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: service.desiredCount,
             };
 
             sendResponse(event, context, STATUS_SUCCESS, responseData);
