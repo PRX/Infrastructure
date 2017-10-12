@@ -81,7 +81,7 @@ exports.handler = (event, context) => {
             const service = data.services[0];
 
             const responseData = {
-                RESPONSE_DATA_KEY_DESIRED_COUNT: service.desiredCount,
+                [RESPONSE_DATA_KEY_DESIRED_COUNT]: service.desiredCount,
             };
 
             sendResponse(event, context, STATUS_SUCCESS, responseData);
