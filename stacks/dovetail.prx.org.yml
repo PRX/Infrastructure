@@ -349,6 +349,48 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt DovetailALB.LoadBalancerFullName
+  # Config Persistence
+  DovetailServiceDesiredCountRolloverIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: EcsServicesPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ecs:DescribeServices"
+                Resource:
+                  - "*"
+                  # - !Sub ${AWS::StackName}-DovetailService TODO
+  DovetailServiceDesiredCountRolloverLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: utility/ecs-service-size-rollover.zip
+      Description: Allows for DesiredCount persistence on ECS services
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 8
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
