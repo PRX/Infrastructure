@@ -108,18 +108,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
-  DovetailProxyALBHTTPListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - /+/*
-      ListenerArn: !Ref DovetailALBHTTPListener
-      Priority: 10
   DovetailALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -131,18 +119,6 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
-  DovetailProxyALBHTTPSListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - /+/*
-      ListenerArn: !Ref DovetailALBHTTPSListener
-      Priority: 10
   DovetailDeuxALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: DovetailALB
@@ -193,10 +169,6 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
-  DovetailProxyLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
   DovetailTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -225,34 +197,6 @@ Resources:
           PortMappings:
             - HostPort: 0
               ContainerPort: 8080
-  DovetailProxyTaskDefinition:
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: 256
-          Environment:
-            - Name: CACHE_INACTIVE
-              Value: "48h"
-            - Name: CACHE_MAX_SIZE
-              Value: "20g"
-            - Name: DOVETAIL_HOST
-              Value: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech
-            - Name: RESOLVER
-              Value: "8.8.8.8" # TODO does 172.16.0.23 work in this VPC?
-            - Name: STITCH_VALID
-              Value: "48h"
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.proxy:latest
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref DovetailProxyLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: 1000
-          Name: "dovetail-nginx"
-          PortMappings:
-            - HostPort: 0
-              ContainerPort: 80
   DovetailDeuxService:
     Type: "AWS::ECS::Service"
     DependsOn:
@@ -270,25 +214,6 @@ Resources:
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref DovetailTaskDefinition
-  DovetailProxyService:
-    Type: "AWS::ECS::Service"
-    DependsOn:
-      - DovetailALBHTTPListener
-      - DovetailALBHTTPSListener
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      PlacementConstraints:
-        - Type: "distinctInstance"
-      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
-      LoadBalancers:
-        - ContainerName: "dovetail-nginx"
-          ContainerPort: 80
-          TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-      Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref DovetailProxyTaskDefinition
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     DependsOn: DovetailALB
@@ -461,6 +386,82 @@ Resources:
       Rotation: !Ref PipelineExecutionNonce
       ServiceName: !Sub ${AWS::StackName}-DovetailApp
       ServiceToken: !GetAtt DovetailServiceDesiredCountRolloverLambdaFunction.Arn
+  # Proxy
+  DovetailProxyALBHTTPListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /+/*
+      ListenerArn: !Ref DovetailALBHTTPListener
+      Priority: 10
+  DovetailProxyALBHTTPSListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /+/*
+      ListenerArn: !Ref DovetailALBHTTPSListener
+      Priority: 10
+  DovetailProxyLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  DovetailProxyTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 256
+          Environment:
+            - Name: CACHE_INACTIVE
+              Value: "48h"
+            - Name: CACHE_MAX_SIZE
+              Value: "20g"
+            - Name: DOVETAIL_HOST
+              Value: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech
+            - Name: RESOLVER
+              Value: "8.8.8.8" # TODO does 172.16.0.23 work in this VPC?
+            - Name: STITCH_VALID
+              Value: "48h"
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.proxy:latest
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DovetailProxyLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 1000
+          Name: "dovetail-nginx"
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 80
+  DovetailProxyService:
+    Type: "AWS::ECS::Service"
+    DependsOn:
+      - DovetailALBHTTPListener
+      - DovetailALBHTTPSListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      PlacementConstraints:
+        - Type: "distinctInstance"
+      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
+      LoadBalancers:
+        - ContainerName: "dovetail-nginx"
+          ContainerPort: 80
+          TargetGroupArn: !Ref DovetailProxyALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref DovetailProxyTaskDefinition
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
