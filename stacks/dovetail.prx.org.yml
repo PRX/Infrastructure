@@ -81,6 +81,7 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub Dovetail-${EnvironmentType}-LB-web_ssh
+  # Load balancer
   DovetailALB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -119,6 +120,7 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
+  # Legacy
   DovetailDeuxALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: DovetailALB
@@ -142,38 +144,6 @@ Resources:
         - Key: Name
           Value: !Sub DovetailDeux-${EnvironmentType}
       VpcId: !Ref VPC
-  DovetailLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
-  DovetailTaskDefinition:
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: 700
-          Environment:
-            - Name: APP_NAME
-              Value: "dovetail"
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref DovetailSecretsVersion
-            - Name: AWS_DEFAULT_REGION
-              Value: !Ref AWS::Region
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.prx.org:${DovetailEcrImageTag}
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref DovetailLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: 600
-          Name: "dovetail-express"
-          PortMappings:
-            - HostPort: 0
-              ContainerPort: 8080
   DovetailDeuxService:
     Type: "AWS::ECS::Service"
     DependsOn:
@@ -191,6 +161,7 @@ Resources:
           TargetGroupArn: !Ref DovetailDeuxALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref DovetailTaskDefinition
+  # Domain
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     DependsOn: DovetailALB
@@ -203,6 +174,7 @@ Resources:
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
+  # Load balancer alarms
   DovetailALBTarget500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -278,6 +250,7 @@ Resources:
           Value: !Sub DovetailApp-${EnvironmentType}
       VpcId: !Ref VPC
   DovetailApplicationALBHTTPListener:
+    # TODO This can be removed after the switchoverf
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
       LoadBalancerArn: !Ref DovetailALB
@@ -308,6 +281,38 @@ Resources:
       Role: !Ref ECSServiceIAMRole
       ServiceName: !Sub ${AWS::StackName}-DovetailApp
       TaskDefinition: !Ref DovetailTaskDefinition
+  DovetailLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  DovetailTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 700
+          Environment:
+            - Name: APP_NAME
+              Value: "dovetail"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref DovetailSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.prx.org:${DovetailEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DovetailLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: 600
+          Name: "dovetail-express"
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 8080
   # Config Persistence
   DovetailServiceDesiredCountRolloverIamRole:
     Type: "AWS::IAM::Role"
