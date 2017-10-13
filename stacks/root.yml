@@ -98,6 +98,25 @@ Mappings:
       abbreviation: stag
     Production:
       abbreviation: prod
+  ECSReservationMap:
+    Staging:
+      BackendCpu: 128
+      BackendMemory: 400
+      FrontendCpu: 64
+      FrontendMemory: 200
+      DovetailCpu: 128
+      DovetailMemory: 400
+      DovetailNginxCpu: 128
+      DovetailNginxMemory: 400
+    Production:
+      BackendCpu: 200
+      BackendMemory: 1400
+      FrontendCpu: 100
+      FrontendMemory: 400
+      DovetailCpu: 700
+      DovetailMemory: 1000
+      DovetailNginxCpu: 200
+      DovetailNginxMemory: 1000
   # Each app should be given a listener rule priority prefix between 10 and 49.
   # In nested stacks, listener rule priorities are created by combining the
   # prefix with either two (eg 01) or three (eg 765) more digits. Wildcard rules
@@ -232,6 +251,8 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         EcrRegion: !Ref EcrRegion
         FourohfourEcrImageTag: !Ref FourohfourEcrImageTag
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/fourohfour.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### PUBLISH #################################################################
@@ -267,6 +288,8 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         PublishEcrImageTag: !Ref PublishEcrImageTag
         PublishSecretsVersion: !Ref PublishSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/publish.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### CASTLE ##################################################################
@@ -302,6 +325,8 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         CastleEcrImageTag: !Ref CastleEcrImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### JINGLE ##################################################################
@@ -338,6 +363,8 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         JingleEcrImageTag: !Ref JingleEcrImageTag
         JingleSecretsVersion: !Ref JingleSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/jingle.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### upload.prx.org ##########################################################
@@ -393,6 +420,8 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         PlayEcrImageTag: !Ref PlayEcrImageTag
         PlaySecretsVersion: !Ref PlaySecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/play.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### CRIER ###################################################################
@@ -431,8 +460,8 @@ Resources:
         AppName: "crier"
         CreateWorker: "true"
         ContainerPort: 3000
-        ContainerMemory: 500
-        ContainerCpu: 128
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
@@ -472,8 +501,8 @@ Resources:
         DesiredWebsProduction: 6
         DesiredWorkersProduction: 1
         ContainerPort: 3000
-        ContainerMemory: 500
-        ContainerCpu: 128
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-alb-application.yml"]]
       TimeoutInMinutes: "5"
@@ -510,6 +539,10 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         DovetailEcrImageTag: !Ref DovetailEcrImageTag
         DovetailSecretsVersion: !Ref DovetailSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailCpu]
+        NginxProxyMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailNginxMemory]
+        NginxProxyCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailNginxCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail.prx.org.yml"]]
       TimeoutInMinutes: "5"
   #### CMS #####################################################################
@@ -549,8 +582,8 @@ Resources:
         AppName: "cms"
         CreateWorker: "true"
         ContainerPort: 3000
-        ContainerMemory: 768
-        ContainerCpu: 128
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
@@ -591,8 +624,8 @@ Resources:
         AppName: "id"
         CreateWorker: "false"
         ContainerPort: 3000
-        ContainerMemory: 512
-        ContainerCpu: 128
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1/certs"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
@@ -629,6 +662,8 @@ Resources:
               !Sub "${SecretsStackName}-SecretsBaseRegion"
         MetricsEcrImageTag: !Ref MetricsEcrImageTag
         MetricsSecretsVersion: !Ref MetricsSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/metrics.prx.org.yml"]]
       TimeoutInMinutes: "5"
 Outputs:
