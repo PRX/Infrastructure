@@ -98,6 +98,15 @@ Mappings:
       abbreviation: stag
     Production:
       abbreviation: prod
+  ASGScalingMap:
+    Staging:
+      ThresholdCpu: 128
+      ThresholdMemory: 400
+      ThresholdCount: 2
+    Production:
+      ThresholdCpu: 700
+      ThresholdMemory: 1400
+      ThresholdCount: 2
   ECSReservationMap:
     Staging:
       BackendCpu: 128
@@ -195,6 +204,9 @@ Resources:
         SecretsInstanceAccessPolicyArn:
           Fn::ImportValue:
             !Sub "${SecretsStackName}-SecretsInstanceAccessPolicyArn"
+        ThresholdCpu: !FindInMap [ASGScalingMap, !Ref EnvironmentType, ThresholdCpu]
+        ThresholdMemory: !FindInMap [ASGScalingMap, !Ref EnvironmentType, ThresholdMemory]
+        ThresholdCount: !FindInMap [ASGScalingMap, !Ref EnvironmentType, ThresholdCount]
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/ecs.yml"]]
       TimeoutInMinutes: "5"
   LoadBalancersStack:
