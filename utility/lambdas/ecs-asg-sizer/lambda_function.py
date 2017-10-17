@@ -9,30 +9,31 @@ import boto3
 session = boto3.session.Session()
 asg_client = session.client(service_name='autoscaling')
 ecs_client = session.client(service_name='ecs')
+EMPTY_SLOTS = 2
 
 
 def lambda_handler(event, context):
     ASG_NAME = get_env('ASG_NAME')
     ECS_CLUSTER = get_env('ECS_CLUSTER')
-    MAX_CPU = int(get_env('THRESHOLD_CPU'))
-    MAX_MEM = int(get_env('THRESHOLD_MEMORY'))
-    MAX_COUNT = int(get_env('THRESHOLD_COUNT'))
     DRY_RUN = True if 'DRY_RUN' in os.environ else False
 
+    # return early if already scaling
     usages = get_usages(ECS_CLUSTER)
-    log_debug(f'Targeting {MAX_COUNT}x [{MAX_CPU} cpu / {MAX_MEM} mem]')
-    for usage in usages:
-        log_debug(f"    {usage['id']} - {usage['cpu']} / {usage['mem']}")
     if len(usages) == 0:
         log_error(f'No instances running in cluster {ECS_CLUSTER}')
-
-    # return early if already scaling
+        return
     reason = is_scaling(ASG_NAME, len(usages))
     if reason:
         log_debug(f'Already scaling: {reason}')
         return
 
-    # how many THRESHOLD-sized tasks can fit in this cluster
+    # find max cpu/mem reservations in this cluster (SLOW)
+    [MAX_CPU, MAX_MEM] = get_max_reservations(ECS_CLUSTER)
+    log_debug(f'Targeting {EMPTY_SLOTS}x [{MAX_CPU} cpu / {MAX_MEM} mem]')
+    for usage in usages:
+        log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]")
+
+    # how many MAX-sized tasks can fit in this cluster
     num_slots = 0
     for usage in usages:
         cpu = usage['cpu']
@@ -42,7 +43,7 @@ def lambda_handler(event, context):
             cpu -= MAX_CPU
             mem -= MAX_MEM
 
-    # calculate how many THRESHOLD-sized tasks could fit on 1 instance
+    # calculate how many MAX-sized tasks could fit on 1 instance
     total_cpu = usages[0]['tcpu']
     total_memory = usages[0]['tmem']
     slots_per_instance = 0
@@ -53,11 +54,11 @@ def lambda_handler(event, context):
 
     # scale!
     msg = f'{num_slots} slots available ({slots_per_instance}/instance)'
-    if num_slots < MAX_COUNT:
-        log_info('Scale UP: ' + msg)
+    if num_slots < EMPTY_SLOTS:
+        log_info('Scale IN: ' + msg)
         scale_asg(ASG_NAME, 1, DRY_RUN)
-    elif (num_slots - MAX_COUNT - slots_per_instance) > 0:
-        log_info('Scale DOWN: ' + msg)
+    elif (num_slots - EMPTY_SLOTS - slots_per_instance) > 0:
+        log_info('Scale OUT: ' + msg)
         scale_asg(ASG_NAME, -1, DRY_RUN)
     else:
         log_debug('No Change: ' + msg)
@@ -100,11 +101,32 @@ def is_scaling(asg_name, ecs_cluster_count):
         return 'waiting for ECS agent connection'
 
 
-def get_usages(clusterName):
-    instance_list = ecs_client.list_container_instances(cluster=clusterName)
+def get_max_reservations(cluster_name):
+    maxCpu = 0
+    maxMemory = 0
+    paginator = ecs_client.get_paginator('list_services')
+    page_iterator = paginator.paginate(cluster=cluster_name,
+                                       PaginationConfig={'PageSize': 10})
+    for page in page_iterator:
+        services = ecs_client.describe_services(cluster=cluster_name,
+                                                services=page['serviceArns'])
+        for service in services['services']:
+            arn = service['taskDefinition']
+            tdef = ecs_client.describe_task_definition(taskDefinition=arn)
+            for container in tdef['taskDefinition']['containerDefinitions']:
+                mem = container.get('memoryReservation', container['memory'])
+                if container['cpu'] > maxCpu:
+                    maxCpu = container['cpu']
+                if mem > maxMemory:
+                    maxMemory = mem
+    return [maxCpu, maxMemory]
+
+
+def get_usages(cluster_name):
+    instance_list = ecs_client.list_container_instances(cluster=cluster_name)
     instance_arns = instance_list['containerInstanceArns']
     details = ecs_client.describe_container_instances(
-        cluster=clusterName, containerInstances=instance_arns)
+        cluster=cluster_name, containerInstances=instance_arns)
     return list(map(get_usage, details['containerInstances']))
 
 
