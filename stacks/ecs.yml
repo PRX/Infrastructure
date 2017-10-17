@@ -588,11 +588,11 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 300
-  ECSScaleRole:
+  ASGSizerRole:
     Type: "AWS::IAM::Role"
     Properties:
       Policies:
-        - PolicyName: "scale-lambda-inline"
+        - PolicyName: "ASGSizerLambdaPolicy"
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -603,23 +603,19 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - ecs:DescribeContainerInstances
+                  - ecs:DescribeServices
+                  - ecs:DescribeTaskDefinition
                   - ecs:ListContainerInstances
+                  - ecs:ListServices
               - Effect: "Allow"
                 Resource: "*" # TODO: how to get an ASG ARN?
                 Action:
                   - autoscaling:DescribeAutoScalingGroups
                   - autoscaling:SetDesiredCapacity
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Path: "/"
-  ECSScaleFunction:
+  ASGSizerFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       Code:
@@ -627,14 +623,14 @@ Resources:
           Fn::ImportValue:
             !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: utility/ecs-asg-sizer.zip
-      Description:
+      Description: Make an ASG the perfect size for an ECS cluster
       Environment:
         Variables:
           ASG_NAME: !Ref ECSClusterASG
           ECS_CLUSTER: !Ref ECSCluster
       Handler: lambda_function.lambda_handler
       MemorySize: 128
-      Role: !GetAtt ECSScaleRole.Arn
+      Role: !GetAtt ASGSizerRole.Arn
       Runtime: python3.6
       Tags:
         - Key: Project
