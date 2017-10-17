@@ -15,6 +15,7 @@ def lambda_handler(event, context):
     thresholdCpu = int(get_env('THRESHOLD_CPU'))
     thresholdMemory = int(get_env('THRESHOLD_MEMORY'))
     thresholdCount = int(get_env('THRESHOLD_COUNT'))
+    dryRun = True if 'DRY_RUN' in os.environ else False
 
     usages = get_usages(clusterName)
     log_debug('Targeting threshold {0}x {1} cpu / {2} mem'.format(thresholdCount, thresholdCpu, thresholdMemory))
@@ -50,18 +51,18 @@ def lambda_handler(event, context):
     msg = '{0} slots available ({1}/instance)'.format(slotsAvailable, slotsPerInstance)
     if slotsAvailable < thresholdCount:
         log_info('Scale UP: ' + msg)
-        scale_asg(asgName, 1)
+        scale_asg(asgName, 1, dryRun)
     elif (slotsAvailable - thresholdCount - slotsPerInstance) > 0:
         log_info('Scale DOWN: ' + msg)
-        scale_asg(asgName, -1)
+        scale_asg(asgName, -1, dryRun)
     else:
         log_debug('No Change: ' + msg)
 
 # logging functions
-def log_debug(msg): print '[DEBUG] ' + msg
-def log_info(msg): print '[INFO] ' + msg
-def log_warn(msg): print '[WARN] ' + msg
-def log_error(msg): print '[ERROR] ' + msg; raise Exception(msg)
+def log_debug(msg): print('[DEBUG] ' + msg)
+def log_info(msg): print('[INFO] ' + msg)
+def log_warn(msg): print('[WARN] ' + msg)
+def log_error(msg): print('[ERROR] ' + msg); raise Exception(msg)
 
 # get env or raise
 def get_env(name):
@@ -90,7 +91,7 @@ def get_usages(clusterName):
     instanceList = ecsClient.list_container_instances(cluster=clusterName)
     instanceArns = instanceList['containerInstanceArns']
     details = ecsClient.describe_container_instances(cluster=clusterName, containerInstances=instanceArns)
-    return map(get_usage, details['containerInstances'])
+    return list(map(get_usage, details['containerInstances']))
 
 # format ECS instance usage info
 def get_usage(details):
@@ -103,13 +104,15 @@ def get_usage(details):
     }
 
 # update the ASG desired count
-def scale_asg(asgName, delta):
+def scale_asg(asgName, delta, dryRun):
     group = asgClient.describe_auto_scaling_groups(AutoScalingGroupNames=[asgName])['AutoScalingGroups'][0]
     desired = group['DesiredCapacity'] + delta
     if desired > group['MaxSize']:
         log_warn('Already at max-size')
     elif desired < group['MinSize']:
         log_warn('Already at min-size')
+    elif dryRun:
+        log_debug('DRY RUN desired capacity to {0}'.format(desired))
     else:
         asgClient.set_desired_capacity(AutoScalingGroupName=asgName, DesiredCapacity=desired, HonorCooldown=False)
         log_debug('Updated desired capacity to {0}'.format(desired))
