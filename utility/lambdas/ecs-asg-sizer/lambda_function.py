@@ -3,19 +3,45 @@
 #
 #  Make an ASG the perfect size for an ECS cluster
 
+import json
+import re
 import os
 import boto3
 
 session = boto3.session.Session()
 asg_client = session.client(service_name='autoscaling')
 ecs_client = session.client(service_name='ecs')
+sns_client = session.client(service_name='sns')
+
 EMPTY_SLOTS = 2
+SLACK_CHANNEL = '#ops-debug'
+SLACK_ICON = ':ops-autoscaling:'
 
 
 def lambda_handler(event, context):
     ASG_NAME = get_env('ASG_NAME')
     ECS_CLUSTER = get_env('ECS_CLUSTER')
-    DRY_RUN = True if 'DRY_RUN' in os.environ else False
+    DRY_RUN = get_env('DRY_RUN', False)
+    SLACK_SNS_TOPIC = get_env('SLACK_SNS_TOPIC', False)
+    ENV_NAME = get_env_name(ASG_NAME)
+
+    # send to slack
+    def slack(text, fields=None):
+        nonlocal SLACK_SNS_TOPIC
+        nonlocal ENV_NAME
+        if SLACK_SNS_TOPIC:
+            msg = {
+                'channel': SLACK_CHANNEL,
+                'username': f'ASG Scaling {ENV_NAME}',
+                'icon_emoji': SLACK_ICON,
+                'text': text,
+            }
+            if fields:
+                msg['attachments'] = [{'fields': fields}]
+            sns_client.publish(
+                TopicArn=SLACK_SNS_TOPIC,
+                Message=json.dumps(msg),
+            )
 
     # return early if already scaling
     usages = get_usages(ECS_CLUSTER)
@@ -29,7 +55,8 @@ def lambda_handler(event, context):
 
     # find max cpu/mem reservations in this cluster (SLOW)
     [MAX_CPU, MAX_MEM] = get_max_reservations(ECS_CLUSTER)
-    log_debug(f'Targeting {EMPTY_SLOTS}x [{MAX_CPU} cpu / {MAX_MEM} mem]')
+    target = f'Targeting {EMPTY_SLOTS}x [{MAX_CPU} cpu / {MAX_MEM} mem]'
+    log_debug(target)
     for usage in usages:
         log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]")
 
@@ -46,22 +73,52 @@ def lambda_handler(event, context):
     # calculate how many MAX-sized tasks could fit on 1 instance
     total_cpu = usages[0]['tcpu']
     total_memory = usages[0]['tmem']
-    slots_per_instance = 0
+    per_instance = 0
     while total_cpu > 0 and total_memory > 0:
-        slots_per_instance += 1
+        per_instance += 1
         total_cpu -= MAX_CPU
         total_memory -= MAX_MEM
+    state = f'{num_slots} slots available'
+    capacity = f'{per_instance} per empty-instance'
+    log_debug(f'{state} ({capacity})')
 
     # scale!
-    msg = f'{num_slots} slots available ({slots_per_instance}/instance)'
+    delta = 0
     if num_slots < EMPTY_SLOTS:
-        log_info('Scale IN: ' + msg)
-        scale_asg(ASG_NAME, 1, DRY_RUN)
-    elif (num_slots - EMPTY_SLOTS - slots_per_instance) > 0:
-        log_info('Scale OUT: ' + msg)
-        scale_asg(ASG_NAME, -1, DRY_RUN)
+        delta = 1
+    elif (num_slots - EMPTY_SLOTS - per_instance) > 0:
+        delta = -1
+    asg = scale_asg(ASG_NAME, delta, DRY_RUN)
+
+    # fancy slack attachment fields
+    slack_fields = [
+        {'title': 'Target', 'value': target, 'short': True},
+        {'title': 'State', 'value': f'{state}\n{capacity}', 'short': True},
+    ]
+
+    # logging is important
+    if asg['next'] < asg['prev']:
+        msg = 'DRY RUN Scale IN - ' if DRY_RUN else 'Scale IN - '
+        if asg['next'] < asg['min']:
+            msg += f"prevented by min-size {asg['min']}"
+            log_warn(msg)
+            slack(msg, slack_fields)
+        else:
+            msg += f"capacity from {asg['prev']} to {asg['next']}"
+            log_info(msg)
+            slack(msg, slack_fields)
+    elif asg['next'] > asg['prev']:
+        msg = 'DRY RUN Scale OUT - ' if DRY_RUN else 'Scale OUT - '
+        if asg['next'] > asg['max']:
+            msg += f"prevented by max-size {asg['max']}"
+            log_warn(msg)
+            slack(msg, slack_fields)
+        else:
+            msg += f"capacity from {asg['prev']} to {asg['next']}"
+            log_info(msg)
+            slack(msg, slack_fields)
     else:
-        log_debug('No Change: ' + msg)
+        log_debug(f"No change - capacity at {asg['next']}")
 
 
 def log_debug(msg): print('[DEBUG] ' + msg)
@@ -78,11 +135,18 @@ def log_error(msg):
     raise Exception(msg)
 
 
-def get_env(name):
+def get_env(name, default_val=None):
     if name in os.environ:
         return os.environ[name]
-    else:
+    elif default_val is None:
         log_error(f'Missing env {name}')
+    else:
+        return default_val
+
+
+def get_env_name(asg_name):
+    match = re.match(r'.*(test|development|staging|production).*', asg_name)
+    return match.group(1).capitalize() if match else asg_name
 
 
 def is_scaling(asg_name, ecs_cluster_count):
@@ -145,15 +209,16 @@ def get_usage(details):
 def scale_asg(asg_name, delta, dry_run):
     group = asg_client.describe_auto_scaling_groups(
         AutoScalingGroupNames=[asg_name])['AutoScalingGroups'][0]
-    desired = group['DesiredCapacity'] + delta
-    if desired > group['MaxSize']:
-        log_warn('Already at max-size')
-    elif desired < group['MinSize']:
-        log_warn('Already at min-size')
-    elif dry_run:
-        log_debug(f'DRY RUN desired capacity to {desired}')
-    else:
+    asg_data = {
+        'min': group['MinSize'],
+        'max': group['MaxSize'],
+        'prev': group['DesiredCapacity'],
+        'next': group['DesiredCapacity'] + delta,
+    }
+    is_ok = (asg_data['next'] > asg_data['min'] and
+             asg_data['next'] < asg_data['max'])
+    if is_ok and asg_data['next'] != asg_data['prev'] and not dry_run:
         asg_client.set_desired_capacity(AutoScalingGroupName=asg_name,
-                                        DesiredCapacity=desired,
+                                        DesiredCapacity=asg_data['next'],
                                         HonorCooldown=False)
-        log_debug(f'Updated desired capacity to {desired}')
+    return asg_data
