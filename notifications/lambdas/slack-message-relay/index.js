@@ -18,7 +18,7 @@ exports.handler = (event, context, callback) => {
 
         const attrs = sns.MessageAttributes;
 
-        let webhookUrl = process.env['DEFAULT_WEBHOOK_URL'];
+        let webhookUrl = process.env.DEFAULT_WEBHOOK_URL;
         if (attrs.WebhookURL) {
           webhookUrl = attrs.WebhookURL.Value;
         }
