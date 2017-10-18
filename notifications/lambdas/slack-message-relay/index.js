@@ -17,7 +17,11 @@ exports.handler = (event, context, callback) => {
         const sns = event.Records[0].Sns;
 
         const attrs = sns.MessageAttributes;
-        const webhookUrl = attrs.WebhookURL.Value;
+
+        let webhookUrl = process.env['DEFAULT_WEBHOOK_URL'];
+        if (attrs.WebhookURL) {
+          webhookUrl = attrs.WebhookURL.Value;
+        }
 
         // Setup request options
         const options = url.parse(webhookUrl);
