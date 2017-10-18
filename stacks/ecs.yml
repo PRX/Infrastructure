@@ -590,6 +590,7 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 300
+  # Autoscaling
   ASGSizerRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -654,6 +655,40 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 30
+  ASGSizerTriggerIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt ASGSizerFunction.Arn
+  ASGSizerFunctionEventTrigger:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Runs the ECS ASG sizer periodically
+      RoleArn: !GetAtt ASGSizerTriggerIAMRole.Arn
+      ScheduleExpression: "rate(1 minute)"
+      State: DISABLED
+      Targets:
+        - Arn: !GetAtt ASGSizerFunction.Arn
+          Id: !Sub "${AWS::StackName}.FailureNotification-Poller"
 Outputs:
   ECSCluster:
     Description: >
