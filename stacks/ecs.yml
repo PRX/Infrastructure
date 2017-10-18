@@ -45,6 +45,8 @@ Parameters:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
+  SlackMessageRelaySnsTopicArn:
+    Type: String
   SecretsInstanceDecryptPolicyArn:
     Type: String
   SecretsInstanceAccessPolicyArn:
@@ -612,6 +614,15 @@ Resources:
                 Action:
                   - autoscaling:DescribeAutoScalingGroups
                   - autoscaling:SetDesiredCapacity
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelaySnsTopicArn
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Path: "/"
@@ -628,6 +639,7 @@ Resources:
         Variables:
           ASG_NAME: !Ref ECSClusterASG
           ECS_CLUSTER: !Ref ECSCluster
+          SLACK_SNS_TOPIC: !Ref SlackMessageRelaySnsTopicArn
       Handler: lambda_function.lambda_handler
       MemorySize: 128
       Role: !GetAtt ASGSizerRole.Arn
