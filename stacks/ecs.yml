@@ -13,6 +13,8 @@ Conditions:
 Parameters:
   InfrastructureStorageStackName:
     Type: String
+  NotificationsStackName:
+    Type: String
   KeyPairName:
     Description: >
      The EC2 key pair used for instances in the Auto Scaling
@@ -445,7 +447,9 @@ Resources:
         - Granularity: 1Minute
       MinSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, MinSize]
       NotificationConfigurations:
-        - TopicARN: !Ref OpsDebugMessagesSnsTopicArn
+        - TopicARN:
+            Fn::ImportValue:
+              !Sub ${NotificationsStackName}-ASGNotificationSnsTopic
           NotificationTypes:
             - "autoscaling:EC2_INSTANCE_LAUNCH"
             - "autoscaling:EC2_INSTANCE_TERMINATE"
