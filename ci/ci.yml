@@ -116,10 +116,9 @@ Resources:
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
                 !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
-           !Ref SlackMessageRelaySnsTopic
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Role: !GetAtt NotificationHandlerIamRole.Arn
       Runtime: nodejs6.10
       Tags:
         - Key: Project
@@ -144,11 +143,14 @@ Resources:
       ActionsEnabled: true
       AlarmName: CI status notifications handler Lambda Errors
       AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
       OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
       AlarmDescription: >
         The error rate on the CI status notifications handler lambda has
         exceeded 0 in the last minute.
