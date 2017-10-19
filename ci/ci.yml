@@ -71,6 +71,33 @@ Parameters:
       will install and execute
     Type: String
 Resources:
+  # Shared IAM Roles
+  NotificationHandlerIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - Fn::ImportValue:
+                      !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   # CI Status notifications
   CiStatusSnsTopic:
     Type: "AWS::SNS::Topic"
