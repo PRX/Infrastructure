@@ -1,7 +1,7 @@
 // Invoked by: SNS Subscription
 // Returns: Error or status message
 //
-// Recieves notifications related to CloudFormation stack changes, and prepares
+// Receives notifications related to CloudFormation stack changes, and prepares
 // Slack messages. for them. The messages are sent to the Slack Message Relay
 // SNS topic in order to be sent to Slack. All messages handled by this function
 // are sent to the #ops-debug (this could change at some point).
