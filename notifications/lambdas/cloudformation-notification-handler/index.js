@@ -11,6 +11,8 @@ const AWS = require('aws-sdk');
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
 const SLACK_CHANNEL = '#ops-debug';
+const SLACK_ICON = ':ops-cloudformation:';
+const SLACK_USERNAME = 'AWS CloudFormation';
 
 // These colors match events in the CloudFormation console
 function colorForResourceStatus(status) {
@@ -76,8 +78,8 @@ function messageForEvent(event) {
 
     return {
         channel: SLACK_CHANNEL,
-        username: 'AWS CloudFormation',
-        icon_emoji: ':ops-cloudformation:',
+        username: SLACK_USERNAME,
+        icon_emoji: SLACK_ICON,
         attachments: [
             {
                 color: colorForResourceStatus(resourceStatus),
