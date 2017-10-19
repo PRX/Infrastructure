@@ -71,20 +71,7 @@ Parameters:
   IkeSlackVerificationToken:
     Type: String
 Resources:
-  # SNS Topics
-  SlackMessageRelaySnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsDebugMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsInfoMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsWarnMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsErrorMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsFatalMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  # IAM Roles
+  # Shared IAM Roles
   LambdaBasicExecutionIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -110,6 +97,154 @@ Resources:
                   - !Ref SlackMessageRelaySnsTopic
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  # Notifications web API
+  RestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: !Sub ${AWS::StackName} API
+      Description: >
+        Provides an API for inbound requests used by the notifications stack,
+        such as Slack interactive messages
+  RestApiDeployment:
+    DependsOn: IkeSlashCommandsRestApiProxyMethod
+    DependsOn: IkeCodePipelineApprovalRestApiProxyMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: "Notifications stack deployment"
+  RestApiStage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: prod
+      Description: "Production stage for notifications stack"
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+  # Slack message relay
+  SlackMessageRelaySnsTopic:
+    Type: "AWS::SNS::Topic"
+  SlackMessageRelayLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "notifications/slack-message-relay.zip"
+      Description: >
+        Receives preformed Slack message payloads and sends them to the provided
+        Incoming Webhook URL
+      Environment:
+        Variables:
+          DEFAULT_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 10
+  SlackMessageRelayPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SlackMessageRelayLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref SlackMessageRelaySnsTopic
+  SlackMessageRelaySubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SlackMessageRelayLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref SlackMessageRelaySnsTopic
+  SlackMessageRelayErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Slack Messgage Relay Lambda Errors
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Slack message relay lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackMessageRelayLambdaFunction
+  # CloudFormation notifications
+  CloudFormationNotificationSnsTopic:
+    Type: "AWS::SNS::Topic"
+  CloudFormationNotificationHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "notifications/cloudformation-notification-handler.zip"
+      Description: >
+        Handles notifications sent by CloudFormation about stack updates
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 10
+  CloudFormationNotificationPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudFormationNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CloudFormationNotificationSnsTopic
+  CloudFormationNotificationSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudFormationNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref CloudFormationNotificationSnsTopic
+  CloudFormationNotificationHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: CloudFormation notifications handler Lambda Errors
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the CloudFormation notifications hander lambda has
+        exceeded 0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudFormationNotificationHandlerLambdaFunction
+  # Ike
   IkeHandlerLambdaIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -154,57 +289,6 @@ Resources:
                   - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  # Lambda Functions
-  SlackMessageRelayLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/slack-message-relay.zip"
-      Description: >
-        Receives preformed Slack message payloads and sends them to the provided
-        Incoming Webhook URL
-      Environment:
-        Variables:
-          DEFAULT_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs6.10
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 10
-  SnsOpsMessagesToSlackLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/sns-ops-to-slack.zip"
-      Description: >
-        Relays messages, which are produced by various AWS services and posted
-        to SNS, to the channels in Slack
-      Environment:
-        Variables:
-          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookUrl
-          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookUrl
-          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookUrl
-          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
-          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookUrl
-          IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookUrl
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs6.10
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 3
   IkeCallbackHandlerLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -255,115 +339,6 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 3
-  # Lambda Permssions for SNS
-  SlackMessageRelayPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SlackMessageRelayLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref SlackMessageRelaySnsTopic
-  OpsDebugTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsDebugMessagesSnsTopic
-  OpsInfoTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsInfoMessagesSnsTopic
-  OpsWarnTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsWarnMessagesSnsTopic
-  OpsErrorTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsErrorMessagesSnsTopic
-  OpsFatalTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsFatalMessagesSnsTopic
-  # Lambda Permissions for API Gateway
-  IkeCallbackHandlerRestApiLambdaPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref IkeCallbackHandlerLambdaFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
-  IkeSlashCommandsHandlerRestApiLambdaPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref IkeSlashCommandsHandlerLambdaFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
-  # Lambda Alarms
-  SlackMessageRelayErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: Slack Messgage Relay Lambda Errors
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        The error rate on the Slack message relay lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SlackMessageRelayLambdaFunction
-  SlackOpsMessagesErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: Legacy Slack Messages Lambda Errors
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        The error rate on the legacy Slack messages lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SnsOpsMessagesToSlackLambdaFunction
   IkeCallbackHandlerErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
@@ -414,57 +389,27 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref IkeSlashCommandsHandlerLambdaFunction
-  # SNS Subscriptions
-  SlackMessageRelaySubscription:
-    Type: "AWS::SNS::Subscription"
+  IkeCallbackHandlerRestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
     Properties:
-      Endpoint: !GetAtt SlackMessageRelayLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref SlackMessageRelaySnsTopic
-  RelayFunctionDebugSubscription:
-    Type: "AWS::SNS::Subscription"
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref IkeCallbackHandlerLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
+  IkeSlashCommandsHandlerRestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
     Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsDebugMessagesSnsTopic
-  RelayFunctionInfoSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsInfoMessagesSnsTopic
-  RelayFunctionWarnSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsWarnMessagesSnsTopic
-  RelayFunctionErrorSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsErrorMessagesSnsTopic
-  RelayFunctionFatalSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsFatalMessagesSnsTopic
-  # API Gateway
-  RestApi:
-    Type: "AWS::ApiGateway::RestApi"
-    Properties:
-      Name: !Sub ${AWS::StackName} API
-      Description: >
-        Provides an API for inbound requests used by the notifications stack,
-        such as Slack interactive messages
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref IkeSlashCommandsHandlerLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
   IkeRestApiResource:
     Type: "AWS::ApiGateway::Resource"
     Properties:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: "ike"
+  ## Ike Web API
   IkeSlashCommandsRestApiResource:
     Type: "AWS::ApiGateway::Resource"
     Properties:
@@ -505,20 +450,140 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
-  RestApiDeployment:
-    DependsOn: IkeSlashCommandsRestApiProxyMethod
-    DependsOn: IkeCodePipelineApprovalRestApiProxyMethod
-    Type: "AWS::ApiGateway::Deployment"
+  # Legacy #####################################################################
+  ## SNS
+  OpsDebugMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsInfoMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsWarnMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsErrorMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsFatalMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  # Lambda Functions
+  SnsOpsMessagesToSlackLambdaFunction:
+    Type: "AWS::Lambda::Function"
     Properties:
-      RestApiId: !Ref RestApi
-      Description: "Notifications stack deployment"
-  RestApiStage:
-    Type: "AWS::ApiGateway::Stage"
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "notifications/sns-ops-to-slack.zip"
+      Description: >
+        Relays messages, which are produced by various AWS services and posted
+        to SNS, to the channels in Slack
+      Environment:
+        Variables:
+          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookUrl
+          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookUrl
+          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookUrl
+          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
+          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookUrl
+          IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookUrl
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  # Lambda Permssions for SNS
+  OpsDebugTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
     Properties:
-      StageName: prod
-      Description: "Production stage for notifications stack"
-      RestApiId: !Ref RestApi
-      DeploymentId: !Ref RestApiDeployment
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsDebugMessagesSnsTopic
+  OpsInfoTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsInfoMessagesSnsTopic
+  OpsWarnTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsWarnMessagesSnsTopic
+  OpsErrorTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsErrorMessagesSnsTopic
+  OpsFatalTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsFatalMessagesSnsTopic
+  # Lambda Alarms
+  SlackOpsMessagesErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Legacy Slack Messages Lambda Errors
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the legacy Slack messages lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SnsOpsMessagesToSlackLambdaFunction
+  # SNS Subscriptions
+  RelayFunctionDebugSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsDebugMessagesSnsTopic
+  RelayFunctionInfoSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsInfoMessagesSnsTopic
+  RelayFunctionWarnSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsWarnMessagesSnsTopic
+  RelayFunctionErrorSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsErrorMessagesSnsTopic
+  RelayFunctionFatalSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsFatalMessagesSnsTopic
 Outputs:
   SnsOpsMessagesToSlackLambdaFunctionName:
     Value: !Ref SnsOpsMessagesToSlackLambdaFunction
@@ -552,6 +617,10 @@ Outputs:
     Value: !Ref OpsFatalMessagesSnsTopic
     Export:
       Name: !Sub ${AWS::StackName}-OpsFatalMessagesSnsTopicArn
+  CloudFormationNotificationSnsTopic:
+    Value: !Ref CloudFormationNotificationSnsTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-CloudFormationNotificationSnsTopic
   IkeCodePipelineApprovalHandlerCallbackUrl:
     Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${RestApiStage}/ike/codepipeline/approval"
   IkeSlashCommandsHandlerCallbackUrl:
