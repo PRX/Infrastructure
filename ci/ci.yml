@@ -71,6 +71,71 @@ Parameters:
       will install and execute
     Type: String
 Resources:
+  # CI Status notifications
+  CiStatusSnsTopic:
+    Type: "AWS::SNS::Topic"
+  CiStatusNotificationHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "ci/ci-status-notification-handler.zip"
+      Description: >
+        Handles status notifications for CI builds
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue:
+                !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+           !Ref SlackMessageRelaySnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 10
+  CiStatusNotificationPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CiStatusNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CiStatusSnsTopic
+  CiStatusNotificationSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CiStatusNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref CiStatusSnsTopic
+  CiStatusNotificationHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: CI status notifications handler Lambda Errors
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the CI status notifications handler lambda has
+        exceeded 0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CiStatusNotificationHandlerLambdaFunction
   # ACM Certificates
   CiCertificate:
     Type: "AWS::CertificateManager::Certificate"
@@ -98,8 +163,6 @@ Resources:
   GitHubEventSnsTopic:
     Type: "AWS::SNS::Topic"
   CodeBuildCallbackSnsTopic:
-    Type: "AWS::SNS::Topic"
-  CiStatusSnsTopic:
     Type: "AWS::SNS::Topic"
   # SNS Subscriptions
   GitHubEventTopicFunctionSubscription:
