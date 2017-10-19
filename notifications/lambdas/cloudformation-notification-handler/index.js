@@ -103,19 +103,12 @@ function messageForEvent(event) {
 
 function main(event, context, callback) {
     const message = messageForEvent(event);
-    const webhook = process.env.CFN_SLACK_WEBHOOK_URL;
 
     const messageJson = JSON.stringify(message);
 
     sns.publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
         Message: messageJson,
-        MessageAttributes: {
-            WebhookURL: {
-                DataType: 'String',
-                StringValue: webhook,
-            },
-        },
     }, (err) => {
         if (err) {
             callback(err);
