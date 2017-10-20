@@ -11,7 +11,7 @@ const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
 const SLACK_CHANNEL = '#ops-debug';
 const SLACK_ICON = ':ops-autoscaling:';
-const SLACK_USERNAME = 'EC2 Auto Scaling';
+const SLACK_USERNAME = 'AWS Auto Scaling';
 
 function colorForAutoScaling(scaling) {
     if (/EC2_INSTANCE_TERMINATE/.test(scaling.Event)) {
@@ -23,6 +23,12 @@ function colorForAutoScaling(scaling) {
 
 function messageForEvent(event) {
     const scaling = JSON.parse(event.Records[0].Sns.Message);
+
+    console.log(scaling);
+
+    if (scaling.Event === 'autoscaling:TEST_NOTIFICATION') {
+        return null;
+    }
 
     return {
         channel: SLACK_CHANNEL,
@@ -44,6 +50,11 @@ function messageForEvent(event) {
 
 function main(event, context, callback) {
     const message = messageForEvent(event);
+
+    if (!message) {
+        callback(null);
+        return;
+    }
 
     const messageJson = JSON.stringify(message);
 
