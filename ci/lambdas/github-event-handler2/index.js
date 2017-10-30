@@ -130,12 +130,6 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         }, {
             name: 'PRX_COMMIT',
             value: commitRef,
-        }, {
-            name: 'PRX_CI_TEST',
-            value: 'true',
-        }, {
-            name: 'PRX_CI_PUBLISH',
-            value: 'false',
         },
     ];
 
@@ -167,11 +161,6 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         //     const tag = `${awsAccountId}.dkr.ecr.${ecrRegion}.amazonaws.com/${ecrRepository}:${ecrImageTag}`;
         //     environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
         // }
-
-        // if (prxci.s3) {
-        //     const s3Key = prxci.s3.key;
-        //     environmentVariables.push({ name: 'PRX_S3_KEY', value: s3Key });
-        // }
     }
 
     codebuild.startBuild({
@@ -190,17 +179,15 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
             const status = updateGitHubStatus(event, data.build);
             const notification = postNotification(event, data.build);
 
-            callback(null);
-
-            // Promise.all([status, notification])
-            //     .then(() => {
-            //         console.log('...Post-build actions finished!');
-            //         callback(null);
-            //     })
-            //     .catch((e) => {
-            //         console.error('...Post-build actions failed!');
-            //         callback(e);
-            //     });
+            Promise.all([status, notification])
+                .then(() => {
+                    console.log('...Post-build actions finished!');
+                    callback(null);
+                })
+                .catch((e) => {
+                    console.error('...Post-build actions failed!');
+                    callback(e);
+                });
         }
     });
 }
