@@ -50,6 +50,25 @@ curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/master/codebuild/b
 
 ### Inputs
 
+Within the CodeBuild build environment, environment variables will originate from several places.
+
+#### CloudFormation CodeBuild Project Definition
+
+These are defined on the project resource definition, and could be overridden by the buildspec or build start API call
+
+- `PRX_SNS_CALLBACK`
+- `PRX_AWS_ACCOUNT_ID`
+
+#### CodeBuild buildStart API Call
+
+- `PRX_REPO`
+- `PRX_COMMIT`
+- `PRX_CI_TEST`
+- `PRX_CI_PUBLISH`
+- `PRX_GITHUB_PR`
+
+#### Repository buildspec.yml
+
 - Codebuild ENVs:
   - `PRX_SNS_CALLBACK` - an SNS topic for callbacks.
   - `PRX_REPO` - the repo this is for.  Not actually used in this script, but passed back to SNS.
