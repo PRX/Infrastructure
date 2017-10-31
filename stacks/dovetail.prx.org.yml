@@ -357,39 +357,74 @@ Resources:
       Path: "/"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole"
-  DovetailAutoScalingPolicy:
+  DovetailAutoScalingInPolicy:
     Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
     Condition: CreateStagingResources
     Properties:
-      PolicyName: String
+      PolicyName: ScaleIn
       PolicyType: StepScaling
       ScalingTargetId: !Ref DovetailAutoScaling
       StepScalingPolicyConfiguration:
         AdjustmentType: ChangeInCapacity
-        Cooldown: 60
+        Cooldown: 300
         MetricAggregationType: Average
         StepAdjustments:
-        - MetricIntervalLowerBound: 0
-          ScalingAdjustment: 2
-        - MetricIntervalUpperBound: 0
+        - MetricIntervalUpperBound: 15
           ScalingAdjustment: -1
-  DovetailAutoScalingAlarm:
+  DovetailAutoScalingInAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateStagingResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Dovetail Low CPU Usage
+      AlarmActions:
+        - !Ref DovetailAutoScalingInPolicy
+      AlarmDescription: >
+        Too many dovetails running
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: "2"
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Period: "60"
+      Statistic: Average
+      Threshold: "15"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ServiceName
+          Value: !Sub ${AWS::StackName}-DovetailApp
+        - Name: ClusterName
+          Value: !Ref ECSCluster
+  DovetailAutoScalingOutPolicy:
+    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+    Condition: CreateStagingResources
+    Properties:
+      PolicyName: ScaleOut
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref DovetailAutoScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 120
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 50
+          ScalingAdjustment: 2
+  DovetailAutoScalingOutAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateStagingResources
     Properties:
       ActionsEnabled: true
       AlarmName: Dovetail High CPU Usage
       AlarmActions:
-        - !Ref DovetailAutoScalingPolicy
+        - !Ref DovetailAutoScalingOutPolicy
       AlarmDescription: >
-        DovetailApp Service CPU usage is really too much
+        Not enough dovetails running
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: "1"
       MetricName: CPUUtilization
       Namespace: AWS/ECS
       Period: "60"
       Statistic: Average
-      Threshold: "150"
+      Threshold: "50"
       TreatMissingData: notBreaching
       Dimensions:
         - Name: ServiceName
