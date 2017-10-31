@@ -333,6 +333,7 @@ Resources:
   # Autoscaling
   DovetailAutoScaling:
     Type: "AWS::ApplicationAutoScaling::ScalableTarget"
+    Condition: CreateStagingResources
     Properties:
       MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMinCount]
       MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMaxCount]
@@ -342,6 +343,7 @@ Resources:
       ServiceNamespace: "ecs"
   DovetailAutoScalingIamRole:
     Type: "AWS::IAM::Role"
+    Condition: CreateStagingResources
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -357,6 +359,7 @@ Resources:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole"
   DovetailAutoScalingPolicy:
     Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+    Condition: CreateStagingResources
     Properties:
       PolicyName: String
       PolicyType: StepScaling
@@ -372,7 +375,7 @@ Resources:
           ScalingAdjustment: -1
   DovetailAutoScalingAlarm:
     Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateProductionResources
+    Condition: CreateStagingResources
     Properties:
       ActionsEnabled: true
       AlarmName: Dovetail High CPU Usage
