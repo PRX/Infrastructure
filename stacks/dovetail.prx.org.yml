@@ -55,12 +55,18 @@ Parameters:
 Mappings:
   EnvironmentTypeMap:
     Testing:
+      DovetailMinCount: 1
+      DovetailMaxCount: 1
       DovetailCount: 1
       ProxyCount: 1
     Staging:
+      DovetailMinCount: 1
+      DovetailMaxCount: 4
       DovetailCount: 2
       ProxyCount: 2
     Production:
+      DovetailMinCount: 10
+      DovetailMaxCount: 20
       DovetailCount: 10
       ProxyCount: 4
 Resources:
@@ -324,6 +330,72 @@ Resources:
       Rotation: !Ref PipelineExecutionNonce
       ServiceName: !Sub ${AWS::StackName}-DovetailApp
       ServiceToken: !GetAtt DovetailServiceDesiredCountRolloverLambdaFunction.Arn
+  # Autoscaling
+  DovetailAutoScaling:
+    Type: "AWS::ApplicationAutoScaling::ScalableTarget"
+    Condition: CreateStagingResources
+    Properties:
+      MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMinCount]
+      MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMaxCount]
+      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !Sub "${AWS::StackName}-DovetailApp"]]
+      RoleARN: !GetAtt DovetailAutoScalingIamRole.Arn
+      ScalableDimension: "ecs:service:DesiredCount"
+      ServiceNamespace: "ecs"
+  DovetailAutoScalingIamRole:
+    Type: "AWS::IAM::Role"
+    Condition: CreateStagingResources
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole"
+  DovetailAutoScalingPolicy:
+    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+    Condition: CreateStagingResources
+    Properties:
+      PolicyName: String
+      PolicyType: StepScaling
+      ResourceId: !Ref DovetailAutoScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 0
+          ScalingAdjustment: 2
+        - MetricIntervalUpperBound: 0
+          ScalingAdjustment: -1
+  DovetailAutoScalingAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateStagingResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Dovetail High CPU Usage
+      AlarmActions:
+        - !Ref DovetailAutoScalingPolicy
+      AlarmDescription: >
+        DovetailApp Service CPU usage is really too much
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      MetricName: CPUUtilization
+      Namespace: AWS/ECS
+      Period: "60"
+      Statistic: Average
+      Threshold: "150"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: ServiceName
+          Value: !Sub ${AWS::StackName}-DovetailApp
+        - Name: ClusterName
+          Value: !Ref ECSCluster
   # Proxy
   DovetailProxyALBHTTPListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
