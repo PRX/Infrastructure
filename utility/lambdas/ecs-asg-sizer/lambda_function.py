@@ -7,13 +7,16 @@ import json
 import re
 import os
 import boto3
+import datetime
 
 session = boto3.session.Session()
 asg_client = session.client(service_name='autoscaling')
+ec2_client = session.client(service_name='ec2')
 ecs_client = session.client(service_name='ecs')
 sns_client = session.client(service_name='sns')
 
 EMPTY_SLOTS = 2
+ECS_AGENT_WAIT = 600
 SLACK_CHANNEL = '#ops-debug'
 SLACK_ICON = ':ops-autoscaling:'
 
@@ -48,7 +51,7 @@ def lambda_handler(event, context):
     if len(usages) == 0:
         log_error(f'No instances running in cluster {ECS_CLUSTER}')
         return
-    reason = is_scaling(ASG_NAME, len(usages))
+    reason = is_scaling(ASG_NAME, [u['id'] for u in usages], DRY_RUN)
     if reason:
         log_debug(f'Already scaling: {reason}')
         return
@@ -149,20 +152,29 @@ def get_env_name(asg_name):
     return match.group(1).capitalize() if match else asg_name
 
 
-def is_scaling(asg_name, ecs_cluster_count):
+def is_scaling(asg_name, ecs_ids, dry_run):
     groups = asg_client.describe_auto_scaling_groups(
         AutoScalingGroupNames=[asg_name])
     if len(groups['AutoScalingGroups']) != 1:
         log_error(f'Invalid asg name {asg_name}')
     group = groups['AutoScalingGroups'][0]
     for instance in group['Instances']:
+        iid = instance['InstanceId']
         state = instance['LifecycleState']
         if state != 'InService' and state != 'Terminated':
             return f'lifecycle state {state}'
+        if iid not in ecs_ids:
+            desc = ec2_client.describe_instances(InstanceIds=[iid])
+            launch = desc['Reservations'][0]['Instances'][0]['LaunchTime']
+            elapsed = datetime.datetime.now(datetime.timezone.utc) - launch
+            if elapsed.total_seconds() > ECS_AGENT_WAIT:
+                if not dry_run:
+                    ec2_client.terminate_instances(InstanceIds=[iid])
+                return 'terminating instance with stale ECS agent'
+            else:
+                return 'waiting for ECS agent connection'
     if len(group['Instances']) != group['DesiredCapacity']:
         return 'waiting for ASG instance count'
-    if len(group['Instances']) != ecs_cluster_count:
-        return 'waiting for ECS agent connection'
 
 
 def get_max_reservations(cluster_name):
