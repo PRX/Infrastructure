@@ -227,8 +227,8 @@ def scale_asg(asg_name, delta, dry_run):
         'prev': group['DesiredCapacity'],
         'next': group['DesiredCapacity'] + delta,
     }
-    is_ok = (asg_data['next'] > asg_data['min'] and
-             asg_data['next'] < asg_data['max'])
+    is_ok = (asg_data['next'] >= asg_data['min'] and
+             asg_data['next'] <= asg_data['max'])
     if is_ok and asg_data['next'] != asg_data['prev'] and not dry_run:
         asg_client.set_desired_capacity(AutoScalingGroupName=asg_name,
                                         DesiredCapacity=asg_data['next'],
