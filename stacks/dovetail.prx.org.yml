@@ -57,17 +57,14 @@ Mappings:
     Testing:
       DovetailMinCount: 1
       DovetailMaxCount: 1
-      DovetailCount: 1
       ProxyCount: 1
     Staging:
       DovetailMinCount: 1
       DovetailMaxCount: 4
-      DovetailCount: 2
       ProxyCount: 2
     Production:
-      DovetailMinCount: 10
-      DovetailMaxCount: 20
-      DovetailCount: 10
+      DovetailMinCount: 15
+      DovetailMaxCount: 30
       ProxyCount: 4
 Resources:
   DovetailSecurityGroup:
@@ -333,7 +330,6 @@ Resources:
   # Autoscaling
   DovetailAutoScaling:
     Type: "AWS::ApplicationAutoScaling::ScalableTarget"
-    Condition: CreateStagingResources
     Properties:
       MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMinCount]
       MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMaxCount]
@@ -343,7 +339,6 @@ Resources:
       ServiceNamespace: "ecs"
   DovetailAutoScalingIamRole:
     Type: "AWS::IAM::Role"
-    Condition: CreateStagingResources
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -359,7 +354,6 @@ Resources:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole"
   DovetailAutoScalingInPolicy:
     Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-    Condition: CreateStagingResources
     Properties:
       PolicyName: ScaleIn
       PolicyType: StepScaling
@@ -373,7 +367,6 @@ Resources:
           ScalingAdjustment: -1
   DovetailAutoScalingInAlarm:
     Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateStagingResources
     Properties:
       ActionsEnabled: true
       AlarmName: !If [CreateProductionResources, "Dovetail Prod Low CPU Usage", "Dovetail Staging Low CPU Usage"]
@@ -396,7 +389,6 @@ Resources:
           Value: !Ref ECSCluster
   DovetailAutoScalingOutPolicy:
     Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-    Condition: CreateStagingResources
     Properties:
       PolicyName: ScaleOut
       PolicyType: StepScaling
@@ -413,7 +405,6 @@ Resources:
           ScalingAdjustment: 2
   DovetailAutoScalingOutAlarm:
     Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateStagingResources
     Properties:
       ActionsEnabled: true
       AlarmName: !If [CreateProductionResources, "Dovetail Prod High CPU Usage", "Dovetail Staging High CPU Usage"]
