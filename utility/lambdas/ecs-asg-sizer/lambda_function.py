@@ -51,9 +51,12 @@ def lambda_handler(event, context):
     if len(usages) == 0:
         log_error(f'No instances running in cluster {ECS_CLUSTER}')
         return
-    reason = is_scaling(ASG_NAME, [u['id'] for u in usages], DRY_RUN)
+    [reason, warn] = is_scaling(ASG_NAME, [u['id'] for u in usages], DRY_RUN)
     if reason:
-        log_debug(f'Already scaling: {reason}')
+        if warn:
+            log_warn(f'Already scaling: {reason}')
+        else:
+            log_debug(f'Already scaling: {reason}')
         return
 
     # find max cpu/mem reservations in this cluster (SLOW)
@@ -162,7 +165,7 @@ def is_scaling(asg_name, ecs_ids, dry_run):
         iid = instance['InstanceId']
         state = instance['LifecycleState']
         if state != 'InService' and state != 'Terminated':
-            return f'lifecycle state {state}'
+            return [f'lifecycle state {state}', False]
         if iid not in ecs_ids:
             desc = ec2_client.describe_instances(InstanceIds=[iid])
             launch = desc['Reservations'][0]['Instances'][0]['LaunchTime']
@@ -170,11 +173,12 @@ def is_scaling(asg_name, ecs_ids, dry_run):
             if elapsed.total_seconds() > ECS_AGENT_WAIT:
                 if not dry_run:
                     ec2_client.terminate_instances(InstanceIds=[iid])
-                return 'terminating instance with stale ECS agent'
+                return [f'terminating {iid} with stale ECS agent', True]
             else:
-                return 'waiting for ECS agent connection'
+                return ['waiting for ECS agent connection', False]
     if len(group['Instances']) != group['DesiredCapacity']:
-        return 'waiting for ASG instance count'
+        return ['waiting for ASG instance count', False]
+    return [False, False]
 
 
 def get_max_reservations(cluster_name):
