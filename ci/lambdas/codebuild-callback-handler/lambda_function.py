@@ -2,7 +2,10 @@
 # Returns: Error or status message
 #
 # Triggered after a CodeBuild run finishes and is responsible for updating
-# the GitHub status, and sending some notifications.
+# the GitHub status, and sending some notifications. This Lambda should not be
+# considered to be entirely or even mostly responsible for the configuration of
+# CodeBuild environment. It should only worry about the parts of the
+# configuration that result from the events the function is intended to handle.
 
 import boto3
 import os
