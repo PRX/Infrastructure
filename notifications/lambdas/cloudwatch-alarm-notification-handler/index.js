@@ -42,7 +42,7 @@ function messageForEvent(event) {
     const trigger = alarm.Trigger;
 
     return {
-        channel: channelForEvent(event), // TODO
+        channel: channelForEvent(event),
         username: SLACK_USERNAME,
         icon_emoji: SLACK_ICON,
         attachments: [

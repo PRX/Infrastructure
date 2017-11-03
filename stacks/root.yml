@@ -32,7 +32,7 @@ Parameters:
     Default: ""
   # Application Specific
   MetricsEcrImageTag:
-      Type: String
+    Type: String
   MetricsSecretsVersion:
     Type: String
   JingleEcrImageTag:
@@ -54,6 +54,10 @@ Parameters:
   DovetailEcrImageTag:
     Type: String
   DovetailSecretsVersion:
+    Type: String
+  ExchangeEcrImageTag:
+    Type: String
+  ExchangeSecretsVersion:
     Type: String
   FeederEcrImageTag:
     Type: String
@@ -125,6 +129,8 @@ Mappings:
   # Higher-traffic apps should be given a higher priority (lower number) to
   # reduce the number of rules evaluations needed for more common requests
   ALBListenerRulePriorityMap:
+    Exchange:
+      prefix: 13
     Cms:
       prefix: 15
     Play:
@@ -469,6 +475,48 @@ Resources:
         HealthCheckPath: "/api/v1"
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
       TimeoutInMinutes: "5"
+  #### Exchange #####################################################################
+  ExchangeStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging # Staging only, for now!
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Exchange, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        SecretsBase:
+            Fn::ImportValue:
+              !Sub "${SecretsStackName}-SecretsBaseRegion"
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        AppName: "exchange"
+        CreateWorker: "true"
+        ContainerPort: 3000
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
+        HealthCheckPath: "/api/v1"
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TimeoutInMinutes: "5"
   #### FEEDER ##################################################################
   FeederStack:
     Type: "AWS::CloudFormation::Stack"
@@ -697,6 +745,10 @@ Outputs:
   CrierHostedZoneDNSName:
     Description: Domain name for crier app
     Value: !GetAtt CrierStack.Outputs.HostedZoneDNSName
+  ExchangeHostedZoneDNSName:
+    Condition: IsStaging
+    Description: Domain name for exchange app
+    Value: !GetAtt ExchangeStack.Outputs.HostedZoneDNSName
   FeederHostedZoneDNSName:
     Description: Domain name for feeder app
     Value: !GetAtt FeederStack.Outputs.HostedZoneDNSName
