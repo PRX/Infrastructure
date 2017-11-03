@@ -355,6 +355,18 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+  # ## SNS topics for CloudWatch Alarm Actions
+  OpsDebugMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsInfoMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsWarnMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsErrorMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsFatalMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  # ## SNS Triggers for the Lambda function
   CloudWatchAlarmNotificationHandlerDebugSubscription:
     Type: "AWS::SNS::Subscription"
     Properties:
@@ -627,18 +639,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
   # Legacy #####################################################################
-  ## SNS
-  OpsDebugMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsInfoMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsWarnMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsErrorMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsFatalMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  # Lambda Functions
+  ## SNS Ops Message to Slack function
   SnsOpsMessagesToSlackLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -667,12 +668,11 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 3
-  # Lambda Alarms
   SlackOpsMessagesErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: Legacy Slack Messages Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] Legacy Notification Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
