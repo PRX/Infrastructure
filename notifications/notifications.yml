@@ -56,19 +56,21 @@ Parameters:
       The S3 object key for the staging template configuration file archive
       (.zip), inside the InfrastructureConfigBucket
     Type: String
-  AutoScalingSlackWebhookUrl:
-    Type: String
   CloudWatchSlackWebhookUrl:
     Type: String
   CloudFormationSlackWebhookUrl:
+    # TODO This is turning into the generic webhook
     Type: String
   CodePipelineSlackWebhookUrl:
-    Type: String
-  CodeBuildSlackWebhookUrl:
     Type: String
   IkeDeploysSlackSlackWebhookUrl:
     Type: String
   IkeSlackVerificationToken:
+    Type: String
+  # Deprecated
+  AutoScalingSlackWebhookUrl:
+    Type: String
+  CodeBuildSlackWebhookUrl:
     Type: String
 Resources:
   # Shared IAM Roles
@@ -161,7 +163,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: Slack Messgage Relay Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] Slack Message Relay"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -223,7 +225,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: CloudFormation notifications handler Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] CloudFormation Notifications Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -285,7 +287,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: ASG notifications handler Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] ASG Notifications Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -293,7 +295,7 @@ Resources:
       OKActions:
         - !Ref OpsWarnMessagesSnsTopic
       AlarmDescription: >
-        The error rate on the ASG notifications hander lambda has
+        The error rate on the ASG notifications handler lambda has
         exceeded 0 in the last minute.
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
@@ -306,6 +308,130 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ASGNotificationHandlerLambdaFunction
+  # CloudWatch Alarms Notifications
+  CloudWatchAlarmNotificationHandlerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: "notifications/cloudwatch-alarm-notification-handler.zip"
+      Description: >
+        Handles notifications from CloudWatch Alarms
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 10
+  CloudWatchAlarmNotificationHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][Notif][Lambda][Errors] CloudWatch Alarms Handler"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the CloudWatch Alarms notifications handler lambda has
+        exceeded 0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+  # ## SNS topics for CloudWatch Alarm Actions
+  OpsDebugMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsInfoMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsWarnMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsErrorMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  OpsFatalMessagesSnsTopic:
+    Type: "AWS::SNS::Topic"
+  # ## SNS Triggers for the Lambda function
+  CloudWatchAlarmNotificationHandlerDebugSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsDebugMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerDebugPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsDebugMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerInfoSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsInfoMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerInfoPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsInfoMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerWarnSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsWarnMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerWarnPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsWarnMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerErrorSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsErrorMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerErrorPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsErrorMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerFatalSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref OpsFatalMessagesSnsTopic
+  CloudWatchAlarmNotificationHandlerFatalPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref OpsFatalMessagesSnsTopic
   # Ike
   IkeHandlerLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -405,7 +531,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: Ike Callback Handler Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] Ike Callback Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -430,7 +556,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: Ike Slash Commands Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] Ike Slack Commands Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -513,18 +639,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
   # Legacy #####################################################################
-  ## SNS
-  OpsDebugMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsInfoMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsWarnMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsErrorMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsFatalMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  # Lambda Functions
+  ## SNS Ops Message to Slack function
   SnsOpsMessagesToSlackLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -553,48 +668,11 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 3
-  # Lambda Permssions for SNS
-  OpsDebugTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsDebugMessagesSnsTopic
-  OpsInfoTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsInfoMessagesSnsTopic
-  OpsWarnTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsWarnMessagesSnsTopic
-  OpsErrorTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsErrorMessagesSnsTopic
-  OpsFatalTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SnsOpsMessagesToSlackLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsFatalMessagesSnsTopic
-  # Lambda Alarms
   SlackOpsMessagesErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: Legacy Slack Messages Lambda Errors
+      AlarmName: "[Infra][Notif][Lambda][Errors] Legacy Notification Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
@@ -615,37 +693,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref SnsOpsMessagesToSlackLambdaFunction
-  # SNS Subscriptions
-  RelayFunctionDebugSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsDebugMessagesSnsTopic
-  RelayFunctionInfoSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsInfoMessagesSnsTopic
-  RelayFunctionWarnSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsWarnMessagesSnsTopic
-  RelayFunctionErrorSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsErrorMessagesSnsTopic
-  RelayFunctionFatalSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SnsOpsMessagesToSlackLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsFatalMessagesSnsTopic
 Outputs:
   SnsOpsMessagesToSlackLambdaFunctionName:
     Value: !Ref SnsOpsMessagesToSlackLambdaFunction

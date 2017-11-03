@@ -27,48 +27,36 @@ CodeBuild will use to bootstrap the build process.
 
 For now the expectation is that this stack will only be launched once, and the
 GitHub webhook will be setup at the organization level, for all repositories.
-Naming the stack "CI" would make a lot of sense.
 
-## DNS
+## Build Process
 
-For now CloudFormation doesn't allow for the setup of custom domain names on
-API Gateway deployments. It's probably a good idea to set one up manually after
-the stack launches, so URL's provided to services like the GitHub webhook are a
-little easier to control. The stack will create a certificate through ACM that
-you can use for that.
+The build process is trigged by the second-stage Lambda function by calling
+`startBuild` against the CodeBuild API. All builds, regardless of project or
+repository, are build using a single, shared CodeBuild project. Parameters are
+passed to `startBuild` to tell the project where to find the code for a given
+build. The `buildspec.yml` from the repository being built is also passed to
+`startBuild`.
 
-## Bootstrapping a CodeBuild
+Additionally, a number of environment variables are passed to the build
+environment. The variables are set in several different places, and are critical
+to the function of the CI process, so it's important to have a good
+understanding of how they work.
 
-The `bootstrap.sh` script can run tests and push-to-ECR any PRX app, using AWS
-CodeBuild.
+- `PRX_SNS_CALLBACK` The CodeBuild Callback Lambda function is subscribed to this topic. When the build completes a message should be sent there to complete the CI process. This value is set on the CodeBuild project resource definition in the CloudFormation template.
+- `PRX_AWS_ACCOUNT_ID` The AWS account ID where building and publishing takes place. This value is set on the CodeBuild project resource definition in the CloudFormation template.
+- `PRX_REPO` The name of the GitHub repository that initially triggered the webhook request. It's used for status notifications before and after the build. The value is determined by the Lambda and set during the call to `startBuild`.
+- `PRX_COMMIT` The commit hash of the event that triggered the webhook request. It's used for status notifications before and after the build. The value is determined by the Lambda and set during the call to `startBuild`.
+- `PRX_GITHUB_PR` The GitHub pull request number for the triggering event. It's used for status notifications before and after the build. The value is only present for pull request events and set during the call to `startBuild`.
+- `PRX_CI_PUBLISH` Used as a flag to tell the the CI process that the code should be published if it passes testing. This is generally only set to true for push events to a `master` branch, and is set during the call to `startBuild`.
+- `PRX_ECR_REGION` For code that is pushed to ECR, indicates the region the repository is in. The value is set in each project's `buildspec.yml`.
+- `PRX_ECR_REPOSITORY` For code that is pushed to ECR, indicates the name of the repository to push to. The value is set in each project's `buildspec.yml`.
 
-Just set up an entrypoint in CodeBuild that will:
+To reduce duplication of code for tasks common to most builds, such as publishing code or the SNS callback messages, a utility script is available. Generally the script will be downloaded and executed as the final command in the `post_build` phase of each `buildspec.yml` file.
 
-```
-curl -sO https://raw.githubusercontent.com/PRX/Infrastructure/master/codebuild/bootstrap.sh && sh bootstrap.sh
-```
+#### Output
 
-### Inputs
+When the build completes, regardless of success, it sends a message to the CodeBuild Callback SNS topic. Many of the above envionment variables are included in that message (eg `prxRepo`, `prxCommit`). Additionally, `success`, `reason`, and `buildArn` are included in the message.
 
-- Codebuild ENVs:
-  - `PRX_SNS_CALLBACK` - an SNS topic for callbacks.
-  - `PRX_REPO` - the repo this is for.  Not actually used in this script, but passed back to SNS.
-  - `PRX_COMMIT` - the 7-char SHA of the commit this is for. Not used, but passed back to SNS.
-  - `PRX_GITHUB_PR` - optional github pull request number.
-  - `PRX_ECR_TAG` - optional param telling codebuild to push to this ECR tag after successfully testing. Will only be used if there is a Dockerfile present.
-  - `PRX_ECR_REGION` - required if you set `PRX_ECR_TAG`
-- Repo setup:
-  - Must have a `.prxci` file in the root.  This is just a plain text file, with 1 command to run per line.  Does any setup for the tests, and runs them.
-  - For docker projects, the Dockerfile must have `LABEL org.prx.app="yes"` in it.  This tells codebuild which image to push to ECR (in case your docker-compose is building multiple).
+The callback handler will update the GitHub branch status to reflect the result of the build, and send a message to Slack. Additionally, if a new version of code was pushed, such as to ECR or S3, the callback handler will update the template configuration file used by the staging environment with the identifier of the new version (eg, ECR tag or S3 version ID).
 
-### SNS Callback
 
-- Will publish an SNS json object with the following keys:
-  - `success` - boolean true or false, indicating if `.prxci` passed, and optionally if pushing to ECR worked.
-  - `reason` - string message if success = false.
-  - `prxRepo` - the repo you passed in.
-  - `prxCommit` - the commit you passed in.
-  - `prxGithubPr` - the pull request number you passed in.
-  - `prxEcrTag` - the ecr tag you passed in.
-  - `prxEcrRegion` - the ecr region you passed in.
-  - `buildArn` - the ARN of this codebuild run.
