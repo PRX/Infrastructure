@@ -1,15 +1,30 @@
 // Invoked by: SNS Subscription
 // Returns: Error or status message
 //
-// tktk
+// TODO tktk
 
 const AWS = require('aws-sdk');
 
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
-// const SLACK_CHANNEL = '#ops-debug';
 const SLACK_ICON = ':ops-cloudwatch-alarm:';
 const SLACK_USERNAME = 'Amazon CloudWatch Alarms';
+
+function channelForEvent(event) {
+    const topicArn = event.Records[0].Sns.TopicArn;
+
+    if (/OpsFatal/.test(topicArn)) {
+        return '#ops-fatal';
+    } else if (/OpsError/.test(topicArn)) {
+        return '#ops-error';
+    } else if (/OpsWarn/.test(topicArn)) {
+        return '#ops-warn';
+    } else if (/OpsInfo/.test(topicArn)) {
+        return '#ops-info';
+    }
+
+    return '#ops-debug';
+}
 
 function colorForAlarm(alarm) {
     switch (alarm.NewStateValue) {
@@ -27,7 +42,7 @@ function messageForEvent(event) {
     const trigger = alarm.Trigger;
 
     return {
-        channel: SLACK_CHANNEL, // TODO
+        channel: channelForEvent(event), // TODO
         username: SLACK_USERNAME,
         icon_emoji: SLACK_ICON,
         attachments: [
