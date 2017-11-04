@@ -21,7 +21,7 @@ Metadata:
           default: Stack Dependencies
         Parameters:
           - InfrastructureStorageStackName
-          - NotificationsStackName
+          - InfrastructureNotificationsStackName
           - SecretsStackName
       - Label:
           default: GitHub API
@@ -35,7 +35,7 @@ Metadata:
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
-      NotificationsStackName:
+      InfrastructureNotificationsStackName:
         default: Notifications stack name
       SecretsStackName:
         default: Secrets stack name
@@ -50,7 +50,7 @@ Parameters:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
     Type: String
-  NotificationsStackName:
+  InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
     Type: String
@@ -106,7 +106,7 @@ Resources:
                   - "sns:Publish"
                 Resource:
                   - Fn::ImportValue:
-                      !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+                      !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
         - PolicyName: CodePipelinePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -131,7 +131,7 @@ Resources:
           PIPELINE_NAME: !Ref Pipeline
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+                !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
       Handler: lambda_function.lambda_handler
       MemorySize: 128
       Role: !GetAtt CodePipelineFailurePollerFunctionIamRole.Arn
@@ -190,13 +190,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Pipeline Failure Notification"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the failure notification lambda has exceeded 0 in
         the last minute.
@@ -246,10 +246,10 @@ Resources:
         Variables:
           IKE_DEPLOYS_SLACK_WEBHOOK_URL:
             Fn::ImportValue:
-                !Sub "${NotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
+                !Sub "${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+                !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -265,13 +265,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Pipeline Approval Notification"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the approval notification handler lambda has exceeded
         0 in the last minute.
@@ -532,7 +532,7 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "NotificationsStackName": "${NotificationsStackName}",
+                    "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
                     "PipelineExecutionNonce": { "Fn::GetArtifactAtt" : ["InfrastructureRepoSourceArtifact", "ObjectKey"]}
@@ -611,7 +611,7 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "NotificationsStackName": "${NotificationsStackName}",
+                    "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
                     "PipelineExecutionNonce": { "Fn::GetArtifactAtt" : ["InfrastructureRepoSourceArtifact", "ObjectKey"]}
@@ -916,7 +916,7 @@ Resources:
                   - "sns:Publish"
                 Resource:
                   - Fn::ImportValue:
-                      !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+                      !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
         - PolicyName: CodePipelinePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -958,7 +958,7 @@ Resources:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+                !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
           CD_STACK_NAME: !Ref AWS::StackName
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue:
@@ -980,13 +980,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Deploy Notification"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the deploy notification lambda has exceeded 0 in
         the last minute.
@@ -1035,13 +1035,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Environment State Capture"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the state capture lambda has exceeded 0 in
         the last minute.
@@ -1087,13 +1087,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Pseudo Source"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the pseudo source lambda has exceeded 0 in
         the last minute.
@@ -1132,13 +1132,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] Commit Proxy"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the S3 commit proxy lambda has exceeded 0 in
         the last minute.
@@ -1182,13 +1182,13 @@ Resources:
       AlarmName: "[Infra][CD][Lambda][Error] S3 Sync"
       AlarmActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the S3 Sync lambda has exceeded 0 in
         the last minute.
