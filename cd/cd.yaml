@@ -85,7 +85,199 @@ Parameters:
       (.zip), inside the InfrastructureConfigBucket
     Type: String
 Resources:
-  # S3 Buckets
+  # CodePipeline Failure Notifications
+  CodePipelineFailurePollerFunctionIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Path: "/"
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:GetPipelineState"
+                Resource: "*"
+  CodePipelineFailurePollerFunction:
+    # TODO Send slack message directly to the Slack Message Relay topic
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/pipeline-fail-notification.zip
+      Description: >
+        Sends a message when pipeline run fails
+      Environment:
+        Variables:
+          PIPELINE_NAME: !Ref Pipeline
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue:
+                !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt CodePipelineFailurePollerFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  CodePipelineFailurePollerEventIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "lambda:InvokeFunction"
+                Effect: Allow
+                Resource:
+                  - !GetAtt CodePipelineFailurePollerFunction.Arn
+  CodePipelineFailurePollerEventTrigger:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Runs the failure notification poller Lambda function periodically
+      RoleArn: !GetAtt CodePipelineFailurePollerEventIamRole.Arn
+      ScheduleExpression: "rate(1 minute)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CodePipelineFailurePollerFunction.Arn
+          Id: !Sub "${AWS::StackName}.FailureNotification-Poller"
+  CodePipelineFailurePollerTriggerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CodePipelineFailurePollerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CodePipelineFailurePollerEventTrigger.Arn
+  CodePipelineFailurePollerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Pipeline Failure Notification"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the failure notification lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CodePipelineFailurePollerFunction
+  # CodePipeline Approvals
+  CodePipelineApprovalsSnsTopic:
+    Type: "AWS::SNS::Topic"
+  CodePipelineApprovalsTopicHandlerFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt PipelineApprovalNotificationHandlerFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref CodePipelineApprovalsSnsTopic
+  CodePipelineApprovalsTopicInvokeHandlerFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref PipelineApprovalNotificationHandlerFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CodePipelineApprovalsSnsTopic
+  PipelineApprovalNotificationHandlerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/pipeline-approval-notification-handler.zip
+      Description: >
+        Receives notifications from CodePipeline when approval is required, and
+        builds a messages to alert externally
+      Environment:
+        Variables:
+          IKE_DEPLOYS_SLACK_WEBHOOK_URL:
+            Fn::ImportValue:
+                !Sub "${NotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue:
+                !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 5
+  PipelineApprovalNotificationHandlerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Pipeline Approval Notification"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the approval notification handler lambda has exceeded
+        0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PipelineApprovalNotificationHandlerFunction
+  # Pipeline
   ArtifactStore:
     # The bucket used to store artifacts generated by CodePipeline actions.
     # This bucket is to be used exclusively by AWS; don't use it to store any
@@ -100,174 +292,7 @@ Resources:
       Tags:
         - Key: Project
           Value: Infrastructure
-  # SNS Topics
-  CodePipelineApprovalsSnsTopic:
-    Type: "AWS::SNS::Topic"
-  CodePipelineFailuresSnsTopic:
-    Type: "AWS::SNS::Topic"
-  DeployNotificationsSnsTopic:
-    Type: "AWS::SNS::Topic"
-  # SNS Subscriptions
-  CodePipelineApprovalsTopicHandlerFunctionSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt PipelineApprovalNotificationHandlerFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref CodePipelineApprovalsSnsTopic
-  DeployNotificationsTopicRelayFunctionSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
-      Protocol: lambda
-      TopicArn: !Ref DeployNotificationsSnsTopic
-  CodePipelineFailureTopicRelayFunctionSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
-      Protocol: lambda
-      TopicArn: !Ref CodePipelineFailuresSnsTopic
-  # Lambda Permssions for SNS
-  CodePipelineApprovalsTopicInvokeHandlerFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref PipelineApprovalNotificationHandlerFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref CodePipelineApprovalsSnsTopic
-  CodePipelineFailureTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref CodePipelineFailuresSnsTopic
-  DeployNotificationsTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref DeployNotificationsSnsTopic
-  # IAM Roles
-  CloudWatchEventsIAMRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "events.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        - PolicyName: LambdaPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "lambda:InvokeFunction"
-                Resource:
-                  - !GetAtt PipelineFailNotificationFunction.Arn
-  LambdaExecutionIAMRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        - PolicyName: XrayTracePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "xray:PutTraceSegments"
-                  - "xray:PutTelemetryRecords"
-                Resource:
-                  - "*"
-        - PolicyName: S3Policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                  - "s3:GetObject"
-                Resource:
-                  - !Sub arn:aws:s3:::${ArtifactStore}/*
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "sns:Publish"
-                Resource:
-                  - !Ref DeployNotificationsSnsTopic
-                  - !Ref CodePipelineFailuresSnsTopic
-                  - Fn::ImportValue:
-                      !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
-        - PolicyName: CodePipelinePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "codepipeline:PutJobSuccessResult"
-                  - "codepipeline:PutJobFailureResult"
-                  - "codepipeline:GetPipelineState"
-                Resource: "*"
-        - PolicyName: CloudWatchMetricsPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "cloudwatch:PutMetricData"
-                Resource: "*"
-        - PolicyName: CloudFormationReadPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "cloudformation:DescribeChangeSet"
-                  - "cloudformation:DescribeStacks"
-                Resource: "*"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-  CodePipelineIAMRole:
+  CdPipelineIamRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -388,546 +413,16 @@ Resources:
                   - "codebuild:BatchGetBuilds"
                   - "codebuild:StartBuild"
                 Resource:
-                  - !GetAtt AcceptanceTestBuildProject.Arn
-                  - !Sub "${AcceptanceTestBuildProject.Arn}/*"
+                  - !GetAtt AcceptanceTestsCodeBuildProject.Arn
+                  - !Sub "${AcceptanceTestsCodeBuildProject.Arn}/*"
                 Resource: "*"
-  CodeBuildIAMRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - codebuild.amazonaws.com
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        # Allow CodeBuild to log to CloudWatch
-        - PolicyName: CodeBuildLogs
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "logs:CreateLogGroup"
-                  - "logs:CreateLogStream"
-                  - "logs:PutLogEvents"
-                Resource:
-                  # NOTE These need to stay in sync with the CodeBuild Project
-                  # name from below
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Acceptance
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Acceptance:*
-        # CodeBuild sources from CodePipeline artifacts, so it needs access
-        - PolicyName: ArtifactStoreBasicAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
-  CloudFormationIAMRole:
-    # This role gets passed to CloudFormation, and is used by CloudFormation to
-    # to perform actions against other AWS resources.
-    #
-    # This is the role used to launch the root stack, and thus all nested app
-    # and service stacks. It needs permissions to create any of the resources
-    # that those stacks require. Eg, if a stack nested in the root stack
-    # includes an S3 bucket resource, this role needs a policy that allows it
-    # to create S3 buckets.
-    # NOTE This role should not be given to anything other than the CodePipeline
-    # CloudFormation actions! It's very powerful!
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - cloudformation.amazonaws.com
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        # Lambda functions used by CI/CD; archives are accessed through S3
-        - PolicyName: SupportBucketAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSupportBucket", "/*"]]
-        # Lambda application code is accessed through S3
-        - PolicyName: CodeBucketAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
-        # Nested stack templates are accessed through S3
-        - PolicyName: TemplateBucketAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
-        # Give CloudFormation full access except deleting stacks
-        - PolicyName: StackManipulationPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              #
-              - Effect: Allow
-                Action:
-                  - "cloudformation:*"
-                Resource:
-                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-staging/*"
-                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-production/*"
-                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*"
-              - Effect: Deny
-                Action:
-                  - "cloudformation:DeleteStack"
-                Resource: "*"
-        # Need to CRUD all resources included in root and nested stacks
-        # NOTE: THIS IS VERY POWERFUL
-        - PolicyName: ResourceManipulationPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              # Be very explicit with S3 policies; CloudFormation never deletes
-              # S3 buckets anyway
-              - Effect: Allow
-                Action:
-                  - s3:CreateBucket
-                  - s3:PutLifecycleConfiguration
-                Resource: "*"
-              # Only include services that root stack or its nested stacks
-              # actually use
-              - Effect: Allow
-                Action:
-                  - "acm:*"
-                  - "apigateway:*"
-                  - "application-autoscaling:*"
-                  - "autoscaling:*"
-                  - "cloudfront:*"
-                  - "cloudwatch:*"
-                  - "ec2:*"
-                  - "ecs:*"
-                  - "elasticloadbalancing:*"
-                  - "events:*"
-                  - "iam:*"
-                  - "lambda:*"
-                  - "logs:*"
-                  - "route53:*"
-                  - "sns:*"
-                Resource: "*"
-  # Lambda Functions
-  InfrastructureRepoSourceS3SyncFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/infrastructure-s3-sync.zip
-      Description: Copies Infrastructure repo artifact to S3
-      Environment:
-        Variables:
-          INFRASTRUCTURE_SOURCE_BUCKET:
-            Fn::ImportValue:
-              !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 8
-  InfrastructureCommitProxyFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/infrastructure-commit-proxy.zip
-      Description: Copies Infrastructure repo artifact to S3
-      Handler: lambda_function.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 3
-  EnvironmentStateCaptureFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/environment-state-capture.zip
-      Description: >
-        Capture template and config version data for deployed environments
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue:
-              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
-            Fn::ImportValue:
-              !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
-      Handler: index.handler
-      MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: nodejs6.10
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 5
-  ProductionConfigPseudoSourceFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/production-config-pseudo-source.zip
-      Description: >
-        Generates output artifact of the production template config
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue:
-              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 8
-  DeploymentNotificationFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/deployment-notification.zip
-      Description: >
-        Sends a message when deployments finish
-      Environment:
-        Variables:
-          DEPLOY_NOTIFICATION_TOPIC_ARN: !Ref DeployNotificationsSnsTopic
-          CD_STACK_NAME: !Ref AWS::StackName
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue:
-              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
-      Handler: lambda_function.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 3
-  PipelineFailNotificationFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/pipeline-fail-notification.zip
-      Description: >
-        Sends a message when pipeline run fails
-      Environment:
-        Variables:
-          CODEPIPELINE_FAILURES_TOPIC_ARN: !Ref CodePipelineFailuresSnsTopic
-          PIPELINE_NAME: !Ref Pipeline
-      Handler: lambda_function.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 3
-  PipelineApprovalNotificationHandlerFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/pipeline-approval-notification-handler.zip
-      Description: >
-        Receives notifications from CodePipeline when approval is required, and
-        builds a messages to alert externally
-      Environment:
-        Variables:
-          IKE_DEPLOYS_SLACK_WEBHOOK_URL:
-            Fn::ImportValue:
-                !Sub "${NotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue:
-                !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 5
-  # Lambda Alarms
-  SourceSyncErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: Infrastructure S3 Sync Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the S3 Sync lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFunction
-  CommitProxyErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: Infrastructure Commit Proxy Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the S3 commit proxy lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InfrastructureCommitProxyFunction
-  StateCaptureErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: CD State Capture Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the state capture lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref EnvironmentStateCaptureFunction
-  PseudoSourceErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: CD Pseudo Source Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the pseudo source lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ProductionConfigPseudoSourceFunction
-  DeployNotificationErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: CD Deploy Notification Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the deploy notification lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DeploymentNotificationFunction
-  FailureNotificationErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: CD Failure Notification Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the failure notification lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref PipelineFailNotificationFunction
-  ApprovalNotificationHandlerErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: CD Approval Notification Handler Lambda Errors
-      AlarmActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the approval notification handler lambda has exceeded
-        0 in the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref PipelineApprovalNotificationHandlerFunction
-  # CloudWatch Events Schedulers
-  FailureNotificationEventTrigger:
-    Type: "AWS::Events::Rule"
-    Properties:
-      Description: >
-        Runs the failure notification poller Lambda function periodically
-      RoleArn: !GetAtt CloudWatchEventsIAMRole.Arn
-      ScheduleExpression: "rate(1 minute)"
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt PipelineFailNotificationFunction.Arn
-          Id: !Sub "${AWS::StackName}.FailureNotification-Poller"
-  # Lambda Permissions for CloudWatch Events
-  SchedulerEventInvokeFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref PipelineFailNotificationFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt FailureNotificationEventTrigger.Arn
-  # Pipelines
   Pipeline:
     Type: "AWS::CodePipeline::Pipeline"
     Properties:
       ArtifactStore:
         Location: !Ref ArtifactStore
         Type: S3
-      RoleArn: !GetAtt CodePipelineIAMRole.Arn
+      RoleArn: !GetAtt CdPipelineIamRole.Arn
       Stages:
         - Name: Source
           Actions:
@@ -1073,7 +568,7 @@ Resources:
                 Provider: CodeBuild
                 Version: 1
               Configuration:
-                ProjectName: !Ref AcceptanceTestBuildProject
+                ProjectName: !Ref AcceptanceTestsCodeBuildProject
               InputArtifacts:
                 - Name: MetaRepoSourceArtifact
               OutputArtifacts:
@@ -1171,8 +666,48 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 5
-  # CodeBuild Projects
-  AcceptanceTestBuildProject:
+  # Acceptance Test Pipeline Action
+  AcceptanceTestsCodeBuildIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+      Path: "/"
+      Policies:
+        # Allow CodeBuild to log to CloudWatch
+        - PolicyName: CodeBuildLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Effect: Allow
+                Resource:
+                  # NOTE These need to stay in sync with the CodeBuild Project
+                  # name from below
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Acceptance
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-Acceptance:*
+        # CodeBuild sources from CodePipeline artifacts, so it needs access
+        - PolicyName: ArtifactStoreBasicAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+  AcceptanceTestsCodeBuildProject:
     Type: "AWS::CodeBuild::Project"
     Properties:
       Artifacts:
@@ -1198,8 +733,8 @@ Resources:
         Image: 561178107736.dkr.ecr.us-east-1.amazonaws.com/meta.prx.org:latest
         Type: LINUX_CONTAINER
       # If this Name changes, the CodeBuild role policy needs to change too
-      Name: !Sub ${AWS::StackName}-Acceptance
-      ServiceRole: !GetAtt CodeBuildIAMRole.Arn
+      Name: !Sub ${AWS::StackName}-AcceptanceTests
+      ServiceRole: !GetAtt AcceptanceTestsCodeBuildIamRole.Arn
       Source:
         BuildSpec: "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - bundle install\n  build:\n    commands:\n      - bundle exec rake\nartifacts:\n  files:\n    - README.md"
         Type: CODEPIPELINE
@@ -1207,3 +742,480 @@ Resources:
         - Key: Project
           Value: Infrastructure
       TimeoutInMinutes: 5
+  # CloudFormation Pipeline Actions
+  CloudFormationIAMRole:
+    # This role gets passed to CloudFormation, and is used by CloudFormation to
+    # to perform actions against other AWS resources.
+    #
+    # This is the role used to launch the root stack, and thus all nested app
+    # and service stacks. It needs permissions to create any of the resources
+    # that those stacks require. Eg, if a stack nested in the root stack
+    # includes an S3 bucket resource, this role needs a policy that allows it
+    # to create S3 buckets.
+    # NOTE This role should not be given to anything other than the CodePipeline
+    # CloudFormation actions! It's very powerful!
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        # Lambda functions used by CI/CD; archives are accessed through S3
+        - PolicyName: SupportBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSupportBucket", "/*"]]
+        # Lambda application code is accessed through S3
+        - PolicyName: CodeBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                  - "s3:GetObjectVersion"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
+        # Nested stack templates are accessed through S3
+        - PolicyName: TemplateBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
+        # Give CloudFormation full access except deleting stacks
+        - PolicyName: StackManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              #
+              - Effect: Allow
+                Action:
+                  - "cloudformation:*"
+                Resource:
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-staging/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-production/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*"
+              - Effect: Deny
+                Action:
+                  - "cloudformation:DeleteStack"
+                Resource: "*"
+        # Need to CRUD all resources included in root and nested stacks
+        # NOTE: THIS IS VERY POWERFUL
+        - PolicyName: ResourceManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Be very explicit with S3 policies; CloudFormation never deletes
+              # S3 buckets anyway
+              - Effect: Allow
+                Action:
+                  - s3:CreateBucket
+                  - s3:PutLifecycleConfiguration
+                Resource: "*"
+              # Only include services that root stack or its nested stacks
+              # actually use
+              - Effect: Allow
+                Action:
+                  - "acm:*"
+                  - "apigateway:*"
+                  - "application-autoscaling:*"
+                  - "autoscaling:*"
+                  - "cloudfront:*"
+                  - "cloudwatch:*"
+                  - "ec2:*"
+                  - "ecs:*"
+                  - "elasticloadbalancing:*"
+                  - "events:*"
+                  - "iam:*"
+                  - "lambda:*"
+                  - "logs:*"
+                  - "route53:*"
+                  - "sns:*"
+                Resource: "*"
+  # Custom Lambda Actions
+  LambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Path: "/"
+      Policies:
+        - PolicyName: XrayTracePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource:
+                  - "*"
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:GetObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
+              - Effect: Allow
+                Action:
+                  - "s3:PutObject"
+                  - "s3:GetObject"
+                Resource:
+                  - !Sub arn:aws:s3:::${ArtifactStore}/*
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref DeployNotificationsSnsTopic
+                  # - !Ref CodePipelineFailuresSnsTopic TODO Remove
+                  - Fn::ImportValue:
+                      !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:PutJobSuccessResult"
+                  - "codepipeline:PutJobFailureResult"
+                  - "codepipeline:GetPipelineState"
+                Resource: "*"
+        - PolicyName: CloudWatchMetricsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:PutMetricData"
+                Resource: "*"
+        - PolicyName: CloudFormationReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudformation:DescribeChangeSet"
+                  - "cloudformation:DescribeStacks"
+                Resource: "*"
+  DeploymentNotificationFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/deployment-notification.zip
+      Description: >
+        Sends a message when deployments finish
+      Environment:
+        Variables:
+          DEPLOY_NOTIFICATION_TOPIC_ARN: !Ref DeployNotificationsSnsTopic
+          CD_STACK_NAME: !Ref AWS::StackName
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  DeploymentNotificationErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Deploy Notification"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the deploy notification lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DeploymentNotificationFunction
+  EnvironmentStateCaptureFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/environment-state-capture.zip
+      Description: >
+        Capture template and config version data for deployed environments
+      Environment:
+        Variables:
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 5
+  EnvironmentStateCaptureErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Environment State Capture"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the state capture lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EnvironmentStateCaptureFunction
+  ProductionConfigPseudoSourceFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/production-config-pseudo-source.zip
+      Description: >
+        Generates output artifact of the production template config
+      Environment:
+        Variables:
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 8
+  ProductionConfigPseudoSourceErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Pseudo Source"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the pseudo source lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProductionConfigPseudoSourceFunction
+  InfrastructureCommitProxyFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/infrastructure-commit-proxy.zip
+      Description: Copies Infrastructure repo artifact to S3
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 3
+  InfrastructureCommitProxyErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Commit Proxy"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the S3 commit proxy lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureCommitProxyFunction
+  InfrastructureRepoSourceS3SyncFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/infrastructure-s3-sync.zip
+      Description: Copies Infrastructure repo artifact to S3
+      Environment:
+        Variables:
+          INFRASTRUCTURE_SOURCE_BUCKET:
+            Fn::ImportValue:
+              !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+      Timeout: 8
+  InfrastructureRepoSourceS3SyncErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] S3 Sync"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the S3 Sync lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureRepoSourceS3SyncFunction
+
+
+  # Legacy deploy notifications support
+  # TODO Currently the DeploymentNotificationFunction sends a message to this
+  # topic, and the legacy SnsOpToSlack function handles them. The
+  # DeploymentNotificationFunction should be changed to publish directly to the
+  # Slack Message Relay
+  DeployNotificationsSnsTopic:
+    Type: "AWS::SNS::Topic"
+  DeployNotificationsTopicRelayFunctionSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
+      Protocol: lambda
+      TopicArn: !Ref DeployNotificationsSnsTopic
+  DeployNotificationsTopicInvokeRelayFunctionPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName:
+        Fn::ImportValue:
+          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref DeployNotificationsSnsTopic
