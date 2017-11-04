@@ -628,36 +628,6 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
-  # Legacy #####################################################################
-  ## SNS Ops Message to Slack function
-  SnsOpsMessagesToSlackLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/sns-ops-to-slack.zip"
-      Description: >
-        Relays messages, which are produced by various AWS services and posted
-        to SNS, to the channels in Slack
-      Environment:
-        Variables:
-          ASG_SLACK_WEBHOOK_URL: !Ref AutoScalingSlackWebhookUrl
-          CW_SLACK_WEBHOOK_URL: !Ref CloudWatchSlackWebhookUrl
-          PIPELINE_SLACK_WEBHOOK_URL: !Ref CodePipelineSlackWebhookUrl
-          CFN_SLACK_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
-          CODEBUILD_SLACK_WEBHOOK_URL: !Ref CodeBuildSlackWebhookUrl
-          IKE_DEPLOYS_SLACK_WEBHOOK_URL: !Ref IkeDeploysSlackSlackWebhookUrl
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs6.10
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-      Timeout: 3
 Outputs:
   SlackMessageRelaySnsTopicArn:
     Value: !Ref SlackMessageRelaySnsTopic
