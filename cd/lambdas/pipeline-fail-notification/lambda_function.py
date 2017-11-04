@@ -55,6 +55,7 @@ def slack_message(action_state):
         ]
     }
 
+
 # Builds a fully-formed Slack message and publishes it to the Slack Message
 # Relay topic to get forwarded to Slack
 def publish_slack_message(action_state):
