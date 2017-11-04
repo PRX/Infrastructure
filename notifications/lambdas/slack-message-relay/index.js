@@ -20,7 +20,7 @@ exports.handler = (event, context, callback) => {
 
         let webhookUrl = process.env.DEFAULT_WEBHOOK_URL;
         if (attrs.WebhookURL) {
-          webhookUrl = attrs.WebhookURL.Value;
+            webhookUrl = attrs.WebhookURL.Value;
         }
 
         // Setup request options
