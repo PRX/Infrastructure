@@ -1194,29 +1194,3 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref InfrastructureRepoSourceS3SyncFunction
-
-
-  # Legacy deploy notifications support
-  # TODO Currently the DeploymentNotificationFunction sends a message to this
-  # topic, and the legacy SnsOpToSlack function handles them. The
-  # DeploymentNotificationFunction should be changed to publish directly to the
-  # Slack Message Relay
-  DeployNotificationsSnsTopic:
-    Type: "AWS::SNS::Topic"
-  DeployNotificationsTopicRelayFunctionSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionArn"
-      Protocol: lambda
-      TopicArn: !Ref DeployNotificationsSnsTopic
-  DeployNotificationsTopicInvokeRelayFunctionPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName:
-        Fn::ImportValue:
-          !Sub "${NotificationsStackName}-SnsOpsMessagesToSlackLambdaFunctionName"
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref DeployNotificationsSnsTopic
