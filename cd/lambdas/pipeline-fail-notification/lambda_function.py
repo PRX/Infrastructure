@@ -24,9 +24,18 @@ class DateTimeEncoder(json.JSONEncoder):
 
 def slack_message(action_state):
     action_name = action_state['actionName']
-    url = action_state['latestExecution']['externalExecutionUrl']
-    error_code = action_state['latestExecution']['errorDetails']['code']
-    error_message = action_state['latestExecution']['errorDetails']['message']
+
+    if action_name == 'ApproveChangeSet':
+        url = ''
+        error_code = 'Rejected'
+        error_message = action_state['latestExecution']['summary']
+    else:
+        url = action_state['latestExecution']['externalExecutionUrl']
+
+        error_details = action_state['latestExecution']['errorDetails']
+        error_code = error_details['code']
+        error_message = error_details['message']
+
     # timestamp = action_state['latestExecution']['lastStatusChange']
 
     return {
@@ -50,13 +59,6 @@ def publish_slack_message(action_state):
     )
 
 
-# def post_notification(action_state):
-#     topic_arn = os.environ['CODEPIPELINE_FAILURES_TOPIC_ARN']
-#     message = json.dumps(action_state, cls=DateTimeEncoder)
-
-#     sns.publish(TopicArn=topic_arn, Message=message)
-
-
 def lambda_handler(event, context):
     try:
         print('Checking pipeline state...')
@@ -65,7 +67,6 @@ def lambda_handler(event, context):
 
         # Get the state history of the pipeline
         pipeline_state = code_pipeline.get_pipeline_state(name=pipeline_name)
-        print('...Got pipeline state...')
 
         # Look through the history and see if there have been any changes in
         # the last 60 seconds (ie since the last time the function executed).
@@ -73,15 +74,12 @@ def lambda_handler(event, context):
         for stage_state in pipeline_state['stageStates']:
             for action_state in stage_state['actionStates']:
                 if 'latestExecution' in action_state:
-                    print('...Checking latest execution...')
                     execution = action_state['latestExecution']
 
                     tz = execution['lastStatusChange'].tzinfo
                     period_start = datetime.now(tz) - timedelta(seconds=60)
 
                     if execution['lastStatusChange'] > period_start:
-                        print('...Found recent execution...')
-
                         if execution['status'] == 'Failed':
                             print('...Found recent failure...')
                             publish_slack_message(action_state)
