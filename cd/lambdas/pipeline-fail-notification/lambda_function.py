@@ -39,15 +39,21 @@ def slack_message(action_state):
     # timestamp = action_state['latestExecution']['lastStatusChange']
 
     return {
-        'color': 'danger',
-        'mrkdwn_in': ['text'],
-        'fallback': f"Deploy pipeline failed on {action_name}",
-        'title': f"Deploy pipeline failed on {action_name}",
-        'title_link': url,
-        'text': f"> {error_code} – {error_message}"
-        # TODO ts: (Date.parse(timestamp) / 1000 | 0),
+        'channel': '#ops-deploys',
+        'username': 'AWS CodePipeline',
+        'icon_emoji': ':ops-codepipeline:',
+        'attachments': [
+            {
+                'color': 'danger',
+                'mrkdwn_in': ['text'],
+                'fallback': f"Deploy pipeline failed on {action_name}",
+                'title': f"Deploy pipeline failed on {action_name}",
+                'title_link': url,
+                'text': f"> {error_code} – {error_message}"
+                # TODO ts: (Date.parse(timestamp) / 1000 | 0),
+            }
+        ]
     }
-
 
 # Builds a fully-formed Slack message and publishes it to the Slack Message
 # Relay topic to get forwarded to Slack
