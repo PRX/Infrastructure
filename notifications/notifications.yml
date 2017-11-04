@@ -20,27 +20,15 @@ Metadata:
       - Label:
           default: Slack Webhooks
         Parameters:
-          - AutoScalingSlackWebhookUrl
-          - CloudFormationSlackWebhookUrl
-          - CloudWatchSlackWebhookUrl
-          - CodeBuildSlackWebhookUrl
-          - CodePipelineSlackWebhookUrl
+          - GenericSlackWebhookUrl
           - IkeDeploysSlackSlackWebhookUrl
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
       InfrastructureConfigStagingKey:
         default: Staging S3 object key
-      AutoScalingSlackWebhookUrl:
-        default: Auto Scaling
-      CloudWatchSlackWebhookUrl:
-        default: CloudWatch
-      CloudFormationSlackWebhookUrl:
-        default: CloudFormation
-      CodePipelineSlackWebhookUrl:
-        default: CodePipeline
-      CodeBuildSlackWebhookUrl:
-        default: CodeBuild
+      GenericSlackWebhookUrl:
+        default: Generic Incoming Webhook
       IkeDeploysSlackSlackWebhookUrl:
         default: Ike Deploys
       IkeSlackVerificationToken:
@@ -56,12 +44,7 @@ Parameters:
       The S3 object key for the staging template configuration file archive
       (.zip), inside the InfrastructureConfigBucket
     Type: String
-  CloudWatchSlackWebhookUrl:
-    Type: String
-  CloudFormationSlackWebhookUrl:
-    # TODO This is turning into the generic webhook
-    Type: String
-  CodePipelineSlackWebhookUrl:
+  GenericSlackWebhookUrl:
     Type: String
   IkeDeploysSlackSlackWebhookUrl:
     Type: String
@@ -71,6 +54,13 @@ Parameters:
   AutoScalingSlackWebhookUrl:
     Type: String
   CodeBuildSlackWebhookUrl:
+    Type: String
+  CodePipelineSlackWebhookUrl:
+    Type: String
+  CloudWatchSlackWebhookUrl:
+    Type: String
+  CloudFormationSlackWebhookUrl:
+    # TODO This is turning into the generic webhook
     Type: String
 Resources:
   # Shared IAM Roles
@@ -137,7 +127,7 @@ Resources:
         Incoming Webhook URL
       Environment:
         Variables:
-          DEFAULT_WEBHOOK_URL: !Ref CloudFormationSlackWebhookUrl
+          DEFAULT_WEBHOOK_URL: !Ref GenericSlackWebhookUrl
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaBasicExecutionIamRole.Arn
@@ -668,31 +658,6 @@ Resources:
         - Key: Project
           Value: Infrastructure
       Timeout: 3
-  SlackOpsMessagesErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Infra][Notif][Lambda][Errors] Legacy Notification Handler"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        The error rate on the legacy Slack messages lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SnsOpsMessagesToSlackLambdaFunction
 Outputs:
   SnsOpsMessagesToSlackLambdaFunctionName:
     Value: !Ref SnsOpsMessagesToSlackLambdaFunction
