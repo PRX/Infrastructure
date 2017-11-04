@@ -23,8 +23,75 @@
 
 const AWS = require('aws-sdk');
 
-const s3 = new AWS.S3({apiVersion: '2006-03-01'});
+const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 const codepipeline = new AWS.CodePipeline();
+
+function failPipelineAction(job, context, callback, err) {
+    console.log('...Notifying CodePipeline job of failure!');
+
+    codepipeline.putJobFailureResult({
+        jobId: job.id,
+        failureDetails: {
+            message: JSON.stringify(err),
+            type: 'JobFailed',
+            externalExecutionId: context.invokeid,
+        },
+    }, (e) => {
+        e ? callback(e) : callback(null, err);
+    });
+}
+
+function makeSnapshot(job, context, callback, cb) {
+    const artifacts = job.data.inputArtifacts;
+
+    console.log(`...Found ${artifacts.length} artifacts...`);
+
+    let env;
+
+    const repo = artifacts.find(a => /RepoSource/.test(a.name));
+
+    // If we're capturing Staging state, there will be two artifacts, and
+    // we need to record the artifact revision value of both: the
+    // Infrastructure repo artifact (Git SHA), and the staging template config
+    // artifact (S3 version ID)
+    if (artifacts.length === 2) {
+        console.log('...Creating staging snapshot...');
+
+        env = 'staging';
+
+        const config = artifacts.find(a => /TemplateConfig/.test(a.name));
+
+        cb(env, JSON.stringify({
+            InfrastructureGitCommit: repo.revision,
+            TemplateConfigArchiveS3Version: config.revision,
+        }));
+    } else {
+        // For production state, only the Infrastructure repo artifact is
+        // immediately available.
+        console.log('...Creating production snapshot...');
+
+        env = 'production';
+
+        // To get the config version, ask S3 for the version ID of the most
+        // recent version
+        // TODO This is potentially inaccurate; there may be a better way
+        console.log('...Getting production config version ID...');
+        s3.headObject({
+            Bucket: process.env.INFRASTRUCTURE_CONFIG_BUCKET,
+            Key: process.env.INFRASTRUCTURE_CONFIG_PRODUCTION_KEY,
+        }, (err, data) => {
+            if (err) {
+                console.error('...S3 headObject failed!');
+                failPipelineAction(job, context, callback, err);
+            } else {
+                cb(env, JSON.stringify({
+                    InfrastructureGitCommit: repo.revision,
+                    TemplateConfigArchiveS3Version: data.VersionId,
+                }));
+            }
+        });
+    }
+}
 
 exports.handler = (event, context, callback) => {
     const job = event['CodePipeline.job'];
@@ -44,16 +111,16 @@ exports.handler = (event, context, callback) => {
             s3.putObject({
                 Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
                 Key: key,
-                Body: snapshot
-            }, (err, data) => {
+                Body: snapshot,
+            }, (err) => {
                 if (err) {
-                    console.error(`...S3 putObject failed!`);
+                    console.error('...S3 putObject failed!');
                     failPipelineAction(job, context, callback, err);
                 } else {
                     console.log('...Notifying CodePipeline job of success...');
                     codepipeline.putJobSuccessResult({
-                        jobId: job.id
-                    }, (e, d) => {
+                        jobId: job.id,
+                    }, (e) => {
                         if (e) {
                             console.error('CodePipeline result failed!');
                             callback(e);
@@ -68,72 +135,4 @@ exports.handler = (event, context, callback) => {
         console.error('...Unhandled error!');
         failPipelineAction(job, context, callback, e);
     }
-}
-
-function makeSnapshot(job, context, callback, cb) {
-    const artifacts = job.data.inputArtifacts;
-
-    console.log(`...Found ${artifacts.length} artifacts...`);
-
-    let snapshot;
-    let env;
-
-    const repo = artifacts.find(a => /RepoSource/.test(a.name));
-
-    // If we're capturing Staging state, there will be two artifacts, and
-    // we need to record the artifact revision value of both: the
-    // Infrastructure repo artifact (Git SHA), and the staging template config
-    // artifact (S3 version ID)
-    if (artifacts.length === 2) {
-        console.log(`...Creating staging snapshot...`);
-
-        env = 'staging';
-
-        const config = artifacts.find(a => /TemplateConfig/.test(a.name));
-
-        cb(env, JSON.stringify({
-            InfrastructureGitCommit: repo.revision,
-            TemplateConfigArchiveS3Version: config.revision
-        }));
-    } else {
-        // For production state, only the Infrastructure repo artifact is
-        // immediately available.
-        console.log(`...Creating production snapshot...`);
-
-        env = 'production';
-
-        // To get the config version, ask S3 for the version ID of the most
-        // recent version
-        // TODO This is potentially inaccurate; there may be a better way
-        console.log('...Getting production config version ID...');
-        s3.headObject({
-            Bucket: process.env.INFRASTRUCTURE_CONFIG_BUCKET,
-            Key: process.env.INFRASTRUCTURE_CONFIG_PRODUCTION_KEY,
-        }, (err, data) => {
-            if (err) {
-                console.error(`...S3 headObject failed!`);
-                failPipelineAction(job, context, callback, err);
-            } else {
-                cb(env, JSON.stringify({
-                    InfrastructureGitCommit: repo.revision,
-                    TemplateConfigArchiveS3Version: data.VersionId
-                }));
-            }
-        });
-    }
-}
-
-function failPipelineAction(job, context, callback, err) {
-    console.log('...Notifying CodePipeline job of failure!');
-
-    codepipeline.putJobFailureResult({
-        jobId: job.id,
-        failureDetails: {
-            message: JSON.stringify(err),
-            type: 'JobFailed',
-            externalExecutionId: context.invokeid
-        }
-    }, (e, d) => {
-        e ? callback(e) : callback(null, err);
-    });
-}
+};
