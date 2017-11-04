@@ -37,6 +37,74 @@ def put_job_failure(job, message):
         failureDetails={'message': message, 'type': 'JobFailed'})
 
 
+def log_deploy_metric(env):
+    if (env == 'Staging') or (env == 'Production'):
+        stack_name = os.environ['CD_STACK_NAME']
+
+        cloudwatch.put_metric_data(
+            Namespace='PRX/CD',
+            MetricData=[
+                {
+                    'MetricName': 'Deploys',
+                    'Dimensions': [
+                        {
+                            'Name': 'Environment',
+                            'Value': env
+                        }, {
+                            'Name': 'StackName',
+                            'Value': stack_name
+                        }
+                    ],
+                    'Value': 1,
+                    'Unit': 'Count'
+                },
+            ]
+        )
+
+
+def publish_slack_message(env, input_artifact, config_version):
+    commit = input_artifact['revision']
+    region = os.environ['AWS_REGION']
+
+    url = f"https://github.com/PRX/Infrastructure/commit/{commit}"
+
+    if env == 'Start':
+        attachment = {
+            'mrkdwn_in': ['text'],
+            # ts: (Date.now() / 1000 | 0), TODO
+            'footer': region,
+            'color': '#A807E8',
+            'fallback': f"Starting deploy. Infrastructure revision {commit}. Config version {config_version}",
+            'text': f"Starting deploy pipeline.\nInfrastructure revision <{url}|`{commit}`>\nTemplate config version `{config_version}`",
+        }
+    else:
+        if env == 'Production':
+            color = 'good'
+        else:
+            color = 'warning'
+
+        attachment = {
+            'mrkdwn_in': ['text'],
+            # ts: (Date.now() / 1000 | 0), TODO
+            'footer': region,
+            'color': color,
+            'fallback': f"{env} deploy complete. Infrastructure revision {commit}",
+            'text': f"*{env}* deploy complete.\nInfrastructure revision <{url}|`${commit}`>\nTemplate config version `${config_version}`",
+        }
+
+    message = {
+        'channel': '#ops-deploys',
+        'username': 'AWS CodePipeline',
+        'icon_emoji': ':ops-codepipeline:',
+        'attachments': [attachment]
+    }
+
+    sns.publish(
+        TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
+        Message=json.dumps(message)
+    )
+
+
 def lambda_handler(event, context):
     try:
         print('Posting notification...')
@@ -63,43 +131,11 @@ def lambda_handler(event, context):
         config_version = config_head['VersionId']
 
         # Publish to SNS Topic
-
-        topic_arn = os.environ['DEPLOY_NOTIFICATION_TOPIC_ARN']
-        message = json.dumps({
-            'environment': env,
-            'commit': input_artifact['revision'],
-            'config': config_version,
-            'region': os.environ['AWS_REGION']
-        })
-
-        sns.publish(TopicArn=topic_arn, Message=message)
-
+        publish_slack_message(env, input_artifact, config_version)
         # Log a custom metric data point with CloudWatch
-
-        if (env == 'Staging') or (env == 'Production'):
-            stack_name = os.environ['CD_STACK_NAME']
-            cloudwatch.put_metric_data(
-                Namespace='PRX/CD',
-                MetricData=[
-                    {
-                        'MetricName': 'Deploys',
-                        'Dimensions': [
-                            {
-                                'Name': 'Environment',
-                                'Value': env
-                            }, {
-                                'Name': 'StackName',
-                                'Value': stack_name
-                            }
-                        ],
-                        'Value': 1,
-                        'Unit': 'Count'
-                    },
-                ]
-            )
+        log_deploy_metric(env)
 
         # Cleanup
-
         put_job_success(job, '')
 
         return '...Done'
