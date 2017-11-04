@@ -77,6 +77,10 @@ Parameters:
     Type: String
 Resources:
   # CodePipeline Failure Notifications
+  # CodePipeline doesn't have very good native support for generating
+  # notifications when a pipeline execution fails. A CloudWatch Event triggers
+  # a Lambda that polls the pipeline every minute looking for recent failures in
+  # order to get around the limitation.
   CodePipelineFailurePollerFunctionIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -208,6 +212,10 @@ Resources:
         - Name: FunctionName
           Value: !Ref CodePipelineFailurePollerFunction
   # CodePipeline Approvals
+  # Production changeset deploys are behind a manual approval action. That
+  # action publishes a message to this SNS topic, of which the Lambda function
+  # is a subscriber. The function generates an interactive Slack message to
+  # facilitate the approval.
   CodePipelineApprovalsSnsTopic:
     Type: "AWS::SNS::Topic"
   CodePipelineApprovalsTopicHandlerFunctionSubscription:
@@ -851,6 +859,7 @@ Resources:
                 Resource: "*"
   # Custom Lambda Actions
   LambdaExecutionIAMRole:
+    # TODO This should probably be split up
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
