@@ -19,6 +19,8 @@ This system is designed to provide CI and CD for applications as well as the inf
 - [AWS CodeBuild Build Phase Transitions ](https://docs.aws.amazon.com/codebuild/latest/userguide/view-build-details.html#view-build-details-phases)
 - [AWS CodeBuild Environment Variables in Build Environments ](https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html#build-env-ref-env-vars)
 
+There is a draw.io file (`System Diagram.xml`) that gives a good overview of how many of the main pieces of the CI and CD systems fit together.
+
 ## Components
 
 There are three main components to the infrastructure system as a whole: **Notifications**, **CI**, and **CD**. Each is defined as its own CloudFormation template. Launching either the CI or CD stack require a preexisting Notifications stacks, but otherwise are entirely independent. They generally will be launched together, and their operations do overlap in some ways, but there are not hard dependencies between the two.
