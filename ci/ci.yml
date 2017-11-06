@@ -15,6 +15,7 @@ Metadata:
         Parameters:
           - InfrastructureStorageStackName
           - InfrastructureNotificationsStackName
+          - InfrastructureSecretsStackName
       - Label:
           default: Template Configuration
         Parameters:
@@ -33,6 +34,8 @@ Metadata:
         default: Storage stack name
       InfrastructureNotificationsStackName:
         default: Notifications stack name
+      InfrastructureSecretsStackName:
+        default: Secrets stack name
       InfrastructureConfigStagingKey:
         default: Staging S3 object key
       GitHubToken:
@@ -49,6 +52,10 @@ Parameters:
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
+    Type: String
+  InfrastructureSecretsStackName:
+    Default: infrastructure-secrets
+    Description: The name of a previously launched infrastructure secrets stack
     Type: String
   InfrastructureConfigStagingKey:
     Default: template-config-staging.zip
@@ -154,6 +161,11 @@ Resources:
                   - "ecr:PutImage"
                 Resource:
                   - !Sub "arn:aws:ecr:us-east-1:${AWS::AccountId}:repository/*"
+      ManagedPolicyArns:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureSecretsStackName}-SecretsInstanceAccessPolicyArn"
+        - Fn::ImportValue:
+            !Sub "${InfrastructureSecretsStackName}-SecretsInstanceDecryptPolicyArn"
   CodeBuildProject:
     Type: "AWS::CodeBuild::Project"
     Properties:
