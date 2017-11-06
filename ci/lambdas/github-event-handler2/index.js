@@ -121,6 +121,14 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
     const ghData = JSON.parse(ciContentsResponse);
     const buildspec = Buffer.from(ghData.content, 'base64').toString('utf8');
 
+    // Only trigger builds for repositories where the buildspec appears to be
+    // be designed for use with CI. Look for an `PRX_` string as a test.
+    if (!buildspec.includes('PRX_')) {
+        console.log('Skipping unsupported buildspec.yml');
+        callback(null);
+        return;
+    }
+
     const commitRef = (event.after || event.pull_request.head.sha);
 
     const environmentVariables = [
