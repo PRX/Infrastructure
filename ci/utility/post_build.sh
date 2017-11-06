@@ -29,7 +29,8 @@ send_sns_callback_message() {
     [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
     # Option Lambda code parameters
-    [ -z "$PRX_LAMBDA_CODE_S3_KEY" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_KEY\"}"
+    [ -z "$PRX_LAMBDA_CODE_S3_KEY" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_KEY\"}"
+    [ -z "$PRX_LAMBDA_CODE_S3_VERSION_ID" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_VERSION_ID\"}"
 
     MSGATR+="}"
 
@@ -111,7 +112,7 @@ init() {
     # Check the status of the build
     if [ $CODEBUILD_BUILD_SUCCEEDING -eq 0 ]
     then
-        build_error "Previous CodeBuild phase did not succeed"
+        build_error "A previous CodeBuild phase did not succeed"
     fi
 
     # Handle code publish if enabled

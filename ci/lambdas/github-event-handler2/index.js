@@ -9,6 +9,10 @@
 // 2. Trigger a CodeBuild by copying current code to S3 (the CodeBuild source)
 // 3. Send a notification that the build is starting (for Slack/etc)
 // 4. Set the GitHub status to 'pending' for the sha
+// This Lambda should not be considered to be entirely or even mostly
+// responsible for the configuration of CodeBuild environment. It should only
+//  worry about the parts of the configuration that result from the events
+// the function is intended to handle.
 
 const url = require('url');
 const https = require('https');
