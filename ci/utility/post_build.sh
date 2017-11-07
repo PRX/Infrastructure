@@ -96,6 +96,12 @@ push_to_s3_lambda() {
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
         echo "Handling Lambda code push..."
+
+        code_archive='tktk'
+
+        version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body $code_archive --output text --query 'VersionId'`
+
+        export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
     fi
 }
 
