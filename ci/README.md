@@ -44,12 +44,15 @@ understanding of how they work.
 
 - `PRX_SNS_CALLBACK` The CodeBuild Callback Lambda function is subscribed to this topic. When the build completes a message should be sent there to complete the CI process. This value is set on the CodeBuild project resource definition in the CloudFormation template.
 - `PRX_AWS_ACCOUNT_ID` The AWS account ID where building and publishing takes place. This value is set on the CodeBuild project resource definition in the CloudFormation template.
+- `PRX_APPLICATION_CODE_BUCKET` The name of the S3 bucket where zipped Lambda code should be sent. This value is set on the CodeBuild project resource definition in the CloudFormation template.
 - `PRX_REPO` The name of the GitHub repository that initially triggered the webhook request. It's used for status notifications before and after the build. The value is determined by the Lambda and set during the call to `startBuild`.
 - `PRX_COMMIT` The commit hash of the event that triggered the webhook request. It's used for status notifications before and after the build. The value is determined by the Lambda and set during the call to `startBuild`.
 - `PRX_GITHUB_PR` The GitHub pull request number for the triggering event. It's used for status notifications before and after the build. The value is only present for pull request events and set during the call to `startBuild`.
 - `PRX_CI_PUBLISH` Used as a flag to tell the the CI process that the code should be published if it passes testing. This is generally only set to true for push events to a `master` branch, and is set during the call to `startBuild`.
 - `PRX_ECR_REGION` For code that is pushed to ECR, indicates the region the repository is in. The value is set in each project's `buildspec.yml`.
 - `PRX_ECR_REPOSITORY` For code that is pushed to ECR, indicates the name of the repository to push to. The value is set in each project's `buildspec.yml`.
+- `PRX_ECR_TAG`
+- `PRX_LAMBDA_CODE_S3_VERSION_ID`
 
 To reduce duplication of code for tasks common to most builds, such as publishing code or the SNS callback messages, a utility script is available. Generally the script will be downloaded and executed as the final command in the `post_build` phase of each `buildspec.yml` file.
 
