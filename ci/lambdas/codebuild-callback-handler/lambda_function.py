@@ -34,6 +34,10 @@ sns = boto3.client('sns')
 
 USER_AGENT = 'PRX/Infrastructure (codebuild-callback-handler)'
 
+SLACK_CHANNEL = '#ops-builds'
+SLACK_ICON = ':ops-codebuild:'
+SLACK_USERNAME = 'AWS CodeBuild'
+
 
 def update_github_status2(sns_message):
     print('...Updating GitHub status...')
@@ -114,7 +118,13 @@ def update_staging_config_status2(sns_message):
             staging_config['Parameters'][key_name] = ecr_tag
 
         if attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']:
+            version_id = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']
+
             print('...Updating Lambda code S3 version ID value...')
+
+            for key in attrs['PRX_LAMBDA_CONFIG_KEYS'].split(','):
+                print(f"...Setting {key} to {version_id}...")
+
 
         # Zip the new config up
 
@@ -135,6 +145,26 @@ def update_staging_config_status2(sns_message):
         print(f"...Uploading to S3 {source_bucket}/{source_key}...")
 
         s3.upload_file(new_archive_path, source_bucket, source_key)
+
+
+def post_notification_status2(sns_message):
+    print('...Posting build status notification...')
+
+    topic_arn = os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN']
+
+    slack_message = json.dumps({
+        'channel': SLACK_CHANNEL,
+        'username': SLACK_USERNAME,
+        'icon_emoji': SLACK_ICON,
+        'attachments': [
+            {
+                'mrkdwn_in': ['text'],
+
+            }
+        ]
+    })
+
+    sns.publish(TopicArn=topic_arn, Message=slack_message)
 
 
 def update_github_status(data):
@@ -244,6 +274,7 @@ def lambda_handler(event, context):
         # New CI
         update_github_status2(sns_object)
         update_staging_config_status2(sns_object)
+        post_notification_status2(sns_object)
     else:
         # Old CI
         callback_object = json.loads(event['Records'][0]['Sns']['Message'])
