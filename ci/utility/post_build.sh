@@ -82,8 +82,8 @@ push_to_ecr() {
             export PRX_ECR_TAG="$TAGGED_IMAGE_NAME"
 
             echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
-            # docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
-            # docker push $TAGGED_IMAGE_NAME
+            docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
+            docker push $TAGGED_IMAGE_NAME
         fi
     fi
 }
