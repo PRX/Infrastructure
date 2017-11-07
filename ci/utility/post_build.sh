@@ -26,12 +26,14 @@ send_sns_callback_message() {
     # Optional ECR parameters
     [ -z "$PRX_ECR_REGION" ] || MSGATR+=",\"PRX_ECR_REGION\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REGION\"}"
     [ -z "$PRX_ECR_REPOSITORY" ] || MSGATR+=",\"PRX_ECR_REPOSITORY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REPOSITORY\"}"
+    [ -z "$PRX_ECR_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_ECR_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_CONFIG_PARAMETERS\"}"
     [ -z "$PRX_ECR_IMAGE" ] || MSGATR+=",\"PRX_ECR_IMAGE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_IMAGE\"}"
     [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
     # Option Lambda code parameters
     [ -z "$PRX_LAMBDA_CODE_S3_KEY" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_KEY\"}"
     [ -z "$PRX_LAMBDA_CODE_S3_VERSION_ID" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_VERSION_ID\"}"
+    [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_PARAMETERS\"}"
 
     MSGATR+="}"
 
@@ -65,6 +67,7 @@ push_to_ecr() {
     if [ -n "$PRX_ECR_REPOSITORY" ]
     then
         if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
+        if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
         echo "Handling ECR push..."
 
         echo "Logging into ECR..."
@@ -97,6 +100,7 @@ push_to_s3_lambda() {
     if [ -n "$PRX_LAMBDA_CODE_S3_KEY" ]
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
+        if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
         echo "Handling Lambda code push..."
 
         code_archive='tktk'
