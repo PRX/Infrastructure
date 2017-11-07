@@ -51,9 +51,9 @@ understanding of how they work.
 - `PRX_CI_PUBLISH` Used as a flag to tell the the CI process that the code should be published if it passes testing. This is generally only set to true for push events to a `master` branch, and is set during the call to `startBuild`.
 - `PRX_ECR_REGION` For code that is pushed to ECR, indicates the region the repository is in. The value is set in each project's `buildspec.yml`.
 - `PRX_ECR_REPOSITORY` For code that is pushed to ECR, indicates the name of the repository to push to. The value is set in each project's `buildspec.yml`.
-- `PRX_ECR_TAG`
-- `PRX_ECR_IMAGE`
-- `PRX_LAMBDA_CODE_S3_VERSION_ID`
+- `PRX_ECR_TAG` Seven character Docker tag
+- `PRX_ECR_IMAGE` Full Docker image name
+- `PRX_LAMBDA_CODE_S3_VERSION_ID` The S3 version ID of the zipped Lambda code
 
 To reduce duplication of code for tasks common to most builds, such as publishing code or the SNS callback messages, a utility script is available. Generally the script will be downloaded and executed as the final command in the `post_build` phase of each `buildspec.yml` file.
 

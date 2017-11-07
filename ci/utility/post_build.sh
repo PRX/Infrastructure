@@ -26,6 +26,7 @@ send_sns_callback_message() {
     # Optional ECR parameters
     [ -z "$PRX_ECR_REGION" ] || MSGATR+=",\"PRX_ECR_REGION\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REGION\"}"
     [ -z "$PRX_ECR_REPOSITORY" ] || MSGATR+=",\"PRX_ECR_REPOSITORY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REPOSITORY\"}"
+    [ -z "$PRX_ECR_IMAGE" ] || MSGATR+=",\"PRX_ECR_IMAGE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_IMAGE\"}"
     [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
     # Option Lambda code parameters
