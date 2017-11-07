@@ -77,9 +77,10 @@ push_to_ecr() {
             build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
         else
             # Construct the image name with a tag
-            TAG=${PRX_COMMIT:0:7}
+            TAG="${PRX_COMMIT:0:7}"
+            export PRX_ECR_TAG="$TAG"
             TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
-            export PRX_ECR_TAG="$TAGGED_IMAGE_NAME"
+            export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
 
             echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
             docker tag $IMAGE_ID $TAGGED_IMAGE_NAME

@@ -52,6 +52,7 @@ understanding of how they work.
 - `PRX_ECR_REGION` For code that is pushed to ECR, indicates the region the repository is in. The value is set in each project's `buildspec.yml`.
 - `PRX_ECR_REPOSITORY` For code that is pushed to ECR, indicates the name of the repository to push to. The value is set in each project's `buildspec.yml`.
 - `PRX_ECR_TAG`
+- `PRX_ECR_IMAGE`
 - `PRX_LAMBDA_CODE_S3_VERSION_ID`
 
 To reduce duplication of code for tasks common to most builds, such as publishing code or the SNS callback messages, a utility script is available. Generally the script will be downloaded and executed as the final command in the `post_build` phase of each `buildspec.yml` file.
