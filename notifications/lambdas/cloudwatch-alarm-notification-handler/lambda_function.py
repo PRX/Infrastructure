@@ -110,6 +110,11 @@ def slack_message(sns_payload):
 def lambda_handler(event, context):
     sns_payload = event['Records'][0]['Sns']
 
+    # TODO This isn't necessary once all stacks stop using the log-level SNS
+    # topics for deployment notifications
+    if sns_payload['Subject'] == 'AWS CloudFormation Notification':
+        return
+
     sns.publish(
         TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
         Message=json.dumps(slack_message(sns_payload))
