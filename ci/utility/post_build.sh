@@ -113,7 +113,7 @@ push_to_s3_lambda() {
             container_id=$(docker create $image_id)
 
             echo "Copying zip archive for Lambda source..."
-            docker cp $container_id:$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME
+            docker cp $container_id:/app/$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME
 
             cleaned=`docker rm $container_id`
 
