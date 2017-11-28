@@ -112,6 +112,10 @@ push_to_s3_lambda() {
         else
             container_id=$(docker create $image_id)
 
+            docker start $container_id
+            docker exec $PRX_LAMBDA_CODE_ARCHIVE_COMMAND
+            docker stop $container_id
+
             echo "Copying zip archive for Lambda source..."
             docker cp $container_id:/app/$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME
 
