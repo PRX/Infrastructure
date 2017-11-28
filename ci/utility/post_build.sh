@@ -114,8 +114,8 @@ push_to_s3_lambda() {
             container_id=$(docker create $image_id)
 
             docker start $container_id
-            echo "Executing code archive proces..."
-            docker exec $container_id $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND
+            echo "Executing code archive process..."
+            docker exec $container_id sh -c "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND"
             docker stop $container_id
 
             echo "Copying zip archive for Lambda source..."
