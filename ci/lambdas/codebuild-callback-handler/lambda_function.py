@@ -53,19 +53,19 @@ def update_github_status2(sns_message):
     headers['Authorization'] = f"token {github_token}"
 
     api = 'api.github.com'
-    repo = attrs['PRX_REPO']
-    sha = attrs['PRX_COMMIT']
+    repo = attrs['PRX_REPO']['Value']
+    sha = attrs['PRX_COMMIT']['Value']
 
-    arn = attrs['CODEBUILD_BUILD_ARN']
+    arn = attrs['CODEBUILD_BUILD_ARN']['Value']
     region = arn.split(':')[3]
     build_id = arn.split('/')[1]
     path = 'console.aws.amazon.com/codebuild/home#/builds'
     build_url = f"https://{region}.{path}/{build_id}/view/new"
 
     # The GitHub state value
-    state = 'success' if attrs['STATUS'] == 'true' else 'failure'
-
-    description = 'Build complete' if attrs['STATUS'] == 'true' else message
+    status = attrs['STATUS']['Value']
+    state = 'success' if status == 'true' else 'failure'
+    description = 'Build complete' if status == 'true' else message
 
     json_body = json.dumps({
         'state': state,
@@ -84,7 +84,7 @@ def update_github_status2(sns_message):
 def update_staging_config_status2(sns_message):
     attrs = sns_message['MessageAttributes']
 
-    if (attrs['STATUS'] == 'true'):
+    if (attrs['STATUS']['Value'] == 'true'):
         print('...Updating Staging template config...')
 
         # Get current staging template config
@@ -101,26 +101,26 @@ def update_staging_config_status2(sns_message):
         with zipfile.ZipFile(archive_path, 'r') as archive:
             staging_config = json.load(archive.open('staging.json'))
 
-        if attrs['PRX_ECR_TAG']:
+        if 'PRX_ECR_TAG' in attrs:
             print('...Updating ECR image tag value...')
 
             # Update config with new ECR Tag
 
-            ecr_tag = attrs['PRX_ECR_TAG']
+            ecr_tag = attrs['PRX_ECR_TAG']['Value']
 
-            for key_name in attrs['PRX_ECR_CONFIG_PARAMETERS'].split(','):
+            for key_name in attrs['PRX_ECR_CONFIG_PARAMETERS']['Value'].split(','):
                 print(f"...Setting {key_name.strip()} to {ecr_tag}...")
 
                 staging_config['Parameters'][key_name.strip()] = ecr_tag
 
-        if attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']:
+        if 'PRX_LAMBDA_CODE_S3_VERSION_ID' in attrs:
             print('...Updating Lambda code S3 version ID value...')
 
             # Update config with new S3 Version ID
 
-            version_id = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']
+            version_id = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']['Value']
 
-            key_names = attrs['PRX_LAMBDA_CODE_CONFIG_PARAMETERS'].split(',')
+            key_names = attrs['PRX_LAMBDA_CODE_CONFIG_PARAMETERS']['Value'].split(',')
             for key_name in key_names:
                 print(f"...Setting {key_name.strip()} to {version_id}...")
 
@@ -150,19 +150,66 @@ def update_staging_config_status2(sns_message):
 def post_notification_status2(sns_message):
     print('...Posting build status notification...')
 
-    topic_arn = os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN']
+    message = sns_message['Message']
+    attrs = sns_message['MessageAttributes']
+
+    attachment = {
+        # ts: Math.floor(Date.now() / 1000),
+        'mrkdwn_in': ['text'],
+    }
+
+    repo = attrs['PRX_REPO']['Value']
+    sha = attrs['PRX_COMMIT']['Value']
+    sha7 = sha[0:7]
+
+    arn = attrs['CODEBUILD_BUILD_ARN']['Value']
+    region = arn.split(':')[3]
+    build_id = arn.split('/')[1]
+
+    commit_url = f"https://github.com/{repo}/commit/{sha7}"
+    build_url = f"https://{region}.console.aws.amazon.com/codebuild/home#/builds/{build_id}/view/new"
+
+    if 'PRX_GITHUB_PR' in attrs:
+        num = attrs['PRX_GITHUB_PR']['Value']
+        pr_url = f"https://github.com/{repo}/pull/{num}"
+        extra = f" <{pr_url}|#{num}>"
+    else:
+        extra = ':master'
+
+    if attrs['STATUS']['Value'] == 'true':
+        attachment['color'] = 'good'
+        attachment['fallback'] = f"Built {repo}{extra} with commit {sha7}"
+        attachment['title'] = f"Built <{build_url}|{repo}>{extra} with commit <{commit_url}|{sha7}>"
+
+        if 'PRX_GITHUB_PR' in attrs:
+            num = attrs['PRX_GITHUB_PR']['Value']
+            pr_url = f"https://github.com/{repo}/pull/{num}"
+            attachment['text'] = f"<{pr_url}|{pr_url}>"
+        elif 'PRX_ECR_TAG' in attrs:
+            tag = attrs['PRX_ECR_TAG']['Value']
+            ecr_region = attrs['PRX_ECR_REGION']['Value']
+            ecr_repo = attrs['PRX_ECR_REPOSITORY']['Value']
+            ecr_url = f"https://console.aws.amazon.com/ecs/home?region={ecr_region}#/repositories/{ecr_repo}"
+            attachment['text'] = f"Docker image pushed to <{ecr_url}|ECR> with tag `{tag}`"
+        elif 'PRX_LAMBDA_CODE_S3_VERSION_ID' in attrs:
+            s3_version = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']['Value']
+            attachment['text'] = f"Lambda code pushed to S3 with version ID `{s3_version}`"
+        else:
+            attachment['text'] = 'Unknown!'
+    else:
+        attachment['color'] = 'danger'
+        attachment['fallback'] = f"Failed to build {repo}{extra} with commit {sha7}"
+        attachment['title'] = f"Failed to build <{build_url}|{repo}>{extra} with commit <{commit_url}|{sha7}>"
+        attachment['text'] = f"> _{message}_"
 
     slack_message = json.dumps({
         'channel': SLACK_CHANNEL,
         'username': f"{SLACK_USERNAME}-2",
         'icon_emoji': SLACK_ICON,
-        'attachments': [
-            {
-                'mrkdwn_in': ['text'],
-
-            }
-        ]
+        'attachments': [attachment]
     })
+
+    topic_arn = os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN']
 
     sns.publish(TopicArn=topic_arn, Message=slack_message)
 
