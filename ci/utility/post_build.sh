@@ -39,15 +39,15 @@ send_sns_callback_message() {
 
     echo "$MSGATR"
 
-    # OUT=$(aws sns publish --topic-arn "$PRX_SNS_CALLBACK" --message "$MSG" --message-attributes "$MSGATR")
+    OUT=$(aws sns publish --topic-arn "$PRX_SNS_CALLBACK" --message "$MSG" --message-attributes "$MSGATR")
 
-    # SNS_CLI_CODE=$?
-    # if [ $SNS_CLI_CODE -eq 0 ]; then
-    #     echo "Sent SNS message: $MSG"
-    # else
-    #     echo "Failed to send SNS message: $MSG"
-    #     exit $SNS_CLI_CODE
-    # fi
+    SNS_CLI_CODE=$?
+    if [ $SNS_CLI_CODE -eq 0 ]; then
+        echo "Sent SNS message: $MSG"
+    else
+        echo "Failed to send SNS message: $MSG"
+        exit $SNS_CLI_CODE
+    fi
 }
 
 build_success() {
