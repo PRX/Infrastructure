@@ -124,7 +124,7 @@ push_to_s3_lambda() {
             cleaned=`docker rm $container_id`
 
             echo "Sending zip archive to S3..."
-            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME --output text --query 'VersionId'`
+            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
 
             export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
         fi
