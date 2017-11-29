@@ -104,27 +104,27 @@ def update_staging_config_status2(sns_message):
         if attrs['PRX_ECR_TAG']:
             print('...Updating ECR image tag value...')
 
-            # Update config with new ECR Tag for the appropriate app
+            # Update config with new ECR Tag
 
-            sha = attrs['PRX_COMMIT']
-            ecr_tag = sha[:7]
-            repo = attrs['PRX_REPO']
+            ecr_tag = attrs['PRX_ECR_TAG']
 
-            short_name = repo.replace('PRX/', '').replace('.prx.org', '')
-            key_name = "{0}EcrImageTag".format(short_name.capitalize())
+            for key_name in attrs['PRX_ECR_CONFIG_PARAMETERS'].split(','):
+                print(f"...Setting {key_name.strip()} to {ecr_tag}...")
 
-            print(f"...Setting {key_name} to {ecr_tag}...")
-
-            staging_config['Parameters'][key_name] = ecr_tag
+                staging_config['Parameters'][key_name.strip()] = ecr_tag
 
         if attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']:
-            version_id = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']
-
             print('...Updating Lambda code S3 version ID value...')
 
-            for key in attrs['PRX_LAMBDA_CONFIG_KEYS'].split(','):
-                print(f"...Setting {key} to {version_id}...")
+            # Update config with new S3 Version ID
 
+            version_id = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']
+
+            key_names = attrs['PRX_LAMBDA_CODE_CONFIG_PARAMETERS'].split(',')
+            for key_name in key_names:
+                print(f"...Setting {key_name.strip()} to {version_id}...")
+
+                staging_config['Parameters'][key_name.strip()] = version_id
 
         # Zip the new config up
 
@@ -154,7 +154,7 @@ def post_notification_status2(sns_message):
 
     slack_message = json.dumps({
         'channel': SLACK_CHANNEL,
-        'username': SLACK_USERNAME,
+        'username': f"{SLACK_USERNAME}-2",
         'icon_emoji': SLACK_ICON,
         'attachments': [
             {
@@ -282,6 +282,3 @@ def lambda_handler(event, context):
         update_github_status(callback_object)
         update_staging_config_status(callback_object)
         post_notification_status(callback_object)
-
-
-
