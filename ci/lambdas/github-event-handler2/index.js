@@ -160,19 +160,6 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         // push the code, etc).
 
         environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
-
-        // ECR push support
-        // When the runner gets a Region and Tag it will log in to ECR, and tag
-        // and push the image to the designated repository
-        // if (prxci.ecr) {
-        //     const ecrRegion = prxci.ecr.region;
-        //     environmentVariables.push({ name: 'PRX_ECR_REGION', value: ecrRegion });
-
-        //     const ecrRepository = prxci.ecr.repository;
-        //     const ecrImageTag = commitRef.substring(0, 7);
-        //     const tag = `${awsAccountId}.dkr.ecr.${ecrRegion}.amazonaws.com/${ecrRepository}:${ecrImageTag}`;
-        //     environmentVariables.push({ name: 'PRX_ECR_TAG', value: tag });
-        // }
     }
 
     codebuild.startBuild({
