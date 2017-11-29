@@ -159,7 +159,7 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         // determine where and how to handle successful builds (e.g. where to
         // push the code, etc).
 
-        environmentVariables.PRX_CI_PUBLISH = 'true';
+        environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
 
         // ECR push support
         // When the runner gets a Region and Tag it will log in to ECR, and tag
