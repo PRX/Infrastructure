@@ -101,8 +101,8 @@ push_to_s3_lambda() {
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
         if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME" ]; then build_error "PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND" ]; then build_error "PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND required for Lambda code push"; fi
+        # if [ -z "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME" ]; then build_error "PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME required for Lambda code push"; fi
+        # if [ -z "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND" ]; then build_error "PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND required for Lambda code push"; fi
         echo "Handling Lambda code push..."
 
         echo "Getting Docker image ID"
@@ -113,13 +113,13 @@ push_to_s3_lambda() {
         else
             container_id=$(docker create $image_id)
 
-            docker start $container_id
-            echo "Executing code archive process..."
-            docker exec $container_id sh -c "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND"
-            docker stop $container_id
+            # docker start $container_id
+            # echo "Executing code archive process..."
+            # docker exec $container_id sh -c "$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_COMMAND"
+            # docker stop $container_id
 
             echo "Copying zip archive for Lambda source..."
-            docker cp $container_id:/app/$PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME $PRX_LAMBDA_CODE_CONTAINER_ARCHIVE_FILENAME
+            docker cp $container_id:/.prxci/build.zip build.zip
 
             cleaned=`docker rm $container_id`
 
