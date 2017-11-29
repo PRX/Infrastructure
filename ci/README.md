@@ -72,6 +72,7 @@ CI will attempt to run if the following conditions are met:
 - The repository is in the PRX GitHub organization
 - A commit is made to a master branch or a change is made to a pull request
 - The repository contains a `buildspec.yml` file
+- The `buildspec.yml` contains the string `PRX_`
 
 Beyond this, there are no technical requirements necessary to be compatible with the CI system. It will happily run any buildspec that it sees, making it possible to write an entirely custom build process for a project.
 
