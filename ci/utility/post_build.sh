@@ -149,6 +149,8 @@ init() {
         push_to_s3_lambda
 
         build_success
+    else
+        build_success
     fi
 }
 
