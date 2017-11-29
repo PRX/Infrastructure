@@ -52,7 +52,7 @@ send_sns_callback_message() {
 
 build_success() {
     echo "Script completed successfully!"
-    send_sns_callback_message true
+    send_sns_callback_message true "Success"
     exit 0
 }
 
