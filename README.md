@@ -42,7 +42,9 @@ When a new packaged version of an app is pushed out (eg., to ECR), the CI proces
 
 ### Continuous Delivery
 
-The **CD** stack takes care of launching and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration. When either of these sources are updated, the pipeline deploys the changes to a staging environment. Acceptance tests are run against staging, and if they pass the updates can then be deployed to the production environment.
+The **CD** stack takes care of launching and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration.
+
+When either the infrastructure code or the staging infrastructure configuration is updated, the pipeline deploys the changes to a staging environment. Acceptance tests then run against staging. If they pass, the updates can then be deployed to the production environment, and the relevant values that should be updated in the production environment template configuration file (currently, only keys that match `"(EcrImageTag|S3ObjectVersion)"`) will be updated from the staging configuration file.
 
 Whenever an environment is successfully deployed, the CD pipeline also captures the state of the infrastructure and configuration, so that known good states can be rolled back to if necessary.
 
