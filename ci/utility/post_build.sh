@@ -101,7 +101,7 @@ push_to_s3_lambda() {
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
         if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then build_error "PRX_LAMBDA_ARCHIVE_BUILD_PATH required for Lambda code push"; fi
+        if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
         echo "Handling Lambda code push..."
 
         echo "Getting Docker image ID"
