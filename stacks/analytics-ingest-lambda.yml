@@ -1,0 +1,141 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Analytics ingest lambda functions
+Parameters:
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+Resources:
+  # IAM Roles
+  AnalyticsLambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  # Lambda Functions
+  AnalyticsBigqueryLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics to BigQuery
+      Environment:
+        Variables:
+          BQ_IMPRESSIONS_TABLE: "impressions"
+          BQ_DOWNLOADS_TABLE: "downloads"
+          BQ_PROJECT_ID: "prx-metrics"
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 30
+  AnalyticsPingbacksLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics http pingbacks
+      Environment:
+        Variables:
+          PINGBACKS: "true"
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 30
+  AnalyticsRedisLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics redis increments
+      Environment:
+        Variables:
+          REDIS_TTL: "7200"
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 30
+  # Lambda Alarms
+  AnalyticsBigqueryErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics bigquery lambda errors"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Too many analytics bigquery lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "300"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryLambdaFunction
+  AnalyticsPingbacksErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics pingbacks lambda errors"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Too many analytics pingbacks lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "300"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsPingbacksLambdaFunction
+  AnalyticsRedisErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics redis lambda errors"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Too many analytics redis lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "300"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsRedisLambdaFunction
