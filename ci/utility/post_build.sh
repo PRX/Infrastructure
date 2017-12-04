@@ -65,6 +65,7 @@ build_error() {
 # If PRX_ECR_REPOSITORY is present, we try to push to ECR
 push_to_ecr() {
     if [ -n "$PRX_ECR_REPOSITORY" ]
+    then
         echo "Found ECR support..."
 
         if [-z "$PRX_GITHUB_PR"]
