@@ -66,36 +66,29 @@ build_error() {
 push_to_ecr() {
     if [ -n "$PRX_ECR_REPOSITORY" ]
     then
-        echo "Found ECR support..."
+        if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
+        if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
+        echo "Handling ECR push..."
 
-        if [-z "$PRX_GITHUB_PR"]
-        then
-            echo "...Skipping ECR push for pull request"
+        echo "Logging into ECR..."
+        $(aws ecr get-login --region $PRX_ECR_REGION)
+        echo "...Logged in to ECR"
+
+        echo "Getting Docker image ID"
+        IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
+
+        if [ -z "$IMAGE_ID" ]; then
+            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
         else
-            if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
-            if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
-            echo "Handling ECR push..."
+            # Construct the image name with a tag
+            TAG="${PRX_COMMIT:0:7}"
+            export PRX_ECR_TAG="$TAG"
+            TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
+            export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
 
-            echo "Logging into ECR..."
-            $(aws ecr get-login --region $PRX_ECR_REGION)
-            echo "...Logged in to ECR"
-
-            echo "Getting Docker image ID"
-            IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
-
-            if [ -z "$IMAGE_ID" ]; then
-                build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
-            else
-                # Construct the image name with a tag
-                TAG="${PRX_COMMIT:0:7}"
-                export PRX_ECR_TAG="$TAG"
-                TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
-                export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
-
-                echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
-                docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
-                docker push $TAGGED_IMAGE_NAME
-            fi
+            echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
+            docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
+            docker push $TAGGED_IMAGE_NAME
         fi
     fi
 }
@@ -149,7 +142,7 @@ init() {
     fi
 
     # Handle code publish if enabled
-    if [ -n "$PRX_CI_PUBLISH" ]
+    if [ "$PRX_CI_PUBLISH" = "true" ]
     then
         echo "Publishing code..."
         push_to_ecr
