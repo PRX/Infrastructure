@@ -66,36 +66,29 @@ build_error() {
 push_to_ecr() {
     if [ -n "$PRX_ECR_REPOSITORY" ]
     then
-        echo "Found ECR support..."
+        if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
+        if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
+        echo "Handling ECR push..."
 
-        if [-z "$PRX_GITHUB_PR"]
-        then
-            echo "...Skipping ECR push for pull request"
+        echo "Logging into ECR..."
+        $(aws ecr get-login --region $PRX_ECR_REGION)
+        echo "...Logged in to ECR"
+
+        echo "Getting Docker image ID"
+        IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
+
+        if [ -z "$IMAGE_ID" ]; then
+            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
         else
-            if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
-            if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
-            echo "Handling ECR push..."
+            # Construct the image name with a tag
+            TAG="${PRX_COMMIT:0:7}"
+            export PRX_ECR_TAG="$TAG"
+            TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
+            export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
 
-            echo "Logging into ECR..."
-            $(aws ecr get-login --region $PRX_ECR_REGION)
-            echo "...Logged in to ECR"
-
-            echo "Getting Docker image ID"
-            IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
-
-            if [ -z "$IMAGE_ID" ]; then
-                build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
-            else
-                # Construct the image name with a tag
-                TAG="${PRX_COMMIT:0:7}"
-                export PRX_ECR_TAG="$TAG"
-                TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
-                export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
-
-                echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
-                docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
-                docker push $TAGGED_IMAGE_NAME
-            fi
+            echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
+            docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
+            docker push $TAGGED_IMAGE_NAME
         fi
     fi
 }
@@ -106,35 +99,28 @@ push_to_ecr() {
 push_to_s3_lambda() {
     if [ -n "$PRX_LAMBDA_CODE_S3_KEY" ]
     then
-        echo "Found Lambda S3 support..."
+        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
+        if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
+        if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
+        echo "Handling Lambda code push..."
 
-        if [-z "$PRX_GITHUB_PR"]
-        then
-            echo "...Skipping Lambda push for pull request"
+        echo "Getting Docker image ID"
+        image_id=$(docker images --filter "label=org.prx.lambda" --format "{{.ID}}" | head -n 1)
+
+        if [ -z "$image_id" ]; then
+            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
         else
-            if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
-            if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
-            if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
-            echo "Handling Lambda code push..."
+            container_id=$(docker create $image_id)
 
-            echo "Getting Docker image ID"
-            image_id=$(docker images --filter "label=org.prx.lambda" --format "{{.ID}}" | head -n 1)
+            echo "Copying zip archive for Lambda source..."
+            docker cp $container_id:$PRX_LAMBDA_ARCHIVE_BUILD_PATH build.zip
 
-            if [ -z "$image_id" ]; then
-                build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
-            else
-                container_id=$(docker create $image_id)
+            cleaned=`docker rm $container_id`
 
-                echo "Copying zip archive for Lambda source..."
-                docker cp $container_id:$PRX_LAMBDA_ARCHIVE_BUILD_PATH build.zip
+            echo "Sending zip archive to S3..."
+            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
 
-                cleaned=`docker rm $container_id`
-
-                echo "Sending zip archive to S3..."
-                version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
-
-                export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
-            fi
+            export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
         fi
     fi
 }
@@ -155,16 +141,21 @@ init() {
         build_error "A previous CodeBuild phase did not succeed"
     fi
 
-    # Handle code publish if enabled
-    if [ -n "$PRX_CI_PUBLISH" ]
+    # Handle code publish if enabled and not pull requests
+    if [-z "$PRX_GITHUB_PR"]
     then
-        echo "Publishing code..."
-        push_to_ecr
-        push_to_s3_lambda
-
-        build_success
+        echo "...Skipping publish for pull request"
     else
-        build_success
+        if [ -n "$PRX_CI_PUBLISH" ]
+        then
+            echo "Publishing code..."
+            push_to_ecr
+            push_to_s3_lambda
+
+            build_success
+        else
+            build_success
+        fi
     fi
 }
 
