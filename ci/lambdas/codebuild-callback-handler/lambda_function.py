@@ -87,6 +87,9 @@ def update_staging_config_status2(sns_message):
     if (attrs['STATUS']['Value'] == 'true'):
         print('...Updating Staging template config...')
 
+        # Keep track of if anything has changed
+        config_did_change = False
+
         # Get current staging template config
 
         source_bucket = os.environ['INFRASTRUCTURE_CONFIG_BUCKET']
@@ -104,6 +107,8 @@ def update_staging_config_status2(sns_message):
         if 'PRX_ECR_TAG' in attrs:
             print('...Updating ECR image tag value...')
 
+            config_did_change = True
+
             # Update config with new ECR Tag
 
             ecr_tag = attrs['PRX_ECR_TAG']['Value']
@@ -115,6 +120,8 @@ def update_staging_config_status2(sns_message):
 
         if 'PRX_LAMBDA_CODE_S3_VERSION_ID' in attrs:
             print('...Updating Lambda code S3 version ID value...')
+
+            config_did_change = True
 
             # Update config with new S3 Version ID
 
@@ -141,10 +148,13 @@ def update_staging_config_status2(sns_message):
         archive.close()
 
         # Send back to S3
+        # Only do this if something was updated, so we're not pushing unchanged
+        # files, which would still trigger deploys
 
-        print(f"...Uploading to S3 {source_bucket}/{source_key}...")
+        if config_did_change:
+            print(f"...Uploading to S3 {source_bucket}/{source_key}...")
 
-        s3.upload_file(new_archive_path, source_bucket, source_key)
+            s3.upload_file(new_archive_path, source_bucket, source_key)
 
 
 def post_notification_status2(sns_message):
