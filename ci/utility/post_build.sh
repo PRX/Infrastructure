@@ -110,7 +110,7 @@ push_to_s3_lambda() {
 
         if [-z "$PRX_GITHUB_PR"]
         then
-            echo "...Skipping ECR push for pull request"
+            echo "...Skipping Lambda push for pull request"
         else
             if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
             if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
