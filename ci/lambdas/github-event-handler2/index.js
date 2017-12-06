@@ -152,6 +152,7 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
 
         const num = event.pull_request.number;
         environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+        environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
     } else {
         // All other events should be code pushes to the master branch. These
         // should get tested and published. The buildspec.yml file will contain

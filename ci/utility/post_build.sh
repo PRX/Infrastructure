@@ -141,8 +141,8 @@ init() {
         build_error "A previous CodeBuild phase did not succeed"
     fi
 
-    # Handle code publish if enabled and not pull requests
-    if [ -n "$PRX_CI_PUBLISH" ] && [-z "$PRX_GITHUB_PR"]
+    # Handle code publish if enabled
+    if [ "$PRX_CI_PUBLISH" = "true" ]
     then
         echo "Publishing code..."
         push_to_ecr
