@@ -142,20 +142,15 @@ init() {
     fi
 
     # Handle code publish if enabled and not pull requests
-    if [-z "$PRX_GITHUB_PR"]
+    if [ -n "$PRX_CI_PUBLISH" ] && [-z "$PRX_GITHUB_PR"]
     then
-        echo "...Skipping publish for pull request"
-    else
-        if [ -n "$PRX_CI_PUBLISH" ]
-        then
-            echo "Publishing code..."
-            push_to_ecr
-            push_to_s3_lambda
+        echo "Publishing code..."
+        push_to_ecr
+        push_to_s3_lambda
 
-            build_success
-        else
-            build_success
-        fi
+        build_success
+    else
+        build_success
     fi
 }
 
