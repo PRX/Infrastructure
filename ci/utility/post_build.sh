@@ -106,28 +106,35 @@ push_to_ecr() {
 push_to_s3_lambda() {
     if [ -n "$PRX_LAMBDA_CODE_S3_KEY" ]
     then
-        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
-        echo "Handling Lambda code push..."
+        echo "Found Lambda S3 support..."
 
-        echo "Getting Docker image ID"
-        image_id=$(docker images --filter "label=org.prx.lambda" --format "{{.ID}}" | head -n 1)
-
-        if [ -z "$image_id" ]; then
-            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
+        if [-z "$PRX_GITHUB_PR"]
+        then
+            echo "...Skipping ECR push for pull request"
         else
-            container_id=$(docker create $image_id)
+            if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
+            if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
+            if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
+            echo "Handling Lambda code push..."
 
-            echo "Copying zip archive for Lambda source..."
-            docker cp $container_id:$PRX_LAMBDA_ARCHIVE_BUILD_PATH build.zip
+            echo "Getting Docker image ID"
+            image_id=$(docker images --filter "label=org.prx.lambda" --format "{{.ID}}" | head -n 1)
 
-            cleaned=`docker rm $container_id`
+            if [ -z "$image_id" ]; then
+                build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
+            else
+                container_id=$(docker create $image_id)
 
-            echo "Sending zip archive to S3..."
-            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
+                echo "Copying zip archive for Lambda source..."
+                docker cp $container_id:$PRX_LAMBDA_ARCHIVE_BUILD_PATH build.zip
 
-            export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
+                cleaned=`docker rm $container_id`
+
+                echo "Sending zip archive to S3..."
+                version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
+
+                export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
+            fi
         fi
     fi
 }
