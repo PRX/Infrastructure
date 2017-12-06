@@ -24,6 +24,17 @@ Resources:
               Action:
                 - "sts:AssumeRole"
       Path: "/"
+      Policies:
+        - PolicyName: ParameterStoreReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:DescribeParameters"
+                  - "ssm:GetParameters"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -36,6 +47,12 @@ Resources:
         S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: Dovetail analytics to BigQuery
+      Environment:
+        Variables:
+          PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-bigquery"
+          BQ_IMPRESSIONS_TABLE: "impressions"
+          BQ_DOWNLOADS_TABLE: "downloads"
+          BQ_PROJECT_ID: "prx-metrics"
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -49,6 +66,9 @@ Resources:
         S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: Dovetail analytics http pingbacks
+      Environment:
+        Variables:
+          PINGBACKS: "true"
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -62,6 +82,10 @@ Resources:
         S3Key: !Sub "lambda/PRX-analytics-ingest-lambda.zip"
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: Dovetail analytics redis increments
+      Environment:
+        Variables:
+          PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-redis"
+          REDIS_TTL: "7200"
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
