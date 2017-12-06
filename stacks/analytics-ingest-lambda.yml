@@ -9,6 +9,20 @@ Parameters:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
+Mappings:
+  VPCSettingsMap:
+    test:
+      vpcsecurity: ""
+      vpcsubnets: ""
+    beta:
+      vpcsecurity: ""
+      vpcsubnets: ""
+    stag:
+      vpcsecurity: "sg-8128d3f8"
+      vpcsubnets: "subnet-89ac7dff,subnet-79442344"
+    prod:
+      vpcsecurity: "sg-c6eb1da1"
+      vpcsubnets: "subnet-83ed9fda,subnet-414e296a,subnet-a0bce4d7,subnet-a0dfd19a"
 Resources:
   # IAM Roles
   AnalyticsLambdaExecutionIAMRole:
@@ -92,6 +106,9 @@ Resources:
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs6.10
       Timeout: 30
+      VpcConfig:
+        SecurityGroupIds: !Split [",", !FindInMap [VPCSettingsMap, !Ref EnvironmentTypeAbbreviation, vpcsecurity]]
+        SubnetIds: !Split [",", !FindInMap [VPCSettingsMap, !Ref EnvironmentTypeAbbreviation, vpcsubnets]]
   # Lambda Alarms
   AnalyticsBigqueryErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
