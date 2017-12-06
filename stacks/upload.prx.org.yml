@@ -16,6 +16,8 @@ Parameters:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
+  WildcardCertificateArn:
+    Type: String
 Resources:
   # API Gateway
   UploadRestApi:
@@ -82,6 +84,34 @@ Resources:
       Description: production stage for upload lambda gateway integration
       RestApiId: !Ref UploadRestApi
       DeploymentId: !Ref UploadRestApiDeployment
+  # Custom Domain
+  UploadRestApiDomainName:
+    Type: "AWS::ApiGateway::DomainName"
+    Properties:
+      CertificateArn: !Ref WildcardCertificateArn
+      DomainName: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref AWS::Region, !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
+  UploadRestApiBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Properties:
+      BasePath: '/prod' # This should match the StageName of the UploadRestApiStage
+      DomainName: !Ref RestApiDomainName
+      RestApiId: !Ref RestApi
+  UploadRestApiDomainNameRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for upload signing API
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref AWS::Region, !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
+          AliasTarget:
+            DNSName: !GetAtt UploadRestApiDomainName.DistributionDomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: A
+          Name: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref AWS::Region, !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
+          AliasTarget:
+            DNSName: !GetAtt UploadRestApiDomainName.DistributionDomainName
+            HostedZoneId: Z2FDTNDATAQYW2
   # Upload signing
   UploadLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -184,3 +214,10 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadLambdaFunction
+Outputs:
+  ApiDomainName:
+    Description: The custom API domain name
+    Value: !Ref UploadRestApiDomainName
+  DistributionDomainName:
+    Description: The Amazon CloudFront distribution domain name that's mapped to the custom domain name
+    Value: !GetAtt UploadRestApiDomainName.DistributionDomainName
