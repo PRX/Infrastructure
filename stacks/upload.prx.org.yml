@@ -1,5 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: File upload Lambda function
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   OpsErrorMessagesSnsTopicArn:
     Type: String
@@ -9,25 +12,11 @@ Parameters:
     Type: String
   PRXUploadAccessKey:
     Type: String
+  EnvironmentType:
+    Type: String
   EnvironmentTypeAbbreviation:
     Type: String
 Resources:
-  # IAM Roles
-  LambdaBasicExecutionIAMRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "lambda.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
-      Path: "/"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   # API Gateway
   UploadRestApi:
     Type: "AWS::ApiGateway::RestApi"
@@ -93,15 +82,22 @@ Resources:
       Description: production stage for upload lambda gateway integration
       RestApiId: !Ref UploadRestApi
       DeploymentId: !Ref UploadRestApiDeployment
-  # Lambda Permissions
-  UploadRestApiLambdaPermission:
-    Type: "AWS::Lambda::Permission"
+  # Upload signing
+  UploadLambdaIamRole:
+    Type: "AWS::IAM::Role"
     Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref UploadLambdaFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
-  # Lambda Functions
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   UploadLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -115,26 +111,75 @@ Resources:
           ACCESS_KEY: !Ref PRXUploadAccessKey
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIAMRole.Arn
+      Role: !GetAtt UploadLambdaIamRole.Arn
       Runtime: nodejs6.10
       Timeout: 5
-  # Lambda Alarms
-  UploadErrorAlarm:
+  UploadRestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref UploadLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
+  UploadLambdaIamRoleErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "${EnvironmentTypeAbbreviation} upload lambda errors"
+      AlarmName: "[Upload][Lambda][Error] Invocation 4XX"
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription:
-        The error rate on the upload lambda has exceeded 0 in the last five minutes.
+        The error rate on the upload lambda has exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
       MetricName: Errors
       Namespace: AWS/Lambda
-      Period: "300"
+      Period: "60"
       Statistic: Sum
       Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UploadLambdaFunction
+  UploadLambdaIamRoleThrottleAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda][Throttles] Invocation 429"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Throttles on the upload lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UploadLambdaFunction
+  UploadLambdaIamRoleDurationAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda][Duration] Unusually slow"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        At least one invocation duration exceeded 225ms
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Maximum
+      Threshold: "225"
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
