@@ -151,7 +151,9 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         // callback for setting the GitHub status.
 
         const num = event.pull_request.number;
+        const branch = event.pull_request.head.ref;
         environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
         environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
     } else {
         // All other events should be code pushes to the master branch. These
@@ -160,6 +162,8 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         // determine where and how to handle successful builds (e.g. where to
         // push the code, etc).
 
+        const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
         environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
     }
 
