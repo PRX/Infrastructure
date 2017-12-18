@@ -727,6 +727,15 @@ Resources:
                   - "s3:GetObjectVersion"
                 Effect: Allow
                 Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+        - PolicyName: ParameterStorePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:GetParameters"
+                Resource:
+                  - "*" # TODO
   AcceptanceTestsCodeBuildProject:
     Type: "AWS::CodeBuild::Project"
     Properties:
@@ -735,30 +744,30 @@ Resources:
       Description: Runs acceptance tests for PRX platform
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
-        EnvironmentVariables:
-          - Name: DOVETAIL_HOST
-            Value: dovetail.staging.prxu.org
-          - Name: DOVETAIL_PROD_HOST
-            Value: dovetail.prxu.org
-          - Name: FEEDER_HOST
-            Value: feeder.staging.prx.tech
-          - Name: METRICS_HOST
-            Value: metrics.staging.prx.tech
-          - Name: PUBLISH_HOST
-            Value: publish.staging.prx.tech
-          - Name: PUBLISH_USER
-            Value: test@test.com
-          - Name: PUBLISH_PASS
-            Value: test1234
-          - Name: UPLOAD_HOST
-            Value: upload-5e12hsv5dh-us-east-1.staging.prx.tech
+        # EnvironmentVariables:
+        #   - Name: DOVETAIL_HOST
+        #     Value: dovetail.staging.prxu.org
+        #   - Name: DOVETAIL_PROD_HOST
+        #     Value: dovetail.prxu.org
+        #   - Name: FEEDER_HOST
+        #     Value: feeder.staging.prx.tech
+        #   - Name: METRICS_HOST
+        #     Value: metrics.staging.prx.tech
+        #   - Name: PUBLISH_HOST
+        #     Value: publish.staging.prx.tech
+        #   - Name: PUBLISH_USER
+        #     Value: test@test.com
+        #   - Name: PUBLISH_PASS
+        #     Value: test1234
+        #   - Name: UPLOAD_HOST
+        #     Value: upload-5e12hsv5dh-us-east-1.staging.prx.tech
         Image: 561178107736.dkr.ecr.us-east-1.amazonaws.com/meta.prx.org:latest
         Type: LINUX_CONTAINER
       # If this Name changes, the CodeBuild role policy needs to change too
       Name: !Sub ${AWS::StackName}-AcceptanceTests
       ServiceRole: !GetAtt AcceptanceTestsCodeBuildIamRole.Arn
       Source:
-        BuildSpec: "version: 0.1\nphases:\n  pre_build:\n    commands:\n      - bundle install\n  build:\n    commands:\n      - bundle exec rake\nartifacts:\n  files:\n    - README.md"
+        BuildSpec: "buildspec-pipeline.yml"
         Type: CODEPIPELINE
       Tags:
         - Key: Project
