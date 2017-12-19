@@ -71,7 +71,7 @@ push_to_ecr() {
         echo "Handling ECR push..."
 
         echo "Logging into ECR..."
-        $(aws ecr get-login --region $PRX_ECR_REGION)
+        $(aws ecr get-login --no-include-email --region $PRX_ECR_REGION)
         echo "...Logged in to ECR"
 
         echo "Getting Docker image ID"
