@@ -45,6 +45,8 @@ Parameters:
     Type: "AWS::EC2::AvailabilityZone::Name"
   OpsDebugMessagesSnsTopicArn:
     Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
   SlackMessageRelaySnsTopicArn:
@@ -506,6 +508,57 @@ Resources:
         - !Ref VPCSubnet1
         - !Ref VPCSubnet2
         - !Ref VPCSubnet3
+  # ASG Alarms
+  ECSClusterASGNetworkOutAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[${VPC}][ASG][NetworkOut] Unusually high traffic"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >
+        ECS Cluster ASG outbound network traffic is unusually high
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "2"
+      MetricName: NetworkOut
+      Namespace: AWS/ApplicationELB
+      Period: "300"
+      Statistic: Sum
+      Threshold: "25000000000"
+      TreatMissingData: missing
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSClusterASG
+  ECSClusterASGNetworkInAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[${VPC}][ASG][NetworkIn] Unusually high traffic"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >
+        ECS Cluster ASG inbound network traffic is unusually high
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "2"
+      MetricName: NetworkIn
+      Namespace: AWS/ApplicationELB
+      Period: "300"
+      Statistic: Sum
+      Threshold: "150000000000"
+      TreatMissingData: missing
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ECSClusterASG
   # ECS task draining
   ECSDrainSNSTopic:
     Type: "AWS::SNS::Topic"
