@@ -26,11 +26,14 @@ import os
 import zipfile
 import json
 import uuid
+import datetime
 import urllib.request
 from botocore.client import Config
 
 s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
 sns = boto3.client('sns')
+cloudwatch = boto3.client('cloudwatch')
+codebuild = boto3.client('codebuild')
 
 USER_AGENT = 'PRX/Infrastructure (codebuild-callback-handler)'
 
@@ -224,6 +227,69 @@ def post_notification_status(sns_message):
     sns.publish(TopicArn=topic_arn, Message=slack_message)
 
 
+def log_build_metrics(sns_message):
+    attrs = sns_message['MessageAttributes']
+
+    build_arn = attrs['CODEBUILD_BUILD_ARN']['Value']
+    build_id = build_arn.split('/')[1]
+    project_name = build_id.split(':')[0]
+
+    github_repo = attrs['PRX_REPO']['Value']
+
+    build = codebuild.batch_get_builds(ids=[build_id])['builds'][0]
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    build_duration = (now - build['startTime']).total_seconds()
+
+    cloudwatch.put_metric_data(
+        Namespace='PRX/CI',
+        MetricData=[
+            {
+                'MetricName': 'Builds',
+                'Dimensions': [
+                    {
+                        'Name': 'CodeBuildProject',
+                        'Value': project_name
+                    }
+                ],
+                'Value': 1,
+                'Unit': 'Count'
+            }, {
+                'MetricName': 'BuildDuration',
+                'Dimensions': [
+                    {
+                        'Name': 'CodeBuildProject',
+                        'Value': project_name
+                    }
+                ],
+                'Value': build_duration,
+                'Unit': 'Seconds'
+            }, {
+                'MetricName': 'Builds',
+                'Dimensions': [
+                    {
+                        'Name': 'GitHubRepository',
+                        'Value': github_repo
+                    }
+                ],
+                'Value': 1,
+                'Unit': 'Count'
+            }, {
+                'MetricName': 'BuildDuration',
+                'Dimensions': [
+                    {
+                        'Name': 'GitHubRepository',
+                        'Value': github_repo
+                    }
+                ],
+                'Value': build_duration,
+                'Unit': 'Seconds'
+            }
+        ]
+    )
+
+
 def lambda_handler(event, context):
     sns_object = event['Records'][0]['Sns']
 
@@ -233,3 +299,4 @@ def lambda_handler(event, context):
         update_github_status(sns_object)
         update_staging_config_status(sns_object)
         post_notification_status(sns_object)
+        log_build_metrics(sns_object)
