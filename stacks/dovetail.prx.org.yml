@@ -25,6 +25,8 @@ Parameters:
   # Misc #######################################################################
   OpsDebugMessagesSnsTopicArn:
     Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
   EnvironmentType:
@@ -198,6 +200,58 @@ Resources:
       Namespace: AWS/ApplicationELB
       Period: "60"
       Statistic: Sum
+      Threshold: "5"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
+  DovetailALBResponseTimeP99Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Dovetail][ALB][TargetResponseTime] P99 unusually slow"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >
+        Target response time value for Dovetail load balancer targets at 99th
+        percentile higher than expected
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      ExtendedStatistic: p99
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Threshold: "2"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
+  DovetailALBResponseTimeP95Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Dovetail][ALB][TargetResponseTime] P95 extremely slow"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >
+        Target response time value for Dovetail load balancer targets at 95th
+        percentile higher than expected
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Period: "60"
       Threshold: "5"
       TreatMissingData: notBreaching
       Dimensions:

@@ -20,6 +20,8 @@ Parameters:
     Type: "AWS::EC2::Subnet::Id"
   VPCCertificateArn:
     Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
 Resources:
@@ -141,6 +143,33 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt PlatformALB.LoadBalancerFullName
+  PlatformALBResponseTimeP95Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[${VPC}][ALB][TargetResponseTime] P95 unusually slow"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >
+        Target response time value for Dovetail load balancer targets at 95th
+        percentile higher than expected
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Period: "60"
+      Threshold: "5"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
+
 Outputs:
   PlatformALBArn:
     Description: The ARN for the application load balancer
