@@ -56,6 +56,14 @@ def alarm_slack_attachment(alarm):
     items = alarm_history['AlarmHistoryItems']
     alarms = filter(lambda x: ('to ALARM' in x['HistorySummary']), items)
 
+    if 'ExtendedStatistic' in trigger:
+        stat = trigger['ExtendedStatistic']
+    else:
+        stat = trigger['Statistic']
+
+    eper = trigger['EvaluationPeriods']
+    per = trigger['Period']
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
@@ -66,7 +74,7 @@ def alarm_slack_attachment(alarm):
         'fields': [
             {
                 'title': 'Evaluation',
-                'value': f"{trigger['Statistic']} – {trigger['EvaluationPeriods']} × {trigger['Period']}",
+                'value': f"{stat} – {eper} × {per}",
                 'short': True,
             }, {
                 'title': 'Threshold',
