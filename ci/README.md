@@ -2,7 +2,7 @@
 
 ## Goals
 
-In order to support the [practice](https://en.wikipedia.org/wiki/Continuous_integration) [of](https://aws.amazon.com/devops/continuous-integration/) **[continuous](https://www.visualstudio.com/learn/what-is-continuous-integration/) [integration](https://www.thoughtworks.com/continuous-integration)** for a large of the apps and services we build, including all of our customer-facing services, we have built a platform to automate the test and build processes for each project.
+In order to support the [practice](https://en.wikipedia.org/wiki/Continuous_integration) [of](https://aws.amazon.com/devops/continuous-integration/) **[continuous](https://www.visualstudio.com/learn/what-is-continuous-integration/) [integration](https://www.thoughtworks.com/continuous-integration)** for a large number of the apps and services we build, including all of our customer-facing services, we have built a platform to automate the test and build processes for each project.
 
 The high-level goals of the system are:
 
@@ -20,7 +20,7 @@ While the CI stack is designed to be launched in any AWS region, regardless of w
 
 ### System Components
 
-The following describes each aspect of the CI system in the order that they usually come into play during an execution
+The following describes each aspect of the CI system in the order that they usually come into play during an execution.
 
 #### GitHub Webhook
 
@@ -30,7 +30,7 @@ An HTTP REST API is constructed using [Amazon API Gateway](https://aws.amazon.co
 
 #### GitHub Event Handling
 
-Event data that are published to SNS by the GitHub webhook request handler function is handled immediately by another Lambda function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from project that is meant for CI, and filtering out code pushes that are not part of pull requests.
+Event data that are published to SNS by the GitHub webhook request handler function get handled immediately by another Lambda function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
 
 If it's determined that an event represents code that should be built and tested, this function will:
 
@@ -38,15 +38,15 @@ If it's determined that an event represents code that should be built and tested
 - Push that archive to [Amazon S3](https://aws.amazon.com/s3/) (so that it is available later in the process)
 - Configure and trigger a build for the code in [AWS CodeBuild](https://aws.amazon.com/codebuild/)
 - Update the GitHub commit status for the code being tested
-- Send a notification to developers through channels like [Slack](https://slack.com/) so the process is visible
+- Send a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible
 
 #### CodeBuild
 
-When the previous step triggers a build, it does so by calling `startBuild` in a CodeBuild project that was setup by the `ci.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
+When the previous step triggers a build, it does so by calling `startBuild` on a CodeBuild project that was setup by the `ci.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
 
-CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers and dealt with _inside_ of CodeBuild's native Docker build environment container.
+CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers and dealt with _inside_ of CodeBuild's native Docker build environment container (ie, Docker running inside Docker).
 
-The configuration of each build is determined by the event Lambda function. This includes properties such as:
+The configuration for each build is determined by the event Lambda function. This includes properties such as:
 
 - The [build specification](http://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html) used to run the build
 - The location, in S3, of the code to be tested
