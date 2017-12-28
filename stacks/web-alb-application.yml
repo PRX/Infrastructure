@@ -26,6 +26,8 @@ Parameters:
   # Misc #######################################################################
   OpsDebugMessagesSnsTopicArn:
     Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
   EnvironmentType:
@@ -213,6 +215,32 @@ Resources:
       Period: "60"
       Statistic: Sum
       Threshold: "2"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt ALB.LoadBalancerFullName
+  ALBResponseTimeP95Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[${AppName}][ALB][TargetResponseTime] P95 extremely slow"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: !Sub |
+        Target response time value for ${AppName} load balancer targets at 95th
+        percentile higher than expected
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      ExtendedStatistic: p95
+      MetricName: TargetResponseTime
+      Namespace: AWS/ApplicationELB
+      Period: "300"
+      Threshold: "0.1"
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
