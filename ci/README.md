@@ -44,7 +44,7 @@ If it's determined that an event represents code that should be built and tested
 
 When the previous step triggers a build, it does so by calling `startBuild` on a CodeBuild project that was setup by the `ci.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
 
-CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers and dealt with _inside_ of CodeBuild's native Docker build environment container (ie, Docker running inside Docker).
+CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers are dealt with _inside_ of CodeBuild's native Docker build environment container (ie, Docker running inside a Docker container).
 
 The configuration for each build is determined by the event Lambda function. This includes properties such as:
 
@@ -56,7 +56,7 @@ The configuration for each build is determined by the event Lambda function. Thi
 
 Once a build run has completed, a third Lambda function is generally invoked to complete the CI process. Information about the original GitHub event, as well information about the results of the build run, are published to SNS, and the callback function handles those messages.
 
-Though the function handles some housekeeping tasks, such as updating the GitHub commit status and sending developer notifications, it's most important function is to publish information about deployable code artifacts that result from the builds. This only happens when such an artifact exists (ie not when building feature branches). Specifically, the function updates a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) that can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
+Though the function handles some housekeeping tasks, such as updating the GitHub commit status and sending developer notifications, its most important function is to publish information about deployable code artifacts that result from the builds. This only happens when such an artifact exists (ie not when building feature branches). Specifically, the function updates a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) that can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
 
 ### Auxiliary Components
 
@@ -77,7 +77,7 @@ Beyond this, there are no technical requirements necessary to be compatible with
 
 In general, though, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
 
-If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. If you choose to have this script publish the code resulting from the build process (which generally will be the case) the `PRX_CI_PUBLISH` environment variable must be set to the string value `true` by the time the post_build script runs. The `post_build` script also sends a message to an SNS topic, including information about the build process and any published code. There is a callback Lambda function that also runs as part of the CI process that can take these messages, and trigger updates to the CD system.
+If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. The script will only attempt to publish code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The GitHub event handler Lambda will set that by default for `master` branch events. The `post_build` script also sends a message to an SNS topic, including information about the build process and any published code. There is a callback Lambda function that also runs as part of the CI process that can take these messages, and trigger updates to the CD system.
 
 ### ECS Targets
 
