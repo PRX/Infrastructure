@@ -1,11 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Analytics ingest lambda functions
+Conditions:
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
   CodeS3Bucket:
     Type: String
   CodeS3ObjectVersion:
+    Type: String
+  EnvironmentType:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
@@ -118,9 +124,9 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics bigquery lambda errors"
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][Errors] ${EnvironmentType} > 0"
       AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
       AlarmDescription:
         Too many analytics bigquery lambda errors
       ComparisonOperator: GreaterThanThreshold
@@ -134,13 +140,34 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref AnalyticsBigqueryLambdaFunction
+  AnalyticsBigqueryInvocationsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][Invocations] ${EnvironmentType} < 1500"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too few invocations
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "300"
+      Statistic: Sum
+      Threshold: "1500"
+      TreatMissingData: breaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryLambdaFunction
   AnalyticsPingbacksErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics pingbacks lambda errors"
+      AlarmName: !Sub "[AnalyticsLambda][Pingbacks][Errors] ${EnvironmentType} > 0"
       AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
       AlarmDescription:
         Too many analytics pingbacks lambda errors
       ComparisonOperator: GreaterThanThreshold
@@ -158,9 +185,9 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "${EnvironmentTypeAbbreviation} analytics redis lambda errors"
+      AlarmName: !Sub "[AnalyticsLambda][Redis][Errors] ${EnvironmentType} > 0"
       AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
       AlarmDescription:
         Too many analytics redis lambda errors
       ComparisonOperator: GreaterThanThreshold
