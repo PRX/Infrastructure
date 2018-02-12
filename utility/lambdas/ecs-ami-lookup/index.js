@@ -10,8 +10,6 @@ const https = require('https');
 const url = require('url');
 const AWS = require('aws-sdk');
 
-const ECS_AMI_FILTER = 'amzn-ami*amazon-ecs-optimized';
-
 exports.handler = (event, context) => {
     console.log(`REQUEST RECEIVED:\n ${JSON.stringify(event)}`);
 
@@ -26,8 +24,12 @@ exports.handler = (event, context) => {
     let responseStatus = 'FAILED';
     let responseData = {};
 
+    const amiName = event.ResourceProperties.AmiName;
     const params = {
-        Filters: [{ Name: 'name', Values: [ECS_AMI_FILTER] }],
+        Filters: [{
+          Name: 'name',
+          Values: [amiName || '(no-ami-name-provided-in-input)']
+        }],
         Owners: ['amazon']
     };
 
@@ -35,6 +37,9 @@ exports.handler = (event, context) => {
     ec2.describeImages(params, (err, results) => {
         if (err) {
             responseData = { Error: 'DescribeImages call failed' };
+            console.log(`${responseData.Error}:\n ${err}`);
+        } else if (results.length === 0) {
+            responseData = { Error: `No images found with name ${amiName}` };
             console.log(`${responseData.Error}:\n ${err}`);
         } else {
             let images = results.Images;
