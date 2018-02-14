@@ -80,10 +80,16 @@ Resources:
   UploadRestApiStage:
     Type: "AWS::ApiGateway::Stage"
     Properties:
-      StageName: !If [CreateProductionResources, prod, prod]
+      StageName: !If [CreateProductionResources, prod, prod] # TODO these shouldn't be the same
       Description: production stage for upload lambda gateway integration
       RestApiId: !Ref UploadRestApi
       DeploymentId: !Ref UploadRestApiDeployment
+      MethodSettings:
+        DataTraceEnabled: true,
+        HttpMethod: "*",
+        LoggingLevel: "INFO",
+        MetricsEnabled: true,
+        ResourcePath: "/*"
   # Custom Domain
   UploadRestApiDomainName:
     Type: "AWS::ApiGateway::DomainName"
@@ -96,7 +102,7 @@ Resources:
       # BasePath: 'prod'
       DomainName: !Ref UploadRestApiDomainName
       RestApiId: !Ref UploadRestApi
-      Stage: !If [CreateProductionResources, prod, prod]
+      Stage: !If [CreateProductionResources, prod, prod] # TODO these shouldn't be the same
   UploadRestApiDomainNameRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
