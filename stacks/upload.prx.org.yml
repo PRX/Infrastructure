@@ -42,17 +42,6 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambdaFunction.Arn}/invocations
-  UploadRestApiSignatureMethodDummy1:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ResourceId: !Ref UploadRestApiSignatureResource
-      HttpMethod: POST
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambdaFunction.Arn}/invocations
   UploadRestApiOptionsMethod:
     Type: "AWS::ApiGateway::Method"
     Properties:
@@ -81,18 +70,17 @@ Resources:
             method.response.header.Access-Control-Allow-Methods: true
             method.response.header.Access-Control-Allow-Origin: true
           StatusCode: '200'
-  UploadRestApiDeploymentDummy2:
+  UploadRestApiDeployment:
     DependsOn:
       - UploadRestApiSignatureMethod
       - UploadRestApiOptionsMethod
-      - UploadRestApiSignatureMethodDummy1
     Type: "AWS::ApiGateway::Deployment"
     Properties:
       RestApiId: !Ref UploadRestApi
   UploadRestApiStage:
     Type: "AWS::ApiGateway::Stage"
     Properties:
-      StageName: prod
+      StageName: !If [CreateProductionResources, prod, stag]
       Description: production stage for upload lambda gateway integration
       RestApiId: !Ref UploadRestApi
       DeploymentId: !Ref UploadRestApiDeploymentDummy2
@@ -108,7 +96,7 @@ Resources:
       # BasePath: 'prod'
       DomainName: !Ref UploadRestApiDomainName
       RestApiId: !Ref UploadRestApi
-      Stage: prod # This should match the StageName of the UploadRestApiStage
+      Stage: !If [CreateProductionResources, prod, stag]
   UploadRestApiDomainNameRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
