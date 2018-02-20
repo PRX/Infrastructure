@@ -1,9 +1,11 @@
 # Infrastructure
-Templates and assets used to launch and manage many aspects of PRX's applications and services
+Templates and assets used to launch and manage many aspects of PRX's applications and services.
 
-This is a fairly comprehensive system that is intended to utilize an "infrastructure as code" philosophy. The goal is to describe the various AWS resources (and their associated configurations) needed to run a multitude of applications, servers, and services using code and templates.
+The Infrastructure project itself contains many independent or related-by-separate projects and assets. It is the home for all work that helps PRX adhere to an "infrastructure as code" philosophy. The goal is to describe the various AWS resources (and their associated configurations) needed to run a multitude of applications, servers, and services using code and templates.
 
-This system is designed to provide CI and CD for applications as well as the infrastructure. This means that standard practices like code reviews and Git merges can be applied to infrastructure code, and the deployment of changes to the AWS resources that run applications can be managed much more explicitly.
+All aspects of Infrastructure largely rely on [AWS CloudFormation](https://aws.amazon.com/cloudformation/).
+
+Applications, as well as the systems designed to test and deploy those applications, are described using CloudFormation templates. Collectively the systems used to facilitate application deployment and the infrastructure necessary to support them are referred to as **CI/CD**. There are a number of other aspects of our AWS architecture that do not fall under that umbrella but are also maintained as part of the Infrastructure project. This includes things like DNS records for hosted zones.
 
 #### Useful Resources
 
@@ -22,75 +24,7 @@ This system is designed to provide CI and CD for applications as well as the inf
 
 There is a draw.io file (`System Diagram.xml`) that gives a good overview of how many of the main pieces of the CI and CD systems fit together.
 
-## Components
-
-There are three main components to the infrastructure system as a whole: **Notifications**, **CI**, and **CD**. Each is defined as its own CloudFormation template. Launching either the CI or CD stack require a preexisting Notifications stacks, but otherwise are entirely independent. They generally will be launched together, and their operations do overlap in some ways, but there are not hard dependencies between the two.
-
-There is also a very lightweight **Storge** stack that creates a few necessary, shared S3 buckets.
-
-### Notifications
-
-The **Notifications** stack is largely responsible for messaging both within the system, and to and from external sources. Messages are passed around using API Gateways and SNS topics. Lambda functions either back the API Gateway methods or subscribe to the SNS topics in order to act on the Messages.
-
-### Continuous Integration
-
-The **CI** stack launches a set of resources that handle code commit related events coming from the GitHub webhook API, and prepare that code to be deployed. The CI setup handles master branch commits, as well as code changes for pull requests. Only master branch code changes will package code to be deployable (for instance, pushing a Docker image to ECR).
-
-At a high level, the system involves: an organization-level webhook configuration on GitHub sending events for activity on all PRX repositories; whose events are handled (via API Gateway) by a Lambda function; which triggers a CodeBuild project that is builds, tests, and packages the applications.
-
-When a new packaged version of an app is pushed out (eg., to ECR), the CI process also updates the staging environment's template configuration file to reference the new version.
-
-### Continuous Delivery
-
-The **CD** stack takes care of launching and updating applications. A pipeline is created in CodePipeline, which watches for changes to either the infrastructure code (which includes templates for each individual app) or staging infrastructure configuration.
-
-When either the infrastructure code or the staging infrastructure configuration is updated, the pipeline deploys the changes to a staging environment. Acceptance tests then run against staging. If they pass, the updates can then be deployed to the production environment, and the relevant values that should be updated in the production environment template configuration file (currently, only keys that match `"(EcrImageTag|S3ObjectVersion)"`) will be updated from the staging configuration file.
-
-Whenever an environment is successfully deployed, the CD pipeline also captures the state of the infrastructure and configuration, so that known good states can be rolled back to if necessary.
-
-## Template Configuration Files
-
-When the CD pipeline deploys to an environment, it is actually launching (or updating) a root stack. The deployment process must provide values for all of the parameters the root stack template expects. These values are provided by a _template configuration file_. This config file contains some general purpose values that are used by the CD process itself, as well as versioning information that indicates which version (eg, Docker image) and which configuration should be used to deploy each app nested within the root stack.
-
-As part of the **CI** process, whenever a new version on an application is available, such as when a new Docker image is pushed to ECR, the staging template configuration file is updated. Because the CD pipeline watches that file for changes, a loose link between the two processes exists. In most cases, a change app code (eg, a merge or commit to the master branch of some app repo), will trigger CI and CD automatically.
-
-## Root Stack
-
-Root stacks are launched by the CD process. A root stack represents a specific environment type (eg staging, production, etc). The root stack is responsible for launching additional stacks for specific platforms, services, and applications.
-
-By using the root stack model, the CD process only needs to be directly aware of a single template, and can generate CloudFormation change sets around a single stack which can subsequently update many other stacks.
-
-The values from the template configuration files stored securely in S3 get passed to the root stack. It's the up to the root stack template to pass individual values to the nested stacks that need them.
-
-The root stack also handles shuttling values and resources between its nested stacks. For example, many application stacks that the root stack launch will require a VPC or Subnets. The root stack can pull those values out of the VPC stack and pass them back into the other stacks that require them. This keeps individual stacks from needing to be tightly coupled to any other specific stack, even if it depends on resources provided by that stack.
-
-Once a root stack has been launched, it is not tied directly to the CD stack, but the IAM role that is associated with any nested stacks does come from the CD stack. If you remove the CD stack, and thus that IAM role, tearing down the root stack's nested stacks and be difficult.
-
-### Application, Service, and Resource Stacks
-
-Within the root stack template (`root.yml`), `AWS::CloudFormation::Stack` resources are used to define the stacks that should be launched by the root stack. The templates for those nested stacks will end up on S3 as a result of the bootstrapping process; they will remain synced with the GitHub code as long as the bootstrapping stack continues to exist.
-
-Each stack resource defines which parameters from the root template configuration file should be passed down the chain. Other values, such as those from other application/service stacks or those intrinsic to the root stack itself, can also be passed in when necessary.
-
-Some stacks launched by the root stack are entirely comprised of additional AWS resources. For example, one stack is only responsible for creating a VPC and the various resources need to support the VPC. These resources are intended to be used by other stacks.
-
-Most stack launched by the root stack will be applications or groups of applications (platforms). For example, one stack may create a Node.js application that runs inside a Docker container, using ECS/EC2 resources defined by a resource stack.
-
-#### Platforms
-
-In cases where several applications or services are tightly coupled, it may make more sense to manage them with an additional layer of abstraction. Rather than adding each application directly to the root stack template, a template for the whole constellation of apps could be created and added to the root stack template.
-
-The root stack would then be responsible for launching the platform stack, which in turn would launch a number of other app-specific stacks. This can be useful if the apps share resources that are specific to that platform, or that have specific testing needs.
-
-## Applications
-
-Several things are necessary for applications to work within this system.
-
-The first is a template the defines the infrastructure needed to host the app. For a Docker application this may include things like: an ECS service and task definition, and ALB, various IAM roles, CloudWatch alarms, and Route53 DNS records. This template would look very similar to the template that would be created if the application were to be launched through CloudFormation outside of this CI/CD system.
-
-For most applications, an additional template will be built to support the CI/CD aspects of that particular app. For a Docker app, that may be a CodePipeline which includes CodeBuild projects that build and test the Docker image, and other actions to push the image to ECR and update infrastructure config files to reflect the new app code.
-
-## Setup
+## CI/CD Setup
 
 First, launch a storage stack. This exports a number of S3 bucket names, which will be used throughout the remaining components of the system. The exports are in the format `{stack name}-{identifier}`. Passing the storage stack name as a parameter to the other stacks will allow them to find the exports.
 
@@ -124,7 +58,7 @@ _Coming soon..._
 
 ## Destruction
 
-If you want to remove everything created by Infrastructure, do so in this order:
+If you want to remove things created by Infrastructure for CI/CD, do so in this order:
 
 - Delete CI stack
 - Delete production root stack
@@ -135,48 +69,3 @@ If you want to remove everything created by Infrastructure, do so in this order:
 - Delete CD pipeline artifacts store bucket (`cd-artifactstore-...`)
 - Delete CI CodeBuild source bucket (`ci-cicodebuildsourcearchivebucket-...`)
 - Delete the five buckets created by the Storage stack
-
-### S3 Buckets
-
-There are many S3 buckets used as part of the CI/CD that are defined within CloudFormation templates, and don't need to be managed separately. A few buckets, though, must exist prior to launching any parts of this system, and must be configured correctly. The following describe each of those buckets:
-
-#### Support
-
-Holds miscellaneous resources that are needed at various points of the setup and deployment process, such as zip files for Lambda function code used by the Notifications, CI, and CD stacks themselves.
-
-- Exported as: `${AWS::StackName}-InfrastructureSupportBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-support`, eg `prx-infrastructure-us-east-1-support`
-
-#### Source
-
-Holds copies of the Infrastructure repository, prefixed with the Git commit hash from when the copy was made. The root stack template points to files in this bucket for nested templates. It does not need S3 versioning.
-
-- Exported as: `${AWS::StackName}-InfrastructureSourceBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-source`, eg `prx-infrastructure-us-east-1-source`
-
-#### Config
-
-Holds one zip file per environment, each which holds a single JSON file. Eg. `template-config-production.zip` and `template-config-staging.zip`. Versioning is required; these files are updated in place whenever the configuration changes. Versioning is used to rollback to good states.
-
-- Exported as: `${AWS::StackName}-InfrastructureConfigBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-config`, eg `prx-infrastructure-us-east-1-config`
-
-#### Snapshots
-
-Holds JSON files used to capture code and configuration states when deploys occur. Eg. `staging/1389173987.json`, `production/1276476413.json`. Versioning is not required.
-
-- Exported as: `${AWS::StackName}-InfrastructureSnapshotsBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-snapshots`, eg `prx-infrastructure-us-east-1-snapshots`
-
-#### Application Code
-
-Stores application code that will be deployed from an application stack. This is primarily used for AWS Lambda functions. Each application is given a single key, and S3 versions are used to deploy specific versions of the code by the CloudFormation application stacks. Versioning is required.
-
-- Exported as: `${AWS::StackName}-InfrastructureApplicationCodeBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-application-code`, eg `prx-infrastructure-us-east-1-application-code`
-
-## Miscellaneous
-
-### Load Balancers
-
-Resources associated with load balancers (eg, target groups, listeners) can have a hard time being reallocated on the fly. If you need to move a target group to a different ALB or similar, you should create a new resource. This could be done simply by giving an existing resource a new logical ID (CloudFormation will treat that as a new resource – tear down the old resource, and create a new one), or adding a new resource in one deploy and removing the old unused resource in a later deploy.

@@ -2,8 +2,7 @@ WIP
 
 # Notifications
 
-A CloudFormation stack for helping deal with notifications across the
-infrastructure. The notifications stack serves as a central hub for inbound data (eg. CloudWatch Alarm alerts) and outbound data (eg. message payloads being sent to Slack).
+A CloudFormation stack for helping deal with notifications across the infrastructure. The notifications stack serves as a central hub for inbound data (eg. CloudWatch Alarm alerts) and outbound data (eg. message payloads being sent to Slack).
 
 ## Inputs
 

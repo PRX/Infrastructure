@@ -1,3 +1,7 @@
+# TODO WIP this is meant to find discrepencies between the stack templates that
+# are deployed to CloudFormation and what is checked in, and do some other basic
+# sanity checks on the stacks and their configurations
+
 import boto3
 
 client = boto3.client('cloudformation')

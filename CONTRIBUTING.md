@@ -1,3 +1,13 @@
+This means that standard practices like code reviews and Git merges can be applied to infrastructure code, and the deployment of changes to the AWS resources that run applications can be managed much more explicitly.
+
+
+https://chris.beams.io/posts/git-commit/
+
+- stack protection
+
+- notes about learning fundementals of AWS
+
+
 JavaScript should follow the included ESLint rules. These follow the Airbnb style guide, save for a few minor changes to that relate to coding specifically for AWS Lambda functions.
 
 Ensure that Airbnb config is available, as the included `.eslintrc` inherits from that, and that your editor is configured to check for problems.
