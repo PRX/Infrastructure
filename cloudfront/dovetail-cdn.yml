@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudFront distribution to origin-pull from a Dovetail ALB.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterLabels:
+      OriginDomain:
+        default: Dovetail Origin ALB
+      DistributionDomain:
+        default: Domain Name
+      CertificateArn:
+        default: ACM Certificate Arn
+Parameters:
+  OriginDomain:
+    Type: String
+    Description: eg. dovetail.prxu.org, dovetail.staging.prxu.org
+  DistributionDomain:
+    Type: String
+    Description: eg. dovetail-cdn.prxu.org
+  CertificateArn:
+    Type: String
+    Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
+Resources:
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DistributionDomain
+        DefaultCacheBehavior:
+          AllowedMethods: [HEAD, GET]
+          CachedMethods: [HEAD, GET]
+          Compress: false
+          ForwardedValues:
+            QueryString: false
+          TargetOriginId: dovetail-alb
+          ViewerProtocolPolicy : allow-all
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - CustomOriginConfig:
+              HTTPPort: 80
+              HTTPSPort: 443
+              OriginKeepaliveTimeout: 5
+              OriginProtocolPolicy: https-only
+              OriginReadTimeout: 60
+              OriginSSLProtocols:
+                - TLSv1.2
+                - TLSv1.1
+                - TLSv1
+            DomainName: !Ref OriginDomain
+            Id: dovetail-alb
+            OriginCustomHeaders:
+              - HeaderName: Authorization
+                HeaderValue: dovetail-cdn
+            OriginPath: "/+"
+        PriceClass: PriceClass_200
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+Outputs:
+  CloadfrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
