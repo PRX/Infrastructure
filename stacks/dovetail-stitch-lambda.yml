@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Dovetail stitch lambda function
+Conditions:
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+Mappings:
+  EnvironmentTypeMap:
+    test:
+      bucket: ""
+      handler: ""
+    beta:
+      bucket: ""
+      handler: ""
+    stag:
+      bucket: "ryan-s3.prx.org"
+      handler: "index-staging.handler"
+    prod:
+      bucket: "ryan-s3.prx.org"
+      handler: "index-production.handler"
+Resources:
+  # IAM Roles
+  DovetailStitchLambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+                  - "edgelambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaEdgePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:GetFunction"
+                  - "lambda:EnableReplication*"
+                  - "iam:CreateServiceLinkedRole"
+                Resource:
+                  - "*"
+        - PolicyName: DovetailStitchS3AccessPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:Get*"
+                  - "s3:Put*"
+                  - "s3:List*"
+                Resource:
+                  - !Join ["", ["arn:aws:s3:::", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, Bucket], "/*"]]
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  # Lambda Functions
+  DovetailStitchLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-dovetail-stitch-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail mp3 file stitching
+      Handler: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, Handler]
+      MemorySize: 1024
+      Role: !GetAtt DovetailStitchLambdaExecutionIAMRole.Arn
+      Runtime: nodejs6.10
+      Timeout: 60
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-Stitch-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  # Lambda Alarms
+  # TODO: cross region monitoring for
+  #  (1) errors > 0, as it should never error out
+  #  (2) execution-time > 30s
+  # TODO: cross region log metrics for
+  #  (3) { _logLevel = "error" } > 0
+  #  (4) { _logLevel = "warn" } > 0
+  #  (5) count { _logLevel = "info" && msg = "cache HIT" }
+  #  (6) count { _logLevel = "info" && msg = "cache PARTIAL" }
+  #  (7) count { _logLevel = "info" && msg = "cache MISS" }
