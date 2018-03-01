@@ -20,6 +20,10 @@ Parameters:
   CertificateArn:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: The name of a previously launched notifications stack
+    Type: String
 Resources:
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
@@ -72,11 +76,14 @@ Resources:
       ActionsEnabled: true
       AlarmName: "[Dovetail][CloudFront][ErrorRate] 5XX"
       AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
       AlarmDescription: >
         The error rate on the Dovetail stitch CDN is too dang high
       ComparisonOperator: GreaterThanThreshold
