@@ -66,6 +66,33 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontDistribution500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Dovetail][CloudFront][ErrorRate] 5XX"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >
+        The error rate on the Dovetail stitch CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: "1"
+      MetricName: 5xxErrorRate
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Average
+      Threshold: "0.001"
+      TreatMissingData: notBreaching
+      Unit: Percent
 Outputs:
   CloadfrontDomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
