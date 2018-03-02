@@ -15,8 +15,10 @@ Metadata:
           - DistributionDomain
           - DistributionDomain
     ParameterLabels:
-      OriginDomain:
-        default: Dovetail Origin ALB
+      OriginBucket:
+        default: Origin S3 Bucket
+      OriginPath:
+        default: Origin S3 Path
       DistributionDomain:
         default: Domain Name
       CertificateArn:
@@ -24,9 +26,12 @@ Metadata:
       InfrastructureNotificationsStackName:
         default: Notifications stack name
 Parameters:
-  OriginDomain:
+  OriginBucket:
     Type: String
-    Description: eg. dovetail.prxu.org, dovetail.staging.prxu.org
+    Description: eg. prx-dovetail.s3.amazonaws.com
+  OriginPath:
+    Type: String
+    Description: eg. /stitch-production, /stitch-staging
   DistributionDomain:
     Type: String
     Description: eg. dovetail-cdn.prxu.org
@@ -50,28 +55,20 @@ Resources:
           Compress: false
           ForwardedValues:
             QueryString: false
-          TargetOriginId: dovetail-alb
+          # TODO: managing this manually for now
+          # LambdaFunctionAssociations:
+          #   - EventType: origin-request
+          #     LambdaFunctionARN: arn:aws:lambda:<region>:<account>:function:<name>:<version>
+          TargetOriginId: dovetail-stitch-s3
           ViewerProtocolPolicy : allow-all
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
         Origins:
-          - CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginKeepaliveTimeout: 5
-              OriginProtocolPolicy: https-only
-              OriginReadTimeout: 60
-              OriginSSLProtocols:
-                - TLSv1.2
-                - TLSv1.1
-                - TLSv1
-            DomainName: !Ref OriginDomain
-            Id: dovetail-alb
-            OriginCustomHeaders:
-              - HeaderName: Authorization
-                HeaderValue: dovetail-cdn
-            OriginPath: "/+"
+          - DomainName: !Ref OriginBucket
+            Id: dovetail-stitch-s3
+            OriginPath: !Ref OriginPath
+            S3OriginConfig: {}
         PriceClass: PriceClass_200
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArn
