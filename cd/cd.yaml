@@ -538,6 +538,8 @@ Resources:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
                 ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: !Sub ${AWS::StackName}-root-staging
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
@@ -546,15 +548,13 @@ Resources:
                     "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
                     "PipelineExecutionNonce": { "Fn::GetArtifactAtt" : ["InfrastructureRepoSourceArtifact", "ObjectKey"]}
                   }
-                RoleArn: !GetAtt CloudFormationIAMRole.Arn
-                StackName: !Sub ${AWS::StackName}-root-staging
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: RepoStateArtifact
-              RunOrder: 2
+              RunOrder: 1
             - Name: StagingDeltaNotification
               ActionTypeId:
                 Category: Invoke
@@ -568,7 +568,7 @@ Resources:
                     "StackName": "${AWS::StackName}-root-staging",
                     "ChangeSetName": "${AWS::StackName}RootStagingChangeSet"
                   }
-              RunOrder: 3
+              RunOrder: 2
             - Name: ExecuteStagingChangeSet
               ActionTypeId:
                 Category: Deploy
@@ -581,6 +581,30 @@ Resources:
                 ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-staging
+              RunOrder: 3
+            - Name: CaptureStagingState
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref EnvironmentStateCaptureFunction
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 4
+            - Name: DeploymentNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref DeploymentNotificationFunction
+                UserParameters: Staging
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
               RunOrder: 4
         - Name: Testing
           Actions:
