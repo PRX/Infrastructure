@@ -3,6 +3,17 @@ Description: >
   Creates a CloudFront distribution to origin-pull from a Dovetail ALB.
 Metadata:
   AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureNotificationsStackName
+      - Label:
+          default: Distribution Parameters
+        Parameters:
+          - OriginDomain
+          - DistributionDomain
+          - DistributionDomain
     ParameterLabels:
       OriginDomain:
         default: Dovetail Origin ALB
@@ -10,6 +21,8 @@ Metadata:
         default: Domain Name
       CertificateArn:
         default: ACM Certificate Arn
+      InfrastructureNotificationsStackName:
+        default: Notifications stack name
 Parameters:
   OriginDomain:
     Type: String
@@ -20,6 +33,10 @@ Parameters:
   CertificateArn:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: The name of a previously launched notifications stack
+    Type: String
 Resources:
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
@@ -66,6 +83,36 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontDistribution500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Dovetail][CloudFront][ErrorRate] 5XX"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the Dovetail stitch CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: "1"
+      MetricName: 5xxErrorRate
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Average
+      Threshold: "0.001"
+      TreatMissingData: notBreaching
+      Unit: Percent
 Outputs:
   CloadfrontDomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
