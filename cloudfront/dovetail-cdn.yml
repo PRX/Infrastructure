@@ -3,23 +3,45 @@ Description: >
   Creates a CloudFront distribution to origin-pull from a Dovetail ALB.
 Metadata:
   AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureNotificationsStackName
+      - Label:
+          default: Distribution Parameters
+        Parameters:
+          - OriginDomain
+          - DistributionDomain
+          - DistributionDomain
     ParameterLabels:
-      OriginDomain:
-        default: Dovetail Origin ALB
+      OriginBucket:
+        default: Origin S3 Bucket
+      OriginPath:
+        default: Origin S3 Path
       DistributionDomain:
         default: Domain Name
       CertificateArn:
         default: ACM Certificate Arn
+      InfrastructureNotificationsStackName:
+        default: Notifications stack name
 Parameters:
-  OriginDomain:
+  OriginBucket:
     Type: String
-    Description: eg. dovetail.prxu.org, dovetail.staging.prxu.org
+    Description: eg. prx-dovetail.s3.amazonaws.com
+  OriginPath:
+    Type: String
+    Description: eg. /stitch-production, /stitch-staging
   DistributionDomain:
     Type: String
     Description: eg. dovetail-cdn.prxu.org
   CertificateArn:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: The name of a previously launched notifications stack
+    Type: String
 Resources:
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
@@ -33,28 +55,21 @@ Resources:
           Compress: false
           ForwardedValues:
             QueryString: false
-          TargetOriginId: dovetail-alb
+          # TODO: managing this manually for now
+          # LambdaFunctionAssociations:
+          #   - EventType: origin-request
+          #     LambdaFunctionARN: arn:aws:lambda:<region>:<account>:function:<name>:<version>
+          TargetOriginId: dovetail-stitch-s3
           ViewerProtocolPolicy : allow-all
+        DefaultRootObject: index.html
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
         Origins:
-          - CustomOriginConfig:
-              HTTPPort: 80
-              HTTPSPort: 443
-              OriginKeepaliveTimeout: 5
-              OriginProtocolPolicy: https-only
-              OriginReadTimeout: 60
-              OriginSSLProtocols:
-                - TLSv1.2
-                - TLSv1.1
-                - TLSv1
-            DomainName: !Ref OriginDomain
-            Id: dovetail-alb
-            OriginCustomHeaders:
-              - HeaderName: Authorization
-                HeaderValue: dovetail-cdn
-            OriginPath: "/+"
+          - DomainName: !Ref OriginBucket
+            Id: dovetail-stitch-s3
+            OriginPath: !Ref OriginPath
+            S3OriginConfig: {}
         PriceClass: PriceClass_200
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArn
@@ -66,6 +81,36 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontDistribution500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 5XX"]]
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the Dovetail stitch CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: "1"
+      MetricName: 5xxErrorRate
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Average
+      Threshold: "0.001"
+      TreatMissingData: notBreaching
+      Unit: Percent
 Outputs:
   CloadfrontDomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
