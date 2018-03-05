@@ -1,0 +1,366 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudFront distribution and some associated resources to act as a
+  CDN with TLS support on a custom domain. It allows for the static mapping of a
+  request path to an origin path to help when migrating from other CDN or proxy
+  services.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Public Feed
+        Parameters:
+          - FeedDomain
+      - Label:
+          default: Source Feed
+        Parameters:
+          - OriginDomain
+          - OriginPath
+      - Label:
+          default: Static Mapping
+        Parameters:
+          - StaticViewerRequestPath
+          - StaticOriginRequestPath
+      - Label:
+          default: CNAME
+        Parameters:
+          - CnameHostedZone
+      - Label:
+          default: HTTPS Certificate
+        Parameters:
+          - AcmCertificateArn
+          - ValidationDomain
+      - Label:
+          default: CloudFront
+        Parameters:
+          - CloudFrontComment
+          - CloudFrontLoggingBucket
+          - CloudFrontLoggingBucketPrefix
+    ParameterLabels:
+      ProjectTag:
+        default: Project tag
+      AcmCertificateArn:
+        default: Certificate ARN
+      FeedDomain:
+        default: Domain name
+      ValidationDomain:
+        default: Validation domain
+      OriginDomain:
+        default: Origin domain
+      OriginPath:
+        default: Origin path
+      StaticViewerRequestPath:
+        default: Viewer request path
+      StaticOriginRequestPath:
+        default: Origin request path
+      CnameHostedZone:
+        default: CNAME hosted zone
+      CloudFrontLoggingBucket:
+        default: Log S3 bucket
+      CloudFrontLoggingBucketPrefix:
+        default: Log file prefix
+      CloudFrontComment:
+        default: Comment
+Conditions:
+  HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
+  HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
+  HasCnameHostedZone: !Not [!Equals [!Ref CnameHostedZone, ""]]
+  HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
+  HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
+  HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
+Parameters:
+  ProjectTag:
+    Type: String
+    Description: >
+      The value used for the Project tag on resources that support tagging.
+  AcmCertificateArn:
+    Type: String
+    Description: >
+      ARN for the ACM certificate that will be used with the CloudFront
+      distribution. If no value is supplied, a new certificate will be created.
+  FeedDomain:
+    Type: String
+    Description: >
+      eg. feeds.songexploder.net. The domain at which the public feed will
+      live. This is the canonical domain that is controlled by the show.
+  ValidationDomain:
+    Type: String
+    Description: >
+      eg. songexploder.net. Must be a superdomain of the public feed domain
+      name. A verification email will be sent to postmast@, webmaster@, etc.
+      (Not used if a certificate ARN is given)
+  OriginDomain:
+    Type: String
+    Description: eg. songexploder.libsyn.com, f.prxu.org
+  OriginPath:
+    Type: String
+    Description: >
+      (optional) If included, must start with a slash and cannot end with a
+      slash. This path will be prepended to the path of all requests when
+      contacting the origin.
+  StaticViewerRequestPath:
+    Type: String
+    Description: >
+      eg. /songexploder. This is a path that will be statically mapped to a path
+      in the origin. It can be used when migrating feeds off of FeedBurner. This
+      would be the path in the feeds.feedburner.com URL.
+  StaticOriginRequestPath:
+    Type: String
+    Description: >
+      eg. /feed-rss.xml. The path that the static viewer request path is
+      remapped to.
+  CnameHostedZone:
+    Type: String
+    Description: >
+      (optional) eg. prxu.org. The hosted zone name in which a custom domain
+      will be created. This is the domain that an end user would create a CNAME
+      to for the feed domain. It results in a domain like
+      a6s7a57af.cname.prxu.org. Do not include a trailing dot.
+  CloudFrontLoggingBucket:
+    Type: String
+    Description: >
+      The Amazon S3 bucket address where access logs are stored for CloudFront
+      (e.g., mybucket.s3.amazonaws.com)
+  CloudFrontLoggingBucketPrefix:
+    Type: String
+    Description: >
+      (optional) A prefix for the access log file names for the CloudFront
+      distribution.
+  CloudFrontComment:
+    Type: String
+    Description: >
+      Any comments that you want to include about the CloudFront distribution
+    MaxLength: 128
+Resources:
+  # ACM Certificates
+  Certificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Condition: HasNoAcmCertificateArn
+    Properties:
+      DomainName: !Ref FeedDomain
+      DomainValidationOptions:
+        - ValidationDomain: !Ref ValidationDomain
+          DomainName: !Ref FeedDomain
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Name
+          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  # CloudFront
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref FeedDomain
+        # CacheBehaviors:
+          # CacheBehavior
+        Comment: !Ref CloudFrontComment
+        # CustomErrorResponses:
+        #   CustomErrorResponse
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          # DefaultTTL: Number
+          ForwardedValues:
+            # Cookies:
+            #   Cookies
+            # Headers:
+            #   - String
+            QueryString: false
+            # QueryStringCacheKeys:
+          LambdaFunctionAssociations:
+            - EventType: origin-request
+              LambdaFunctionARN: !Ref OriginRequestLambdaFunctionVersionA
+            - EventType: viewer-request
+              LambdaFunctionARN: !Ref ViewerRequestLambdaFunctionVersionA
+          # MaxTTL: Number
+          # MinTTL: Number
+          # SmoothStreaming: Boolean
+          TargetOriginId: feed-origin
+          # TrustedSigners:
+          #   - String
+          ViewerProtocolPolicy : redirect-to-https
+        # DefaultRootObject: "index.html"
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Logging:
+          !If
+            - HasCloudFrontLoggingBucket
+            - Bucket: !Ref CloudFrontLoggingBucket
+              IncludeCookies: false
+              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref "CloudFrontLoggingBucketPrefix", !Ref "AWS::NoValue"]
+            - !Ref "AWS::NoValue"
+        Origins:
+          - CustomOriginConfig:
+              # HTTPPort: Integer
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+                - TLSv1.1
+                - TLSv1
+            DomainName: !Ref OriginDomain
+            Id: feed-origin
+            # OriginCustomHeaders:
+            #   - OriginCustomHeader
+            OriginPath: !If [HasOriginPath, !Ref "OriginPath", !Ref "AWS::NoValue"]
+            # S3OriginConfig:
+            #   S3 Origin
+        PriceClass: PriceClass_All
+        # Restrictions:
+        #   Restriction
+        ViewerCertificate:
+          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref "AcmCertificateArn", !Ref Certificate]
+          # CloudFrontDefaultCertificate: true
+          # IamCertificateId: String
+          # MinimumProtocolVersion: String
+          SslSupportMethod: sni-only
+        # WebACLId: String
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  # Lambda@Edge functions
+  EdgeLambdaExecutionIamRole:
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: Retain
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+                - "edgelambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaEdgePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:GetFunction"
+                  - "lambda:EnableReplication*"
+                  - "iam:CreateServiceLinkedRole"
+                Resource:
+                  - "*"
+        - PolicyName: XrayTracePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "xray:PutTraceSegments"
+                  - "xray:PutTelemetryRecords"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  OriginRequestLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: Retain
+    Properties:
+      Code:
+        ZipFile:
+          Fn::Sub: |
+            exports.handler = (event, context, callback) => {
+              const request = event.Records[0].cf.request;
+              if (request.uri === '${StaticViewerRequestPath}') {
+                request.uri = '${StaticOriginRequestPath}';
+              }
+              callback(null, request);
+            };
+      Description: Remaps static paths on origin requests
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt EdgeLambdaExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 1
+  OriginRequestLambdaFunctionVersionA:
+    Type: "AWS::Lambda::Version"
+    DeletionPolicy: Retain
+    Properties:
+      FunctionName: !GetAtt OriginRequestLambdaFunction.Arn
+  ViewerRequestLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: Retain
+    Properties:
+      Code:
+        ZipFile:
+          Fn::Sub: |
+            exports.handler = (event, context, callback) => {
+              const request = event.Records[0].cf.request;
+              const host = request.headers.host[0].value;
+              if (host !== '${FeedDomain}') {
+                const response = {};
+                response.status = '403';
+                callback(null, response);
+                return;
+              }
+              callback(null, request);
+            };
+      Description: Prevent access other than from custom feed domain
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt EdgeLambdaExecutionIamRole.Arn
+      Runtime: nodejs6.10
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 1
+  ViewerRequestLambdaFunctionVersionA:
+    Type: "AWS::Lambda::Version"
+    DeletionPolicy: Retain
+    Properties:
+      FunctionName: !GetAtt ViewerRequestLambdaFunction.Arn
+  # Route 53
+  WebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Condition: HasCnameHostedZone
+    Properties:
+      Comment: Custom domain for CloudFront distribution
+      HostedZoneName: !Sub "${CnameHostedZone}."
+      RecordSets:
+        - Type: A
+          Name:
+            Fn::Sub:
+              - "${Uniq}.cname.${CnameHostedZone}."
+              - { Uniq: !Select [0, !Split [".", !GetAtt CloudFrontDistribution.DomainName]] }
+          AliasTarget:
+            DNSName: !GetAtt CloudFrontDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+# Outputs:
+#   Cname:
+#     Value:
+#       Fn::Sub:
+#         - "${Uniq}.cname.${CnameHostedZone}."
+#         - { Uniq: !Select [0, !Split [".", !GetAtt CloudFrontDistribution.DomainName]] }
