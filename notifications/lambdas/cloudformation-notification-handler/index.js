@@ -3,14 +3,16 @@
 //
 // Receives notifications related to CloudFormation stack changes, and prepares
 // Slack messages. for them. The messages are sent to the Slack Message Relay
-// SNS topic in order to be sent to Slack. All messages handled by this function
-// are sent to the #ops-debug (this could change at some point).
+// SNS topic in order to be sent to Slack. Messages about the stack being
+// updated directly are sent to the info channel, and other messages are sent
+// to the debug channel
 
 const AWS = require('aws-sdk');
 
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
-const SLACK_CHANNEL = '#ops-debug';
+const SLACK_DEBUG_CHANNEL = '#ops-debug';
+const SLACK_INFO_CHANNEL = '#ops-info';
 const SLACK_ICON = ':ops-cloudformation:';
 const SLACK_USERNAME = 'AWS CloudFormation';
 
@@ -76,8 +78,10 @@ function messageForEvent(event) {
     const region = stackId.split(':')[3];
     const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home#/stack/detail?stackId=${stackId}`;
 
+    const channel = stackName === resourceId ? SLACK_INFO_CHANNEL : SLACK_DEBUG_CHANNEL;
+
     return {
-        channel: SLACK_CHANNEL,
+        channel,
         username: SLACK_USERNAME,
         icon_emoji: SLACK_ICON,
         attachments: [
