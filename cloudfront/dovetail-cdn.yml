@@ -81,6 +81,36 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontDistribution400Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 4XX"]]
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The 4xx rate on the Dovetail stitch CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: "1"
+      MetricName: 4xxErrorRate
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Average
+      Threshold: "0.001"
+      TreatMissingData: notBreaching
+      Unit: Percent
   CloudFrontDistribution500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
