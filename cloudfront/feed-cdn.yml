@@ -34,6 +34,7 @@ Metadata:
           default: CloudFront
         Parameters:
           - CloudFrontComment
+          - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
           - CloudFrontLoggingBucketPrefix
     ParameterLabels:
@@ -61,6 +62,8 @@ Metadata:
         default: Log file prefix
       CloudFrontComment:
         default: Comment
+      CloudFrontMaxTtl:
+        default: Max TTL
 Conditions:
   HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
   HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
@@ -131,6 +134,15 @@ Parameters:
     Description: >
       Any comments that you want to include about the CloudFront distribution
     MaxLength: 128
+  CloudFrontMaxTtl:
+    Type: Number
+    Default: 900
+    Description: >
+      The maximum amount of time, in seconds, that you want objects to stay in
+      CloudFront caches before CloudFront forwards another request to your
+      origin to determine whether the object has been updated. The value that
+      you specify applies only when your origin adds HTTP headers such as
+      Cache-Control max-age, Cache-Control s-maxage, and Expires to objects
 Resources:
   # ACM Certificates
   Certificate:
@@ -183,7 +195,7 @@ Resources:
               LambdaFunctionARN: !Ref OriginRequestLambdaFunctionVersionA
             - EventType: viewer-request
               LambdaFunctionARN: !Ref ViewerRequestLambdaFunctionVersionA
-          # MaxTTL: Number
+          MaxTTL: !Ref CloudFrontMaxTtl
           # MinTTL: Number
           # SmoothStreaming: Boolean
           TargetOriginId: feed-origin
