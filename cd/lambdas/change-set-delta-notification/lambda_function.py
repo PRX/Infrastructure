@@ -91,7 +91,7 @@ def parameters_delta_attachment(user_parameters, deploy_id):
             else:
                 deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
 
-    unchanged_count = len(parameters) - len(deltas + 1)
+    unchanged_count = len(parameters) - len(deltas) + 1
 
     return {
         'footer': f'Excludes {unchanged_count} unchanged parameters',
