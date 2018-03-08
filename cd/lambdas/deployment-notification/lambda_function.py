@@ -62,34 +62,35 @@ def log_deploy_metric(env):
         )
 
 
-def publish_slack_message(env, input_artifact, config_version):
-    commit = input_artifact['revision']
+def publish_slack_message(stage, deploy_id, repo_artifact, config_version):
+    commit = repo_artifact['revision']
     region = os.environ['AWS_REGION']
 
     url = f"https://github.com/PRX/Infrastructure/commit/{commit}"
 
-    if env == 'Start':
+    if stage == 'Housekeeping':
         attachment = {
-            'mrkdwn_in': ['text'],
+            'mrkdwn_in': ['text', 'fields'],
             # ts: (Date.now() / 1000 | 0), TODO
             'footer': region,
-            'color': '#A807E8',
-            'fallback': f"Starting deploy. Infrastructure revision {commit}. Config version {config_version}",
-            'text': f"Starting deploy pipeline.\nInfrastructure revision <{url}|`{commit}`>\nTemplate config version `{config_version}`",
+            'color': '#b8dcdf',
+            'text': f"*`{deploy_id}` CD pipeline has started* <{url}|`{commit[0:6]}`>:`{config_version[0:10]…}`",
+            # 'fallback': f"Starting deploy. Infrastructure revision {commit}. Config version {config_version}",
+            # 'text': f"Starting deploy pipeline.\nInfrastructure revision <{url}|`{commit}`>\nTemplate config version `{config_version}`",
         }
     else:
-        if env == 'Production':
+        if stage == 'Production':
             color = 'good'
         else:
-            color = 'warning'
+            color = '#8bb9bd'
 
         attachment = {
-            'mrkdwn_in': ['text'],
+            'mrkdwn_in': ['text', 'fields'],
             # ts: (Date.now() / 1000 | 0), TODO
             'footer': region,
             'color': color,
-            'fallback': f"{env} deploy complete. Infrastructure revision {commit}",
-            'text': f"*{env}* deploy complete.\nInfrastructure revision <{url}|`${commit}`>\nTemplate config version `${config_version}`",
+            # 'fallback': f"{stage} deploy complete. Infrastructure revision {commit}",
+            'text': f"*`{deploy_id}` {stage} deploy has finished* <{url}|`{commit[0:6]}`>:`{config_version[0:10]…}`",
         }
 
     message = {
@@ -107,18 +108,28 @@ def publish_slack_message(env, input_artifact, config_version):
 
 def lambda_handler(event, context):
     try:
-        print('Posting notification...')
-
         job = event['CodePipeline.job']
 
-        input_artifact = job['data']['inputArtifacts'][0]
-
+        # UserParameters is JSON {stage:x, info:Y}
         cfg = job['data']['actionConfiguration']['configuration']
-        env = cfg['UserParameters']
+        user_parameters = json.loads(cfg['UserParameters'])
+
+        stage = user_parameters['stage']
+        info = user_parameters['info']
+
+        input_artifacts = job['data']['inputArtifacts']
+
+        repo_artifact = next((a for a in input_artifacts if a['name'] == 'InfrastructureRepoSourceArtifact'), None)
+        staging_config_artifact = next((a for a in input_artifacts if a['name'] == 'TemplateConfigStagingZipArtifact'), None)
+
+        repo_id = repo_artifact['revision'][0:3]
+        stag_config_id = staging_config_artifact['revision'][0:3]
+
+        deploy_id = f"{repo_id}-{stag_config_id}"
 
         # Get the S3 version of the most recent config
 
-        if env == 'Production':
+        if stage == 'Production':
             config_key = os.environ['INFRASTRUCTURE_CONFIG_PRODUCTION_KEY']
         else:
             config_key = os.environ['INFRASTRUCTURE_CONFIG_STAGING_KEY']
@@ -131,9 +142,9 @@ def lambda_handler(event, context):
         config_version = config_head['VersionId']
 
         # Publish to SNS Topic
-        publish_slack_message(env, input_artifact, config_version)
+        publish_slack_message(stage, deploy_id, repo_artifact, config_version)
         # Log a custom metric data point with CloudWatch
-        log_deploy_metric(env)
+        log_deploy_metric(stage)
 
         # Cleanup
         put_job_success(job, '')

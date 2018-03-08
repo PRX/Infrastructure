@@ -34,7 +34,7 @@ def put_job_failure(job, message):
         failureDetails={'message': message, 'type': 'JobFailed'})
 
 
-def parameters_delta_attachment(user_parameters):
+def parameters_delta_attachment(user_parameters, deploy_id):
     stack_name = user_parameters['StackName']
     change_set_name = user_parameters['ChangeSetName']
 
@@ -66,7 +66,7 @@ def parameters_delta_attachment(user_parameters):
 
     # Find values that have changed, and build strings that will be included in
     # the Slack message describing the changes
-    deltas = []
+    deltas = [f"*`{deploy_id}` {user_parameters['Stage']} Stack Parameters Delta*"]
 
     for k, v in parameters.items():
         if k == 'PipelineExecutionNonce':
@@ -91,29 +91,39 @@ def parameters_delta_attachment(user_parameters):
             else:
                 deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
 
-    unchanged_count = len(parameters) - len(deltas)
+    unchanged_count = len(parameters) - len(deltas + 1)
 
     return {
-        'title': 'Stack Parameters Delta',
         'footer': f'Excludes {unchanged_count} unchanged parameters',
+        'color': '#a0d0d4',
         'mrkdwn_in': ['text'],
         'text': '\n'.join(deltas)
     }
 
 
-def slack_message(notification):
+def slack_message(notification, deploy_id):
     return {
         'channel': '#ops-deploys',
         'username': 'AWS CodePipeline',
         'icon_emoji': ':ops-codepipeline:',
         'attachments': [
-            parameters_delta_attachment(notification)
+            parameters_delta_attachment(notification, deploy_id)
         ]
     }
 
 
-def sns_message(notification):
-    return json.dumps(slack_message(notification))
+def sns_message(notification, deploy_id):
+    return json.dumps(slack_message(notification, deploy_id))
+
+
+def deploy_id(artifacts):
+    repo_artifact = next((a for a in artifacts if a['name'] == 'InfrastructureRepoSourceArtifact'), None)
+    staging_config_artifact = next((a for a in artifacts if a['name'] == 'TemplateConfigStagingZipArtifact'), None)
+
+    repo_id = repo_artifact['revision'][0:3]
+    stag_config_id = staging_config_artifact['revision'][0:3]
+
+    return f"{repo_id}-{stag_config_id}"
 
 
 def lambda_handler(event, context):
@@ -121,13 +131,14 @@ def lambda_handler(event, context):
         print('Posting delta notification...')
 
         job = event['CodePipeline.job']
+        input_artifacts = job['data']['inputArtifacts']
 
         cfg = job['data']['actionConfiguration']['configuration']
         user_parameters = json.loads(cfg['UserParameters'])
 
         sns.publish(
             TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
-            Message=sns_message(user_parameters)
+            Message=sns_message(user_parameters, deploy_id(input_artifacts))
         )
 
         # Cleanup

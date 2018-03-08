@@ -523,9 +523,14 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Start
+                UserParameters: !Sub |
+                  {
+                    "stage": "Housekeeping",
+                    "info": "start"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
         - Name: Staging
           Actions:
@@ -567,8 +572,12 @@ Resources:
                 UserParameters: !Sub |
                   {
                     "StackName": "${AWS::StackName}-root-staging",
-                    "ChangeSetName": "${AWS::StackName}RootStagingChangeSet"
+                    "ChangeSetName": "${AWS::StackName}RootStagingChangeSet",
+                    "Stage": "Staging"
                   }
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 2
             - Name: ExecuteStagingChangeSet
               ActionTypeId:
@@ -603,9 +612,14 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Staging
+                UserParameters: !Sub |
+                  {
+                    "stage": "Staging",
+                    "info": "complete"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 3
         - Name: Testing
           Actions:
@@ -710,9 +724,14 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Production
+                UserParameters: !Sub |
+                  {
+                    "stage": "Production",
+                    "info": "complete"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 5
   # Acceptance Test Pipeline Action
   AcceptanceTestsCodeBuildIamRole:
