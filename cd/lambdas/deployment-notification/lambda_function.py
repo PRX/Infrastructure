@@ -74,7 +74,7 @@ def publish_slack_message(stage, deploy_id, repo_artifact, config_version):
             # ts: (Date.now() / 1000 | 0), TODO
             'footer': region,
             'color': '#b8dcdf',
-            'text': f"*`{deploy_id}` CD pipeline has started* <{url}|`{commit[0:6]}`>:`{config_version[0:10]…}`",
+            'text': f"*`{deploy_id}` CD pipeline has started* <{url}|`{commit[0:6]}`>:`{config_version[0:10]}…`",
             # 'fallback': f"Starting deploy. Infrastructure revision {commit}. Config version {config_version}",
             # 'text': f"Starting deploy pipeline.\nInfrastructure revision <{url}|`{commit}`>\nTemplate config version `{config_version}`",
         }
@@ -90,7 +90,7 @@ def publish_slack_message(stage, deploy_id, repo_artifact, config_version):
             'footer': region,
             'color': color,
             # 'fallback': f"{stage} deploy complete. Infrastructure revision {commit}",
-            'text': f"*`{deploy_id}` {stage} deploy has finished* <{url}|`{commit[0:6]}`>:`{config_version[0:10]…}`",
+            'text': f"*`{deploy_id}` {stage} deploy has finished* <{url}|`{commit[0:6]}`>:`{config_version[0:10]}…`",
         }
 
     message = {
