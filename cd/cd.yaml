@@ -130,7 +130,7 @@ Resources:
           PIPELINE_NAME: !Ref Pipeline
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+              !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
       Handler: lambda_function.lambda_handler
       MemorySize: 128
       Role: !GetAtt CodePipelineFailurePollerFunctionIamRole.Arn
@@ -249,10 +249,10 @@ Resources:
         Variables:
           IKE_DEPLOYS_SLACK_WEBHOOK_URL:
             Fn::ImportValue:
-                !Sub "${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
+              !Sub "${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
+              !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Role: !GetAtt LambdaExecutionIAMRole.Arn
@@ -423,6 +423,7 @@ Resources:
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
                   - !GetAtt DeploymentNotificationFunction.Arn
+                  - !GetAtt ChangeSetDeltaNotificationFunction.Arn
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
@@ -522,20 +523,25 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Start
+                UserParameters: !Sub |
+                  {
+                    "stage": "Housekeeping",
+                    "info": "start"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
         - Name: Staging
           Actions:
-            - Name: StagingDeploy
+            - Name: CreateStagingChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
                 Provider: CloudFormation
                 Version: 1
               Configuration:
-                ActionMode: REPLACE_ON_FAILURE
+                ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM
                 ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
@@ -555,6 +561,37 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: RepoStateArtifact
               RunOrder: 1
+            - Name: StagingDeltaNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref ChangeSetDeltaNotificationFunction
+                UserParameters: !Sub |
+                  {
+                    "StackName": "${AWS::StackName}-root-staging",
+                    "ChangeSetName": "${AWS::StackName}RootStagingChangeSet",
+                    "Stage": "Staging"
+                  }
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 2
+            - Name: ExecuteStagingChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
+                RoleArn: !GetAtt CloudFormationIAMRole.Arn
+                StackName: !Sub ${AWS::StackName}-root-staging
+              RunOrder: 2
             - Name: CaptureStagingState
               ActionTypeId:
                 Category: Invoke
@@ -566,7 +603,7 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 2
+              RunOrder: 3
             - Name: DeploymentNotification
               ActionTypeId:
                 Category: Invoke
@@ -575,10 +612,15 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Staging
+                UserParameters: !Sub |
+                  {
+                    "stage": "Staging",
+                    "info": "complete"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 2
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 3
         - Name: Testing
           Actions:
             - Name: Acceptance
@@ -636,6 +678,28 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: RepoStateArtifact
               RunOrder: 2
+            # TODO Production delta seem to work better as part of the approval
+            # notification, just so the changes are always locked up to the
+            # button. Still need the custom function for staging, though, but
+            # for now they're duplicative.
+            # - Name: ProductionDeltaNotification
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: 1
+            #   Configuration:
+            #     FunctionName: !Ref ChangeSetDeltaNotificationFunction
+            #     UserParameters: !Sub |
+            #       {
+            #         "StackName": "${AWS::StackName}-root-production",
+            #         "ChangeSetName": "${AWS::StackName}RootProductionChangeSet",
+            #         "Stage": "Production"
+            #       }
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 3
             - Name: ApproveChangeSet
               ActionTypeId:
                 Category: Approval
@@ -682,9 +746,14 @@ Resources:
                 Version: 1
               Configuration:
                 FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: Production
+                UserParameters: !Sub |
+                  {
+                    "stage": "Production",
+                    "info": "complete"
+                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 5
   # Acceptance Test Pipeline Action
   AcceptanceTestsCodeBuildIamRole:
@@ -970,6 +1039,62 @@ Resources:
                   - "cloudformation:DescribeChangeSet"
                   - "cloudformation:DescribeStacks"
                 Resource: "*"
+  ChangeSetDeltaNotificationFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket:
+          Fn::ImportValue:
+            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+        S3Key: cd/change-set-delta-notification.zip
+      Description: >
+        Sends a message about stack changes in a CodePipeline change set
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue:
+              !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          CD_STACK_NAME: !Ref AWS::StackName
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 3
+  ChangeSetDeltaNotificationNotificationErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Change Set Diff Notification"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the diff notification lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChangeSetDeltaNotificationFunction
   DeploymentNotificationFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -984,7 +1109,7 @@ Resources:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-                !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+              !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
           CD_STACK_NAME: !Ref AWS::StackName
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue:
