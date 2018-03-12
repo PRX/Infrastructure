@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Feeder bucket CDN (or really any plain S3-bucket CDN)
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Distribution Parameters
+        Parameters:
+          - OriginBucket
+          - DistributionDomain
+          - DistributionDomain2
+          - CertificateArn
+    ParameterLabels:
+      OriginBucket:
+        default: Origin S3 Bucket
+      DistributionDomain:
+        default: Domain Name
+      DistributionDomain2:
+        default: Alternate Domain Name
+      CertificateArn:
+        default: ACM Certificate Arn
+Parameters:
+  OriginBucket:
+    Type: String
+    Description: eg. staging-prx-feed.s3.amazonaws.com, prx-feed.s3.amazonaws.com
+  DistributionDomain:
+    Type: String
+    Description: eg. f-staging.prxu.org, f.prxu.org
+  DistributionDomain2:
+    Type: String
+    Description: eg. f2-staging.prxu.org, f2.prxu.org
+  CertificateArn:
+    Type: String
+    Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
+Resources:
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DistributionDomain
+          - !Ref DistributionDomain2
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+        DefaultCacheBehavior:
+          AllowedMethods: [HEAD, GET]
+          CachedMethods: [HEAD, GET]
+          Compress: false
+          DefaultTTL: 86400
+          ForwardedValues:
+            QueryString: false
+          TargetOriginId: feeder-s3-bucket
+          ViewerProtocolPolicy : allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !Ref OriginBucket
+            Id: feeder-s3-bucket
+            S3OriginConfig: {}
+        PriceClass: PriceClass_200
+        ViewerCertificate:
+          AcmCertificateArn: !Ref CertificateArn
+          SslSupportMethod: sni-only
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
