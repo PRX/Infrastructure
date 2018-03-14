@@ -16,6 +16,16 @@ Parameters:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
+  WildcardCertificateArn:
+    Type: String
+Mappings:
+  EnvironmentTypeMap:
+    Testing:
+      DomainName: "proxy.test.prx.tech"
+    Staging:
+      DomainName: "proxy.staging.prx.tech"
+    Production:
+      DomainName: "proxy.prx.tech"
 Resources:
   ProxyLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -92,6 +102,7 @@ Resources:
   ProxyRestApiDeployment:
     Type: "AWS::ApiGateway::Deployment"
     DependsOn:
+      - ProxyRestApiRootMethod
       - ProxyRestApiMethod
     Properties:
       RestApiId: !Ref ProxyRestApi
@@ -109,3 +120,37 @@ Resources:
       FunctionName: !Ref ProxyLambdaFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ProxyRestApi}/${ProxyRestApiStage}/*"
+  ProxyRestApiDomainName:
+    Type: "AWS::ApiGateway::DomainName"
+    Properties:
+      CertificateArn: !Ref WildcardCertificateArn
+      DomainName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
+  ProxyRestApiBasePathMapping:
+    Type: "AWS::ApiGateway::BasePathMapping"
+    Properties:
+      DomainName: !Ref ProxyRestApiDomainName
+      RestApiId: !Ref ProxyRestApi
+      Stage: prod
+  ProxyRestApiDomainNameRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for proxy server API
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
+          AliasTarget:
+            DNSName: !GetAtt ProxyRestApiDomainName.DistributionDomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: A
+          Name: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
+          AliasTarget:
+            DNSName: !GetAtt ProxyRestApiDomainName.DistributionDomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+Outputs:
+  ApiDomainName:
+    Description: The custom API domain name
+    Value: !Ref ProxyRestApiDomainName
+  DistributionDomainName:
+    Description: The Amazon CloudFront distribution domain name that's mapped to the custom domain name
+    Value: !GetAtt ProxyRestApiDomainName.DistributionDomainName
