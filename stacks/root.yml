@@ -83,6 +83,8 @@ Parameters:
     Type: String
   DovetailStitchLambdaCodeS3ObjectVersion:
     Type: String
+  ProxyPrxOrgCodeS3ObjectVersion:
+    Type: String
   PRXUploadAccessKey:
     Type: String
   # Parameter Overrides
@@ -854,6 +856,33 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail-stitch-lambda.yml"]]
+      TimeoutInMinutes: "5"
+  #### proxy.prx.org ###########################################################
+  ProxyPrxOrgStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref ProxyPrxOrgCodeS3ObjectVersion
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/proxy.prx.org.yml"]]
       TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
