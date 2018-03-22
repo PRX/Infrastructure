@@ -21,11 +21,11 @@ Parameters:
 Mappings:
   EnvironmentTypeMap:
     Testing:
-      DomainName: "proxy.test.prx.tech"
+      DomainName: "proxy.test.prx.org"
     Staging:
-      DomainName: "proxy.staging.prx.tech"
+      DomainName: "proxy.staging.prx.org"
     Production:
-      DomainName: "proxy.prx.tech"
+      DomainName: "proxy.prx.org"
 Resources:
   ProxyLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -137,7 +137,7 @@ Resources:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
       Comment: Record sets for proxy server API
-      HostedZoneName: prx.tech.
+      HostedZoneName: prx.org.
       RecordSets:
         - Type: AAAA
           Name: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
@@ -149,6 +149,19 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt ProxyRestApiDomainName.DistributionDomainName
             HostedZoneId: Z2FDTNDATAQYW2
+  ProductionRestApiDomainName:
+    Type: "AWS::ApiGateway::DomainName"
+    Condition: CreateProductionResources
+    Properties:
+      CertificateArn: !Ref WildcardCertificateArn
+      DomainName: www.prx.org
+  ProductionRestApiBasePathMapping:
+    Type: "AWS::ApiGateway::BasePathMapping"
+    Condition: CreateProductionResources
+    Properties:
+      DomainName: !Ref ProductionRestApiDomainName
+      RestApiId: !Ref ProxyRestApi
+      Stage: prod
 Outputs:
   ApiDomainName:
     Description: The custom API domain name

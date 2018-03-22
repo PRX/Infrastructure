@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Cloudwatch log metric-filters for the dovetail-stitch-lambda.  Since the edge
+  lambda can execute/log in any cloudfront region, this should probably be
+  deployed manually as a StackSet.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Lambda Parameters
+        Parameters:
+          - LambdaName
+          - LambdaRegion
+          - EnvironmentName
+    ParameterLabels:
+      LambdaName:
+        default: Lambda Function Name
+      LambdaRegion:
+        default: Lambda Function Region
+      EnvironmentName:
+        default: Lowercase Environment Name
+Parameters:
+  LambdaName:
+    Type: String
+    Description: eg. some-function-name
+  LambdaRegion:
+    Type: String
+    Description: eg. us-east-1
+  EnvironmentName:
+    Type: String
+    Description: eg. stag, prod
+Resources:
+  LambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${LambdaRegion}.${LambdaName}"
+      RetentionInDays: 14
+  LambdaCacheHitMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg = "cache HIT" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_hit"
+          MetricNamespace: LogMetrics
+          MetricValue: $.timer
+  LambdaCacheMissMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg = "cache MISS" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_miss"
+          MetricNamespace: LogMetrics
+          MetricValue: $.timer
+  LambdaCachePartialMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg = "cache PARTIAL" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_partial"
+          MetricNamespace: LogMetrics
+          MetricValue: $.timer
+  LambdaInvokeMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg = "invoke" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_invoke"
+          MetricNamespace: LogMetrics
+          MetricValue: $.timer
+  LambdaTimeoutMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '"Task timed out after"'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_timeout"
+          MetricNamespace: LogMetrics
+          MetricValue: 1
+  LambdaWarnMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "warn" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_warn"
+          MetricNamespace: LogMetrics
+          MetricValue: 1
+  LambdaErrorMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref LambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
+          MetricNamespace: LogMetrics
+          MetricValue: 1
+Outputs:
+  LambdaLogGroupName:
+    Value: !Ref LambdaLogGroup
