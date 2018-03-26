@@ -1,0 +1,245 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudFront distribution for web origins (i.e., not S3)
+Conditions:
+  HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
+  HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
+  HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
+  HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
+  HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
+  HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
+  HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
+  HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Distribution
+        Parameters:
+          - ProjectTag
+          - Cnames
+      - Label:
+          default: Origin
+        Parameters:
+          - OriginDomain
+          - OriginPath
+      - Label:
+          default: CloudFront
+        Parameters:
+          - CloudFrontComment
+          - CloudFrontPriceClass
+          - CloudFrontDefaultRootObject
+          - CloudFrontMinTtl
+          - CloudFrontMaxTtl
+          - CloudFrontLoggingBucket
+          - CloudFrontLoggingBucketPrefix
+      - Label:
+          default: HTTPS Certificate
+        Parameters:
+          - AcmCertificateArn
+          - ValidationDomain
+    ParameterLabels:
+      ProjectTag:
+        default: Project tag
+      Cnames:
+        default: CNAMEs
+      OriginDomain:
+        default: Origin domain
+      OriginPath:
+        default: Origin path
+      CloudFrontLoggingBucket:
+        default: Log S3 bucket
+      CloudFrontLoggingBucketPrefix:
+        default: Log file prefix
+      CloudFrontComment:
+        default: Comment
+      CloudFrontMinTtl:
+        default: Min TTL
+      CloudFrontMaxTtl:
+        default: Max TTL
+      CloudFrontPriceClass:
+        default: Price class
+      CloudFrontDefaultRootObject:
+        default: Default root object
+      AcmCertificateArn:
+        default: Certificate ARN
+      ValidationDomain:
+        default: Validation domain
+Parameters:
+  ProjectTag:
+    Type: String
+    Description: >
+      The value used for the Project tag on resources that support tagging.
+  Cnames:
+    Type: CommaDelimitedList
+    Description: >
+      The CNAMEs (alternate domain names) for the distribution, as a
+      comma-delimited list (e.g. "cdn1.example.com,cdn2.example.com")
+  OriginDomain:
+    Type: String
+    Description: >
+      The DNS name of HTTP server from which you want CloudFront to get objects
+      for this origin
+  OriginPath:
+    Type: String
+    Description: >
+      (optional) If included, must start with a slash and cannot end with a
+      slash. This path will be prepended to the path of all requests when
+      contacting the origin.
+  CloudFrontLoggingBucket:
+    Type: String
+    Description: >
+      The Amazon S3 bucket address where access logs are stored for CloudFront.
+      (e.g., mybucket.s3.amazonaws.com)
+  CloudFrontLoggingBucketPrefix:
+    Type: String
+    Description: >
+      (optional) A prefix for the access log file names for the CloudFront
+      distribution.
+  CloudFrontComment:
+    Type: String
+    Description: >
+      Any comments that you want to include about the CloudFront distribution
+    MaxLength: 128
+  CloudFrontMinTtl:
+    Type: String
+    Description: >
+      The minimum amount of time that you want objects to stay in CloudFront
+      caches before CloudFront forwards another request to your origin to
+      determine whether the object has been updated.
+  CloudFrontMaxTtl:
+    Type: String
+    Description: >
+      The maximum amount of time, in seconds, that you want objects to stay in
+      CloudFront caches before CloudFront forwards another request to your
+      origin to determine whether the object has been updated. The value that
+      you specify applies only when your origin adds HTTP headers such as
+      Cache-Control max-age, Cache-Control s-maxage, and Expires to objects
+  CloudFrontPriceClass:
+    Type: String
+    Description: >
+      The price class that corresponds with the maximum price that you want to
+      pay for CloudFront service.
+    Default: PriceClass_All
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+  CloudFrontDefaultRootObject:
+    Type: String
+    Default: index.html
+    Description: >
+      Optional. The object that you want CloudFront to return (for example,
+      index.html) when a viewer request points to your root URL
+      (http://www.example.com) instead of to a specific object in your
+      distribution (http://www.example.com/index.html).
+  AcmCertificateArn:
+    Type: String
+    Description: >
+      ARN for the ACM certificate that will be used with the CloudFront
+      distribution. If no value is supplied, a new certificate will be created.
+  ValidationDomain:
+    Type: String
+    Description: >
+      eg. songexploder.net. Must be a superdomain of the public feed domain
+      name. A verification email will be sent to postmast@, webmaster@, etc.
+      (Not used if a certificate ARN is given)
+Resources:
+  # ACM Certificate
+  # This gets created when no ARN for a pre-existing certificate is provided
+  Certificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Condition: HasNoAcmCertificateArn
+    Properties:
+      DomainName: !Select [0, !Ref Cnames]
+      DomainValidationOptions:
+        - ValidationDomain: !Ref ValidationDomain
+          DomainName: !Select [0, !Ref Cnames]
+      SubjectAlternativeNames: !Ref Cnames
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Name
+          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases: !Ref Cnames
+        # CacheBehaviors:
+          # CacheBehavior
+        Comment: !Ref CloudFrontComment
+        # CustomErrorResponses:
+        #   CustomErrorResponse
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          Compress: true
+          # DefaultTTL: Number
+          ForwardedValues:
+            # Cookies:
+            #   Cookies
+            # Headers:
+            #   - String
+            QueryString: false
+            # QueryStringCacheKeys:
+          # LambdaFunctionAssociations:
+          MaxTTL: !If [HasCloudFrontMaxTtl, !Ref "CloudFrontMaxTtl", !Ref "AWS::NoValue"]
+          MinTTL: !If [HasCloudFrontMinTtl, !Ref "CloudFrontMinTtl", !Ref "AWS::NoValue"]
+          # SmoothStreaming: Boolean
+          TargetOriginId: web-origin
+          # TrustedSigners:
+          #   - String
+          ViewerProtocolPolicy : redirect-to-https
+        DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref "CloudFrontDefaultRootObject", !Ref "AWS::NoValue"]
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Logging:
+          !If
+            - HasCloudFrontLoggingBucket
+            - Bucket: !Ref CloudFrontLoggingBucket
+              IncludeCookies: false
+              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref "CloudFrontLoggingBucketPrefix", !Ref "AWS::NoValue"]
+            - !Ref "AWS::NoValue"
+        Origins:
+          - CustomOriginConfig:
+              # HTTPPort: Integer
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+                - TLSv1.1
+                - TLSv1
+            DomainName: !Ref OriginDomain
+            Id: web-origin
+            # OriginCustomHeaders:
+            #   - OriginCustomHeader
+            OriginPath: !If [HasOriginPath, !Ref "OriginPath", !Ref "AWS::NoValue"]
+            # S3OriginConfig:
+            #   S3 Origin
+        PriceClass: !Ref CloudFrontPriceClass
+        # Restrictions:
+        #   Restriction
+        ViewerCertificate:
+          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref "AcmCertificateArn", !Ref Certificate]
+          # CloudFrontDefaultCertificate: true
+          # IamCertificateId: String
+          # MinimumProtocolVersion: String
+          SslSupportMethod: sni-only
+        # WebACLId: String
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
