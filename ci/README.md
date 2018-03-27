@@ -103,3 +103,18 @@ In order for `post_build` to handle Lambda-based apps, the following environment
 Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.lambda`, which allows for the build process to involve any number of different Docker images.
 
 How the Lambda code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that Lambda apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works for your project.
+
+### S3 Static Site Targets
+
+For websites and apps that can be run entirely as static files out of an S3 bucket, the `post_build` script can push zipped code archives to S3. It's important to note that the code is as part of the CI process, the code is pushed to an S3 bucket **different** than the bucket the site will ultimately be served from. The archive is pushed to a bucket from which it can be deployed to the static site bucket during the CD process.
+
+The callback function will track the S3 version ID of the zip archive object, and update the metadata used by CD so it is available during a deploy.
+
+In order for `post_build` to handle S3 static sites, the following environment variables must be set:
+
+- `PRX_S3_STATIC_S3_KEY` – The S3 object key to use for the zipped code archive file. This object will always be placed in a bucket based on the `PRX_APPLICATION_CODE_BUCKET` environment variable, which has a default value provided by the CI base system, and generally should not be changed.
+- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (eg `AcmeAppStaticVersionId`)
+
+Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_S3_STATIC_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.s3static`, which allows for the build process to involve any number of different Docker images.
+
+How the static code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that static site apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works for your project.

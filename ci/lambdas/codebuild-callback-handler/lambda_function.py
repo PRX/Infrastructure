@@ -16,9 +16,15 @@
 #   PRX_GITHUB_PR: only for pull requests
 #   PRX_ECR_REGION: only for Docker apps
 #   PRX_ECR_REPOSITORY: only for Docker apps
+#   PRX_ECR_CONFIG_PARAMETERS: only for Docker apps
+#   PRX_ECR_IMAGE: only for Docker apps
 #   PRX_ECR_TAG: only for Docker apps
 #   PRX_LAMBDA_CODE_S3_KEY: only for Lambda apps
 #   PRX_LAMBDA_CODE_S3_VERSION_ID: only for Lambda apps
+#   PRX_LAMBDA_CODE_CONFIG_PARAMETERS: only for Lambda apps
+#   PRX_S3_STATIC_S3_KEY: only for S3 static sites
+#   PRX_S3_STATIC_S3_VERSION_ID: only for S3 static sites
+#   PRX_S3_STATIC_CONFIG_PARAMETERS: only for S3 static sites
 
 
 import boto3
@@ -136,6 +142,21 @@ def update_staging_config_status(sns_message):
 
                 staging_config['Parameters'][key_name.strip()] = version_id
 
+        if 'PRX_S3_STATIC_S3_VERSION_ID' in attrs:
+            print('...Updating S3 static site S3 version ID value...')
+
+            config_did_change = True
+
+            # Update config with new S3 Version ID
+
+            version_id = attrs['PRX_S3_STATIC_S3_VERSION_ID']['Value']
+
+            key_names = attrs['PRX_S3_STATIC_CONFIG_PARAMETERS']['Value'].split(',')
+            for key_name in key_names:
+                print(f"...Setting {key_name.strip()} to {version_id}...")
+
+                staging_config['Parameters'][key_name.strip()] = version_id
+
         # Zip the new config up
 
         new_archive_path = f"/tmp/{uuid.uuid4()}"
@@ -207,6 +228,9 @@ def post_notification_status(sns_message):
         elif 'PRX_LAMBDA_CODE_S3_VERSION_ID' in attrs:
             s3_version = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']['Value']
             attachment['text'] = f"Lambda code pushed to S3 with version ID `{s3_version}`"
+        elif 'PRX_S3_STATIC_S3_VERSION_ID' in attrs:
+            s3_version = attrs['PRX_S3_STATIC_S3_VERSION_ID']['Value']
+            attachment['text'] = f"S3 static site pushed to S3 with version ID `{s3_version}`"
         else:
             attachment['text'] = 'Unknown!'
     else:

@@ -30,10 +30,15 @@ send_sns_callback_message() {
     [ -z "$PRX_ECR_IMAGE" ] || MSGATR+=",\"PRX_ECR_IMAGE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_IMAGE\"}"
     [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
-    # Option Lambda code parameters
+    # Optional Lambda code parameters
     [ -z "$PRX_LAMBDA_CODE_S3_KEY" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_KEY\"}"
     [ -z "$PRX_LAMBDA_CODE_S3_VERSION_ID" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_VERSION_ID\"}"
     [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_PARAMETERS\"}"
+
+    # Optional S3 static site parameters
+    [ -z "$PRX_S3_STATIC_S3_KEY" ] || MSGATR+=",\"PRX_S3_STATIC_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_S3_KEY\"}"
+    [ -z "$PRX_S3_STATIC_S3_VERSION_ID" ] || MSGATR+=",\"PRX_S3_STATIC_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_S3_VERSION_ID\"}"
+    [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_S3_STATIC_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_CONFIG_PARAMETERS\"}"
 
     MSGATR+="}"
 
@@ -125,6 +130,37 @@ push_to_s3_lambda() {
     fi
 }
 
+#
+push_to_s3_static() {
+    if [ -n "$PRX_S3_STATIC_S3_KEY" ]
+    then
+        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for S3 static code push"; fi
+        if [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]; then build_error "PRX_S3_STATIC_CONFIG_PARAMETERS required for S3 static code push"; fi
+        if [ -z "$PRX_S3_STATIC_ARCHIVE_BUILD_PATH" ]; then export PRX_S3_STATIC_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
+        echo "Handling S3 static code push..."
+
+        echo "Getting Docker image ID"
+        image_id=$(docker images --filter "label=org.prx.s3static" --format "{{.ID}}" | head -n 1)
+
+        if [ -z "$image_id" ]; then
+            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.s3static label"
+        else
+            container_id=$(docker create $image_id)
+
+            echo "Copying zip archive for S3 static source..."
+            docker cp $container_id:$PRX_S3_STATIC_ARCHIVE_BUILD_PATH build.zip
+
+            cleaned=`docker rm $container_id`
+
+            echo "Sending zip archive to S3..."
+            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_S3_STATIC_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
+
+            export PRX_S3_STATIC_S3_VERSION_ID="$version_id"
+        fi
+
+    fi
+}
+
 init() {
     echo "Running post_build script..."
 
@@ -147,6 +183,7 @@ init() {
         echo "Publishing code..."
         push_to_ecr
         push_to_s3_lambda
+        push_to_s3_static
 
         build_success
     else
