@@ -21,11 +21,20 @@ Parameters:
 Mappings:
   EnvironmentTypeMap:
     Testing:
-      DomainName: "proxy.test.prx.org"
+      DomainName: "proxy.test.prx.tech"
+      CorporateHost: "corporate.prx.tech"
+      ExchangeHost: "exchange.test.prx.tech"
+      PrxSessionKey: "_prx_session_test"
     Staging:
-      DomainName: "proxy.staging.prx.org"
+      DomainName: "proxy.staging.prx.tech"
+      CorporateHost: "corporate.prx.tech"
+      ExchangeHost: "exchange.staging.prx.tech"
+      PrxSessionKey: "_prx_session_staging"
     Production:
       DomainName: "proxy.prx.org"
+      CorporateHost: "corporate.prx.tech"
+      ExchangeHost: "exchange.prx.org"
+      PrxSessionKey: "_prx_session"
 Resources:
   ProxyLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -50,6 +59,11 @@ Resources:
         S3Key: lambda/PRX-proxy.prx.org.zip
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: Top-level proxy server for www.prx.org
+      Environment:
+        Variables:
+          CORPORATE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, CorporateHost]
+          EXCHANGE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ExchangeHost]
+          PRX_SESSION_KEY: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, PrxSessionKey]
       Handler: index.handler
       MemorySize: 192
       Role: !GetAtt ProxyLambdaIamRole.Arn
