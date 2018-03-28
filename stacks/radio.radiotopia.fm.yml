@@ -5,14 +5,25 @@ Parameters:
     Type: String
   StaticSiteArchiveS3ObjectVersion:
     Type: String
-  StaticSitesS3StagingDeployBucket:
+  StaticSiteS3StagingDeployBucket:
     Type: AWS::SSM::Parameter::Value<String>
-  StaticSitesS3ProductionDeployBucket:
+  StaticSiteS3ProductionDeployBucket:
     Type: AWS::SSM::Parameter::Value<String>
   EnvironmentType:
     Type: String
-  EnvironmentTypeAbbreviation:
+  S3StaticSiteDeployFunctionArn:
     Type: String
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Resources:
   Temp:
     Type: "AWS::SNS::Topic"
+  S3StaticDeploy:
+    Type: "Custom::S3StaticDeploy"
+    Properties:
+      ServiceToken: !Ref S3StaticSiteDeployFunctionArn
+      Region: !Ref AWS::Region
+      StaticSiteArchiveS3Bucket: !Ref CodeS3Bucket
+      StaticSiteArchiveS3Object: 's3-static/PRX-radio.radiotopia.fm.zip'
+      StaticSiteArchiveS3ObjectVersion: !Ref StaticSiteArchiveS3ObjectVersion
+      StaticSiteS3DeployBucket: !If [IsProduction, !Ref StaticSiteS3ProductionDeployBucket, !Ref StaticSiteS3StagingDeployBucket]
