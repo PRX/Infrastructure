@@ -22,6 +22,8 @@ STATUS_FAILED = 'FAILED'
 
 
 def send_response(event, context, res_status, res_reason='Done', res_data={}):
+    print(f"Sending {res_status} response")
+
     res_data = json.dumps({
         'Status': res_status,
         'Reason': res_reason,
@@ -37,6 +39,8 @@ def send_response(event, context, res_status, res_reason='Done', res_data={}):
     url = event['ResponseURL']
     req = urllib.request.Request(url, data=res_data, method='PUT', headers=headers)
     urllib.request.urlopen(req)
+
+    print(f"Response sent")
 
 
 def lambda_handler(event, context):
