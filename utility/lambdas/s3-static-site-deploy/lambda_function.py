@@ -13,6 +13,7 @@ import os
 import urllib.request
 import json
 import traceback
+import mimetypes
 
 
 s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
@@ -73,7 +74,8 @@ def lambda_handler(event, context):
                     s3_key = os.path.relpath(local_path, unzip_dir)
 
                     print(f"Uploading {s3_key} to {deploy_bucket}")
-                    s3.upload_file(local_path, deploy_bucket, s3_key)
+                    mime_type = mimetypes.guess_type(local_path)[0]
+                    s3.upload_file(local_path, deploy_bucket, s3_key, ExtraArgs={'ContentType': mime_type})
 
             send_response(event, context, STATUS_SUCCESS)
         else:
