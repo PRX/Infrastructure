@@ -21,6 +21,13 @@ s3 = boto3.client('s3', config=Config(signature_version='s3v4'))
 STATUS_SUCCESS = 'SUCCESS'
 STATUS_FAILED = 'FAILED'
 
+mimetypes.init()
+mimetypes.add_type('application/json', 'json')
+mimetypes.add_type('application/ttf', 'ttf')
+mimetypes.add_type('application/eot', 'eot')
+mimetypes.add_type('application/otf', 'otf')
+mimetypes.add_type('application/woff', 'woff')
+
 
 def send_response(event, context, res_status, res_reason='Done', res_data={}):
     print(f"Sending {res_status} response")
