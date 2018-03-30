@@ -83,7 +83,7 @@ def lambda_handler(event, context):
                     print(f"Uploading {s3_key} to {deploy_bucket}")
                     mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
                     extras = {'ContentType': mime_type}
-                    if re.match(r'\.html$', filename):
+                    if re.search(r'\.html$', filename):
                         extras['CacheControl'] = 'max-age=300'
                     s3.upload_file(local_path, deploy_bucket, s3_key, ExtraArgs=extras)
 
