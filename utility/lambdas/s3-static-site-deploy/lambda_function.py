@@ -81,7 +81,7 @@ def lambda_handler(event, context):
                     s3_key = os.path.relpath(local_path, unzip_dir)
 
                     print(f"Uploading {s3_key} to {deploy_bucket}")
-                    mime_type = mimetypes.guess_type(local_path)[0]
+                    mime_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
                     s3.upload_file(local_path, deploy_bucket, s3_key, ExtraArgs={'ContentType': mime_type})
 
             send_response(event, context, STATUS_SUCCESS)
