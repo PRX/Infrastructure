@@ -10,6 +10,7 @@ Conditions:
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
+  HasSinglePageApp: !Equals [!Ref SinglePageApp, "Yes"]
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -33,6 +34,10 @@ Metadata:
           - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
           - CloudFrontLoggingBucketPrefix
+      - Label:
+          default: Behavior
+        Parameters:
+          - SinglePageApp
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -65,6 +70,8 @@ Metadata:
         default: Certificate ARN
       ValidationDomain:
         default: Validation domain
+      SinglePageApp:
+        default: Single page app
 Parameters:
   ProjectTag:
     Type: String
@@ -143,6 +150,15 @@ Parameters:
       eg. songexploder.net. Must be a superdomain of the public feed domain
       name. A verification email will be sent to postmast@, webmaster@, etc.
       (Not used if a certificate ARN is given)
+  SinglePageApp:
+    Type: String
+    Description: >
+      Rewrite S3 origin 403s (file not found, and no public LIST permission) to
+      index.html, to support routing for a single page app.
+    Default: No
+    AllowedValues:
+      - Yes
+      - No
 Resources:
   # ACM Certificate
   # This gets created when no ARN for a pre-existing certificate is provided
@@ -172,8 +188,11 @@ Resources:
         # CacheBehaviors:
           # CacheBehavior
         Comment: !Ref CloudFrontComment
-        # CustomErrorResponses:
-        #   CustomErrorResponse
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: !If [HasSinglePageApp, 200, !Ref "AWS::NoValue"]
+            ResponsePagePath: !If [HasSinglePageApp, "/index.html", !Ref "AWS::NoValue"]
         DefaultCacheBehavior:
           AllowedMethods:
             - HEAD
