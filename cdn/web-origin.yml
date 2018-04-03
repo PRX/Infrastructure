@@ -29,6 +29,8 @@ Metadata:
           - CloudFrontComment
           - CloudFrontPriceClass
           - CloudFrontDefaultRootObject
+          - CloudFrontCachedMethods
+          - CloudFrontAllowedMethods
           - CloudFrontMinTtl
           - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
@@ -61,6 +63,10 @@ Metadata:
         default: Price class
       CloudFrontDefaultRootObject:
         default: Default root object
+      CloudFrontAllowedMethods:
+        default: Allowed methods
+      CloudFrontCachedMethods:
+        default: Cached methods
       AcmCertificateArn:
         default: Certificate ARN
       ValidationDomain:
@@ -133,6 +139,23 @@ Parameters:
       index.html) when a viewer request points to your root URL
       (http://www.example.com) instead of to a specific object in your
       distribution (http://www.example.com/index.html).
+  CloudFrontAllowedMethods:
+    Type: CommaDelimitedList
+    Description: >
+      HTTP methods that CloudFront processes and forwards to your Amazon S3 bucket or your custom origin.
+    Default: "HEAD,GET"
+    AllowedValues:
+      - "HEAD,GET"
+      - "GET,HEAD,OPTIONS"
+      - "DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT"
+  CloudFrontCachedMethods:
+    Type: CommaDelimitedList
+    Description: >
+      HTTP methods for which CloudFront caches responses.
+    Default: "HEAD,GET"
+    AllowedValues:
+      - "HEAD,GET"
+      - "GET,HEAD,OPTIONS"
   AcmCertificateArn:
     Type: String
     Description: >
@@ -176,12 +199,8 @@ Resources:
         # CustomErrorResponses:
         #   CustomErrorResponse
         DefaultCacheBehavior:
-          AllowedMethods:
-            - HEAD
-            - GET
-          CachedMethods:
-            - HEAD
-            - GET
+          AllowedMethods: !Ref CloudFrontAllowedMethods
+          CachedMethods: !Ref CloudFrontCachedMethods
           Compress: true
           # DefaultTTL: Number
           ForwardedValues:
