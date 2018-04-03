@@ -1,3 +1,25 @@
+# When creating a CloudFront distribution for an S3 bucket, it is recommended
+# that the bucket remains private and CloudFront is given access to it via an
+# Origin Access Identity. This template can create that identity, but it cannot
+# update the origin bucket's policy to grant the identity access permissions.
+# Once the stack has been created, add a policy like the following to the
+# bucket, substituting the bucket name and the S3 canonical user ID (whose
+# value is an output of the stack)
+# {
+#     "Version": "2012-10-17",
+#     "Id": "CloudFrontOrigin",
+#     "Statement": [
+#         {
+#             "Sid": "Grant read access to a CloudFront Origin Identity",
+#             "Effect": "Allow",
+#             "Principal": {
+#                 "CanonicalUser":"XXXXXXXXXXXXXX"
+#             },
+#             "Action": "s3:GetObject",
+#             "Resource": "arn:aws:s3:::XXXXXXX-bucketname/*"
+#         }
+#     ]
+# }
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates a CloudFront distribution for web origins (i.e., not S3)
@@ -5,6 +27,7 @@ Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
+  HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
   HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
   HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
@@ -35,6 +58,7 @@ Metadata:
           - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
           - CloudFrontLoggingBucketPrefix
+          - CloudFrontOriginAccess
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -67,6 +91,8 @@ Metadata:
         default: Allowed methods
       CloudFrontCachedMethods:
         default: Cached methods
+      CloudFrontOriginAccess:
+        default: Origin access identity
       AcmCertificateArn:
         default: Certificate ARN
       ValidationDomain:
@@ -84,14 +110,15 @@ Parameters:
   OriginDomain:
     Type: String
     Description: >
-      The DNS name of HTTP server from which you want CloudFront to get objects
-      for this origin
+      The DNS name of the Amazon Simple Storage Service (S3) bucket or the HTTP
+      server from which you want CloudFront to get objects for this origin.
   OriginPath:
     Type: String
     Description: >
-      (optional) If included, must start with a slash and cannot end with a
-      slash. This path will be prepended to the path of all requests when
-      contacting the origin.
+      (optional) The path that CloudFront uses to request content from an S3
+      bucket or custom origin. The combination of the DomainName and OriginPath
+      properties must resolve to a valid path. The value must start with a slash
+      mark (/) and cannot end with a slash mark.
   CloudFrontLoggingBucket:
     Type: String
     Description: >
@@ -156,6 +183,18 @@ Parameters:
     AllowedValues:
       - "HEAD,GET"
       - "GET,HEAD,OPTIONS"
+  CloudFrontOriginAccess:
+    Type: String
+    Description: >
+      Create an origin access identity which can be used to grant the CloudFront
+      distribution access to an S3 bucket via a bucket policy. Only use this
+      when the origin is an S3 bucket. The Comment is required when an origin
+      access identity is created. Turning this on will not update an S3 bucket
+      policies.
+    Default: 'No'
+    AllowedValues:
+      - 'Yes'
+      - 'No'
   AcmCertificateArn:
     Type: String
     Description: >
@@ -231,20 +270,26 @@ Resources:
             - !Ref "AWS::NoValue"
         Origins:
           - CustomOriginConfig:
-              # HTTPPort: Integer
-              HTTPSPort: 443
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols:
-                - TLSv1.2
-                - TLSv1.1
-                - TLSv1
+              !If
+                - HasCloudFrontOriginAccess
+                - !Ref "AWS::NoValue"
+                - HTTPSPort: 443
+                  # HTTPPort: Integer
+                  OriginProtocolPolicy: https-only
+                  OriginSSLProtocols:
+                    - TLSv1.2
+                    - TLSv1.1
+                    - TLSv1
             DomainName: !Ref OriginDomain
             Id: web-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
             OriginPath: !If [HasOriginPath, !Ref "OriginPath", !Ref "AWS::NoValue"]
-            # S3OriginConfig:
-            #   S3 Origin
+            S3OriginConfig:
+              !If
+                - HasCloudFrontOriginAccess
+                - OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+                - !Ref "AWS::NoValue"
         PriceClass: !Ref CloudFrontPriceClass
         # Restrictions:
         #   Restriction
@@ -262,3 +307,16 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Condition: HasCloudFrontOriginAccess
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Ref CloudFrontComment
+Outputs:
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
+  CloudFrontOriginAccessIdentityId:
+    Value: !Ref CloudFrontOriginAccessIdentity
+  CloudFrontOriginAccessIdentityS3CanonicalUserId:
+    Value: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
