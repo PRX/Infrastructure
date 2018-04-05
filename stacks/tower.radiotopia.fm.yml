@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: File upload Lambda function
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+Resources:
+  TowerLambdaIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  TowerLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import urllib2
+          import socket
+          import rfc822
+          from datetime import datetime
+          from xml.etree import cElementTree as ET
+
+          FEED_URLS = [
+              'http://feeds.99percentinvisible.org/99percentinvisible',
+              'http://feed.loveandradio.org/loveplusradio',
+              'http://feeds.thetruthpodcast.com/thetruthapm',
+              'http://feeds.prx.org/toe',
+              'http://feed.radiodiaries.org/radio-diaries',
+              'http://feeds.fugitivewaves.org/fugitivewaves',
+              'http://feeds.theheartradio.org/TheHeartRadio',
+              'http://feeds.thisiscriminal.com/CriminalShow',
+              'http://feeds.getmortified.com/MortifiedPod',
+              'http://feeds.theallusionist.org/Allusionist',
+              'http://feed.songexploder.net/SongExploder',
+              'http://feeds.thememorypalace.us/thememorypalace',
+              'http://feeds.millennialpodcast.org/millennialpodcast',
+              'http://feeds.thewestwingweekly.com/westwingweekly',
+              'http://feeds.thebuglepodcast.com/thebuglefeed',
+              'http://feeds.trumpconlaw.com/TrumpConLaw',
+              'http://feeds.earhustlesq.com/earhustlesq',
+              'http://feeds.radiotopia.fm/radiotopia-showcase',
+              'http://feeds.thisiscriminal.com/thisislovepodcast'
+          ]
+
+          def lambda_handler(event, context):
+              episodes = []
+
+              for url in FEED_URLS:
+                  try:
+                      rss = ET.fromstring(urllib2.urlopen(url, timeout=2).read())
+                  except urllib2.HTTPError:
+                      print "Error opening %s." % url
+                  except socket.timeout:
+                      print "Error socket.timeout %s." % url
+                  except urllib2.URLError:
+                      print "Error URLError opening %s." % url
+                  else:
+                      channel = rss.find('channel')
+                      showtitle = channel.find('title').text
+
+                      for item in channel.findall('item'):
+                          enc = item.find('enclosure')
+                          encurl = enc.attrib['url']
+                          enctype = enc.attrib['type']
+
+                          if enctype.find('audio') != -1:
+                              title = item.find('title').text
+
+                              datetext = item.find('pubDate').text
+                              datetuple = rfc822.parsedate_tz(datetext)
+                              datets = rfc822.mktime_tz(datetuple)
+                              pubdate = datetime.fromtimestamp(datets)
+                              pubdatestr = pubdate.strftime('%Y-%m-%d %H:%M:%S UTC')
+
+                              guid = item.find('guid').text
+
+                              episode = {
+                                  'show': showtitle,
+                                  'title': title,
+                                  'date': pubdatestr,
+                                  'audioURL': encurl,
+                                  'guid': guid
+                              }
+                              episodes.append(episode)
+
+              return episodes
+      Description: Radiotopia Radio API Lambda function
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt TowerLambdaIamRole.Arn
+      Runtime: python2.7
+      Tags:
+        - Key: Project
+          Value: tower.radiotopia.fm
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 5
+  TowerLambdaErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Tower][Lambda][Error] Invocation 4XX"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        The error rate on the Tower lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TowerLambdaFunction
+  TowerLambdaThrottleAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Tower][Lambda][Throttles] Invocation 429"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Throttles on the Tower lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TowerLambdaFunction
+  TowerLambdaDurationAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Tower][Lambda][Duration] Unusually slow"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        At least one invocation duration exceeded 225ms
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Maximum
+      Threshold: "10000"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TowerLambdaFunction
