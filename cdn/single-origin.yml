@@ -52,6 +52,7 @@ Metadata:
           - CloudFrontComment
           - CloudFrontPriceClass
           - CloudFrontDefaultRootObject
+          - CloudFrontViewerProtocolPolicy
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
           - CloudFrontMinTtl
@@ -93,6 +94,8 @@ Metadata:
         default: Cached methods
       CloudFrontOriginAccess:
         default: Origin access identity
+      CloudFrontViewerProtocolPolicy:
+        default: Viewer protocol policy
       AcmCertificateArn:
         default: Certificate ARN
       ValidationDomain:
@@ -195,6 +198,15 @@ Parameters:
     AllowedValues:
       - 'Yes'
       - 'No'
+  CloudFrontViewerProtocolPolicy:
+    Type: String
+    Description: >
+      The protocol that viewers can use to access the files in the origin
+    Default: redirect-to-https
+    AllowedValues:
+      - allow-all
+      - redirect-to-https
+      - https-only
   AcmCertificateArn:
     Type: String
     Description: >
@@ -256,7 +268,7 @@ Resources:
           TargetOriginId: web-origin
           # TrustedSigners:
           #   - String
-          ViewerProtocolPolicy : redirect-to-https
+          ViewerProtocolPolicy : !Ref CloudFrontViewerProtocolPolicy
         DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref "CloudFrontDefaultRootObject", !Ref "AWS::NoValue"]
         Enabled: true
         HttpVersion: http2
