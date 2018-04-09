@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  TKTKTK
+  Sites that are deployed through S3 as static websites
 Conditions:
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
@@ -76,9 +76,9 @@ Resources:
   RadiotopiaRadioStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
-      # NotificationARNs:
-      #   - Fn::ImportValue:
-      #       !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
       Parameters:
         CodeS3Bucket:
           Fn::ImportValue:
@@ -95,25 +95,25 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "radio.radiotopia.fm.yml"]]
       TimeoutInMinutes: "5"
-  # BetaPrxOrgStack:
-  #   Type: "AWS::CloudFormation::Stack"
-  #   Properties:
-  #     NotificationARNs:
-  #       - Fn::ImportValue:
-  #           !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-  #     Parameters:
-  #       CodeS3Bucket:
-  #         Fn::ImportValue:
-  #           !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-  #       StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
-  #       StaticSiteS3StagingDeployBucket: "/prx/stag/beta.prx.org/DEPLOY_S3_BUCKET"
-  #       StaticSiteS3ProductionDeployBucket: "/prx/prod/beta.prx.org/DEPLOY_S3_BUCKET"
-  #       EnvironmentType: !Ref EnvironmentType
-  #       S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
-  #     Tags:
-  #       - Key: "prx:cloudformation:stack-name"
-  #         Value: !Ref AWS::StackName
-  #       - Key: "prx:cloudformation:stack-id"
-  #         Value: !Ref AWS::StackId
-  #     TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/static-sites/beta.prx.org.yml"]]
-  #     TimeoutInMinutes: "5"
+  BetaPrxOrgStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
+        StaticSiteS3StagingDeployBucket: "/prx/stag/beta.prx.org/DEPLOY_S3_BUCKET"
+        StaticSiteS3ProductionDeployBucket: "/prx/prod/beta.prx.org/DEPLOY_S3_BUCKET"
+        EnvironmentType: !Ref EnvironmentType
+        S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "beta.prx.org.yml"]]
+      TimeoutInMinutes: "5"
