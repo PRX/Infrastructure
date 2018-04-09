@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Serverless (Lambda, API Gateway, etc) apps
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  InfrastructureStorageStackName:
+    Type: String
+  InfrastructureNotificationsStackName:
+    Type: String
+  TemplateUrlPrefix:
+    Type: String
+  EnvironmentType:
+    Type: String
+Resources:
+  RadiotopiaTowerStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "tower.radiotopia.fm.yml"]]
+      TimeoutInMinutes: "5"

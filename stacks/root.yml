@@ -159,7 +159,7 @@ Mappings:
       prefix: 42
 Resources:
   # Root stacks
-  StaticSitesStack:
+  StaticSitesRootStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
       NotificationARNs:
@@ -178,6 +178,24 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/static-sites/root.yml"]]
+      TimeoutInMinutes: "5"
+  ServerlessRootStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
+        InfrastructureNotificationsStackName: !Ref NotificationsStackName
+        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/"]]
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/root.yml"]]
       TimeoutInMinutes: "5"
   # App and shared resource stacks
   VPCStack:
