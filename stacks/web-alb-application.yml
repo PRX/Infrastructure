@@ -4,6 +4,7 @@ Description: >
 Conditions:
   CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+  HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -65,6 +66,9 @@ Parameters:
   ContainerMemory:
     Type: String
     Default: 500
+  ContainerMemoryReservation:
+    Type: String
+    Default: ""
   ContainerCpu:
     Type: String
     Default: 128
@@ -274,6 +278,7 @@ Resources:
               awslogs-group: !Ref WebLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
+          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
           Name: !Sub ${AppName}-web
           PortMappings:
             - HostPort: 0
@@ -340,6 +345,7 @@ Resources:
               awslogs-group: !Ref WorkerLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
+          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
           Name: !Sub ${AppName}-worker
           Command:
             - worker
