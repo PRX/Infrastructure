@@ -231,6 +231,15 @@ Resources:
                 Action:
                   - "ec2:DescribeTags"
                 Resource: "*"
+        - PolicyName: ModifyCreditSpecificationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:ModifyInstanceCreditSpecification
+                  - ec2:DescribeInstanceCreditSpecifications
+                Resource: "*"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
         - !Ref SecretsInstanceDecryptPolicyArn
@@ -384,11 +393,6 @@ Resources:
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions InstanceId=$AWSINSTANCEID --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
                 aws cloudwatch put-metric-data --namespace EC2 --dimensions AutoScalingGroup=$AWSASG --value $data --unit Bytes --metric-name DockerMetadataSpace --region $AWSREGION
               mode: "000755"
-            # "/etc/newrelic-infra.yml":
-            #   content: !Sub |
-            #     license_key: ${NewRelicLicenseKey}
-            #     custom_attributes:
-            #       environment: ${EnvironmentType}
           commands:
             01_add_instance_to_cluster:
               command: !Sub |
@@ -401,13 +405,16 @@ Resources:
             03_fstrim_reclaim_disk:
               # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
               command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
-            # 04_set_newrelic_data:
-            #   command: "echo \"display_name: $(curl -ss http://169.254.169.254/latest/meta-data/instance-id)\" >> /etc/newrelic-infra.yml"
-            # 05_install_newrelic_infra:
-            #   command: |
-            #     sudo curl -o /etc/yum.repos.d/newrelic-infra.repo https://download.newrelic.com/infrastructure_agent/linux/yum/el/6/x86_64/newrelic-infra.repo
-            #     sudo yum -q makecache -y --disablerepo='*' --enablerepo='newrelic-infra'
-            #     sudo yum install newrelic-infra -y
+            04_set_t2_unlimited:
+              command: !Sub |
+                #!/bin/bash
+                AWSREGION=`curl -ss http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .region`
+                AWSINSTANCEID=`curl -ss http://169.254.169.254/latest/meta-data/instance-id`
+                AWSINSTANCETYPE=`curl -ss http://169.254.169.254/latest/dynamic/instance-identity/document | jq -r .instanceType`
+                if [[ "$AWSINSTANCETYPE" =~ ^t2.* ]]; then
+                  JSON="[{\"InstanceId\": \"${AWSINSTANCEID}\",\"CpuCredits\": \"unlimited\"}]"
+                  aws --region=$AWSREGION ec2 modify-instance-credit-specification --instance-credit-specification "${JSON}"
+                fi
           services:
             sysvinit:
               cfn-hup:
