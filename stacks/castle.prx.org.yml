@@ -9,6 +9,7 @@ Mappings:
 Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+  HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -48,6 +49,9 @@ Parameters:
     Type: String
   ContainerMemory:
     Type: String
+  ContainerMemoryReservation:
+    Type: String
+    Default: ""
   ContainerCpu:
     Type: String
   # Shared ENV #################################################################
@@ -137,6 +141,7 @@ Resources:
               awslogs-group: !Ref CastleLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
+          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
           Name: !FindInMap [Shared, Container, name]
           PortMappings:
             - HostPort: 0
