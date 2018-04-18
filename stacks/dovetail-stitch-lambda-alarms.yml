@@ -7,19 +7,37 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureNotificationsStackName
+      - Label:
           default: Lambda Parameters
         Parameters:
           - LambdaName
           - LambdaRegion
           - EnvironmentName
+          - EnvironmentFullName
     ParameterLabels:
+      InfrastructureNotificationsStackName:
+        default: Notifications stack name
       LambdaName:
         default: Lambda Function Name
       LambdaRegion:
         default: Lambda Function Region
       EnvironmentName:
         default: Lowercase Environment Name
+      EnvironmentFullName:
+        default: Full Environment Name
+Conditions:
+  CreateLambdaAlarms: !Equals [!Ref LambdaRegion, !Ref "AWS::Region"]
+  IsProduction: !Equals [!Ref EnvironmentFullName, Production]
 Parameters:
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: >
+      The name of a previously launched notifications stack in the same region
+      as the original non-edge lambda function.
+    Type: String
   LambdaName:
     Type: String
     Description: eg. some-function-name
@@ -29,6 +47,9 @@ Parameters:
   EnvironmentName:
     Type: String
     Description: eg. stag, prod
+  EnvironmentFullName:
+    Type: String
+    Description: eg. Staging, Production
 Resources:
   LambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -98,6 +119,160 @@ Resources:
         - MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
           MetricNamespace: LogMetrics
           MetricValue: 1
+LambdaErrorAlarm:
+  Type: "AWS::CloudWatch::Alarm"
+  Condition: CreateLambdaAlarms
+  Properties:
+    ActionsEnabled: true
+    AlarmName: !Sub "[DovetailStitchLambda][Errors] ${EnvironmentFullName} > 0"
+    AlarmActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    InsufficientDataActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    OKActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    AlarmDescription:
+      Errors on the dovetail stitch lambda exceeded 0
+    ComparisonOperator: GreaterThanThreshold
+    EvaluationPeriods: "1"
+    MetricName: Errors
+    Namespace: AWS/Lambda
+    Period: "60"
+    Statistic: Sum
+    Threshold: "0"
+    TreatMissingData: notBreaching
+    Dimensions:
+      - Name: FunctionName
+        Value: !Sub "${LambdaRegion}.${LambdaName}"
+LambdaThrottleAlarm:
+  Type: "AWS::CloudWatch::Alarm"
+  Condition: CreateLambdaAlarms
+  Properties:
+    ActionsEnabled: true
+    AlarmName: !Sub "[DovetailStitchLambda][Throttles] ${EnvironmentFullName} > 0"
+    AlarmActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    InsufficientDataActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    OKActions:
+      - Fn::If:
+        - IsProduction
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+    AlarmDescription:
+      Throttles on the dovetail stitch lambda exceeded 0
+    ComparisonOperator: GreaterThanThreshold
+    EvaluationPeriods: "1"
+    MetricName: Throttles
+    Namespace: AWS/Lambda
+    Period: "60"
+    Statistic: Sum
+    Threshold: "0"
+    TreatMissingData: notBreaching
+    Dimensions:
+      - Name: FunctionName
+        Value: !Sub "${LambdaRegion}.${LambdaName}"
+  LambdaLogErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][LogErrors] ${EnvironmentFullName} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Logged errors on dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
+      Namespace: LogMetrics
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+  LambdaTimeoutAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][Timeouts] ${EnvironmentFullName} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Logged errors on dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: !Sub "dt_lambda_${EnvironmentName}_timeout"
+      Namespace: LogMetrics
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
 Outputs:
   LambdaLogGroupName:
     Value: !Ref LambdaLogGroup
