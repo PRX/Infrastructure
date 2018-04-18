@@ -15,8 +15,8 @@ Metadata:
         Parameters:
           - LambdaName
           - LambdaRegion
-          - EnvironmentName
-          - EnvironmentFullName
+          - EnvironmentType
+          - EnvironmentTypeAbbreviation
     ParameterLabels:
       InfrastructureNotificationsStackName:
         default: Notifications stack name
@@ -24,13 +24,13 @@ Metadata:
         default: Lambda Function Name
       LambdaRegion:
         default: Lambda Function Region
-      EnvironmentName:
-        default: Lowercase Environment Name
-      EnvironmentFullName:
-        default: Full Environment Name
+      EnvironmentTypeAbbreviation:
+        default: Lowercase Short Environment Name
+      EnvironmentType:
+        default: Environment Name
 Conditions:
   CreateLambdaAlarms: !Equals [!Ref LambdaRegion, !Ref "AWS::Region"]
-  IsProduction: !Equals [!Ref EnvironmentFullName, Production]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
@@ -44,10 +44,10 @@ Parameters:
   LambdaRegion:
     Type: String
     Description: eg. us-east-1
-  EnvironmentName:
+  EnvironmentTypeAbbreviation:
     Type: String
     Description: eg. stag, prod
-  EnvironmentFullName:
+  EnvironmentType:
     Type: String
     Description: eg. Staging, Production
 Resources:
@@ -62,7 +62,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache HIT" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_hit"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_hit"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaCacheMissMetric:
@@ -71,7 +71,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache MISS" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_miss"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_miss"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaCachePartialMetric:
@@ -80,7 +80,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache PARTIAL" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_partial"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_partial"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaInvokeMetric:
@@ -89,7 +89,7 @@ Resources:
       FilterPattern: '{ $.msg = "invoke" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_invoke"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_invoke"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaTimeoutMetric:
@@ -98,7 +98,7 @@ Resources:
       FilterPattern: '"Task timed out after"'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_timeout"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_timeout"
           MetricNamespace: LogMetrics
           MetricValue: 1
   LambdaWarnMetric:
@@ -107,7 +107,7 @@ Resources:
       FilterPattern: '{ $._logLevel = "warn" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_warn"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_warn"
           MetricNamespace: LogMetrics
           MetricValue: 1
   LambdaErrorMetric:
@@ -116,7 +116,7 @@ Resources:
       FilterPattern: '{ $._logLevel = "error" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_error"
           MetricNamespace: LogMetrics
           MetricValue: 1
   LambdaErrorAlarm:
@@ -124,7 +124,7 @@ Resources:
     Condition: CreateLambdaAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[DovetailStitchLambda][Errors] ${EnvironmentFullName} > 0"
+      AlarmName: !Sub "[DovetailStitchLambda][Errors] ${EnvironmentType} > 0"
       AlarmActions:
         - Fn::If:
           - IsProduction
@@ -164,7 +164,7 @@ Resources:
     Condition: CreateLambdaAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[DovetailStitchLambda][Throttles] ${EnvironmentFullName} > 0"
+      AlarmName: !Sub "[DovetailStitchLambda][Throttles] ${EnvironmentType} > 0"
       AlarmActions:
         - Fn::If:
           - IsProduction
@@ -204,7 +204,7 @@ Resources:
     Condition: CreateLambdaAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[DovetailStitchLambda][LogErrors] ${EnvironmentFullName} > 0"
+      AlarmName: !Sub "[DovetailStitchLambda][LogErrors] ${EnvironmentType} > 0"
       AlarmActions:
         - Fn::If:
           - IsProduction
@@ -230,7 +230,7 @@ Resources:
         Logged errors on dovetail stitch lambda exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
-      MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
+      MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_error"
       Namespace: LogMetrics
       Period: "60"
       Statistic: Sum
@@ -241,7 +241,7 @@ Resources:
     Condition: CreateLambdaAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[DovetailStitchLambda][Timeouts] ${EnvironmentFullName} > 0"
+      AlarmName: !Sub "[DovetailStitchLambda][Timeouts] ${EnvironmentType} > 0"
       AlarmActions:
         - Fn::If:
           - IsProduction
@@ -267,7 +267,7 @@ Resources:
         Logged errors on dovetail stitch lambda exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: "1"
-      MetricName: !Sub "dt_lambda_${EnvironmentName}_timeout"
+      MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_timeout"
       Namespace: LogMetrics
       Period: "60"
       Statistic: Sum
