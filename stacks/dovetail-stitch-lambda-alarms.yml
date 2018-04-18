@@ -7,28 +7,49 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureNotificationsStackName
+      - Label:
           default: Lambda Parameters
         Parameters:
           - LambdaName
           - LambdaRegion
-          - EnvironmentName
+          - EnvironmentType
+          - EnvironmentTypeAbbreviation
     ParameterLabels:
+      InfrastructureNotificationsStackName:
+        default: Notifications stack name
       LambdaName:
         default: Lambda Function Name
       LambdaRegion:
         default: Lambda Function Region
-      EnvironmentName:
-        default: Lowercase Environment Name
+      EnvironmentTypeAbbreviation:
+        default: Lowercase Short Environment Name
+      EnvironmentType:
+        default: Environment Name
+Conditions:
+  CreateLambdaAlarms: !Equals [!Ref LambdaRegion, !Ref "AWS::Region"]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: >
+      The name of a previously launched notifications stack in the same region
+      as the original non-edge lambda function.
+    Type: String
   LambdaName:
     Type: String
     Description: eg. some-function-name
   LambdaRegion:
     Type: String
     Description: eg. us-east-1
-  EnvironmentName:
+  EnvironmentTypeAbbreviation:
     Type: String
     Description: eg. stag, prod
+  EnvironmentType:
+    Type: String
+    Description: eg. Staging, Production
 Resources:
   LambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -41,7 +62,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache HIT" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_hit"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_hit"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaCacheMissMetric:
@@ -50,7 +71,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache MISS" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_miss"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_miss"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaCachePartialMetric:
@@ -59,7 +80,7 @@ Resources:
       FilterPattern: '{ $.msg = "cache PARTIAL" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_partial"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_partial"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaInvokeMetric:
@@ -68,7 +89,7 @@ Resources:
       FilterPattern: '{ $.msg = "invoke" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_invoke"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_invoke"
           MetricNamespace: LogMetrics
           MetricValue: $.timer
   LambdaTimeoutMetric:
@@ -77,7 +98,7 @@ Resources:
       FilterPattern: '"Task timed out after"'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_timeout"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_timeout"
           MetricNamespace: LogMetrics
           MetricValue: 1
   LambdaWarnMetric:
@@ -86,7 +107,7 @@ Resources:
       FilterPattern: '{ $._logLevel = "warn" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_warn"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_warn"
           MetricNamespace: LogMetrics
           MetricValue: 1
   LambdaErrorMetric:
@@ -95,9 +116,163 @@ Resources:
       FilterPattern: '{ $._logLevel = "error" }'
       LogGroupName: !Ref LambdaLogGroup
       MetricTransformations:
-        - MetricName: !Sub "dt_lambda_${EnvironmentName}_error"
+        - MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_error"
           MetricNamespace: LogMetrics
           MetricValue: 1
+  LambdaErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][Errors] ${EnvironmentType} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Errors on the dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub "${LambdaRegion}.${LambdaName}"
+  LambdaThrottleAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][Throttles] ${EnvironmentType} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Throttles on the dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub "${LambdaRegion}.${LambdaName}"
+  LambdaLogErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][LogErrors] ${EnvironmentType} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Logged errors on dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_error"
+      Namespace: LogMetrics
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
+  LambdaTimeoutAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateLambdaAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[DovetailStitchLambda][Timeouts] ${EnvironmentType} > 0"
+      AlarmActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription:
+        Logged errors on dovetail stitch lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: !Sub "dt_lambda_${EnvironmentTypeAbbreviation}_timeout"
+      Namespace: LogMetrics
+      Period: "60"
+      Statistic: Sum
+      Threshold: "0"
+      TreatMissingData: notBreaching
 Outputs:
   LambdaLogGroupName:
     Value: !Ref LambdaLogGroup
