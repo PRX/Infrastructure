@@ -2,13 +2,13 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   AWS CloudFormation RDS Template: Template to create RDS MySQL v5.5 instance.
 Parameters:
-  DBName:
-    Default: my_database
-    Description: The database schema name
+  CreateDBName:
+    Default: ''
+    Description: The database schema name for create only
     Type: String
-    MinLength: '1'
+    MinLength: '0'
     MaxLength: '64'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9\-_]*'
+    AllowedPattern: '^$|[a-zA-Z][a-zA-Z0-9\-_]*'
     ConstraintDescription: >-
       must begin with a letter and contain only alphanumeric characters, dash,
       or underscore.
@@ -71,57 +71,63 @@ Parameters:
       - db.t2.medium
       - db.t2.large
     ConstraintDescription: must select a valid database instance type.
-  EC2SecurityGroup:
-    Description: >-
-      The "MySQL_replication_tunnel" EC2 security group that contains the EC2 instance acting as the replication tunnel
-      https://console.aws.amazon.com/ec2/v2/home?region=us-east-1#SecurityGroups:sort=groupId
-    Default: default
-    Type: AWS::EC2::SecurityGroup::Id
-    ConstraintDescription: must be a valid security group id.
-  RDSSubnetGroup:
-    Description: >-
-      The "Platform-Production" RDS subnet group name
-      https://console.aws.amazon.com/rds/home?region=us-east-1#db-subnet-groups:
-    Default: default
+  DBSnapshot:
+    Default: ''
+    Description: optional, the DB snapshot that's used to restore the DB instance
     Type: String
-    AllowedPattern: '[a-zA-Z0-9\-]+'
-    ConstraintDescription: must be a valid subnet group name.  
-  MultiAZ:
-    Description: Multi-AZ master database
+    AllowedPattern: '[a-zA-Z]*[a-zA-Z0-9\-:]*'
+    ConstraintDescription: >-
+      must begin with a letter and contain only alphanumeric characters, dash,
+      or colon.
+  EnvironmentType:
     Type: String
-    Default: 'false'
     AllowedValues:
-      - 'true'
-      - 'false'
-    ConstraintDescription: must be true or false.
+      - Staging
+      - Production
+Conditions:
+  UseSnapshot: !Not [!Equals [!Ref DBSnapshot, '']]
+  CreateDB: !Not [!Equals [!Ref CreateDBName, '']]
 Resources:
   MasterDB:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-# 	CloudFormation cannot update a stack when a custom-named resource requires replacing.
-#      DBInstanceIdentifier: !Ref DBInstance
-      DBName: !Ref DBName
+# CloudFormation cannot update a stack when a custom-named resource requires replacing.
+#     DBInstanceIdentifier: !Ref DBInstance
+      DBName:
+        Fn::If:
+        - CreateDB
+        - Ref: CreateDBName
+        - Ref: AWS::NoValue
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       DBInstanceClass: !Ref DBInstanceClass
+      DBSnapshotIdentifier:
+        Fn::If:
+        - UseSnapshot
+        - Ref: DBSnapshot
+        - Ref: AWS::NoValue
       Engine: MySQL
       EngineVersion: 5.5.46
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
-      MultiAZ: !Ref MultiAZ
+      MultiAZ: false
       Tags:
         - Key: Project
           Value: cms.prx.org
         - Key: Environment
-          Value: Production
+          Value: !Ref EnvironmentType
         - Key: 'prx:cloudformation:stack-name'
           Value: !Ref AWS::StackName
         - Key: 'prx:cloudformation:stack-id'
           Value: !Ref AWS::StackId
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-      VPCSecurityGroups: [!Ref EC2SecurityGroup]
-# replication won't connect via tunnel if false      
-      PubliclyAccessible: true
+      DBSubnetGroupName: !Sub Platform-${EnvironmentType}
+# The MySQL_replication_tunnel security group is added and removed manually for use during migration     
+#     VPCSecurityGroups: [!Ref EC2SecurityGroup]
+# replication won't connect via tunnel if false
+# Post migration, we want to set PubliclyAccessible to false
+# But we have to set this manually because if flipped with a stack update, the RDS instance is rebuilt
+# It does not change with other stack updates if set manually
+#     PubliclyAccessible: true
     DeletionPolicy: Snapshot
 Outputs:
   EC2Platform:
