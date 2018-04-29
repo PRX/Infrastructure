@@ -482,6 +482,7 @@ Resources:
                 Provider: S3
                 Version: 1
               Configuration:
+                PollForSourceChanges: false
                 S3Bucket:
                   Fn::ImportValue:
                     !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
@@ -755,6 +756,123 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 5
+  # Pipeline S3 Trigger
+  CdPipelineS3TriggerTrailStore:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CdPipelineS3TriggerTrailStoreBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket:
+        Ref: CdPipelineS3TriggerTrailStore
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${CdPipelineS3TriggerTrailStore}"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${CdPipelineS3TriggerTrailStore}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+  CdPipelineS3TriggerTrail:
+    Type: "AWS::CloudTrail::Trail"
+    DependsOn:
+        - CdPipelineS3TriggerTrailStoreBucketPolicy
+    Properties:
+      EventSelectors:
+        - DataResources:
+            - Type: "AWS::S3::Object"
+              Values:
+                - Fn::Sub:
+                    - "arn:aws:s3:::${BucketName}/"
+                    - BucketName:
+                        Fn::ImportValue:
+                          !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          IncludeManagementEvents: false
+          ReadWriteType: WriteOnly
+      IsLogging: true
+      IsMultiRegionTrail: false
+      S3BucketName: !Ref CdPipelineS3TriggerTrailStore
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CdPipelineS3TriggerIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:StartPipelineExecution"
+                Resource:
+                  - !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+  CdPipelineS3TriggerEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Triggers CD CodePipeline when CloudTrail sees changes in S3 on the
+        staging template config
+      EventPattern:
+        Fn::Sub:
+          - |
+            {
+              "source": ["aws.s3"],
+              "detail-type": ["AWS API Call via CloudTrail"],
+              "detail": {
+                "eventSource": ["s3.amazonaws.com"],
+                "eventName": ["PutObject"],
+                "resources": {
+                  "ARN": ["arn:aws:s3:::${BucketName}/${ObjectId}"]
+                }
+              }
+            }
+          - BucketName:
+              Fn::ImportValue:
+                !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+            ObjectId: !Ref InfrastructureConfigStagingKey
+      State: ENABLED
+      Targets:
+        - Arn: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+          Id: !Sub "${AWS::StackName}.CdPipelineS3Trigger"
+          RoleArn: !GetAtt CdPipelineS3TriggerIamRole.Arn
   # Acceptance Test Pipeline Action
   AcceptanceTestsCodeBuildIamRole:
     Type: "AWS::IAM::Role"
