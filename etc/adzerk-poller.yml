@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a Lambda function that polls the Adzerk API and finds ad flight
+  starting soon, which get sent to Slack
+Parameters:
+  AdzerkApiKey:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+Resources:
+  PollerFunctionIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  PollerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          import datetime
+          import urllib.request
+
+          sns = boto3.client('sns')
+
+          SLACK_ICON = ':adzerk:'
+          SLACK_USERNAME = 'Adzerk'
+          SLACK_CHANNEL = '#adzerk-flights'
+
+          ADZERK_REQUEST_HEADERS = {
+              'X-Adzerk-ApiKey': os.environ['ADZERK_API_KEY']
+          }
+
+
+          def slack_attachments(flights):
+              attachments = []
+
+              for flight in flights:
+                  fields = []
+
+                  fields.append({
+                      'title': 'StartDate',
+                      'value': flight['StartDate'],
+                      'short': True
+                  })
+
+                  if flight['LifetimeCapAmount']:
+                      fields.append({
+                          'title': 'LifetimeCapAmount',
+                          'value': flight['LifetimeCapAmount'],
+                          'short': True
+                      })
+
+                  if flight['EndDate']:
+                      fields.append({
+                          'title': 'EndDate',
+                          'value': flight['EndDate'],
+                          'short': True
+                      })
+
+                  attachments.append({
+                      'title': flight['Name'],
+                      'fields': fields
+                  })
+
+              return attachments
+
+
+          def slack_message(flights):
+              return {
+                  'channel': SLACK_CHANNEL,
+                  'username': SLACK_USERNAME,
+                  'icon_emoji': SLACK_ICON,
+                  'attachments': slack_attachments(flights)
+              }
+
+
+          def lambda_handler(event, context):
+              flights = []
+
+              t1 = datetime.datetime.utcnow() + datetime.timedelta(days=0)
+              t2 = datetime.datetime.utcnow() + datetime.timedelta(days=2)
+
+              s1 = t1.strftime("%Y-%m-%d%%2023:59:59")
+              s2 = t2.strftime("%Y-%m-%d%%2000:00:00")
+
+              api_url = f"https://api.adzerk.net/v1/fast/flight?isActive=true&afterStartDate={s1}&beforeStartDate={s2}"
+
+              print(f"Filter flights for {s1} – {s2}")
+
+              flight_filter_req = urllib.request.Request(
+                  api_url,
+                  headers=ADZERK_REQUEST_HEADERS)
+              with urllib.request.urlopen(flight_filter_req) as response:
+                  response_data = response.read()
+
+              # The response is a line-delimited set of JSON flight objects
+              for json_str in response_data.decode("utf-8").split("\n"):
+                  if len(json_str) > 1:
+                      flights.append(json.loads(json_str))
+
+              print(f"Found {len(flights)} flights for this period")
+
+              if len(flights) > 0:
+                  sns.publish(
+                      TopicArn=os.environ['SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN'],
+                      Message=json.dumps(slack_message(flights))
+                  )
+
+      Description: >
+        Finds ad flights starting soon in Adzerk and sends them to Slack via the
+        Slack relay
+      Environment:
+        Variables:
+          ADZERK_API_KEY: !Ref AdzerkApiKey
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt PollerFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Misc
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 10
+  PollerEventRuleIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt PollerFunction.Arn
+  PollerEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Runs the Adzerk poller once a day
+      RoleArn: !GetAtt PollerEventRuleIamRole.Arn
+      ScheduleExpression: "cron(0 14 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PollerFunction.Arn
+          Id: !Sub "${AWS::StackName}.PollerFunction"
+  PollerFunctionEventInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PollerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PollerEventRule.Arn
