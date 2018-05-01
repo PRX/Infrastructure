@@ -67,5 +67,6 @@ If you want to remove things created by Infrastructure for CI/CD, do so in this 
 - Delete Notifications stack
 - Delete Storage stack
 - Delete CD pipeline artifacts store bucket (`cd-artifactstore-...`)
+- Delete CD pipeline CloudTrail storage bucket (`cd-CdPipelineS3TriggerTrailStore-...`)
 - Delete CI CodeBuild source bucket (`ci-cicodebuildsourcearchivebucket-...`)
 - Delete the five buckets created by the Storage stack
