@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  AWS CloudFormation Memcached Template: Template to create Elasticachr memcached instance.
+Parameters:
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  CacheNodeType:
+    Description: The cache instance type
+    Type: String
+    Default: cache.t2.micro
+    AllowedValues:
+      - cache.m1.small
+      - cache.m1.large
+      - cache.m1.xlarge
+      - cache.m2.xlarge
+      - cache.m2.2xlarge
+      - cache.m2.4xlarge
+      - cache.c1.xlarge
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
+      - cache.m3.medium
+      - cache.m3.large
+      - cache.m3.xlarge
+      - cache.m3.2xlarge
+      - cache.r3.large
+      - cache.r3.xlarge
+      - cache.r3.2xlarge
+      - cache.r3.4xlarge
+      - cache.r3.8xlarge
+  NumCacheNodes:
+    Description: The cache instance count
+    Type: Number
+    Default: 1
+    AllowedValues:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      - 6
+      - 7
+      - 8
+      - 9
+      - 10
+Conditions:
+  MultiZone: !Not [!Equals [!Ref NumCacheNodes, 1]]
+Resources:
+  ElasticacheSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "Elasticache Security Group"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "tcp"
+          FromPort: "11211"
+          ToPort: "11211"
+  ElasticacheCluster:
+    Type: "AWS::ElastiCache::CacheCluster"
+    Properties:
+      AutoMinorVersionUpgrade: "true"
+      AZMode: !If [MultiZone, "cross-az", "single-az"]
+      Engine: "memcached"
+      CacheNodeType: !Ref CacheNodeType
+      NumCacheNodes: !Ref NumCacheNodes
+      VpcSecurityGroupIds:
+        - !GetAtt ElasticacheSecurityGroup.GroupId
+      Tags:
+        - Key: Project
+          Value: exchange.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: 'prx:cloudformation:stack-name'
+          Value: !Ref AWS::StackName
+        - Key: 'prx:cloudformation:stack-id'
+          Value: !Ref AWS::StackId
+Outputs:
+  EC2Platform:
+    Description: Platform in which this stack is deployed
+    Value: EC2-VPC
