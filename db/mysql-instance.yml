@@ -97,6 +97,10 @@ Parameters:
     AllowedValues:
       - Staging
       - Production
+  VPCStack:
+    Description: VPC stack to add this cache into
+    Type: String
+    Default: VPCStack
   CloudWatchWarnDiskSpace:
     Default: '0'
     Description: >-
@@ -131,13 +135,23 @@ Conditions:
     - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
     - !Not [!Equals [!Ref CloudWatchWarnConnections, '0']]
 Resources:
+  RDSSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
+      DBSubnetGroupDescription: !Ref EnvironmentType
+      SubnetIds:
+        - Fn::ImportValue:
+            !Sub ${VPCStack}-Subnet1
+        - Fn::ImportValue:
+            !Sub ${VPCStack}-Subnet2
   MasterDB:
     Type: 'AWS::RDS::DBInstance'
     Properties:
 # CloudFormation cannot update a stack when a custom-named resource requires replacing,
 # so when replacement is required (such as when restoring from snapshot),
 # use a new instance name such as oldname-restoredYYYYMMDD
-      DBInstanceIdentifier: 
+      DBInstanceIdentifier:
         Fn::If:
         - NamedInstance
         - Ref: DBInstance
@@ -169,8 +183,8 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: 'prx:cloudformation:stack-id'
           Value: !Ref AWS::StackId
-      DBSubnetGroupName: !Sub Platform-${EnvironmentType}
-# The MySQL_replication_tunnel security group is added and removed manually for use during migration     
+      DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
+# The MySQL_replication_tunnel security group is added and removed manually for use during migration
 #     VPCSecurityGroups: [!Ref EC2SecurityGroup]
 # replication won't connect via tunnel if false
 # Post migration, we want to set PubliclyAccessible to false
@@ -243,7 +257,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MasterDB        
+          Value: !Ref MasterDB
 Outputs:
   EC2Platform:
     Description: Platform in which this stack is deployed
