@@ -2,6 +2,17 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   AWS CloudFormation RDS Template: Template to create RDS MySQL v5.5 instance.
 Parameters:
+  DBInstance:
+    Default: 'name_me'
+    Description: >-
+      The database instance name.
+      When replacement is required, must be different than existing instance name.
+    Type: String
+    MinLength: '0'
+    MaxLength: '64'
+    AllowedPattern: '^$|[a-zA-Z][a-zA-Z0-9\-_]*'
+    ConstraintDescription: >-
+      optional, must begin with a letter and contain only alphanumeric characters or dash.
   CreateDBName:
     Default: ''
     Description: The database schema name for create only
@@ -73,7 +84,9 @@ Parameters:
     ConstraintDescription: must select a valid database instance type.
   DBSnapshot:
     Default: ''
-    Description: optional, the DB snapshot that's used to restore the DB instance
+    Description: >-
+      optional, the DB snapshot that's used to restore the DB instance,
+      not used in conjunction with CreateDBName
     Type: String
     AllowedPattern: '[a-zA-Z]*[a-zA-Z0-9\-:]*'
     ConstraintDescription: >-
@@ -88,9 +101,39 @@ Parameters:
     Description: VPC stack to add this cache into
     Type: String
     Default: VPCStack
+  CloudWatchWarnDiskSpace:
+    Default: '0'
+    Description: >-
+      amount of free disk space in bytes that will trigger warning, 0 means no alarm
+    Type: Number
+  CloudWatchWarnCPU:
+    Default: '0'
+    Description: percent of CPU that will trigger warning, 0 means no alarm
+    Type: Number
+    MinValue: '0'
+    MaxValue: '100'
+    ConstraintDescription: must be between 0 and 100
+  CloudWatchWarnConnections:
+    Default: '0'
+    Description: amount of connections that will trigger warning, 0 means no alarm
+    Type: Number
+  OpsWarnSnsTopic:
+    Default: ''
+    Description: ops warn SNS Topic arn
+    Type: String
 Conditions:
   UseSnapshot: !Not [!Equals [!Ref DBSnapshot, '']]
   CreateDB: !Not [!Equals [!Ref CreateDBName, '']]
+  NamedInstance: !Not [!Equals [!Ref DBInstance, '']]
+  CreateCloudWatchWarnDiskSpace: !And
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
+    - !Not [!Equals [!Ref CloudWatchWarnDiskSpace, '0']]
+  CreateCloudWatchWarnCPU: !And
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
+    - !Not [!Equals [!Ref CloudWatchWarnCPU, '0']]
+  CreateCloudWatchWarnConnections: !And
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
+    - !Not [!Equals [!Ref CloudWatchWarnConnections, '0']]
 Resources:
   RDSSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
@@ -105,8 +148,14 @@ Resources:
   MasterDB:
     Type: 'AWS::RDS::DBInstance'
     Properties:
-# CloudFormation cannot update a stack when a custom-named resource requires replacing.
-#     DBInstanceIdentifier: !Ref DBInstance
+# CloudFormation cannot update a stack when a custom-named resource requires replacing,
+# so when replacement is required (such as when restoring from snapshot),
+# use a new instance name such as oldname-restoredYYYYMMDD
+      DBInstanceIdentifier:
+        Fn::If:
+        - NamedInstance
+        - Ref: DBInstance
+        - Ref: AWS::NoValue
       DBName:
         Fn::If:
         - CreateDB
@@ -143,6 +192,72 @@ Resources:
 # It does not change with other stack updates if set manually
 #     PubliclyAccessible: true
     DeletionPolicy: Snapshot
+  DiskSpaceAlarm:
+    Condition: CreateCloudWatchWarnDiskSpace
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] Disk Space"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: Free Storage Space getting low
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: "1"
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Period: "300"
+      Statistic: Average
+      Threshold: !Ref CloudWatchWarnDiskSpace
+      Unit: Bytes
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref MasterDB
+  CPUAlarm:
+    Condition: CreateCloudWatchWarnCPU
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] CPU"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: CPU utilization high
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "5"
+      MetricName: CPUUtilization
+      Namespace: AWS/RDS
+      Period: "60"
+      Statistic: Maximum
+      Threshold: !Ref CloudWatchWarnCPU
+      Unit: Percent
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref MasterDB
+  MaxConnectionsAlarm:
+    Condition: CreateCloudWatchWarnConnections
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] Database Connections"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: Database Connections nearing max
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: "1"
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Period: "60"
+      Statistic: Maximum
+      Threshold: !Ref CloudWatchWarnConnections
+      Unit: Count
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref MasterDB
 Outputs:
   EC2Platform:
     Description: Platform in which this stack is deployed
