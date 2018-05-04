@@ -84,10 +84,24 @@ Parameters:
     AllowedValues:
       - Staging
       - Production
+  VPCStack:
+    Description: VPC stack to add this cache into
+    Type: String
+    Default: VPCStack
 Conditions:
   UseSnapshot: !Not [!Equals [!Ref DBSnapshot, '']]
   CreateDB: !Not [!Equals [!Ref CreateDBName, '']]
 Resources:
+  RDSSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupName: !Sub Platform-${EnvironmentType}-db
+      DBSubnetGroupDescription: !Ref EnvironmentType
+      SubnetIds:
+        - Fn::ImportValue:
+            !Sub ${VPCStack}-Subnet1
+        - Fn::ImportValue:
+            !Sub ${VPCStack}-Subnet2
   MasterDB:
     Type: 'AWS::RDS::DBInstance'
     Properties:
@@ -121,7 +135,7 @@ Resources:
         - Key: 'prx:cloudformation:stack-id'
           Value: !Ref AWS::StackId
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}
-# The MySQL_replication_tunnel security group is added and removed manually for use during migration     
+# The MySQL_replication_tunnel security group is added and removed manually for use during migration
 #     VPCSecurityGroups: [!Ref EC2SecurityGroup]
 # replication won't connect via tunnel if false
 # Post migration, we want to set PubliclyAccessible to false
