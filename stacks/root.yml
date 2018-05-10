@@ -123,6 +123,8 @@ Mappings:
       DovetailMemory: 400
       DovetailNginxCpu: 128
       DovetailNginxMemory: 400
+      StripeProxyNginxCpu: 128
+      StripeProxyNginxMemory: 400
     Production:
       BackendCpu: 200
       BackendMemory: 2000
@@ -133,6 +135,8 @@ Mappings:
       DovetailMemory: 1000
       DovetailNginxCpu: 200
       DovetailNginxMemory: 1000
+      StripeProxyNginxCpu: 128
+      StripeProxyNginxMemory: 400
   # Each app should be given a listener rule priority prefix between 10 and 49.
   # In nested stacks, listener rule priorities are created by combining the
   # prefix with either two (eg 01) or three (eg 765) more digits. Wildcard rules
@@ -924,6 +928,44 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/proxy.prx.org.yml"]]
+      TimeoutInMinutes: "5"
+  FeederStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, StripeProxyNginxMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, StripeProxyNginxCpu]
+        HealthCheckPath: "/healthcheck"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/stripe-proxy.yml"]]
       TimeoutInMinutes: "5"
 Outputs:
   VPCCertificateArn:
