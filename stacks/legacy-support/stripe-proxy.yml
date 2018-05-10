@@ -56,7 +56,7 @@ Mappings:
       ContainerMemory: 400
       ContainerCpu: 128
 Resources:
-  StripeProxyALBTargetGroup:
+  StripeProxyTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
       HealthCheckIntervalSeconds: 60
@@ -85,7 +85,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref StripeProxyALBTargetGroup
+        - TargetGroupArn: !Ref StripeProxyTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
@@ -97,7 +97,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref StripeProxyALBTargetGroup
+        - TargetGroupArn: !Ref StripeProxyTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
@@ -106,7 +106,7 @@ Resources:
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerStripeProxyPriorityPrefix, "00"]]
   # CloudWatch Alarms
-  StripeProxyALBTargetGroup500Alarm:
+  StripeProxyTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
@@ -132,7 +132,7 @@ Resources:
         - Name: LoadBalancer
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
-          Value: !GetAtt StripeProxyALBTargetGroup.TargetGroupFullName
+          Value: !GetAtt StripeProxyTargetGroup.TargetGroupFullName
   # ECS Service - Web
   StripeProxyWebLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -168,7 +168,7 @@ Resources:
       LoadBalancers:
         - ContainerName: stripe-proxy
           ContainerPort: 80
-          TargetGroupArn: !Ref StripeProxyALBTargetGroup
+          TargetGroupArn: !Ref StripeProxyTargetGroup
       Role: !Ref ECSServiceIAMRole
       TaskDefinition: !Ref StripeProxyWebTaskDefinition
   # Route 53
