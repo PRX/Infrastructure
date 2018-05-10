@@ -36,23 +36,20 @@ Parameters:
   # App ENV #################################################################
   EcrRegion:
     Type: String
-  ContainerMemory:
-    Type: String
-    Default: 400
-  ContainerCpu:
-    Type: String
-    Default: 128
-  HealthCheckPath:
-    Type: String
-    Default: /healthcheck
 Mappings:
   EnvironmentTypeMap:
     Testing:
       ProxyCount: 1
+      ContainerMemory: 400
+      ContainerCpu: 128
     Staging:
       ProxyCount: 1
+      ContainerMemory: 400
+      ContainerCpu: 128
     Production:
       ProxyCount: 1
+      ContainerMemory: 400
+      ContainerCpu: 128
 Resources:
   StripeProxyALBSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -131,7 +128,7 @@ Resources:
     Properties:
       HealthCheckIntervalSeconds: 60
       HealthCheckTimeoutSeconds: 10
-      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckPath: /healthcheck
       Name: !Sub stripe-proxy-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
@@ -236,7 +233,7 @@ Resources:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
-        - Cpu: !Ref ContainerCpu
+        - Cpu: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerCpu]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/stripe-proxy.prx.org:latest
           LogConfiguration:
@@ -244,7 +241,7 @@ Resources:
             Options:
               awslogs-group: !Ref StripeProxyWebLogGroup
               awslogs-region: !Ref AWS::Region
-          Memory: !Ref ContainerMemory
+          Memory: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerMemory]
           Name: stripe-proxy-web
           PortMappings:
             - HostPort: 0
