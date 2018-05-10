@@ -203,6 +203,34 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/root.yml"]]
       TimeoutInMinutes: "5"
+  LegacySupportRootStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
+        InfrastructureNotificationsStackName: !Ref NotificationsStackName
+        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/legacy-support/"]]
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        EcrRegion: !Ref EcrRegion
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/legacy-support/root.yml"]]
+      TimeoutInMinutes: "5"
   # App and shared resource stacks
   VPCStack:
     Type: "AWS::CloudFormation::Stack"
