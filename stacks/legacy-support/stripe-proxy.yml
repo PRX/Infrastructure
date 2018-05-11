@@ -56,138 +56,138 @@ Mappings:
       ContainerMemory: 400
       ContainerCpu: 128
 Resources:
-  StripeProxyTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    Properties:
-      HealthCheckIntervalSeconds: 60
-      UnhealthyThresholdCount: 10
-      HealthCheckPath: "/healthcheck"
-      Name: !Sub stripe-proxy-${EnvironmentTypeAbbreviation}-${VPC}
-      Port: 80
-      Protocol: HTTP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: 30
-      Tags:
-        - Key: Project
-          Value: stripe-proxy
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub stripe-proxy-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      VpcId: !Ref VPC
-  # ALB Listener Rules
-  ALBHTTPSHostWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref StripeProxyTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - stripe-proxy.*
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerStripeProxyPriorityPrefix, "00"]]
-  ALBHTTPHostWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref StripeProxyTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - stripe-proxy.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerStripeProxyPriorityPrefix, "00"]]
-  # CloudWatch Alarms
-  StripeProxyTargetGroup500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[stripe-proxy][ALB][Error] Target 5XX"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: >
-        5XX server errors originating from the stripe-proxy target group exceeded 0
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
-      MetricName: HTTPCode_Target_5XX_Count
-      Namespace: AWS/ApplicationELB
-      Period: "60"
-      Statistic: Sum
-      Threshold: "0"
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !Ref PlatformALBFullName
-        - Name: TargetGroup
-          Value: !GetAtt StripeProxyTargetGroup.TargetGroupFullName
-  # ECS Service - Web
-  StripeProxyWebLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
-  StripeProxyWebTaskDefinition:
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerCpu]
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/stripe.proxy:latest
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref StripeProxyWebLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerMemory]
-          Name: stripe-proxy
-          PortMappings:
-            - HostPort: 0
-              ContainerPort: 80
-  StripeProxyWebService:
-    Type: "AWS::ECS::Service"
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      PlacementConstraints:
-        - Type: "distinctInstance"
-      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
-      LoadBalancers:
-        - ContainerName: stripe-proxy
-          ContainerPort: 80
-          TargetGroupArn: !Ref StripeProxyTargetGroup
-      Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref StripeProxyWebTaskDefinition
-  # Route 53
-  StripeProxyWebRecordSetGroup:
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Record sets for dualstack web traffic to a web app instance
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: AAAA
-          Name: !Sub stripe-proxy.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
-          AliasTarget:
-            DNSName: !Ref PlatformALBDNSName
-            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
-        - Type: A
-          Name: !Sub stripe-proxy.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
-          AliasTarget:
-            DNSName: !Ref PlatformALBDNSName
-            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  # StripeProxyALBTargetGroup:
+  #   Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  #   Properties:
+  #     HealthCheckIntervalSeconds: 60
+  #     UnhealthyThresholdCount: 10
+  #     HealthCheckPath: "/healthcheck"
+  #     Name: !Sub stripe-proxy-${EnvironmentTypeAbbreviation}-${VPC}
+  #     Port: 80
+  #     Protocol: HTTP
+  #     TargetGroupAttributes:
+  #       - Key: deregistration_delay.timeout_seconds
+  #         Value: 30
+  #     Tags:
+  #       - Key: Project
+  #         Value: stripe-proxy
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentType
+  #       - Key: Name
+  #         Value: !Sub stripe-proxy-${EnvironmentType}
+  #       - Key: "prx:cloudformation:stack-name"
+  #         Value: !Ref AWS::StackName
+  #       - Key: "prx:cloudformation:stack-id"
+  #         Value: !Ref AWS::StackId
+  #     VpcId: !Ref VPC
+  # # ALB Listener Rules
+  # ALBHTTPSHostWildcardListenerRule:
+  #   Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+  #   Properties:
+  #     Actions:
+  #       - TargetGroupArn: !Ref StripeProxyALBTargetGroup
+  #         Type: forward
+  #     Conditions:
+  #       - Field: host-header
+  #         Values:
+  #           - stripe-proxy.*
+  #     ListenerArn: !Ref PlatformALBHTTPSListenerArn
+  #     Priority: !Join ["", [!Ref PlatformALBListenerStripeProxyPriorityPrefix, "00"]]
+  # ALBHTTPHostWildcardListenerRule:
+  #   Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+  #   Properties:
+  #     Actions:
+  #       - TargetGroupArn: !Ref StripeProxyALBTargetGroup
+  #         Type: forward
+  #     Conditions:
+  #       - Field: host-header
+  #         Values:
+  #           - stripe-proxy.*
+  #     ListenerArn: !Ref PlatformALBHTTPListenerArn
+  #     Priority: !Join ["", [!Ref PlatformALBListenerStripeProxyPriorityPrefix, "00"]]
+  # # CloudWatch Alarms
+  # StripeProxyALBTargetGroup500Alarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[stripe-proxy][ALB][Error] Target 5XX"
+  #     AlarmActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     AlarmDescription: >
+  #       5XX server errors originating from the stripe-proxy target group exceeded 0
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: "1"
+  #     MetricName: HTTPCode_Target_5XX_Count
+  #     Namespace: AWS/ApplicationELB
+  #     Period: "60"
+  #     Statistic: Sum
+  #     Threshold: "0"
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: LoadBalancer
+  #         Value: !Ref PlatformALBFullName
+  #       - Name: TargetGroup
+  #         Value: !GetAtt StripeProxyALBTargetGroup.TargetGroupFullName
+  # # ECS Service - Web
+  # StripeProxyWebLogGroup:
+  #   Type: "AWS::Logs::LogGroup"
+  #   Properties:
+  #     RetentionInDays: 14
+  # StripeProxyWebTaskDefinition:
+  #   Type: "AWS::ECS::TaskDefinition"
+  #   Properties:
+  #     ContainerDefinitions:
+  #       - Cpu: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerCpu]
+  #         Essential: true
+  #         Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/stripe.proxy:latest
+  #         LogConfiguration:
+  #           LogDriver: awslogs
+  #           Options:
+  #             awslogs-group: !Ref StripeProxyWebLogGroup
+  #             awslogs-region: !Ref AWS::Region
+  #         Memory: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ContainerMemory]
+  #         Name: stripe-proxy
+  #         PortMappings:
+  #           - HostPort: 0
+  #             ContainerPort: 80
+  # StripeProxyWebService:
+  #   Type: "AWS::ECS::Service"
+  #   Properties:
+  #     Cluster: !Ref ECSCluster
+  #     DeploymentConfiguration:
+  #       MaximumPercent: 200
+  #       MinimumHealthyPercent: 50
+  #     PlacementConstraints:
+  #       - Type: "distinctInstance"
+  #     DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
+  #     LoadBalancers:
+  #       - ContainerName: stripe-proxy
+  #         ContainerPort: 80
+  #         TargetGroupArn: !Ref StripeProxyALBTargetGroup
+  #     Role: !Ref ECSServiceIAMRole
+  #     TaskDefinition: !Ref StripeProxyWebTaskDefinition
+  # # Route 53
+  # StripeProxyWebRecordSetGroup:
+  #   Type: "AWS::Route53::RecordSetGroup"
+  #   Properties:
+  #     Comment: Record sets for dualstack web traffic to a web app instance
+  #     HostedZoneName: prx.tech.
+  #     RecordSets:
+  #       - Type: AAAA
+  #         Name: !Sub stripe-proxy.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+  #         AliasTarget:
+  #           DNSName: !Ref PlatformALBDNSName
+  #           HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  #       - Type: A
+  #         Name: !Sub stripe-proxy.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+  #         AliasTarget:
+  #           DNSName: !Ref PlatformALBDNSName
+  #           HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
