@@ -22,6 +22,10 @@ Metadata:
         Parameters:
           - GenericSlackWebhookUrl
           - IkeDeploysSlackSlackWebhookUrl
+      - Label:
+          default: SNS Topic Access
+        Parameters:
+          - SnsTopicPolicyPublishAllowanceAccountIds
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
@@ -33,6 +37,8 @@ Metadata:
         default: Ike Deploys
       IkeSlackVerificationToken:
         default: Ike Verification Token
+      SnsTopicPolicyPublishAllowanceAccountIds:
+        default: "SNS:Publish Account IDs"
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -50,6 +56,8 @@ Parameters:
     Type: String
   IkeSlackVerificationToken:
     Type: String
+  SnsTopicPolicyPublishAllowanceAccountIds:
+    Type: CommaDelimitedList
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -111,6 +119,40 @@ Resources:
   # Slack message relay
   SlackMessageRelaySnsTopic:
     Type: "AWS::SNS::Topic"
+  SlackMessageRelaySnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: default_policy_id
+        Version: '2012-10-17'
+        Statement:
+          - Sid: it_services_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref SlackMessageRelaySnsTopic
+          - Sid: default_statement_id
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref SlackMessageRelaySnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref SlackMessageRelaySnsTopic
   SlackMessageRelayLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
