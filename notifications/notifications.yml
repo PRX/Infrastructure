@@ -58,6 +58,9 @@ Parameters:
     Type: String
   SnsTopicPolicyPublishAllowanceAccountIds:
     Type: CommaDelimitedList
+    Description: >
+      Account IDs that will be given SNS:Publish access to notification SNS
+      topics. This grants access to all resources/roles/etc in that account.
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -123,17 +126,17 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: default_policy_id
+        Id: slack_message_relay_policy
         Version: '2012-10-17'
         Statement:
-          - Sid: it_services_publish
+          - Sid: slack_message_relay_external_publish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref SlackMessageRelaySnsTopic
-          - Sid: default_statement_id
+          - Sid: slack_message_relay_default
             Effect: Allow
             Principal:
               AWS: "*"
@@ -403,14 +406,184 @@ Resources:
   # ## SNS topics for CloudWatch Alarm Actions
   OpsDebugMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
+  OpsDebugMessagesSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: ops_debug_policy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ops_debug_external_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsDebugMessagesSnsTopic
+          - Sid: ops_debug_default
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsDebugMessagesSnsTopic
   OpsInfoMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
+  OpsInfoMessagesSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: ops_info_policy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ops_info_external_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsInfoMessagesSnsTopic
+          - Sid: ops_info_default
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref OpsInfoMessagesSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsInfoMessagesSnsTopic
   OpsWarnMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
+  OpsWarnMessagesSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: ops_warn_policy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ops_warn_external_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsWarnMessagesSnsTopic
+          - Sid: ops_warn_default
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref OpsWarnMessagesSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsWarnMessagesSnsTopic
   OpsErrorMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
+  OpsErrorMessagesSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: ops_error_policy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ops_error_external_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsErrorMessagesSnsTopic
+          - Sid: ops_error_default
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref OpsErrorMessagesSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsErrorMessagesSnsTopic
   OpsFatalMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
+  OpsFatalMessagesSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: ops_fatal_policy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ops_fatal_external_publish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsFatalMessagesSnsTopic
+          - Sid: ops_fatal_default
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref OpsFatalMessagesSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsFatalMessagesSnsTopic
   # ## SNS Triggers for the Lambda function
   CloudWatchAlarmNotificationHandlerDebugSubscription:
     Type: "AWS::SNS::Subscription"
