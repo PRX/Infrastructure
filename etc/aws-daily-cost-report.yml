@@ -1,0 +1,146 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a Lambda function that runs some basic reports against Cost Explorer,
+  and posts the results to Slack
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+Resources:
+  ReportFunctionIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+        - PolicyName: CostExplorerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ce:GetReservationCoverage"
+                  - "ce:GetCostAndUsage"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  ReportFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import json
+
+          sns = boto3.client('sns')
+          ce = boto3.client('ce')
+
+          ri_services = [
+              'Amazon Elastic Compute Cloud - Compute',
+              'Amazon Relational Database Service',
+              'Amazon ElastiCache'
+          ]
+
+          def lambda_handler(event, context):
+              for service in ri_services:
+                  # No data is available for the last three days, so the window needs to be earlier than that
+                  coverage = ce.get_reservation_coverage(
+                      TimePeriod={
+                          'Start': '2018-05-12',
+                          'End': '2018-05-13'
+                      },
+                      Granularity='DAILY',
+                      Filter={
+                          'Dimensions': {
+                              'Key': 'SERVICE',
+                              'Values': [service]
+                          }
+                      }
+                  )
+
+                  percent = coverage['Total']['CoverageHours']['CoverageHoursPercentage']
+
+                  sns.publish(
+                      TopicArn=os.environ['SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN'],
+                      Message=json.dumps({
+                          'channel': '#api-sandbox',
+                          'title': f"RI Coverage {service}",
+                          'text': percent
+                      })
+                  )
+      Description: >
+        Sends daily messages to Slack with AWS billing information
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt ReportFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Misc
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 10
+  ReportEventRuleIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt ReportFunction.Arn
+  ReportEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Runs the AWS Billing alerts function once a day
+      RoleArn: !GetAtt ReportEventRuleIamRole.Arn
+      ScheduleExpression: "cron(0 14 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ReportFunction.Arn
+          Id: !Sub "${AWS::StackName}.ReportFunction"
+  ReportFunctionEventInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ReportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ReportEventRule.Arn
