@@ -1,0 +1,191 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudWatch Events rule that triggers a Lambda function whenever
+  there is root account API or Console activity in CloudTrail. A global,
+  multi-region CloudTrail trail is also created to log those activities.
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+Resources:
+  # CloudTrail
+  CloudTrailS3Bucket:
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Admin
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CloudTrailS3BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket:
+        Ref: CloudTrailS3Bucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !Sub "arn:aws:s3:::${CloudTrailS3Bucket}"
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub "arn:aws:s3:::${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*"
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: "bucket-owner-full-control"
+  CloudTrail:
+    Type: "AWS::CloudTrail::Trail"
+    DependsOn:
+        - CloudTrailS3BucketPolicy
+    Properties:
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      S3BucketName: !Ref CloudTrailS3Bucket
+      Tags:
+        - Key: Project
+          Value: Admin
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  # Lambda Function
+  LambdaFunctionIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  LambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+
+          sns = boto3.client('sns')
+
+          SLACK_ICON = ':ops-cloudtrail:'
+          SLACK_USERNAME = 'AWS CloudTrail'
+          SLACK_CHANNEL = '#ops-info'
+
+          print(event)
+
+          def lambda_handler(event, context):
+              print(event)
+
+              sns.publish(
+                  TopicArn=os.environ['SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN'],
+                  Message=json.dumps({
+                      'channel': SLACK_CHANNEL,
+                      'username': SLACK_USERNAME,
+                      'icon_emoji': SLACK_ICON,
+                      'text': f"Root account event detected - {event['account']} {event['detail-type']} {event['region']} {event['detail']['eventName']}"
+                  })
+              )
+      Description: >
+        Receives CloudWatch Events rule events related to root account activity
+        and sends a message to the Slack relay
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LambdaFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Admin
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 10
+  LambdaPermissionForEventsRule:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt EventsRule.Arn
+  # Events Rule
+  EventsRuleLambdaTargetIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt LambdaFunction.Arn
+  EventsRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Monitors root account activity by watching for any API and Console
+        access via CloudTrail
+      EventPattern: |
+        {
+          "detail-type": [
+            "AWS API Call via CloudTrail",
+            "AWS Console Sign In via CloudTrail"
+          ],
+          "detail": {
+            "userIdentity": {
+              "type": ["Root"]
+            }
+          }
+        }
+      RoleArn: !GetAtt EventsRuleLambdaTargetIamRole.Arn
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LambdaFunction.Arn
+          Id: !Sub "${AWS::StackName}.LambdaTarget"
