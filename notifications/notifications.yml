@@ -26,6 +26,7 @@ Metadata:
           default: SNS Topic Access
         Parameters:
           - SnsTopicPolicyPublishAllowanceAccountIds
+          - SnsTopicPolicyPublishAllowanceOrganizationId
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
@@ -39,6 +40,8 @@ Metadata:
         default: Ike Verification Token
       SnsTopicPolicyPublishAllowanceAccountIds:
         default: "SNS:Publish Account IDs"
+      SnsTopicPolicyPublishAllowanceOrganizationId:
+        default: "SNS:Publish Organization ID"
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -61,6 +64,12 @@ Parameters:
     Description: >
       Account IDs that will be given SNS:Publish access to notification SNS
       topics. This grants access to all resources/roles/etc in that account.
+  SnsTopicPolicyPublishAllowanceOrganizationId:
+    Type: String
+    Description: >
+      Organization ID that will be given SNS:Publish access to notification SNS
+      topics. This grants access to all resources/roles/etc in that
+      organization.
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -126,17 +135,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: slack_message_relay_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: slack_message_relay_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref SlackMessageRelaySnsTopic
-          - Sid: slack_message_relay_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref SlackMessageRelaySnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
@@ -223,6 +242,50 @@ Resources:
   # CloudFormation notifications
   CloudFormationNotificationSnsTopic:
     Type: "AWS::SNS::Topic"
+  CloudFormationNotificationSnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountPublish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - SNS:Publish
+            Resource: !Ref CloudFormationNotificationSnsTopic
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref OpsDebugMessagesSnsTopic
   CloudFormationNotificationHandlerLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -410,17 +473,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: ops_debug_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: ops_debug_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref OpsDebugMessagesSnsTopic
-          - Sid: ops_debug_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
@@ -446,17 +519,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: ops_info_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: ops_info_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref OpsInfoMessagesSnsTopic
-          - Sid: ops_info_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsInfoMessagesSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
@@ -482,17 +565,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: ops_warn_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: ops_warn_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref OpsWarnMessagesSnsTopic
-          - Sid: ops_warn_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsWarnMessagesSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
@@ -518,17 +611,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: ops_error_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: ops_error_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref OpsErrorMessagesSnsTopic
-          - Sid: ops_error_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsErrorMessagesSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
@@ -554,17 +657,27 @@ Resources:
     Type: "AWS::SNS::TopicPolicy"
     Properties:
       PolicyDocument:
-        Id: ops_fatal_policy
+        Id: OrganizationAcccessPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: ops_fatal_external_publish
+          - Sid: AccountPublish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
             Action:
               - SNS:Publish
             Resource: !Ref OpsFatalMessagesSnsTopic
-          - Sid: ops_fatal_default
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:Publish
+            Resource: !Ref OpsFatalMessagesSnsTopic
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
             Effect: Allow
             Principal:
               AWS: "*"
