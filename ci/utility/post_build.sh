@@ -79,6 +79,18 @@ push_to_ecr() {
         $(aws ecr get-login --no-include-email --region $PRX_ECR_REGION)
         echo "...Logged in to ECR"
 
+        # Need to allow errors temporarily to check if the repo exists
+        set +e
+        aws ecr describe-repositories --repository-names "$PRX_ECR_REPOSITORY" > /dev/null 2>&1
+        if [ $? -eq 0 ]
+        then
+            echo "ECR Repository already exists"
+        else
+            echo "Creating ECR repository"
+            aws ecr create-repository "$PRX_ECR_REPOSITORY"
+        fi
+        set -e
+
         echo "Getting Docker image ID"
         IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
 
