@@ -1,5 +1,4 @@
 #!/bin/bash
-set -e
 
 # First parameter is required and is a boolean indicating if the build was a
 # success. Second paremeter is an error message if the build was a failure.
@@ -78,6 +77,15 @@ push_to_ecr() {
         echo "Logging into ECR..."
         $(aws ecr get-login --no-include-email --region $PRX_ECR_REGION)
         echo "...Logged in to ECR"
+
+        aws ecr describe-repositories --repository-names "$PRX_ECR_REPOSITORY"
+        if [ $? -eq 0 ]
+        then
+            echo "ECR Repository already exists"
+        else
+            echo "Creating ECR repository"
+            aws ecr create-repository "$PRX_ECR_REPOSITORY"
+        fi
 
         echo "Getting Docker image ID"
         IMAGE_ID=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
