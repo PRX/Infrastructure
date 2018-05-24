@@ -81,7 +81,7 @@ push_to_ecr() {
 
         # Need to allow errors temporarily to check if the repo exists
         set +e
-        aws ecr describe-repositories --repository-names "$PRX_ECR_REPOSITORY"
+        aws ecr describe-repositories --repository-names "$PRX_ECR_REPOSITORY" > /dev/null 2>&1
         if [ $? -eq 0 ]
         then
             echo "ECR Repository already exists"
