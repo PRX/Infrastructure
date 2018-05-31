@@ -27,6 +27,8 @@ Conditions:
   IsApSouth1: !Equals [!Ref "AWS::Region", ap-south-1]
   IsSaEast1: !Equals [!Ref "AWS::Region", sa-east-1]
 Parameters:
+  AwsOrganizationId:
+    Type: String
   EnvironmentType:
     Type: String
 Resources:
@@ -324,6 +326,29 @@ Resources:
     Properties:
       DhcpOptionsId: !Ref DHCPOptions
       VpcId: !Ref VPC
+  # VPC Peering
+  VpcPeeringOrgTrustingRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Principal:
+              AWS: "*"
+            Action:
+              - "sts:AssumeRole"
+            Effect: Allow
+            Condition:
+              "StringEquals":
+                "aws:PrincipalOrgID": !Ref AwsOrganizationId
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: "ec2:AcceptVpcPeeringConnection"
+                Resource: "*"
 Outputs:
   VPC:
     Description: >
