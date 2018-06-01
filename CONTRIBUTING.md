@@ -1,7 +1,11 @@
+- Follow these rules: https://chris.beams.io/posts/git-commit/
+- For CloudFormation templates, add the filename at the top of the file as a comment
+- Follow JS and Python linting as described below
+
 This means that standard practices like code reviews and Git merges can be applied to infrastructure code, and the deployment of changes to the AWS resources that run applications can be managed much more explicitly.
 
 
-https://chris.beams.io/posts/git-commit/
+
 
 - stack protection
 
