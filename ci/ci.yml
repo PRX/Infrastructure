@@ -16,6 +16,7 @@ Metadata:
           - InfrastructureStorageStackName
           - InfrastructureNotificationsStackName
           - InfrastructureSecretsStackName
+          - LogGroupRetentionPolicyFunctionArn
       - Label:
           default: Template Configuration
         Parameters:
@@ -44,6 +45,8 @@ Metadata:
         default: Webhook secret
       CodeBuildBootstrapUrl:
         default: Bootstrap script URL
+      LogGroupRetentionPolicyFunctionArn:
+        default: Log group retention function SSM key
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -77,6 +80,11 @@ Parameters:
       URL of the bootstrap shell script that the CI runner CodeBuild project
       will install and execute
     Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
 Resources:
   # CodeBuild Project
   CiCodeBuildSourceArchiveBucket:
@@ -427,6 +435,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CiStatusNotificationHandlerLambdaFunction
+  CiStatusNotificationHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${CiStatusNotificationHandlerLambdaFunction}"
+      RetentionInDays: 5
   # GitHub Webhook Endpoint Handler
   # An HTTP endpoint is registered with GitHub to receive Pull Request and Push
   # events. A Lambda function handles requests made to that endpoint. If the
@@ -527,6 +541,12 @@ Resources:
       FunctionName: !Ref GitHubWebhookEndpointLambdaFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiProdStage}/*"  # TOD This isn't quite right. Reference one made by the console to correct
+  GitHubWebhookEndpointLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${GitHubWebhookEndpointLambdaFunction}"
+      RetentionInDays: 5
   # GitHub Event Handler
   # GitHub Pull Request and Push events for projects that support the CI system
   # are sent to the GitHub Event Handler. The Lambda function copies the project
@@ -656,6 +676,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref GitHubEventHandler2LambdaFunction
+  GitHubEventHandler2LambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${GitHubEventHandler2LambdaFunction}"
+      RetentionInDays: 5
   # CodeBuild Callback
   # Once a CI build finishes, it posts information about the build result to an
   # SNS topic. A Lambda function is subscribed to the topic, and can process the
@@ -800,6 +826,12 @@ Resources:
       FunctionName: !Ref CodeBuildCallbackHandlerLambdaFunction
       Principal: sns.amazonaws.com
       SourceArn: !Ref CodeBuildCallbackSnsTopic
+  CodeBuildCallbackHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${CodeBuildCallbackHandlerLambdaFunction}"
+      RetentionInDays: 5
 Outputs:
   GitHubWebhookEndpointUrl:
     Value: !Sub "https://${RestApiDomainName}/${RestApiProdStage}/v1/github/webhook"

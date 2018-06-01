@@ -6,9 +6,10 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: Storage Stack
+          default: Stack Dependencies
         Parameters:
           - InfrastructureStorageStackName
+          - LogGroupRetentionPolicyFunctionArn
       - Label:
           default: Infrastructure Config
         Parameters:
@@ -42,6 +43,8 @@ Metadata:
         default: "SNS:Publish Account IDs"
       SnsTopicPolicyPublishAllowanceOrganizationId:
         default: "SNS:Publish Organization ID"
+      LogGroupRetentionPolicyFunctionArn:
+        default: Log group retention function SSM key
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -70,6 +73,11 @@ Parameters:
       Organization ID that will be given SNS:Publish access to notification SNS
       topics. This grants access to all resources/roles/etc in that
       organization.
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -239,6 +247,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref SlackMessageRelayLambdaFunction
+  SlackMessageRelayLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${SlackMessageRelayLambdaFunction}"
+      RetentionInDays: 5
   # CloudFormation notifications
   CloudFormationNotificationSnsTopic:
     Type: "AWS::SNS::Topic"
@@ -349,6 +363,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CloudFormationNotificationHandlerLambdaFunction
+  CloudFormationNotificationHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${CloudFormationNotificationHandlerLambdaFunction}"
+      RetentionInDays: 5
   # ASG Autoscaling Notifications
   ASGNotificationSnsTopic:
     Type: "AWS::SNS::Topic"
@@ -415,6 +435,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ASGNotificationHandlerLambdaFunction
+  ASGNotificationHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${ASGNotificationHandlerLambdaFunction}"
+      RetentionInDays: 5
   # CloudWatch Alarms Notifications
   CloudWatchAlarmNotificationHandlerLambdaFunction:
     Type: "AWS::Lambda::Function"
@@ -466,6 +492,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+  CloudWatchAlarmNotificationHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${CloudWatchAlarmNotificationHandlerLambdaFunction}"
+      RetentionInDays: 5
   # ## SNS topics for CloudWatch Alarm Actions
   OpsDebugMessagesSnsTopic:
     Type: "AWS::SNS::Topic"
@@ -936,6 +968,18 @@ Resources:
       RestApiId: !Ref RestApi
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: "ike"
+  IkeCallbackHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${IkeCallbackHandlerLambdaFunction}"
+      RetentionInDays: 5
+  IkeSlashCommandsHandlerLambdaFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${IkeSlashCommandsHandlerLambdaFunction}"
+      RetentionInDays: 5
   ## Ike Web API
   IkeSlashCommandsRestApiResource:
     Type: "AWS::ApiGateway::Resource"
