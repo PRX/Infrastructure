@@ -1,0 +1,101 @@
+# cross-account-vpc-peering-requester.yml
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  Create a VPC Peering connection between two VPCs in different AWS accounts,
+  using an existing trusted assumable role. It will optionally add a route to
+  the peering connection to a given route table. This stack is for the requester
+  side of the connection; the accepter side should approve the connection
+  automatically since an appropriately-permissioned IAM user on that side is
+  used to create the connection.
+Conditions:
+  HasRouteTable: !Not [!Equals [!Ref RouteTable, ""]]
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Peering Connection
+        Parameters:
+          - VpcPeeringConnectionName
+      - Label:
+          default: Accepter (trusting) Account
+        Parameters:
+          - PeerVpcAccountId
+          - PeerVpcId
+          - PeerRoleArn
+      - Label:
+          default: Requester (trusted) Account
+        Parameters:
+          - VpcId
+          - RouteTable
+          - DestinationCidrBlock
+    ParameterLabels:
+      VpcPeeringConnectionName:
+        default: Name
+      VpcId:
+        default: VPC ID
+      RouteTable:
+        default: Route table
+      PeerVpcAccountId:
+        default: Peering account ID
+      PeerVpcId:
+        default: Peering VPC ID
+      PeerRoleArn:
+        default: Peering IAM role ARN
+      DestinationCidrBlock:
+        default: CIDR block
+Parameters:
+  VpcPeeringConnectionName:
+    Type: String
+    Description: >
+      A name tag to give to the VPC peering connection
+  VpcId:
+    Type: String
+    Description: >
+      The ID of the VPC in the requester account (where this stack is being
+      launched)
+  RouteTable:
+    Type: String
+    Description: >
+      (Optional) If provided, a route will be added to the table for the
+      VPR peering connection
+  DestinationCidrBlock:
+    Type: String
+    Description: >
+      The IPv4 CIDR address block used for the destination match.
+  PeerVpcAccountId:
+    Type: String
+    Description: >
+      The account ID where the peering VPC exists
+  PeerVpcId:
+    Type: String
+    Description: >
+      The ID of the VPC to peer with
+  PeerRoleArn:
+    Type: String
+    Description: >
+      The ARN for a IAM role in the peering account that allows VPC peering
+      and trusts this account
+Resources:
+  VpcPeeringConnection:
+    Type: "AWS::EC2::VPCPeeringConnection"
+    Properties:
+      VpcId: !Ref VpcId
+      PeerVpcId: !Ref PeerVpcId
+      PeerOwnerId: !Ref PeerVpcAccountId
+      PeerRoleArn: !Ref PeerRoleArn
+      Tags:
+        - Key: Name
+          Value: !Ref VpcPeeringConnectionName
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  Route:
+    Type: "AWS::EC2::Route"
+    Condition: HasRouteTable
+    DependsOn: VpcPeeringConnection
+    Properties:
+      RouteTableId: !Ref RouteTable
+      VpcPeeringConnectionId: !Ref VpcPeeringConnection
+      DestinationCidrBlock: !Ref DestinationCidrBlock
+
