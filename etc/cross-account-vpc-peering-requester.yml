@@ -2,12 +2,20 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
   Create a VPC Peering connection between two VPCs in different AWS accounts,
-  using an existing trusted assumable role.
+  using an existing trusted assumable role. It will optionally add a route to
+  the peering connection to a given route table. This stack is for the requester
+  side of the connection; the accepter side should approve the connection
+  automatically since an appropriately-permissioned IAM user on that side is
+  used to create the connection.
 Conditions:
   HasRouteTable: !Not [!Equals [!Ref RouteTable, ""]]
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
+      - Label:
+          default: Peering Connection
+        Parameters:
+          - VpcPeeringConnectionName
       - Label:
           default: Accepter (trusting) Account
         Parameters:
@@ -21,6 +29,8 @@ Metadata:
           - RouteTable
           - DestinationCidrBlock
     ParameterLabels:
+      VpcPeeringConnectionName:
+        default: Name
       VpcId:
         default: VPC ID
       RouteTable:
@@ -34,6 +44,10 @@ Metadata:
       DestinationCidrBlock:
         default: CIDR block
 Parameters:
+  VpcPeeringConnectionName:
+    Type: String
+    Description: >
+      A name tag to give to the VPC peering connection
   VpcId:
     Type: String
     Description: >
@@ -70,10 +84,8 @@ Resources:
       PeerOwnerId: !Ref PeerVpcAccountId
       PeerRoleArn: !Ref PeerRoleArn
       Tags:
-        # - Key: Project
-        #   Value: platform.prx.org
-        # - Key: Name
-        #   Value: !Sub Platform-${EnvironmentType}
+        - Key: Name
+          Value: !Ref VpcPeeringConnectionName
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
