@@ -1,0 +1,99 @@
+# log-group-retention-policy-custom-resource.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a Lambda function for backing a CloudFormation custom resource that
+  sets the retention policy of a CloudWatch Logs log group. This is useful
+  when creating Lambda functions in CloudFormation. Creating a custom resource
+  for each function allows you to control the rention policy of the Lambda
+  function's logs from within CloudFormation. (This function also sets the
+  retention policy for its own log group.)
+Resources:
+  LogGroupRetentionPolicyIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LogGroupRetentionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:PutRetentionPolicy"
+                  - "logs:DescribeLogGroups"
+                  - "logs:CreateLogGroup"
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  LogGroupRetentionPolicyFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          import os
+          import boto3
+          import traceback
+          import cfnresponse
+
+          logs = boto3.client('logs')
+
+
+          def lambda_handler(event, context):
+              try:
+                  print(event)
+
+                  logs.put_retention_policy(
+                      logGroupName=os.environ['AWS_LAMBDA_LOG_GROUP_NAME'],
+                      retentionInDays=14
+                  )
+
+                  if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                      log_group_name = event['ResourceProperties']['LogGroupName']
+                      rention_in_days = event['ResourceProperties']['RetentionInDays']
+
+                      resource_log_group_name = event['ResourceProperties']['LogGroupName']
+
+                      desc = logs.describe_log_groups(logGroupNamePrefix=log_group_name)
+
+                      if len(desc['logGroups']) == 0:
+                          logs.create_log_group(logGroupName=log_group_name)
+
+                      logs.put_retention_policy(
+                          logGroupName=log_group_name,
+                          retentionInDays=int(rention_in_days)
+                      )
+
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+              except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  traceback.print_exc()
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Description: >
+        Sets the retention policy for a given CloudWatch Logs log group
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt LogGroupRetentionPolicyIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 8
+Outputs:
+  LogGroupRetentionPolicyFunctionArn:
+    Value: !GetAtt LogGroupRetentionPolicyFunction.Arn
