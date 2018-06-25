@@ -51,6 +51,7 @@ def alarm_slack_attachment(alarm):
         HistoryItemType='StateUpdate',
         StartDate=datetime.datetime.now() - datetime.timedelta(hours=24),
         EndDate=datetime.datetime.now(),
+        MaxRecords=100,
     )
 
     items = alarm_history['AlarmHistoryItems']
