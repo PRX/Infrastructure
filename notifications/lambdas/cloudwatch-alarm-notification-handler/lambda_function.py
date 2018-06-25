@@ -90,10 +90,36 @@ def alarm_slack_attachment(alarm):
 
 
 def ok_slack_attachment(alarm):
+    duration = 'Unavailable'
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    alarm_history = cloudwatch.describe_alarm_history(
+        AlarmName=alarm['AlarmName'],
+        HistoryItemType='StateUpdate',
+        StartDate=now - datetime.timedelta(hours=24),
+        EndDate=now,
+    )
+
+    items = alarm_history['AlarmHistoryItems']
+
+    if len(items) > 0:
+        ok_item = items[0]
+        history_data = json.loads(ok_item['HistoryData'])
+
+        ok_time = ok_item['Timestamp']
+
+        alarm_time = history_data['oldState']['stateReasonData']['startDate']
+        alarm_time = parse(alarm_time)
+
+        dif = ok_time - alarm_time
+        duration = f"{round(dif.total_seconds() / 60)} min."
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        'text': f"Alarm duration: {duration}",
         'footer': f"{alarm['Trigger']['Namespace']} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp())
     }
