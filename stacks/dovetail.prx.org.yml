@@ -45,10 +45,6 @@ Parameters:
     Type: String
   ContainerCpu:
     Type: String
-  NginxProxyMemory:
-    Type: String
-  NginxProxyCpu:
-    Type: String
   # Dovetail ###################################################################
   DovetailEcrImageTag:
     Type: String
@@ -59,15 +55,12 @@ Mappings:
     Testing:
       DovetailMinCount: 1
       DovetailMaxCount: 1
-      ProxyCount: 1
     Staging:
       DovetailMinCount: 2
       DovetailMaxCount: 4
-      ProxyCount: 1
     Production:
       DovetailMinCount: 8
       DovetailMaxCount: 30
-      ProxyCount: 2
 Resources:
   DovetailSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -495,109 +488,6 @@ Resources:
           Value: !Sub ${AWS::StackName}-DovetailApp
         - Name: ClusterName
           Value: !Ref ECSCluster
-  # Proxy
-  DovetailProxyALBHTTPListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - /+/*
-      ListenerArn: !Ref DovetailALBHTTPListener
-      Priority: 10
-  DovetailProxyALBHTTPSListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - /+/*
-      ListenerArn: !Ref DovetailALBHTTPSListener
-      Priority: 10
-  DovetailProxyALBTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    DependsOn: DovetailALB
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 10
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 5
-      HealthCheckPath: /ping
-      Name: !Sub dovetail-proxy-${EnvironmentTypeAbbreviation}-${VPC}
-      Port: 80
-      Protocol: HTTP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: "30"
-      Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub Dovetail-Proxy-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      VpcId: !Ref VPC
-  DovetailProxyLogGroup:
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
-  DovetailProxyTaskDefinition:
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: !Ref NginxProxyCpu
-          Environment:
-            - Name: CACHE_INACTIVE
-              Value: "48h"
-            - Name: CACHE_MAX_SIZE
-              Value: "20g"
-            - Name: DOVETAIL_HOST
-              Value: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech
-            - Name: RESOLVER
-              Value: "8.8.8.8" # TODO does 172.16.0.23 work in this VPC?
-            - Name: STITCH_VALID
-              Value: "48h"
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail.proxy:latest
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref DovetailProxyLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: !Ref NginxProxyMemory
-          Name: "dovetail-nginx"
-          PortMappings:
-            - HostPort: 0
-              ContainerPort: 80
-  DovetailProxyService:
-    Type: "AWS::ECS::Service"
-    DependsOn:
-      - DovetailALBHTTPListener
-      - DovetailALBHTTPSListener
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      PlacementConstraints:
-        - Type: "distinctInstance"
-      DesiredCount: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ProxyCount]
-      LoadBalancers:
-        - ContainerName: "dovetail-nginx"
-          ContainerPort: 80
-          TargetGroupArn: !Ref DovetailProxyALBTargetGroup
-      Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref DovetailProxyTaskDefinition
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
