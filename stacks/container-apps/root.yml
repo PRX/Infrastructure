@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Apps that run in containers (i.e. Docker)
+Parameters:
+  InfrastructureStorageStackName:
+    Type: String
+  InfrastructureNotificationsStackName:
+    Type: String
+  TemplateUrlPrefix:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBFullName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # App ENV ####################################################################
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  ContainerMemory:
+    Type: String
+  ContainerMemoryReservation:
+    Type: String
+  ContainerCpu:
+    Type: String
+  # App Specific ###############################################################
+  ExchangePlatformALBListenerPriorityPrefix:
+    Type: String
+  ExchangeSecretsVersion:
+    Type: String
+  ExchangeEcrImageTag:
+    Type: String
+Resources:
+  ExchangeStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !Ref ExchangePlatformALBListenerPriorityPrefix
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        AppName: "exchange"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
