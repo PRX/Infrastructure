@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates alarms related to ssh tunnel remote server -> rds db replication
+Parameters:
+  OpsWarnSnsTopic:
+    Default: ''
+    Description: ops warn SNS Topic arn
+    Type: String
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+Resources:
+  ReplicationIoHalted:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Replication][${EnvironmentType}][SlaveIORunning] Not running"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: IO replication not running
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: Database
+          Value: !Sub mediajoint_${EnvironmentType}
+        - Name: Environment
+          Value: !Ref EnvironmentType
+      EvaluationPeriods: 2
+      MetricName: SlaveIORunning
+      Namespace: PRX/Data
+      Period: 60
+      Statistic: Average
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Unit: Count
+  ReplicationSqlHalted:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Replication][${EnvironmentType}][SlaveSQLRunning] Not running"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: SQL replication not running
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: Database
+          Value: !Sub mediajoint_${EnvironmentType}
+        - Name: Environment
+          Value: !Ref EnvironmentType
+      EvaluationPeriods: 2
+      MetricName: SlaveSQLRunning
+      Namespace: PRX/Data
+      Period: 60
+      Statistic: Average
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Unit: Count
+  ReplicationBehindMaster:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Replication][${EnvironmentType}][SecondsBehindMaster] Too far behind"
+      AlarmActions: [!Ref OpsWarnSnsTopic]
+      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
+      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmDescription: SQL replication too far behind master
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Database
+          Value: !Sub mediajoint_${EnvironmentType}
+        - Name: Environment
+          Value: !Ref EnvironmentType
+      EvaluationPeriods: 2
+      MetricName: SecondsBehindMaster
+      Namespace: PRX/Data
+      Period: 60
+      Statistic: Average
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Unit: Seconds
