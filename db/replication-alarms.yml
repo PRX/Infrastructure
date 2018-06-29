@@ -9,10 +9,18 @@ Parameters:
   EnvironmentType:
     Type: String
     AllowedValues:
-      - Staging
-      - Production
+      - staging
+      - production
+  DatabaseName:
+    Default: 'mediajoint_production'
+    Description: Name of the database
+    Type: String
+  TunnelInstanceId:
+    Default: ''
+    Description: Instance id (i.e. i-something) of the EC2 server
+    Type: String
 Resources:
-  ReplicationIoHalted:
+  ReplicationIoHaltedAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
@@ -24,9 +32,11 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: Database
-          Value: !Sub mediajoint_${EnvironmentType}
+          Value: !Ref DatabaseName
         - Name: Environment
           Value: !Ref EnvironmentType
+        - Name: InstanceID
+          Value: !Ref TunnelInstanceId
       EvaluationPeriods: 2
       MetricName: SlaveIORunning
       Namespace: PRX/Data
@@ -35,7 +45,7 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
       Unit: Count
-  ReplicationSqlHalted:
+  ReplicationSqlHaltedAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
@@ -47,9 +57,11 @@ Resources:
       ComparisonOperator: LessThanThreshold
       Dimensions:
         - Name: Database
-          Value: !Sub mediajoint_${EnvironmentType}
+          Value: !Ref DatabaseName
         - Name: Environment
           Value: !Ref EnvironmentType
+        - Name: InstanceID
+          Value: !Ref TunnelInstanceId
       EvaluationPeriods: 2
       MetricName: SlaveSQLRunning
       Namespace: PRX/Data
@@ -58,7 +70,7 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
       Unit: Count
-  ReplicationBehindMaster:
+  ReplicationBehindMasterAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
@@ -70,9 +82,11 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Database
-          Value: !Sub mediajoint_${EnvironmentType}
+          Value: !Ref DatabaseName
         - Name: Environment
           Value: !Ref EnvironmentType
+        - Name: InstanceID
+          Value: !Ref TunnelInstanceId
       EvaluationPeriods: 2
       MetricName: SecondsBehindMaster
       Namespace: PRX/Data
