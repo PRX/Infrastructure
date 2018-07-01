@@ -745,7 +745,6 @@ Resources:
       TimeoutInMinutes: 5
   CmsStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging # Staging only, for now
     DependsOn: ECSClusterStack
     Properties:
       NotificationARNs:
@@ -777,7 +776,7 @@ Resources:
         EcrImageTag: !Ref CmsEcrImageTag
         SecretsVersion: !Ref CmsSecretsVersion
         AppName: "cms"
-        CreateWorker: "true"
+        CreateWorker: !If [IsProduction, "false", "true"]
         ContainerPort: "3000"
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
         ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
