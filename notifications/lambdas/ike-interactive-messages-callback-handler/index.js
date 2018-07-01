@@ -5,9 +5,8 @@
 // Slack will send a request to a callback This function handles those requests,
 // such as for approving CloudFormation deploys through CodePipeline.
 
-const url = require('url');
-const https = require('https');
 const querystring = require('querystring');
+const crypto = require('crypto');
 
 const aws = require('aws-sdk');
 const s3 = new aws.S3({apiVersion: '2006-03-01'});
@@ -39,7 +38,14 @@ function processEvent(event, context, callback) {
     const callbackId = payload.callback_id;
     const token = payload.token;
 
-    if (payload.token !== process.env.SLACK_VERIFICATION_TOKEN) {
+    // Slack signing secret
+    const slackRequestTimestamp = event.headers['X-Slack-Request-Timestamp'];
+    const basestring = ['v0', slackRequestTimestamp, event.body].join(':');
+    const signingSecret = process.env.SLACK_SIGNING_SECRET;
+    const slackSignature = event.headers['X-Slack-Signature'];
+    const requestSignature = `v0=${crypto.createHmac('sha256', signingSecret).update(basestring).digest('hex')}`;
+
+    if (requestSignature !== slackSignature) {
         // Bad request; bogus token
         callback(null, { statusCode: 400, headers: {}, body: null });
     } else {
@@ -71,6 +77,7 @@ function handleRollbackCallback(payload, callback) {
 }
 
 function triggerRollback(payload, callback) {
+    const action = payload.actions[0];
     const versionId = action.selected_options[0].value;
 
     const configBucket = process.env.INFRASTRUCTURE_CONFIG_BUCKET;
