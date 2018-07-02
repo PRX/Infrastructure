@@ -6,6 +6,7 @@
 
 const querystring = require('querystring');
 const AWS = require('aws-sdk');
+const crypto = require('crypto');
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
@@ -81,8 +82,15 @@ function handleRollbackRequest(payload, callback) {
 function main(event, context, callback) {
     const payload = querystring.parse(event.body);
 
-    if (payload.token !== process.env.SLACK_VERIFICATION_TOKEN) {
-        // Bad request; bogus token
+    // Slack signing secret
+    const slackRequestTimestamp = event.headers['X-Slack-Request-Timestamp'];
+    const basestring = ['v0', slackRequestTimestamp, event.body].join(':');
+    const signingSecret = process.env.SLACK_SIGNING_SECRET;
+    const slackSignature = event.headers['X-Slack-Signature'];
+    const requestSignature = `v0=${crypto.createHmac('sha256', signingSecret).update(basestring).digest('hex')}`;
+
+    if (requestSignature !== slackSignature) {
+        // Bad request; bogus signature
         callback(null, { statusCode: 400, headers: {}, body: null });
     } else if (payload.command === '/ops-rollback' && payload.channel_id === 'G3H72T468') {
         handleRollbackRequest(payload, callback);

@@ -3,6 +3,7 @@ Description: >
   Apps that run in containers (i.e. Docker)
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureNotificationsStackName:
     Type: String
@@ -111,7 +112,6 @@ Resources:
       TimeoutInMinutes: 5
   CmsStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
@@ -143,7 +143,7 @@ Resources:
         EcrImageTag: !Ref CmsEcrImageTag
         SecretsVersion: !Ref CmsSecretsVersion
         AppName: "cms"
-        CreateWorker: "true"
+        CreateWorker: !If [IsProduction, "false", "true"]
         ContainerPort: "3000"
         HealthCheckPath: "/api/v1"
       Tags:
