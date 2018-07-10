@@ -14,6 +14,7 @@ Metadata:
           default: Infrastructure Config
         Parameters:
           - InfrastructureConfigStagingKey
+          - InfrastructureCdPipelineName
       - Label:
           default: Slack Secrets
         Parameters:
@@ -45,6 +46,8 @@ Metadata:
         default: "SNS:Publish Organization ID"
       LogGroupRetentionPolicyFunctionArn:
         default: Log group retention function SSM key
+      InfrastructureCdPipelineName:
+        default: CD pipeline name
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -78,6 +81,10 @@ Parameters:
     Description: >
       The Parameter Store key for the log group retention policy function's
       ARN (not the ARN itself)
+  InfrastructureCdPipelineName:
+    Type: String
+    Description: >
+      The name of the main CD pipeline in CodePipeline
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -820,6 +827,15 @@ Resources:
                   - "codepipeline:PutApprovalResult"
                 Resource:
                   - "*" # This should be okay
+        - PolicyName: CodePipelineExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:StartPipelineExecution"
+                Resource:
+                  - "*" # This should be okay
         - PolicyName: S3ProductionConfigPolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -887,6 +903,7 @@ Resources:
             Fn::ImportValue:
               !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
           INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+          INFRASTRUCTURE_CD_PIPELINE_NAME: !Ref InfrastructureCdPipelineName
       Handler: index.handler
       MemorySize: 512
       Role: !GetAtt IkeHandlerLambdaIamRole.Arn

@@ -9,6 +9,7 @@ const AWS = require('aws-sdk');
 const crypto = require('crypto');
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
+const codepipeline = new AWS.CodePipeline({apiVersion: '2015-07-09'});
 
 const ROLLBACK_VERSION_SELECTION_CALLBACK = 'rollback-version-selection-action';
 
@@ -79,6 +80,24 @@ function handleRollbackRequest(payload, callback) {
     });
 }
 
+function handleRelease(payload, callback) {
+    codepipeline.startPipelineExecution({
+            name: process.env.INFRASTRUCTURE_CD_PIPELINE_NAME
+        }, function(err, data) {
+        if (err) {
+            console.log(err, err.stack); // an error occurred
+        } else {
+            const msg = {
+                text: `Pipeline execution started for \`${process.env.INFRASTRUCTURE_CD_PIPELINE_NAME}\``,
+                response_type: 'ephemeral',
+            };
+
+            const body = JSON.stringify(msg);
+            callback(null, { statusCode: 200, headers: {}, body });
+        }
+      });
+}
+
 function main(event, context, callback) {
     const payload = querystring.parse(event.body);
 
@@ -94,6 +113,8 @@ function main(event, context, callback) {
         callback(null, { statusCode: 400, headers: {}, body: null });
     } else if (payload.command === '/ops-rollback' && payload.channel_id === 'G3H72T468') {
         handleRollbackRequest(payload, callback);
+    } else if (payload.command === '/ops-release' && payload.channel_id === 'G3H72T468') {
+        handleRelease(payload, callback);
     } else {
         // Unauthorized use
         const msg = {
