@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Apps that run in containers (i.e. Docker)
+Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  InfrastructureNotificationsStackName:
+    Type: String
+  TemplateUrlPrefix:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBFullName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # App ENV ####################################################################
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  ContainerMemory:
+    Type: String
+  ContainerMemoryReservation:
+    Type: String
+  ContainerCpu:
+    Type: String
+  # Exchange Specific ##########################################################
+  ExchangePlatformALBListenerPriorityPrefix:
+    Type: String
+  ExchangeSecretsVersion:
+    Type: String
+  ExchangeEcrImageTag:
+    Type: String
+  # CMS Specific ###############################################################
+  CmsPlatformALBListenerPriorityPrefix:
+    Type: String
+  CmsSecretsVersion:
+    Type: String
+  CmsEcrImageTag:
+    Type: String
+  # Jingle Specific ############################################################
+  JinglePlatformALBListenerPriorityPrefix:
+    Type: String
+  JingleSecretsVersion:
+    Type: String
+  JingleEcrImageTag:
+    Type: String
+Resources:
+  ExchangeStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref ExchangePlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        AppName: "exchange"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  CmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref CmsPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref CmsEcrImageTag
+        SecretsVersion: !Ref CmsSecretsVersion
+        AppName: "cms"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/api/v1"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  JingleStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref JinglePlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref JingleEcrImageTag
+        SecretsVersion: !Ref JingleSecretsVersion
+        AppName: "jingle"
+        CreateWorker: "false"
+        ContainerPort: "4000"
+        HealthCheckPath: "/api/v1"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5

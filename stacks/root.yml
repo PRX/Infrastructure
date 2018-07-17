@@ -12,8 +12,6 @@ Description: >
   in separate templates.
 Conditions:
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   AwsOrganizationId:
     Type: String
@@ -234,6 +232,53 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/legacy-support/root.yml"]]
       TimeoutInMinutes: 5
+  ContainerAppsRootStack:
+    Type: "AWS::CloudFormation::Stack"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        InfrastructureNotificationsStackName: !Ref NotificationsStackName
+        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/"]]
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        EcrRegion: !Ref EcrRegion
+        SecretsBase:
+          Fn::ImportValue:
+            !Sub "${SecretsStackName}-SecretsBaseRegion"
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
+        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
+        # Exchange
+        ExchangePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Exchange, prefix]
+        ExchangeEcrImageTag: !Ref ExchangeEcrImageTag
+        ExchangeSecretsVersion: !Ref ExchangeSecretsVersion
+        # Cms
+        CmsPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
+        CmsEcrImageTag: !Ref CmsEcrImageTag
+        CmsSecretsVersion: !Ref CmsSecretsVersion
+        # Jingle
+        JinglePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Jingle, prefix]
+        JingleEcrImageTag: !Ref JingleEcrImageTag
+        JingleSecretsVersion: !Ref JingleSecretsVersion
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/root.yml"]]
+      TimeoutInMinutes: 5
   # App and shared resource stacks
   VPCStack:
     Type: "AWS::CloudFormation::Stack"
@@ -446,49 +491,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
       TimeoutInMinutes: 5
-  JingleStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging # Staging only, for now
-    DependsOn: ECSClusterStack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Jingle, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsDebugMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
-        JingleEcrImageTag: !Ref JingleEcrImageTag
-        JingleSecretsVersion: !Ref JingleSecretsVersion
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/jingle.prx.org.yml"]]
-      TimeoutInMinutes: 5
   UploadLambdaStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
@@ -601,54 +603,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
-      TimeoutInMinutes: 5
-  ExchangeStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging # Staging only, for now!
-    DependsOn: ECSClusterStack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Exchange, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsDebugMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        SecretsBase:
-          Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
-        EcrRegion: !Ref EcrRegion
-        EcrImageTag: !Ref ExchangeEcrImageTag
-        SecretsVersion: !Ref ExchangeSecretsVersion
-        AppName: "exchange"
-        CreateWorker: "true"
-        ContainerPort: "3000"
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-        HealthCheckPath: "/"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   FeederStack:
     Type: "AWS::CloudFormation::Stack"
@@ -743,53 +698,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail.prx.org.yml"]]
       TimeoutInMinutes: 5
-  CmsStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging # Staging only, for now
-    DependsOn: ECSClusterStack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsDebugMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        SecretsBase:
-          Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
-        EcrRegion: !Ref EcrRegion
-        EcrImageTag: !Ref CmsEcrImageTag
-        SecretsVersion: !Ref CmsSecretsVersion
-        AppName: "cms"
-        CreateWorker: "true"
-        ContainerPort: "3000"
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-        HealthCheckPath: "/api/v1"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
-      TimeoutInMinutes: 5
   IdStack:
     Type: "AWS::CloudFormation::Stack"
     DependsOn: ECSClusterStack
@@ -834,7 +742,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-application.yml"]]
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   MetricsStack:
     Type: "AWS::CloudFormation::Stack"

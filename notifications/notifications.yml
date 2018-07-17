@@ -14,10 +14,11 @@ Metadata:
           default: Infrastructure Config
         Parameters:
           - InfrastructureConfigStagingKey
+          - InfrastructureCdPipelineName
       - Label:
-          default: Slack Tokens
+          default: Slack Secrets
         Parameters:
-          - IkeSlackVerificationToken
+          - IkeSlackSigningSecret
       - Label:
           default: Slack Webhooks
         Parameters:
@@ -37,14 +38,16 @@ Metadata:
         default: Generic Incoming Webhook
       IkeDeploysSlackSlackWebhookUrl:
         default: Ike Deploys
-      IkeSlackVerificationToken:
-        default: Ike Verification Token
+      IkeSlackSigningSecret:
+        default: Ike Signing Secret
       SnsTopicPolicyPublishAllowanceAccountIds:
         default: "SNS:Publish Account IDs"
       SnsTopicPolicyPublishAllowanceOrganizationId:
         default: "SNS:Publish Organization ID"
       LogGroupRetentionPolicyFunctionArn:
         default: Log group retention function SSM key
+      InfrastructureCdPipelineName:
+        default: CD pipeline name
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -60,7 +63,7 @@ Parameters:
     Type: String
   IkeDeploysSlackSlackWebhookUrl:
     Type: String
-  IkeSlackVerificationToken:
+  IkeSlackSigningSecret:
     Type: String
   SnsTopicPolicyPublishAllowanceAccountIds:
     Type: CommaDelimitedList
@@ -78,6 +81,10 @@ Parameters:
     Description: >
       The Parameter Store key for the log group retention policy function's
       ARN (not the ARN itself)
+  InfrastructureCdPipelineName:
+    Type: String
+    Description: >
+      The name of the main CD pipeline in CodePipeline
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -820,6 +827,15 @@ Resources:
                   - "codepipeline:PutApprovalResult"
                 Resource:
                   - "*" # This should be okay
+        - PolicyName: CodePipelineExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "codepipeline:StartPipelineExecution"
+                Resource:
+                  - "*" # This should be okay
         - PolicyName: S3ProductionConfigPolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -853,7 +869,7 @@ Resources:
         Handles requests from Slack for interactive messages
       Environment:
         Variables:
-          SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
+          SLACK_SIGNING_SECRET: !Ref IkeSlackSigningSecret
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue:
               !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
@@ -882,11 +898,12 @@ Resources:
         Handles requests from Slack for slash commands
       Environment:
         Variables:
-          SLACK_VERIFICATION_TOKEN: !Ref IkeSlackVerificationToken
+          SLACK_SIGNING_SECRET: !Ref IkeSlackSigningSecret
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue:
               !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
           INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+          INFRASTRUCTURE_CD_PIPELINE_NAME: !Ref InfrastructureCdPipelineName
       Handler: index.handler
       MemorySize: 512
       Role: !GetAtt IkeHandlerLambdaIamRole.Arn
@@ -928,7 +945,7 @@ Resources:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Infra][Notif][Lambda][Errors] Ike Slack Commands Handler"
+      AlarmName: "[Infra][Notif][Lambda][Errors] Ike Slash Commands Handler"
       AlarmActions:
         - !Ref OpsWarnMessagesSnsTopic
       InsufficientDataActions:
