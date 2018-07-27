@@ -74,11 +74,13 @@ function findRangeBytes(headers) {
 }
 function findRequestRangeBytes(headers) {
   if (headers && headers['range'] && headers['range'][0]) {
-    const val = headers['content-range'][0]['value'] || ''
+    const val = headers['range'][0]['value'] || ''
     if (val.indexOf(',') > -1) {
       console.error(`[ERROR] Multipart range not supported: ${val}`)
+      return false
+    } else {
+      return val
     }
-    return val
   } else {
     return ''
   }
