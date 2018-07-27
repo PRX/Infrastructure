@@ -17,6 +17,7 @@ Metadata:
           - DistributionDomain
           - CertificateArn
           - LambdaFunctionArn
+          - LambdaBytesFunctionArn
     ParameterLabels:
       OriginBucket:
         default: Origin S3 Bucket
@@ -28,6 +29,8 @@ Metadata:
         default: ACM Certificate Arn
       LambdaFunctionArn:
         default: Stitch Function Arn
+      LambdaBytesFunctionArn:
+        default: Bytes Logging Function Arn
       InfrastructureNotificationsStackName:
         default: Notifications stack name
 Parameters:
@@ -44,6 +47,9 @@ Parameters:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
   LambdaFunctionArn:
+    Type: String
+    Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
+  LambdaBytesFunctionArn:
     Type: String
     Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
   InfrastructureNotificationsStackName:
@@ -87,6 +93,8 @@ Resources:
           LambdaFunctionAssociations:
             - EventType: origin-request
               LambdaFunctionARN: !Ref LambdaFunctionArn
+            - EventType: viewer-response
+              LambdaFunctionARN: !Ref LambdaBytesFunctionArn
           TargetOriginId: dovetail-stitch-s3
           ViewerProtocolPolicy : allow-all
         DefaultRootObject: index.html
