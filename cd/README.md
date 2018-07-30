@@ -44,7 +44,7 @@ The file from the repository used as the stack template is `root.yml`. This file
 
 The Git commit hash of the Infrastructure repo is used as a prefix in S3 for the copy. Another [custom Lambda](https://github.com/PRX/Infrastructure/blob/master/cd/lambdas/infrastructure-commit-proxy/lambda_function.py) action captures the commit hash in an artifact that can be passed around amongst CodePipeline actions. That artifact is passed to the `deploy` action, and the value (hash) is pulled out and passed to as a stack parameter to the CloudFormation deployment. This makes it available within the template, so the nested stack definitions can correctly locate the templates in S3.
 
-The staging `deploy` action does **not** use a change set, and there is no confirmation before the deploy happens. Staging is, essentially, continuously deployed.
+The staging `deploy` action does **not** have a confirmation before the deploy happens. Staging is, essentially, continuously deployed.
 
 Most deploys are a result of application code changes, for example an updated version of an app that has been pushed to a new Docker image. Code changes do not directly trigger the pipeline. Instead, identifiers for deployable code are maintained within the template configuration files (which are a trigger). In the case of a Docker app, an image tag is used. The template config. file is updated by some mechanism when there is a new Docker tag, which in turn triggers the pipeline to run. The value from the config. is then used within the app's template, which is ultimately how the update happens.
 
