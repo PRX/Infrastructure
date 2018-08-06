@@ -36,6 +36,9 @@ Metadata:
 Conditions:
   CreateLambdaAlarms: !Equals [!Ref LambdaRegion, !Ref "AWS::Region"]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsProductionAlarms: !And
+    - !Equals [!Ref LambdaRegion, !Ref "AWS::Region"]
+    - !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
@@ -154,7 +157,7 @@ Resources:
           Value: !Sub "${LambdaRegion}.${LambdaName}"
   LambdaManyErrorsAlarm:
     Type: "AWS::CloudWatch::Alarm"
-    Condition: !And [CreateLambdaAlarms, IsProduction]
+    Condition: IsProductionAlarms
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[DovetailStitchLambda][ManyErrors] ${EnvironmentType}"
@@ -284,7 +287,7 @@ Resources:
       TreatMissingData: notBreaching
   LambdaManyTimeoutsAlarm:
     Type: "AWS::CloudWatch::Alarm"
-    Condition: !And [CreateLambdaAlarms, IsProduction]
+    Condition: IsProductionAlarms
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[DovetailStitchLambda][ManyTimeouts] ${EnvironmentType}"
