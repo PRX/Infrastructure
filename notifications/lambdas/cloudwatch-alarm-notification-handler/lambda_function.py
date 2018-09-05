@@ -90,7 +90,7 @@ def alarm_slack_attachment(alarm):
                 'short': True,
             }, {
                 'title': 'Datapoints',
-                'value': f"{','.join(datapoints)}",
+                'value': f"{', '.join(datapoints)}",
                 'short': True,
             }
         ]
