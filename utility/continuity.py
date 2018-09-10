@@ -3,42 +3,49 @@
 # basic sanity checks on the stacks and their configurations
 
 import boto3
+import re
 
-client = boto3.client('cloudformation')
+cloudformation = boto3.client('cloudformation')
 
-response = client.describe_stacks()
+stacks = cloudformation.describe_stacks()
 
-map = {
-    'cd': ['infrastructure-cd', '../cd/cd.yaml'],
-    'ci': ['infrastructure-ci', '../ci/ci.yml'],
-    'notifications': ['infrastructure-notifications', '../notifications/notifications.yml'],
-    'secrets': ['infrastructure-secrets', '../secrets/secrets.yml'],
-    'storage': ['infrastructure-storage', '../storage/storage.yml'],
-    'radiotopia-com': ['hostedzone-radiotopia-com', '../dns/radiotopia.com-hosted_zone.yml'],
-    'radiotopia-fm': ['hostedzone-radiotopia-fm', '../dns/radiotopia.fm-hosted_zone.yml'],
-    'prxu-org': ['hostedzone-prxu-org', '../dns/prxu.org-hosted_zone.yml'],
-    'prx-mx': ['hostedzone-prx-mx', '../dns/prx.mx-hosted_zone.yml'],
-    'prx-org': ['hostedzone-prx-org', '../dns/prx.org-hosted_zone.yml'],
-    'cdn-radiotopia-plus': ['cdn-radiotopia-plus', '../cdn/feed-cdn.yml'],
-    'dt-stag': ['cloudfront-dovetail-cdn-staging', '../cdn/dovetail-cdn.yml'],
-    'dt-prod': ['cloudfront-dovetail-cdn-production', '../cdn/dovetail-cdn.yml'],
-}
+# Stack Notifications
+# Examines all stacks to ensure they have the shared CloudFormation
+# notification SNS topic configured as a notification ARN
 
-for key in map:
-    res = client.get_template(StackName=map[key][0])
-    remote = res['TemplateBody']
+cfn_topic = 'arn:aws:sns:us-east-1:561178107736:infrastructure-notifications-CloudFormationNotificationSnsTopic-2OCAWQM7S7BP'
 
-    local = open(map[key][1], "r").read()
+print("======================================================================")
+print(f"These stacks do NOT include the notification ARN:")
+for stack in stacks['Stacks']:
+    if cfn_topic not in stack['NotificationARNs']:
+        print(f"{stack['StackName']}")
 
-    if not local == remote:
-        print(f"MISMATCH: {key}")
+
+# Template continuity
+# Compares the template for certain stacks, as they exist in CloudFormation,
+# to your local copy. If you are on master these should not have any
+# differences. The first line each template should contain a relative path
+# to the file in the Infrastructure repo. If that path appears to be missing,
+# this will report a warning
+
+print("======================================================================")
+for stack in stacks['Stacks']:
+    cfn_template = cloudformation.get_template(StackName=stack['StackName'])
+    cfn_body = cfn_template['TemplateBody']
+
+    cfn_first_line = cfn_body.split('\n', 1)[0]
+    if re.match(r"\# ([a-zA-Z/_\-\.]+yml)", cfn_first_line) is None:
+        print(f"Missing template path: {stack['StackName']}")
     else:
-        print(f"match: {key}")
+        template_path = re.findall(r'\# ([a-zA-Z/_\-\.]+yml)', cfn_first_line)[0]
 
+        local_path = f"../{template_path}"
 
+        try:
+            local_body = open(local_path, "r").read()
+        except FileNotFoundError:
+            print(f"File error: {stack['StackName']}")
 
-
-
-
-
-
+        if not local_body == cfn_body:
+            print(f"Template mismatch: {stack['StackName']}")
