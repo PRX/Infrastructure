@@ -33,16 +33,17 @@ def temp_file_path():
 def get_record_info(record):
     bucket = record['s3']['bucket']['name']
     key = record['s3']['object']['key']
-    app, env, secrets = key.split('/')
-    # print(app, env, secrets)
+    app, env, file = key.split('/')
+    # print(app, env, file)
     version = s3.head_object(Bucket=bucket, Key=key)['VersionId']
-    return {'app' : app, 'env' : env, 'version' : version}
+    return {'app' : app, 'env' : env, 'file' : file, 'version' : version}
 
 def get_secrets_changes(event):
     changes = {}
     for record in event['Records']:
         info = get_record_info(record)
-        changes.setdefault(info['env'], []).append(info)
+        if info['file'] == 'secrets':
+            changes.setdefault(info['env'], []).append(info)
     return changes
 
 def get_config(env):
