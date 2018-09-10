@@ -215,24 +215,28 @@ def post_notification_status(sns_message):
         attachment['fallback'] = f"Built {repo}{extra} with commit {sha7}"
         attachment['title'] = f"Built <{build_url}|{repo}>{extra} with commit <{commit_url}|{sha7}>"
 
+        text_lines = []
+
         if 'PRX_GITHUB_PR' in attrs:
             num = attrs['PRX_GITHUB_PR']['Value']
             pr_url = f"https://github.com/{repo}/pull/{num}"
-            attachment['text'] = f"<{pr_url}|{pr_url}>"
+            text_lines.append(f"<{pr_url}|{pr_url}>")
         elif 'PRX_ECR_TAG' in attrs:
             tag = attrs['PRX_ECR_TAG']['Value']
             ecr_region = attrs['PRX_ECR_REGION']['Value']
             ecr_repo = attrs['PRX_ECR_REPOSITORY']['Value']
             ecr_url = f"https://console.aws.amazon.com/ecs/home?region={ecr_region}#/repositories/{ecr_repo}"
-            attachment['text'] = f"Docker image pushed to <{ecr_url}|ECR> with tag `{tag}`"
+            text_lines.append(f"Docker image pushed to <{ecr_url}|ECR> with tag `{tag}`")
         elif 'PRX_LAMBDA_CODE_S3_VERSION_ID' in attrs:
             s3_version = attrs['PRX_LAMBDA_CODE_S3_VERSION_ID']['Value']
-            attachment['text'] = f"Lambda code pushed to S3 with version ID `{s3_version}`"
+            text_lines.append(f"Lambda code pushed to S3 with version ID `{s3_version}`")
         elif 'PRX_S3_STATIC_S3_VERSION_ID' in attrs:
             s3_version = attrs['PRX_S3_STATIC_S3_VERSION_ID']['Value']
-            attachment['text'] = f"S3 static site pushed to S3 with version ID `{s3_version}`"
+            text_lines.append(f"S3 static site pushed to S3 with version ID `{s3_version}`")
         else:
-            attachment['text'] = 'Unknown!'
+            text_lines.append('No pull request; no known artifact')
+
+        attachment['text'] = '\n'.join(text_lines)
     else:
         attachment['color'] = 'danger'
         attachment['fallback'] = f"Failed to build {repo}{extra} with commit {sha7}"
