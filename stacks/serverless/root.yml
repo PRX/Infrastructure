@@ -11,6 +11,14 @@ Parameters:
     Type: String
   InfrastructureNotificationsStackName:
     Type: String
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
   TemplateUrlPrefix:
     Type: String
   EnvironmentType:
@@ -24,6 +32,8 @@ Parameters:
   UploadLambdaCodeS3ObjectVersion:
     Type: String
   DovetailBytesLambdaCodeS3ObjectVersion:
+    Type: String
+  DovetailCountsLambdaCodeS3ObjectVersion:
     Type: String
 Resources:
   UploadLambdaStack:
@@ -87,4 +97,39 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-bytes-lambda.yml"]]
+      TimeoutInMinutes: 5
+  DovetailCountsLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        VPC: !Ref VPC
+        VPCSubnet1: !Ref VPCSubnet1
+        VPCSubnet2: !Ref VPCSubnet2
+        VPCSubnet3: !Ref VPCSubnet3
+        KinesisIn: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_IN"
+        KinesisOut: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_OUT"
+        RedisUrl: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/REDIS_URL"
+        S3Bucket: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_BUCKET"
+        S3Prefix: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_PREFIX"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-counts-lambda.yml"]]
       TimeoutInMinutes: 5
