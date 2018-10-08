@@ -92,6 +92,49 @@ Resources:
       RouteTableId: !Ref RouteTable
       GatewayId: !Ref InternetGateway
       DestinationCidrBlock: 0.0.0.0/0
+  S3Endpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      RouteTableIds:
+        - !Ref RouteTable
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcEndpointType: Gateway
+      VpcId: !Ref VPC
+  KinesisEndpointSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow kinesis traffic
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  KinesisEndpoint:
+    Type: "AWS::EC2::VPCEndpoint"
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !GetAtt VPC.DefaultSecurityGroup
+        - !Ref KinesisEndpointSecurityGroup
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.kinesis-streams"
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
   Subnet1:
     Type: "AWS::EC2::Subnet"
     Properties:
@@ -355,6 +398,10 @@ Outputs:
     Description: >
       Resource ID for the VPC
     Value: !Ref VPC
+  SecurityGroup:
+    Description: >
+      Default Security Group for the VPC
+    Value: !GetAtt VPC.DefaultSecurityGroup
   Subnet1:
     Description: >
       Resource ID (eg subnet-e19f0178) for subnet 1
