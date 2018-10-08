@@ -1,0 +1,80 @@
+# stacks/container-apps/web-application.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Exchange say_when worker (with a SAY_WHEN_THREAD=true override)
+Conditions:
+  HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
+Parameters:
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  # Misc #######################################################################
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  SecretsBase:
+    Type: String
+  EcrRegion:
+    Type: String
+  EcrImageTag:
+    Type: String
+  # App ENV #################################################################
+  AppName:
+    Type: String # castle, crier, cms, feeder
+  SecretsVersion:
+    Type: String
+  ContainerMemory:
+    Type: String
+    Default: 500
+  ContainerMemoryReservation:
+    Type: String
+    Default: ""
+  ContainerCpu:
+    Type: String
+    Default: 128
+Resources:
+  SayWhenWorkerLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  SayWhenWorkerTaskDefinition:
+    Condition: CreateWorkerResources
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: !Ref ContainerCpu
+          Environment:
+            - Name: APP_NAME
+              Value: !Ref AppName
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: SAY_WHEN_THREAD
+              Value: "true"
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref SayWhenWorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: !Ref ContainerMemory
+          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
+          Name: !Sub ${AppName}-saywhen-worker
+          Command:
+            - worker
+  SayWhenWorkerService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      TaskDefinition: !Ref SayWhenWorkerTaskDefinition
