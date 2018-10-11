@@ -26,6 +26,8 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   KinesisOut:
     Type: AWS::SSM::Parameter::Value<String>
+  Kinesis404:
+    Type: AWS::SSM::Parameter::Value<String>
   RedisUrl:
     Type: AWS::SSM::Parameter::Value<String>
   S3Bucket:
@@ -58,6 +60,7 @@ Resources:
                   - "kinesis:PutRecords"
                 Resource:
                   - !Ref KinesisOut
+                  - !Ref Kinesis404
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
@@ -72,15 +75,16 @@ Resources:
       Description: Dovetail bytes sent counter
       Environment:
         Variables:
-          KINESIS_OUT: !Ref KinesisOut
+          KINESIS_ARRANGEMENT_STREAM: !Ref Kinesis404
+          KINESIS_IMPRESSION_STREAM: !Ref KinesisOut
           REDIS_URL: !Ref RedisUrl
           S3_BUCKET: !Ref S3Bucket
           S3_PREFIX: !Ref S3Prefix
       Handler: index.handler
-      MemorySize: 128
+      MemorySize: 2048
       Role: !GetAtt DovetailCountsLambdaExecutionIAMRole.Arn
       Runtime: nodejs8.10
-      Timeout: 10
+      Timeout: 20
       VpcConfig:
         SecurityGroupIds:
           - !Ref VPCSecurityGroup
