@@ -86,8 +86,6 @@ Resources:
     Properties:
       Code:
         ZipFile: |
-          const querystring = require('querystring');
-          const url = require('url');
           const https = require('https');
           const AWS = require('aws-sdk');
 
@@ -154,17 +152,48 @@ Resources:
           }
 
           function message(order, event) {
-              const tc = event.ticket_classes[0];
-              const remaining = (tc.quantity_total - tc.quantity_sold);
+              const ticket_classes = event.ticket_classes;
+
+              const total_tickets = ticket_classes.reduce((t, c) => (t + c.quantity_total), 0);
+              const total_sold = ticket_classes.reduce((t, c) => (t + c.quantity_sold), 0);
+
+              const remaining = (total_tickets - total_sold);
+
+              const attendees = [`<mailto:${order.email}|${order.name}>`];
+
+              if (order.attendees.length > 1) {
+                  attendees.push(`${order.attendees.length - 1}`);
+              }
+
+              const adminUrl = `https://www.eventbrite.com/myevent?eid=${event.id}`;
+              const orderUrl = `https://www.eventbrite.com/reports?eid=${event.id}&rid=h&filterby=all,${order.id}`;
+
+              const order_ts = (Date.parse(order.created) / 1000);
 
               return {
                   channel: SLACK_CHANNEL,
                   username: SLACK_USERNAME,
                   icon_emoji: SLACK_ICON,
-                  text: [
-                      `${order.name} ordered ${order.attendees.length} tickets for ${order.event.name.text}`,
-                      `_${remaining} remaining_`,
-                  ].join('\n'),
+                  attachments: [
+                      {
+                          fallback: `${order.name} ordered ${order.attendees.length} ticket for ${event.name.text}`,
+                          pretext: `<${event.url}|${event.name.text}> <${adminUrl}|:gear:>`,
+                          ts: order_ts,
+                          title: `Order #${order.id}`,
+                          title_link: orderUrl,
+                          fields: [
+                              {
+                                  title: "Attendees",
+                                  value: attendees.join(' + '),
+                                  short: true
+                              }, {
+                                  title: "Remaining",
+                                  value: `${remaining} of ${total_tickets}`,
+                                  short: true
+                              }
+                          ]
+                      }
+                  ],
               };
           }
 
