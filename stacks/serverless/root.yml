@@ -3,8 +3,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Serverless (Lambda, API Gateway, etc) apps
 Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureStorageStackName:
@@ -34,6 +32,8 @@ Parameters:
   DovetailBytesLambdaCodeS3ObjectVersion:
     Type: String
   DovetailCountsLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsAudioLambdaCodeS3ObjectVersion:
     Type: String
 Resources:
   UploadLambdaStack:
@@ -133,4 +133,36 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-counts-lambda.yml"]]
+      TimeoutInMinutes: 5
+  CmsAudioLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        AlarmWarnActions:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        AlarmErrorActions:
+          Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        DestinationBucketName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/DESTINATION_BUCKET"
+        SqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/SQS_CALLBACK_NAME"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-audio-lambda.yml"]]
       TimeoutInMinutes: 5

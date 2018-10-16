@@ -2,10 +2,10 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Audio processing for cms.prx.org
 Parameters:
-  OpsWarnMessagesSnsTopicArn:
-    Type: String
-  OpsErrorMessagesSnsTopicArn:
-    Type: String
+  AlarmWarnActions:
+    Type: CommaDelimitedList
+  AlarmErrorActions:
+    Type: CommaDelimitedList
   CodeS3Bucket:
     Type: String
   CodeS3ObjectVersion:
@@ -91,7 +91,7 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       LogGroupName: !Sub "/aws/lambda/${CmsAudioLambdaFunction}"
-      RetentionDays: 14
+      RetentionInDays: 14
   CmsAudioLambdaLogErrors:
     Type: "AWS::Logs::MetricFilter"
     Properties:
@@ -100,7 +100,7 @@ Resources:
       MetricTransformations:
         - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_error"
           MetricNamespace: LogMetrics
-          MetricValue: 1
+          MetricValue: "1"
   CmsAudioLambdaLogWarns:
     Type: "AWS::Logs::MetricFilter"
     Properties:
@@ -109,7 +109,7 @@ Resources:
       MetricTransformations:
         - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_warn"
           MetricNamespace: LogMetrics
-          MetricValue: 1
+          MetricValue: "1"
   CmsAudioLambdaLogProcessed:
     Type: "AWS::Logs::MetricFilter"
     Properties:
@@ -128,3 +128,57 @@ Resources:
         - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_deleted"
           MetricNamespace: LogMetrics
           MetricValue: $num
+  CmsAudioLambdaAlarmErrors:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][Errors] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmErrorActions
+      InsufficientDataActions: !Ref AlarmErrorActions
+      OKActions: !Ref AlarmErrorActions
+      AlarmDescription: Errors on the cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CmsAudioLambdaFunction
+  LambdaLogErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][LogErrors] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmErrorActions
+      InsufficientDataActions: !Ref AlarmErrorActions
+      OKActions: !Ref AlarmErrorActions
+      AlarmDescription: Logged errors on cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_error"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  LambdaLogWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][LogWarns] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmWarnActions
+      InsufficientDataActions: !Ref AlarmWarnActions
+      OKActions: !Ref AlarmWarnActions
+      AlarmDescription: Logged warnings on cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_warn"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
