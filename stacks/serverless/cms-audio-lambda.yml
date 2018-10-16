@@ -92,3 +92,39 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/${CmsAudioLambdaFunction}"
       RetentionDays: 14
+  CmsAudioLambdaLogErrors:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '"[ERROR]"'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_error"
+          MetricNamespace: LogMetrics
+          MetricValue: 1
+  CmsAudioLambdaLogWarns:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '"[WARN]"'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_warn"
+          MetricNamespace: LogMetrics
+          MetricValue: 1
+  CmsAudioLambdaLogProcessed:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '[timestamp, guid, level=INFO, msg="Processed:", num]'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_processed"
+          MetricNamespace: LogMetrics
+          MetricValue: $num
+  CmsAudioLambdaLogDeleted:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '[timestamp, guid, level=INFO, msg="Deleted:", num]'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_deleted"
+          MetricNamespace: LogMetrics
+          MetricValue: $num
