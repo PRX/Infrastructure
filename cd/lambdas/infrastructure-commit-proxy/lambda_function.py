@@ -5,6 +5,21 @@
 # that contains the Git commit hash of the input repo artifact. The destination
 # bucket for that is the native CodePipeline artifact store bucket.
 #
+# This is necessary because even though the Git commit hash is stored as
+# metadata on a Git source artifact, it is not available in a way that allows
+# it to be passed to a stack deploy action as a parameter. This transforms the
+# metadata into a format that can be passed as a parameter, making use of
+# parameter override functions[1]. `Fn::GetParam` takes an artifact name,
+# the name of a file in that artifact, and a JSON key the exists in a JSON
+# object in that file. The function returns the value associated with that key.
+#
+# e.g., { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]}
+#
+# This function creates `state.json` in that example, and sets `commit` to the
+# Git commit hash.
+#
+# 1. https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-parameter-override-functions.html
+#
 # This should always callback to the CodePipeline API to indicate success or
 # failure.
 

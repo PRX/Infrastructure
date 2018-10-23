@@ -2,7 +2,9 @@
 # Returns: Error or status message
 #
 # Triggered periodically to check if the CD CodePipeline has failed, and
-# publishes a notification
+# publishes a notification.
+#
+# This is not an action within the CD pipeline.
 
 import boto3
 import traceback

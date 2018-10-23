@@ -3,9 +3,9 @@
 #
 # Creates an output artifact for the production template config. It does that
 # by getting the existing production config from S3 and the staging config
-# pipeline artifact, and updating any app version information (ECR image
-#  tags, etc) from staging to production. The result is written to the output
-# artifact
+# pipeline artifact, and copying any app version information (ECR image
+# tags, etc) from staging into production. The result is a JSON file written
+# to the CodePipeline-provided output artifact location.
 #
 # This should always callback to the CodePipeline API to indicate success or
 # failure.
