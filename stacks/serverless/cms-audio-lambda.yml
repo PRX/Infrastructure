@@ -18,6 +18,16 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   SqsCallbackName:
     Type: AWS::SSM::Parameter::Value<String>
+Mappings:
+  AnnounceTopicNames:
+    Staging:
+      create: staging_announce_audio_create
+      update: staging_announce_audio_update
+      delete: staging_announce_audio_delete
+    Production:
+      create: production_announce_audio_create
+      update: production_announce_audio_update
+      delete: production_announce_audio_delete
 Resources:
   CmsAudioLambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
@@ -87,6 +97,24 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CmsAudioLambdaCreateTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, create]]]
+      FunctionName: !Ref CmsAudioLambdaFunction
+  CmsAudioLambdaUpdateTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, update]]]
+      FunctionName: !Ref CmsAudioLambdaFunction
+  CmsAudioLambdaDeleteTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, delete]]]
+      FunctionName: !Ref CmsAudioLambdaFunction
   CmsAudioLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:

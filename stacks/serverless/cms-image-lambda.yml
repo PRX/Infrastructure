@@ -18,6 +18,16 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   SqsCallbackName:
     Type: AWS::SSM::Parameter::Value<String>
+Mappings:
+  AnnounceTopicNames:
+    Staging:
+      create: staging_announce_image_create
+      update: staging_announce_image_update
+      delete: staging_announce_image_delete
+    Production:
+      create: production_announce_image_create
+      update: production_announce_image_update
+      delete: production_announce_image_delete
 Resources:
   CmsImageLambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
@@ -86,6 +96,24 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CmsImageLambdaCreateTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, create]]]
+      FunctionName: !Ref CmsImageLambdaFunction
+  CmsImageLambdaUpdateTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, update]]]
+      FunctionName: !Ref CmsImageLambdaFunction
+  CmsImageLambdaDeleteTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      Enabled: true
+      EventSourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, delete]]]
+      FunctionName: !Ref CmsImageLambdaFunction
   CmsImageLambdaLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
