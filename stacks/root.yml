@@ -1,3 +1,4 @@
+# stacks/root.yml
 # Generally this template is used to launch stacks from the bootstrapping
 # CodePipeline. Primarily is is simply a wrapper around individial app- and
 # service-specific templates, which get nested into this template and are
@@ -85,9 +86,13 @@ Parameters:
     Type: String
   DovetailBytesLambdaCodeS3ObjectVersion:
     Type: String
-  ProxyPrxOrgCodeS3ObjectVersion:
+  DovetailCountsLambdaCodeS3ObjectVersion:
     Type: String
-  DovetailBytesLambdaCodeS3ObjectVersion:
+  CmsAudioLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsImageLambdaCodeS3ObjectVersion:
+    Type: String
+  ProxyPrxOrgCodeS3ObjectVersion:
     Type: String
   PRXUploadAccessKey:
     Type: String
@@ -143,6 +148,8 @@ Mappings:
   ALBListenerRulePriorityMap:
     Exchange:
       prefix: 13
+    ExchangeApi:
+      prefix: 14
     Cms:
       prefix: 15
     Play:
@@ -192,6 +199,10 @@ Resources:
       Parameters:
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
+        VPCSecurityGroup: !GetAtt VPCStack.Outputs.SecurityGroup
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
         TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/"]]
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
@@ -199,6 +210,9 @@ Resources:
         PRXUploadAccessKey: !Ref PRXUploadAccessKey
         UploadLambdaCodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
         DovetailBytesLambdaCodeS3ObjectVersion: !Ref DovetailBytesLambdaCodeS3ObjectVersion
+        DovetailCountsLambdaCodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
+        CmsAudioLambdaCodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
+        CmsImageLambdaCodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -267,6 +281,7 @@ Resources:
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         # Exchange
         ExchangePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Exchange, prefix]
+        ExchangeApiPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, ExchangeApi, prefix]
         ExchangeEcrImageTag: !Ref ExchangeEcrImageTag
         ExchangeSecretsVersion: !Ref ExchangeSecretsVersion
         # Cms

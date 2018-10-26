@@ -9,6 +9,7 @@ import os
 import json
 from dateutil.parser import parse
 import datetime
+import re
 
 sns = boto3.client('sns')
 cloudwatch = boto3.client('cloudwatch')
@@ -65,6 +66,8 @@ def alarm_slack_attachment(alarm):
     eper = trigger['EvaluationPeriods']
     per = trigger['Period']
 
+    datapoints = re.findall(r'([0-9]+\.[0-9]+) ', alarm['NewStateReason'])
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
@@ -84,6 +87,10 @@ def alarm_slack_attachment(alarm):
             }, {
                 'title': 'Last 24 Hours',
                 'value': f"{len(list(alarms))} alarms",
+                'short': True,
+            }, {
+                'title': 'Datapoints',
+                'value': f"{', '.join(datapoints)}",
                 'short': True,
             }
         ]

@@ -1,3 +1,4 @@
+# stacks/container-apps/root.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Apps that run in containers (i.e. Docker)
@@ -48,6 +49,8 @@ Parameters:
   # Exchange Specific ##########################################################
   ExchangePlatformALBListenerPriorityPrefix:
     Type: String
+  ExchangeApiPlatformALBListenerPriorityPrefix:
+    Type: String
   ExchangeSecretsVersion:
     Type: String
   ExchangeEcrImageTag:
@@ -97,10 +100,15 @@ Resources:
         ContainerMemoryReservation: !Ref ContainerMemoryReservation
         ContainerCpu: !Ref ContainerCpu
         PlatformALBListenerPriorityPrefix: !Ref ExchangePlatformALBListenerPriorityPrefix
+        PlatformALBAltListenerPriorityPrefix: !Ref ExchangeApiPlatformALBListenerPriorityPrefix
         EcrImageTag: !Ref ExchangeEcrImageTag
         SecretsVersion: !Ref ExchangeSecretsVersion
         AppName: "exchange"
+        AltName: "api"
         CreateWorker: "true"
+        DesiredWebsProduction: "3"
+        DesiredWorkersProduction: "6"
+        ErrorAlarmThreshold: "5"
         ContainerPort: "3000"
         HealthCheckPath: "/"
       Tags:
@@ -109,6 +117,31 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  ExchangeSayWhenStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        ECSCluster: !Ref ECSCluster
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SecretsBase: !Ref SecretsBase
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        AppName: "exchange"
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-say-when.yml"]]
       TimeoutInMinutes: 5
   CmsStack:
     Type: "AWS::CloudFormation::Stack"

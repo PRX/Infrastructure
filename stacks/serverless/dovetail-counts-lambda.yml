@@ -1,0 +1,113 @@
+# stacks/serverless/dovetail-counts-lambda.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Dovetail counts lambda function
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  VPCSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
+  KinesisIn:
+    Type: AWS::SSM::Parameter::Value<String>
+  KinesisOut:
+    Type: AWS::SSM::Parameter::Value<String>
+  Kinesis404:
+    Type: AWS::SSM::Parameter::Value<String>
+  RedisUrl:
+    Type: AWS::SSM::Parameter::Value<String>
+  S3Bucket:
+    Type: AWS::SSM::Parameter::Value<String>
+  S3Prefix:
+    Type: AWS::SSM::Parameter::Value<String>
+Resources:
+  DovetailCountsLambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: KinesisWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref KinesisOut
+                  - !Ref Kinesis404
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  DovetailCountsLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-dovetail-counts-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail bytes sent counter
+      Environment:
+        Variables:
+          KINESIS_ARRANGEMENT_STREAM: !Ref Kinesis404
+          KINESIS_IMPRESSION_STREAM: !Ref KinesisOut
+          REDIS_URL: !Ref RedisUrl
+          S3_BUCKET: !Ref S3Bucket
+          S3_PREFIX: !Ref S3Prefix
+      Handler: index.handler
+      MemorySize: 2048
+      Role: !GetAtt DovetailCountsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 20
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref VPCSecurityGroup
+        SubnetIds:
+          - !Ref VPCSubnet1
+          - !Ref VPCSubnet2
+          - !Ref VPCSubnet3
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Dovetail-Counts-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  DovetailCountsKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 100
+      Enabled: true
+      EventSourceArn: !Ref KinesisIn
+      FunctionName: !Ref DovetailCountsLambdaFunction
+      StartingPosition: "LATEST"

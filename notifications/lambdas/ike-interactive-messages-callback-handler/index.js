@@ -156,15 +156,15 @@ function handleCodePipelineApproval(payload, callback) {
 
             switch (extractedParams.value) {
                 case REJECTED:
-                    attachment.text = attachment.text + `\n*@${payload.user.name} rejected this deploy*`;
+                    attachment.text = attachment.text + `\n*<@${payload.user.id}> rejected this deploy*`;
                     attachment.color = '#de0e0e';
                     break;
                 case APPROVED:
-                    attachment.text = attachment.text + `\n:white_check_mark: *@${payload.user.name} approved this deploy*`;
+                    attachment.text = attachment.text + `\n:white_check_mark: *<@${payload.user.id}> approved this deploy*`;
                     attachment.color = '#15da34';
                     break;
                 default:
-                    attachment.text = attachment.text + `\nUnknown action by @${payload.user.name}`;
+                    attachment.text = attachment.text + `\nUnknown action by <@${payload.user.id}>`;
                     attachment.color = '#cd0ede';
             }
 

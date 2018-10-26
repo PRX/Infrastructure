@@ -1,3 +1,4 @@
+# cdn/dovetail-cdn.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates a CloudFront distribution to origin-pull from a Dovetail S3 bucket,
@@ -175,6 +176,36 @@ Resources:
       Period: 60
       Statistic: Average
       Threshold: 0.01
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistributionFatal500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] Fatal 5XX"]]
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the Dovetail stitch CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 3
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Average
+      Threshold: 0.25
       TreatMissingData: notBreaching
       Unit: Percent
 Outputs:
