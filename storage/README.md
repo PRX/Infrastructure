@@ -1,10 +1,10 @@
 # Storage Stack
 
-This template is used for the storage stack that both CI and CD are dependent on.
+This template is used for the storage stack that both CI and CD are dependent on. Once the storage stack has been launched, the stack name can be passed to other stacks as a parameter, and specific bucket names can be imported based on predefined export identifiers.
 
 ## S3 Buckets
 
-There are many S3 buckets used as part of the CI/CD that are defined within CloudFormation templates, and don't need to be managed separately. A few buckets, though, must exist prior to launching any parts of this system, and must be configured correctly. The following describe each of those buckets:
+There are many S3 buckets used as part of the CI and CD systems that are defined within those respective CloudFormation templates, and don't need to be managed separately. A few buckets, though, must exist prior to launching any parts of this system, and must be configured correctly. The following describe each of those buckets:
 
 ### Support
 
