@@ -1,4 +1,4 @@
-# Invoked by: SNS Subscription
+# Invoked by: Approval CodePipeline Action (via SNS Subscription)
 # Returns: Error or status message
 #
 # Receives notifications from CodePipeline when an execution requires manual
