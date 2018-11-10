@@ -95,7 +95,7 @@ function handleRelease(payload, callback) {
             const body = JSON.stringify(msg);
             callback(null, { statusCode: 200, headers: {}, body });
         }
-      });
+    });
 }
 
 function main(event, context, callback) {
@@ -111,12 +111,14 @@ function main(event, context, callback) {
     if (requestSignature !== slackSignature) {
         // Bad request; bogus signature
         callback(null, { statusCode: 400, headers: {}, body: null });
-    } else if (payload.command === '/ops-rollback' && payload.channel_id === 'G3H72T468') {
+    } else if (payload.command === '/ops-rollback' && payload.channel_id === 'CDTU41WFP') {
         handleRollbackRequest(payload, callback);
-    } else if (payload.command === '/ops-release' && payload.channel_id === 'G3H72T468') {
+    } else if (payload.command === '/ops-release' && payload.channel_id === 'CDTU41WFP') {
         handleRelease(payload, callback);
     } else {
         // Unauthorized use
+        console.log(`Channel ID: ${payload.channel_id}`);
+
         const msg = {
             text: "Sorry, that command doesn't work here.",
             response_type: 'ephemeral',
