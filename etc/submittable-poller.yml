@@ -1,0 +1,217 @@
+# etc/workable-poller.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a Lambda function that polls the Submittable API and finds new
+  submissions, which get sent to Slack
+Parameters:
+  SubmittableAccessToken:
+    Type: String
+  SubmittableCategoryId:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+  DestinationSlackChannel:
+    Type: String
+  PollingPeriod:
+    Type: Number
+    Default: 1
+    Description: In minutes
+  PollingState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+Conditions:
+  IsPollingPeriodOne: !Equals [!Ref PollingPeriod, 1]
+Resources:
+  PollerFunctionIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  PollerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          const url = require('url');
+          const https = require('https');
+          const AWS = require('aws-sdk');
+
+          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+          const API_URL_BASE = 'api.submittable.com';
+
+          const SLACK_ICON = ':submittable:';
+          const SLACK_USERNAME = 'Submittable';
+
+          const PERIOD = (60 * process.env.POLLING_PERIOD);
+
+          function submittableApiData(apiUrl) {
+              return new Promise((resolve, reject) => {
+                  const options = url.parse(apiUrl);
+                  options.auth = `${process.env.SUBMITTABLE_ACCESS_TOKEN}:`;
+
+                  https.get(options, (res) => {
+                      let body = '';
+
+                      res.setEncoding('utf8');
+                      res.on('error', e => { reject(e) });
+                      res.on('data', chunk => body += chunk);
+
+                      res.on('end', () => {
+                          try {
+                              const data = JSON.parse(body);
+                              resolve(data);
+                          } catch (e) {
+                              reject(e);
+                          }
+                      });
+                  }).on('error', e => { reject(e) });
+              });
+          }
+
+          async function getSubmissions() {
+              const id = process.env.SUBMITTABLE_CATEGORY_ID;
+              const apiPath = `/v1/submissions?category_id[0]=${id}&dir=desc&count=200`;
+              const apiUrl = `${API_URL_BASE}${apiPath}`;
+
+              console.log(`Getting submissions for category: ${id}`);
+
+              const payload = await submittableApiData(apiUrl);
+
+              const now = new Date();
+              const periodThreshold = new Date(now.getTime() - (PERIOD * 1000));
+
+              console.log(`API return count: ${payload.items.length}`);
+              return payload.items.filter(s => {
+                  const dateCreated = new Date(submission.date_created + '-06:00');
+                  return (dateCreated > periodThreshold);
+              });
+          }
+
+          function messageForSubmissions(submissions) {
+              return {
+                  channel: process.env.DESTINATION_SLACK_CHANNEL,
+                  username: SLACK_USERNAME,
+                  icon_emoji: SLACK_ICON,
+                  attachments: submissions.map(s => {
+                      return {
+                          title: `${s.form.items[10].data} from ${s.form.items[1].data} (${s.form.items[2].data} – ${s.form.items[3].data})`,
+                          title_link: s.link,
+                          text: `${s.title} – ${s.form.items[11].data}`
+                      };
+                  }),
+              };
+          }
+
+          function publishMessage(message) {
+              return new Promise((resolve, reject) => {
+                  const json = JSON.stringify(message);
+
+                  sns.publish({
+                      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+                      Message: json,
+                  }, (err) => {
+                      if (err) {
+                          reject(err);
+                      } else {
+                          resolve();
+                      }
+                  });
+              });
+          }
+
+          exports.handler = async (event) => {
+              const submissions = await getSubmissions();
+              console.log(`API return count: ${payload.items.length}`);
+              await publishMessage(messageForSubmissions(submissions));
+          };
+      Description: >
+        Gets recent job applicants from Workable and sends them to Slack via the
+        Slack relay
+      Environment:
+        Variables:
+          SUBMITTABLE_ACCESS_TOKEN: !Ref SubmittableAccessToken
+          SUBMITTABLE_CATEGORY_ID: !Ref SubmittableCategoryId
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+          POLLING_PERIOD: !Ref PollingPeriod
+          DESTINATION_SLACK_CHANNEL: !Ref DestinationSlackChannel
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt PollerFunctionIamRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: Project
+          Value: Misc
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 16
+  PollerEventRuleIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "lambda:InvokeFunction"
+                Resource:
+                  - !GetAtt PollerFunction.Arn
+  PollerEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Invokes the Workable poller function
+      RoleArn: !GetAtt PollerEventRuleIamRole.Arn
+      ScheduleExpression:
+        Fn::If:
+          - IsPollingPeriodOne
+          - !Sub "rate(${PollingPeriod} minute)"
+          - !Sub "rate(${PollingPeriod} minutes)"
+      State: !Ref PollingState
+      Targets:
+        - Arn: !GetAtt PollerFunction.Arn
+          Id: !Sub "${AWS::StackName}.PollerFunction"
+  PollerFunctionEventInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PollerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PollerEventRule.Arn
