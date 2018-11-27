@@ -1,0 +1,120 @@
+# etc/cms-resource-reporter.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Handles CMS Resource SNS Events
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+  CmsSeriesCreateSnsTopicArn:
+    Type: String
+Resources:
+  LambdaIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  PushSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt MessageHandlerFunction.Arn
+      Protocol: "lambda"
+      Region: "us-east-1"
+      TopicArn: !Ref CmsSeriesCreateSnsTopicArn
+  LambdaResourcePolicy:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !GetAtt MessageHandlerFunction.Arn
+      Principal: "sns.amazonaws.com"
+      Action: "lambda:InvokeFunction"
+      SourceArn: !Ref CmsSeriesCreateSnsTopicArn 
+  MessageHandlerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: >
+          var AWS = require("aws-sdk");
+          exports.handler = async (event, context) => {
+              var message = JSON.parse(event["Records"][0]["Sns"]["Message"]);
+              var event = JSON.parse(message["body"]);
+
+              var resourceLink = event['_links']['self']['href'];
+              var fromImport = event['_links']['prx:podcast-imports']['count'] > 0;
+
+
+              var importLabel = fromImport ? "import" : "publish"
+              var eventText = `A new series was created on CMS via *${importLabel}*:
+          _${event['title']}_
+
+          https://cms.prx.org${resourceLink}`
+
+              var relayParams = {
+                  channel: "#cms-series-resources",
+                  username: 'CMS Activity Reporter',
+                  icon_emoji: ':fleur_de_lis:',
+                  text: eventText
+              };
+
+              var sns = new AWS.SNS({region: 'us-east-1'});
+              var relayParams = {
+                  Message: JSON.stringify(relayParams), 
+                  Subject: "CMS Resource Reporter: Resource Action Discovered",
+                  TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN
+              };
+
+              return new Promise(function(resolve, reject) {
+                  sns.publish(relayParams, (err, response) => {
+                      if (err) {
+                          reject(relayParams);
+                      }
+                      else {
+                          resolve(relayParams);
+                      }
+                  });
+              });
+          };
+      Description: Listens for CMS SNS actions, routes them to slack
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 8
+  LambdaErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[CMSResourceReporter][Lambda][Error] Invocation 4XX"
+      AlarmDescription:
+        The error rate on the CMS Resource reporter has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MessageHandlerFunction
