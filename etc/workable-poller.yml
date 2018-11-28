@@ -12,6 +12,14 @@ Parameters:
     Type: Number
     Default: 5
     Description: In minutes
+  PollingState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+Conditions:
+  IsPollingPeriodOne: !Equals [!Ref PollingPeriod, 1]
 Resources:
   PollerFunctionIamRole:
     Type: "AWS::IAM::Role"
@@ -186,8 +194,12 @@ Resources:
       Description: >
         Invokes the Workable poller function
       RoleArn: !GetAtt PollerEventRuleIamRole.Arn
-      ScheduleExpression: !Sub "rate(${PollingPeriod} minutes)"
-      State: ENABLED
+      ScheduleExpression:
+        Fn::If:
+          - IsPollingPeriodOne
+          - !Sub "rate(${PollingPeriod} minute)"
+          - !Sub "rate(${PollingPeriod} minutes)"
+      State: !Ref PollingState
       Targets:
         - Arn: !GetAtt PollerFunction.Arn
           Id: !Sub "${AWS::StackName}.PollerFunction"
