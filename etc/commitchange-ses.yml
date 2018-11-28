@@ -13,6 +13,11 @@ Parameters:
     Type: String
   RecipientEmailAddress:
     Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
 Resources:
   SnsTopic:
     Type: AWS::SNS::Topic
@@ -144,3 +149,9 @@ Resources:
       Endpoint: !GetAtt MessageHandlerFunction.Arn
       Protocol: lambda
       TopicArn: !Ref SnsTopic
+  MessageHandlerFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${MessageHandlerFunction}"
+      RetentionInDays: 5

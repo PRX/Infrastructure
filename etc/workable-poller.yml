@@ -18,6 +18,11 @@ Parameters:
     AllowedValues:
       - ENABLED
       - DISABLED
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
 Conditions:
   IsPollingPeriodOne: !Equals [!Ref PollingPeriod, 1]
 Resources:
@@ -210,3 +215,9 @@ Resources:
       FunctionName: !Ref PollerFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt PollerEventRule.Arn
+  PollerFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${PollerFunction}"
+      RetentionInDays: 5

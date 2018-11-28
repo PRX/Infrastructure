@@ -8,6 +8,11 @@ Parameters:
     Type: String
   SlackMessageRelayTopicArn:
     Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
 Resources:
   PollerFunctionIamRole:
     Type: "AWS::IAM::Role"
@@ -191,3 +196,9 @@ Resources:
       FunctionName: !Ref PollerFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt PollerEventRule.Arn
+  PollerFunctionLogRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${PollerFunction}"
+      RetentionInDays: 5
