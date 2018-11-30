@@ -1,10 +1,14 @@
 # etc/cms-resource-reporter.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Handles CMS Resource SNS Events
+Description: Handles Resource SNS Events, Sends Report to Slack
 Parameters:
   SlackMessageRelayTopicArn:
     Type: String
-  CmsSeriesCreateSnsTopicArn:
+  ResourceSnsTopicArn:
+    Type: String
+  DescriptiveAttributeKeys:
+    Type: CommaDelimitedList
+  SlackChannel:
     Type: String
 Resources:
   LambdaIamRole:
@@ -38,14 +42,14 @@ Resources:
       Endpoint: !GetAtt MessageHandlerFunction.Arn
       Protocol: "lambda"
       Region: "us-east-1"
-      TopicArn: !Ref CmsSeriesCreateSnsTopicArn
+      TopicArn: !Ref ResourceSnsTopicArn
   LambdaResourcePolicy:
     Type: "AWS::Lambda::Permission"
     Properties:
       FunctionName: !GetAtt MessageHandlerFunction.Arn
       Principal: "sns.amazonaws.com"
       Action: "lambda:InvokeFunction"
-      SourceArn: !Ref CmsSeriesCreateSnsTopicArn 
+      SourceArn: !Ref ResourceSnsTopicArn 
   MessageHandlerFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -53,48 +57,45 @@ Resources:
         ZipFile: >
           var AWS = require("aws-sdk");
           exports.handler = async (event, context) => {
-              var message = JSON.parse(event["Records"][0]["Sns"]["Message"]);
-              var event = JSON.parse(message["body"]);
+              let message = JSON.parse(event["Records"][0]["Sns"]["Message"]);
+              let eventBody = JSON.parse(message["body"]);
 
-              var resourceLink = event['_links']['self']['href'];
-              var fromImport = event['_links']['prx:podcast-imports']['count'] > 0;
+              let descriptiveAttrKeys = process.env.DESCRIPTIVE_ATTRIBUTE_KEYS.split(',');
+              let resourceActionDesc = process.env.RESOURCE_SNS_TOPIC_ARN
+              .split(":")
+              .reverse()[0];
 
+              let slackMsg = `${resourceActionDesc}:` + '\n' +
+              descriptiveAttrKeys.map((key) => `${key}: ${eventBody[key]}`)
+              .join('\n');
 
-              var importLabel = fromImport ? "import" : "publish"
-              var eventText = `A new series was created on CMS via *${importLabel}*:
-          _${event['title']}_
-
-          https://cms.prx.org${resourceLink}`
-
-              var relayParams = {
-                  channel: "#cms-series-resources",
-                  username: 'CMS Activity Reporter',
+              let relayParams = {
+                  channel: process.env.SLACK_CHANNEL,
+                  username: 'Resource Activity Reporter',
                   icon_emoji: ':fleur_de_lis:',
-                  text: eventText
+                  text: slackMsg
               };
 
               var sns = new AWS.SNS({region: 'us-east-1'});
-              var relayParams = {
-                  Message: JSON.stringify(relayParams), 
-                  Subject: "CMS Resource Reporter: Resource Action Discovered",
+              var snsWrapper = {
+                  Message: JSON.stringify(relayParams),
+                  Subject: "Resource Reporter: Resource Action Discovered",
                   TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN
               };
 
-              return new Promise(function(resolve, reject) {
-                  sns.publish(relayParams, (err, response) => {
-                      if (err) {
-                          reject(relayParams);
-                      }
-                      else {
-                          resolve(relayParams);
-                      }
-                  });
-              });
+              await sns.publish(snsWrapper).promise();
+              return relayParams;
           };
       Description: Listens for CMS SNS actions, routes them to slack
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+          RESOURCE_SNS_TOPIC_ARN: !Ref ResourceSnsTopicArn
+          SLACK_CHANNEL: !Ref SlackChannel
+          DESCRIPTIVE_ATTRIBUTE_KEYS:
+            !Join
+              - ","
+              - !Ref DescriptiveAttributeKeys
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaIamRole.Arn
