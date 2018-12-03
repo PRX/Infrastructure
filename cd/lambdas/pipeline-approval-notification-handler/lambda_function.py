@@ -115,7 +115,7 @@ def approval_action_attachment(notification):
     release_admonition = """Release Procedure:
     - Gather up your notes for each principal feature change
     - Press "Approve" below to trigger *ExecuteChangeSet* and deploy:
-    - Post your release notes to #release-notes in slack
+    - Post your release notes to #tech-releases in slack
     """
 
     return {
