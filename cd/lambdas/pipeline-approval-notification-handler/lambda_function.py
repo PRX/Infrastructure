@@ -112,6 +112,12 @@ def approval_action_attachment(notification):
         'value': REJECTED
     }
 
+    release_admonition = """Release Procedure:
+    - Gather up your notes for each principal feature change
+    - Press "Approve" below to trigger *ExecuteChangeSet* and deploy:
+    - Post your release notes to #tech-releases in slack
+    """
+
     return {
         'fallback': f"{notification['approval']['pipelineName']} {notification['approval']['stageName']}: {notification['approval']['actionName']}",
         'color': '#FF8400',
@@ -119,7 +125,7 @@ def approval_action_attachment(notification):
         'author_link': notification['consoleLink'],
         'title': f"{notification['approval']['stageName']}: {notification['approval']['actionName']}",
         'title_link': notification['approval']['approvalReviewLink'],
-        'text': 'Manual approval required to trigger *ExecuteChangeSet*',
+        'text': release_admonition,
         'footer': notification['region'],
         'ts': int(time.time()),
         'mrkdwn_in': ['text'],
