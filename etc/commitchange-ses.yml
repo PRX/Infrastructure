@@ -69,6 +69,7 @@ Resources:
           const AWS = require('aws-sdk');
 
           const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+          const s3 = new AWS.S3({apiVersion: '2006-03-01'});
 
           const SLACK_ICON = ':commitchange:';
           const SLACK_USERNAME = 'CommitChange';
@@ -90,6 +91,37 @@ Resources:
               });
           }
 
+          function getCount() {
+              return new Promise((resolve, reject) => {
+                  s3.getObject({
+                      Bucket: 'farski-sandbox-prx',
+                      Key: "2018-cc-count.txt"
+                  }, (err, data) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(+data.Body.toString('utf8'));
+                    }
+                  });
+              });
+          }
+
+          function setCount(count) {
+              return new Promise((resolve, reject) => {
+                  s3.putObject({
+                      Body: `${count}`,
+                      Bucket: 'farski-sandbox-prx',
+                      Key: "2018-cc-count.txt"
+                  }, (err, data) => {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                  });
+              });
+          }
+
           exports.handler = async (event) => {
               const message = JSON.parse(event['Records'][0]['Sns']['Message']);
               // message has: notificationType, receipt, mail, content
@@ -104,7 +136,20 @@ Resources:
               const amount = content.match(/\$([0-9,]+)/)[1];
               const isRecurring = content.includes('Every 1 month');
 
-              const text = `${name || 'Anonymous'}: $${amount} ${isRecurring ? '(monthly)' : ''}`;
+              const oldCount = await getCount();
+              const newCount = oldCount + 1;
+              await setCount(newCount);
+
+              let icon = '';
+              if (+amount >= 1000) {
+                  icon = ':rotating_light::moneybag::rotating_light:';
+              } else if (+amount >= 250) {
+                  icon = ':moneybag::moneybag:';
+              } else if (+amount >= 100) {
+                  icon = ':moneybag:';
+              }
+
+              const text = `${icon}#${newCount} – ${name || 'Anonymous'}: $${amount} ${isRecurring ? '(monthly)' : ''}`;
 
               const campaignName = 'Radiotopia 2018 Fundraiser';
 
