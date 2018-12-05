@@ -19,6 +19,8 @@ Parameters:
     Type: String
   WildcardCertificateArn:
     Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   # API Gateway
   UploadRestApi:
@@ -201,12 +203,12 @@ Resources:
       AlarmDescription:
         The error rate on the upload lambda has exceeded 0
       ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
+      EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
-      Period: "60"
+      Period: 60
       Statistic: Sum
-      Threshold: "0"
+      Threshold: 0
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
@@ -226,12 +228,12 @@ Resources:
       AlarmDescription:
         Throttles on the upload lambda has exceeded 0
       ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
+      EvaluationPeriods: 1
       MetricName: Throttles
       Namespace: AWS/Lambda
-      Period: "60"
+      Period: 60
       Statistic: Sum
-      Threshold: "0"
+      Threshold: 0
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
@@ -251,22 +253,28 @@ Resources:
       AlarmDescription:
         At least one invocation duration exceeded 225ms
       ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: "1"
+      EvaluationPeriods: 1
       MetricName: Duration
       Namespace: AWS/Lambda
-      Period: "60"
+      Period: 60
       Statistic: Maximum
-      Threshold: "225"
+      Threshold: 225
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadLambdaFunction
+  UploadLambdaLogExpiration:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${UploadLambdaFunction}"
+      RetentionInDays: 60
 Outputs:
   ApiDomainName:
     Description: The custom API domain name
     Value: !Ref UploadRestApiDomainName
   DistributionDomainName:
     Description: >
-        The Amazon CloudFront distribution domain name that's mapped to the
-        custom domain name
+      The Amazon CloudFront distribution domain name that's mapped to the
+      custom domain name
     Value: !GetAtt UploadRestApiDomainName.DistributionDomainName
