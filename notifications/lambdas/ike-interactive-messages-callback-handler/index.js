@@ -4,20 +4,80 @@
 // When a user acts on an interactive message in Slack (eg., clicks a button),
 // Slack will send a request to a callback This function handles those requests,
 // such as for approving CloudFormation deploys through CodePipeline.
+//
+// This handles all requsts to the Slack app's Action URL, which includes
+// interactive messages, as well as dialogs and perhaps other requests as well.
 
 const querystring = require('querystring');
 const crypto = require('crypto');
+const url = require('url');
+const https = require('https');
 
 const aws = require('aws-sdk');
 const s3 = new aws.S3({apiVersion: '2006-03-01'});
 const codepipeline = new aws.CodePipeline({apiVersion: '2015-07-09'});
+const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
 const APPROVED = 'Approved';
 const REJECTED = 'Rejected';
 
 const CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = 'codepipeline-approval-action';
-
+const RELEASE_NOTES_DIALOG_CALLBACK = 'release-notes-dialog';
 const ROLLBACK_VERSION_SELECTION_CALLBACK = 'rollback-version-selection-action';
+
+const SLACK_API_DIALOG_OPEN = 'https://slack.com/api/dialog.open';
+
+// Calls a method in the Slack Web API with a provided POST body. The payload
+// argument is an object. If responseProperty is provided, rather than the
+// entire response being resolved from the promise, only that property will be.
+// https://api.slack.com/web
+// https://api.slack.com/methods
+function slackWebMethod(uri, responseProperty, payload) {
+    return new Promise((resolve, reject) => {
+        const urlencodedBody = querystring.stringify(payload);
+
+        // Setup request options
+        const options = url.parse(uri);
+        options.method = 'POST';
+        options.headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(urlencodedBody),
+        };
+
+        const method = uri.split('/').pop();
+
+        // Request with response handler
+        console.log(`[Slack] Calling ${method}`);
+        const req = https.request(options, (res) => {
+            res.setEncoding('utf8');
+
+            let json = '';
+            res.on('data', (chunk) => { json += chunk; });
+            res.on('end', () => {
+                try {
+                    const resPayload = JSON.parse(json);
+
+                    if (resPayload.ok) {
+                        console.error(`[Slack] ${method} ok`);
+                        resolve(resPayload[responseProperty] || resPayload);
+                    } else {
+                        console.error(`[Slack] ${method} error`);
+                        reject(new Error(resPayload.error));
+                    }
+                } catch (e) {
+                    console.error(`[Slack] Error parsing ${method}`);
+                    reject(e);
+                }
+            });
+        });
+
+        // Generic request error handling
+        req.on('error', e => reject(e));
+
+        req.write(urlencodedBody);
+        req.end();
+    });
+}
 
 exports.handler = (event, context, callback) => {
     try {
@@ -34,9 +94,7 @@ function processEvent(event, context, callback) {
     const payload = JSON.parse(body.payload);
 
     // Top-level properties of the message action response object
-    const action = payload.actions[0];
     const callbackId = payload.callback_id;
-    const token = payload.token;
 
     // Slack signing secret
     const slackRequestTimestamp = event.headers['X-Slack-Request-Timestamp'];
@@ -52,16 +110,36 @@ function processEvent(event, context, callback) {
         // Handle each callback ID appropriately
         switch (callbackId) {
             case CODEPIPELINE_MANUAL_APPROVAL_CALLBACK:
-                handleCodePipelineApproval(payload, callback);
+                handleReleaseButtons(payload, callback);
                 break;
             case ROLLBACK_VERSION_SELECTION_CALLBACK:
                 handleRollbackCallback(payload, callback);
+                break;
+            case RELEASE_NOTES_DIALOG_CALLBACK:
+                handleReleaseNotesDialog(payload, callback);
                 break;
             default:
                 // Unknown message callback
                 callback(null, { statusCode: 400, headers: {}, body: null });
         }
     }
+}
+
+function handleReleaseNotesDialog(payload, callback) {
+    console.log(JSON.stringify(payload));
+
+    sns.publish({
+        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+        Message: JSON.stringify({
+            channel: '#tech-releses',
+            username: 'Release Notes',
+            icon_emoji: ':rabbit:',
+            text: `<@${payload.user.id}>: ${payload.submission.release_notes}`,
+        }),
+    }, () => {
+        callback(null, { statusCode: 200, headers: {}, body: null });
+    });
+
 }
 
 function handleRollbackCallback(payload, callback) {
@@ -112,7 +190,14 @@ function cancelRollback(payload, callback) {
     callback(null, { statusCode: 200, headers: {}, body: body });
 }
 
-function handleCodePipelineApproval(payload, callback) {
+// This will get called for both the Approve and Approve With Notes buttons.
+// Both will trigger an IMMEDIATE deploy, but the Aw/N button will also open a
+// dialog prompting the user for release notes related to the deploy. (The
+// reason the deploy is not delayed until after the release notes dialog is
+// because of the added complexity with updating the message in Slack to
+// reflect the deployment with the indirection introduced with the dialog. It
+// is possible, but was not done to save time.)
+function handleReleaseButtons(payload, callback) {
     const action = payload.actions[0];
 
     // The manual approval notifications params need to be extracted from
@@ -168,8 +253,35 @@ function handleCodePipelineApproval(payload, callback) {
                     attachment.color = '#cd0ede';
             }
 
+            // The message to replace the one that included the Release buttons
             const body = JSON.stringify(msg);
-            callback(null, { statusCode: 200, headers: {}, body: body });
+
+            // If the Approve With Notes button was pressed open a dialog,
+            // otherwise we're done
+            if (action.name !== 'notes') {
+                callback(null, { statusCode: 200, headers: {}, body: body });
+            } else {
+                slackWebMethod(SLACK_API_DIALOG_OPEN, null, {
+                    trigger_id: payload.trigger_id,
+                    token: process.env.SLACK_ACCESS_TOKEN,
+                    dialog: JSON.stringify({
+                        callback_id: RELEASE_NOTES_DIALOG_CALLBACK,
+                        state: action.value,
+                        title: 'Release Notes',
+                        submit_label: 'Post',
+                        elements: [
+                            {
+                                type: 'textarea',
+                                label: 'Release notes',
+                                name: 'release_notes',
+                                hint: 'These will be posted in #tech-releases.',
+                            },
+                        ],
+                    }),
+                }).then(res => {
+                    callback(null, { statusCode: 200, headers: {}, body: body });
+                });
+            }
         }
     });
 }
