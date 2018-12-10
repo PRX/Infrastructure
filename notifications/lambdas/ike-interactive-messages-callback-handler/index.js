@@ -131,7 +131,7 @@ function handleReleaseNotesDialog(payload, callback) {
     sns.publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
         Message: JSON.stringify({
-            channel: '#tech-releses',
+            channel: '#tech-releases',
             username: 'Release Notes',
             icon_emoji: ':rabbit:',
             text: `<@${payload.user.id}>: ${payload.submission.release_notes}`,
