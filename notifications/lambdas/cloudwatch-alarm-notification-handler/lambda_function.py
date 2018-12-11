@@ -7,6 +7,7 @@
 import boto3
 import os
 import json
+import urllib.parse
 from dateutil.parser import parse
 import datetime
 import re
@@ -47,6 +48,11 @@ def color_for_alarm(alarm):
 def alarm_slack_attachment(alarm):
     trigger = alarm['Trigger']
 
+    alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+    alarm_info = alarm_infos['MetricAlarms'][0]
+
+    alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
+
     alarm_history = cloudwatch.describe_alarm_history(
         AlarmName=alarm['AlarmName'],
         HistoryItemType='StateUpdate',
@@ -68,11 +74,16 @@ def alarm_slack_attachment(alarm):
 
     datapoints = re.findall(r'([0-9]+\.[0-9]+) ', alarm['NewStateReason'])
 
+    cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
+    alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
+    alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
-        'text': f"{trigger['MetricName']}: {alarm['NewStateReason']}",
+        'title_link': alarm_console_url,
+        'text': f"`{trigger['MetricName']}`: {alarm['NewStateReason']}",
         'footer': f"{trigger['Namespace']} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp()),
         'fields': [
@@ -100,6 +111,11 @@ def alarm_slack_attachment(alarm):
 def ok_slack_attachment(alarm):
     duration = 'Unavailable'
 
+    alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+    alarm_info = alarm_infos['MetricAlarms'][0]
+
+    alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
+
     now = datetime.datetime.now(datetime.timezone.utc)
 
     alarm_history = cloudwatch.describe_alarm_history(
@@ -123,10 +139,15 @@ def ok_slack_attachment(alarm):
         dif = ok_time - alarm_time
         duration = f"{round(dif.total_seconds() / 60)} min."
 
+        cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
+        alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
+        alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        'title_link': alarm_console_url,
         'text': f"Alarm duration: {duration}",
         'footer': f"{alarm['Trigger']['Namespace']} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp())
