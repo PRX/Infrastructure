@@ -6,6 +6,10 @@
 # deploy. Information regarding the pending changes to the stack are queried
 # from CloudFormation, and sent to Slack along with control to make a decision
 # about the deploy.
+#
+# This creates the Deploy button for production deploys, but does NOT handle
+# what happens when the button is pressed. That is handled by
+# notifications/ike-interactive-messages-callback-handler.
 
 import boto3
 import json
@@ -140,6 +144,17 @@ def approval_action_attachment(notification):
                 'confirm': {
                     'title': 'Production Deploy Approval',
                     'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
+                    'ok_text': 'Deploy',
+                    'dismiss_text': 'Cancel'
+                }
+            }, {
+                'type': 'button',
+                'name': 'notes',
+                'text': 'Approve with notes',
+                'value': json.dumps(approved_params),
+                'confirm': {
+                    'title': 'Production Deploy Approval',
+                    'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack, even if you choose not to enter release notes!',
                     'ok_text': 'Deploy',
                     'dismiss_text': 'Cancel'
                 }
