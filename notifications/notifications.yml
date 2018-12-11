@@ -66,6 +66,11 @@ Parameters:
     Type: String
   IkeSlackSigningSecret:
     Type: String
+  IkeOauthAccessToken:
+    Type: String
+    Description: >
+      The OAuth access token generated when Ike was installed (e.g.,
+      xoxp-123456789…)
   SnsTopicPolicyPublishAllowanceAccountIds:
     Type: CommaDelimitedList
     Description: >
@@ -819,6 +824,15 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelaySnsTopic
         - PolicyName: CodePipelineApprovalPolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -871,14 +885,16 @@ Resources:
       Environment:
         Variables:
           SLACK_SIGNING_SECRET: !Ref IkeSlackSigningSecret
+          SLACK_ACCESS_TOKEN: !Ref IkeOauthAccessToken
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue:
               !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
           INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt IkeHandlerLambdaIamRole.Arn
-      Runtime: nodejs6.10
+      Runtime: nodejs8.10
       Tags:
         - Key: Project
           Value: Infrastructure
