@@ -16,7 +16,7 @@ const https = require('https');
 const aws = require('aws-sdk');
 const s3 = new aws.S3({apiVersion: '2006-03-01'});
 const codepipeline = new aws.CodePipeline({apiVersion: '2015-07-09'});
-const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+const sns = new aws.SNS({ apiVersion: '2010-03-31' });
 
 const APPROVED = 'Approved';
 const REJECTED = 'Rejected';
