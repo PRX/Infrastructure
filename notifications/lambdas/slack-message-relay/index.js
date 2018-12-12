@@ -16,6 +16,7 @@ exports.handler = (event, context, callback) => {
     try {
         const sns = event.Records[0].Sns;
         console.log(`SNS MessageId: ${sns.MessageId}`);
+        console.log(`Channel: #${JSON.parse(sns.Message).channel}`);
 
         const attrs = sns.MessageAttributes;
 
