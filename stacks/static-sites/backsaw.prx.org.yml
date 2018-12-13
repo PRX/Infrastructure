@@ -1,0 +1,28 @@
+# stacks/static-sites/backsaw.prx.org.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Backsaw static site deployment
+Parameters:
+  CodeS3Bucket:
+    Type: String
+  StaticSiteArchiveS3ObjectVersion:
+    Type: String
+  StaticSiteS3StagingDeployBucket:
+    Type: AWS::SSM::Parameter::Value<String>
+  StaticSiteS3ProductionDeployBucket:
+    Type: AWS::SSM::Parameter::Value<String>
+  EnvironmentType:
+    Type: String
+  S3StaticSiteDeployFunctionArn:
+    Type: String
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+Resources:
+  S3StaticDeploy:
+    Type: "Custom::S3StaticDeploy"
+    Properties:
+      ServiceToken: !Ref S3StaticSiteDeployFunctionArn
+      Region: !Ref AWS::Region
+      StaticSiteArchiveS3Bucket: !Ref CodeS3Bucket
+      StaticSiteArchiveS3Object: "s3-static/PRX-backsaw.prx.org.zip"
+      StaticSiteArchiveS3ObjectVersion: !Ref StaticSiteArchiveS3ObjectVersion
+      StaticSiteS3DeployBucket: !If [IsProduction, !Ref StaticSiteS3ProductionDeployBucket, !Ref StaticSiteS3StagingDeployBucket]
