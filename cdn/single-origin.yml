@@ -31,6 +31,8 @@ Conditions:
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
   HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
   HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
+  HasCloudFrontCustom403ErrorResponseCode: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponseCode, ""]]
+  HasCloudFrontCustom403ErrorResponsePagePath: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponsePagePath, ""]]
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
@@ -62,6 +64,8 @@ Metadata:
           - CloudFrontLoggingBucketPrefix
           - CloudFrontOriginAccess
           - CloudFrontOriginProtocolPolicy
+          - CloudFrontCustom403ErrorResponseCode
+          - CloudFrontCustom403ErrorResponsePagePath
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -100,6 +104,10 @@ Metadata:
         default: Origin protocol policy
       CloudFrontViewerProtocolPolicy:
         default: Viewer protocol policy
+      CloudFrontCustom403ErrorResponseCode:
+        default: Custom 403 error response code
+      CloudFrontCustom403ErrorResponsePagePath:
+        default: Custom 403 error response page
       AcmCertificateArn:
         default: Certificate ARN
       ValidationDomain:
@@ -220,6 +228,14 @@ Parameters:
       - allow-all
       - redirect-to-https
       - https-only
+  CloudFrontCustom403ErrorResponseCode:
+    Type: String
+    Description: >
+      A custom HTTP resonse code to return when a 403 is returned by the origin
+  CloudFrontCustom403ErrorResponsePagePath:
+    Type: String
+    Description: >
+      A custom page to return when a 403 is returned by the origin
   AcmCertificateArn:
     Type: String
     Description: >
@@ -260,8 +276,11 @@ Resources:
         # CacheBehaviors:
           # CacheBehavior
         Comment: !Ref CloudFrontComment
-        # CustomErrorResponses:
-        #   CustomErrorResponse
+        CustomErrorResponses:
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 403
+            ResponseCode: !If [HasCloudFrontCustom403ErrorResponseCode, !Ref CloudFrontCustom403ErrorResponseCode, !Ref "AWS::NoValue"]
+            ResponsePagePath: !If [HasCloudFrontCustom403ErrorResponsePagePath, !Ref CloudFrontCustom403ErrorResponsePagePath, !Ref "AWS::NoValue"]
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
