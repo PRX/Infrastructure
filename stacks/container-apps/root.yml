@@ -69,6 +69,13 @@ Parameters:
     Type: String
   JingleEcrImageTag:
     Type: String
+  # Courier Specific ###############################################################
+  CourierPlatformALBListenerPriorityPrefix:
+    Type: String
+  CourierSecretsVersion:
+    Type: String
+  CourierEcrImageTag:
+    Type: String
 Resources:
   ExchangeStack:
     Type: "AWS::CloudFormation::Stack"
@@ -142,6 +149,50 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-say-when.yml"]]
+      TimeoutInMinutes: 5
+  CourierStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref CourierPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref CourierEcrImageTag
+        SecretsVersion: !Ref CourierSecretsVersion
+        AppName: "cms"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
       TimeoutInMinutes: 5
   CmsStack:
     Type: "AWS::CloudFormation::Stack"
