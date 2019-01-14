@@ -11,6 +11,8 @@ Parameters:
     Description: >
       The Parameter Store key for the log group retention policy function's
       ARN (not the ARN itself)
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
 Resources:
   # API Gateway
   RestApi:
@@ -164,41 +166,21 @@ Resources:
 
               const remaining = (total_tickets - total_sold);
 
-              const attendees = [`<mailto:${order.email}|${order.name}>`];
-
-              if (order.attendees.length > 1) {
-                  attendees.push(`${order.attendees.length - 1}`);
-              }
+              const tickets = `${order.attendees.length} ticket${order.attendees.length > 1 ? 's' : ''}`;
 
               const adminUrl = `https://www.eventbrite.com/myevent?eid=${event.id}`;
               const orderUrl = `https://www.eventbrite.com/reports?eid=${event.id}&rid=h&filterby=all,${order.id}`;
 
-              const order_ts = (Date.parse(order.created) / 1000);
+              // const order_ts = (Date.parse(order.created) / 1000);
 
               return {
                   channel: SLACK_CHANNEL,
                   username: SLACK_USERNAME,
                   icon_emoji: SLACK_ICON,
-                  attachments: [
-                      {
-                          fallback: `${order.name} ordered ${order.attendees.length} ticket for ${event.name.text}`,
-                          pretext: `<${event.url}|${event.name.text}> <${adminUrl}|:gear:>`,
-                          ts: order_ts,
-                          title: `Order #${order.id}`,
-                          title_link: orderUrl,
-                          fields: [
-                              {
-                                  title: "Attendees",
-                                  value: attendees.join(' + '),
-                                  short: true
-                              }, {
-                                  title: "Remaining",
-                                  value: `${remaining} of ${total_tickets}`,
-                                  short: true
-                              }
-                          ]
-                      }
-                  ],
+                  text: [
+                      `<mailto:${order.email}|${order.name}> ordered <${orderUrl}|${tickets}> for <${event.url}|${event.name.text}> (<${adminUrl}|Manage>)`,
+                      `> ${total_sold} tickets ordered – ${remaining} remaining`
+                  ].join('\n')
               };
           }
 
@@ -243,12 +225,12 @@ Resources:
     Properties:
       ActionsEnabled: true
       AlarmName: "[Eventbrite][Lambda][Error] Invocation 4XX"
-      # AlarmActions:
-      #   - !Ref OpsErrorMessagesSnsTopicArn
-      # InsufficientDataActions:
-      #   - !Ref OpsErrorMessagesSnsTopicArn
-      # OKActions:
-      #   - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription:
         The error rate on the Eventbrite lambda has exceeded 0
       ComparisonOperator: GreaterThanThreshold

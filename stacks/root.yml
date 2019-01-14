@@ -100,6 +100,8 @@ Parameters:
     Type: String
   BetaPrxOrgArchiveS3ObjectVersion:
     Type: String
+  BacksawArchiveS3ObjectVersion:
+    Type: String
   # Parameter Overrides
   InfrastructureStorageStackName:
     Type: String
@@ -183,6 +185,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         RadiotopiaRadioArchiveS3ObjectVersion: !Ref RadiotopiaRadioArchiveS3ObjectVersion
         BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
+        BacksawArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -514,32 +517,6 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
-      TimeoutInMinutes: 5
-  UploadLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        PRXUploadAccessKey: !Ref PRXUploadAccessKey
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        WildcardCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
-        CodeS3Bucket:
-          Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
-        LogGroupRetentionPolicyFunctionArn: "/prx/infrastructure/log-group-retention-policy-function-arn"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/upload.prx.org.yml"]]
       TimeoutInMinutes: 5
   PlayStack:
     Type: "AWS::CloudFormation::Stack"
