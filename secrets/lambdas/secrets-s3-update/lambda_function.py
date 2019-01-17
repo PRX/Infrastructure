@@ -67,7 +67,10 @@ def update_config(env, changes):
     env_config = get_config(env)
     for change in changes:
         app_key = change['app'].title() + 'SecretsVersion'
-        current_val = env_config['Parameters'][app_key]
+        if app_key in env_config['Parameters']:
+            current_val = env_config['Parameters'][app_key]
+        else:
+            current_val = None
         new_val = change['version']
         print("...Set %s from %s to %s..." % (app_key, current_val, new_val))
         env_config['Parameters'][app_key] = new_val
