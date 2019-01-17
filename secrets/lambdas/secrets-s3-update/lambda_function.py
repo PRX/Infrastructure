@@ -71,7 +71,6 @@ def update_config(env, changes):
             current_val = env_config['Parameters'][app_key]
         else:
             current_val = None
-        current_val = env_config['Parameters'][app_key]
         new_val = change['version']
         print("...Set %s from %s to %s..." % (app_key, current_val, new_val))
         env_config['Parameters'][app_key] = new_val
