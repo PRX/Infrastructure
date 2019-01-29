@@ -1,0 +1,36 @@
+# stacks/container-apps/web-application.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Docker application with scheduled worker task
+Parameters:
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Scheduling #################################################################
+  ScheduleCommand:
+    Type: String
+    Default: run-scheduled
+  ScheduleExpression:
+    Type: String
+    Default: run-scheduled
+  ScheduledTaskDefinitionName:
+    Type: String
+  ScheduledTaskDefinitionArn:
+    Type: String
+Resources:
+   ScheduledRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: Schedule the execution of the ECS task
+      ScheduleExpression: !Ref ScheduleExpression
+      State: "ENABLED"
+      Targets:
+        - Id: "ScheduledWorkerTaskDefinitionTarget"
+          Input: !Sub '{ "containerOverrides": [ { "name": "${ScheduledTaskDefinitionName}", "command": ${ScheduleCommand} } ] }'
+          RoleArn: !Ref ECSServiceIAMRole
+          Arn: !Ref ECSCluster
+          EcsParameters:
+            TaskCount: 1
+            TaskDefinitionArn: !Ref ScheduledTaskDefinitionArn
