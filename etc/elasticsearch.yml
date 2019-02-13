@@ -1,0 +1,131 @@
+# etc/elasticsearch.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates an Amazon Elasticsearch Service (Amazon ES) domain, with a VPC
+  endpoint, automated snapshots, and an optional EBS volume.
+Parameters:
+  ProjectTag:
+    Type: String
+  EnvironmentTag:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  EbsEnabled:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+  EbsVolumeType:
+    Type: String
+    AllowedValues:
+      - standard
+  EbsVolumeSize:
+    Type: Number
+  ElasticsearchVersion:
+    Type: String
+    AllowedValues:
+      - 6.4
+  ElasticsearchInstanceCount:
+    Type: Number
+  ElasticsearchInstanceType:
+    Type: String
+    AllowedValues:
+      - t2.small.elasticsearch
+  ElasticsearchZoneAwarenessEnabled:
+    Type: String
+    AllowedValues:
+      - true
+      - false
+  VpsSecurityGroupIds:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  VpcSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  AutomatedSnapshotStartHour:
+    Type: Number
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Elasticsearch
+        Parameters:
+          - ElasticsearchVersion
+          - ElasticsearchInstanceCount
+          - ElasticsearchInstanceType
+          - ElasticsearchZoneAwarenessEnabled
+          - AutomatedSnapshotStartHour
+      - Label:
+          default: EBS
+        Parameters:
+          - EbsEnabled
+          - EbsVolumeSize
+          - EbsVolumeType
+      - Label:
+          default: Resource Tagging
+        Parameters:
+          - ProjectTag
+          - EnvironmentTag
+    ParameterLabels:
+      EbsEnabled:
+        default: Enabled
+      EbsVolumeType:
+        default: Volume Type
+      EbsVolumeSize:
+        default: Volume Size
+      ProjectTag:
+        default: Project Tag
+      ElasticsearchVersion:
+        default: Version
+      ElasticsearchInstanceCount:
+        default: Instance Count
+      ElasticsearchInstanceType:
+        default: Data Node Instance Type
+      ElasticsearchZoneAwarenessEnabled:
+        default: Multi-AZ
+      AutomatedSnapshotStartHour:
+        default: Automated Snapshot Hour
+Resources:
+  Foo:
+    Type: AWS::SNS::Topic
+  ElasticsearchDomain:
+    Type: AWS::Elasticsearch::Domain
+    Properties:
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: "es:*"
+            Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/*"
+  # #     AdvancedOptions:
+  # #       String: String
+      EBSOptions:
+        EBSEnabled: !Ref EbsEnabled
+        # Iops: Integer
+        VolumeSize: !Ref EbsVolumeSize
+        VolumeType: !Ref EbsVolumeType
+      ElasticsearchClusterConfig:
+        # DedicatedMasterCount: Integer
+        # DedicatedMasterEnabled: Boolean
+        # DedicatedMasterType: String
+        InstanceCount: !Ref ElasticsearchInstanceCount
+        InstanceType: !Ref ElasticsearchInstanceType
+        ZoneAwarenessEnabled: !Ref ElasticsearchZoneAwarenessEnabled
+      ElasticsearchVersion: !Ref ElasticsearchVersion
+  #     EncryptionAtRestOptions:
+  #       EncryptionAtRestOptions
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: !Ref AutomatedSnapshotStartHour
+      Tags:
+          - Key: "prx:cloudformation:stack-name"
+            Value: !Ref AWS::StackName
+          - Key: "prx:cloudformation:stack-id"
+            Value: !Ref AWS::StackId
+          - Key: Project
+            Value: !Ref ProjectTag
+          - Key: Environment
+            Value: !Ref EnvironmentTag
+      VPCOptions:
+        SecurityGroupIds: !Ref VpsSecurityGroupIds
+        SubnetIds: !Ref VpcSubnetIds
