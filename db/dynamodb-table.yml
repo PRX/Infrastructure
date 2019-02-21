@@ -1,0 +1,98 @@
+# db/dynamodb-table.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Create a simple primary-key-lookup DynamoDB table
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Table Definition
+        Parameters:
+          - TableName
+          - PrimaryKey
+          - PrimaryType
+          - ExpirationField
+      - Label:
+          default: Metadata
+        Parameters:
+          - EnvironmentType
+          - ProjectTag
+    ParameterLabels:
+      TableName:
+        default: Table name
+      PrimaryKey:
+        default: Primary key field
+      PrimaryType:
+        default: Primary key type
+      ExpirationField:
+        default: Field to enable expiration on
+      EnvironmentType:
+        default: Environment type
+      ProjectTag:
+        default: Project Tag
+Parameters:
+  TableName:
+    Type: String
+    Description: The unique DynamoDB table name.
+  PrimaryKey:
+    Type: String
+    Description: The name of the primary key field
+  PrimaryType:
+    Type: String
+    Description: The type of the primary key field
+    AllowedValues:
+      - String
+      - Numeric
+      - Binary
+  ExpirationField:
+    Type: String
+    Description: Optionally enable Time-To-Live on this field
+  EnvironmentType:
+    Type: String
+    Description: Environment this table is used by.
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+  ProjectTag:
+    Type: String
+    Description: The value used for the Project tag on resources that support tagging.
+Conditions:
+  HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
+Mappings:
+  DataTypesMap:
+    String:
+      Symbol: S
+    Numeric:
+      Symbol: N
+    Binary:
+      Symbol: B
+Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: !Ref PrimaryKey
+          AttributeType: !FindInMap [DataTypesMap, !Ref PrimaryType, Symbol]
+      # https://github.com/awslabs/cfn-python-lint/issues/509
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: !Ref PrimaryKey
+          KeyType: HASH
+      TableName: !Ref TableName
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TimeToLiveSpecification:
+        AttributeName: !If [HasExpirationField, !Ref "ExpirationField", !Ref "AWS::NoValue"]
+        Enabled: !If [HasExpirationField, true, false]
+Outputs:
+  TableArn:
+    Description: The created DynamoDB table ARN
+    Value: !GetAtt DynamoDBTable.Arn
