@@ -18,6 +18,14 @@ Parameters:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
+  MetricsKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbTableName:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbAccessRole:
+    Type: AWS::SSM::Parameter::Value<String>
 Mappings:
   VPCSettingsMap:
     test:
@@ -63,6 +71,24 @@ Resources:
                   - "ssm:GetParametersByPath"
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*"
+        - PolicyName: KinesisWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref MetricsKinesisStream
+        - PolicyName: DynamodbAssumeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "sts:AssumeRole"
+                Resource: !Ref DynamodbAccessRole
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -161,6 +187,10 @@ Resources:
         Variables:
           PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-dynamodb"
           DYNAMODB: "true"
+          DDB_TABLE: !Ref DynamodbTableName
+          DDB_ROLE: !Ref DynamodbAccessRole
+          DDB_TTL: "604800"
+          KINESIS_STREAM: !Ref MetricsKinesisStream
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -175,6 +205,16 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       Timeout: 30
+  # Lambda Triggers
+  # TODO: bigquery/pingbacks/redis triggers manually managed, and tricky to move
+  AnalyticsDynamodbKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 100
+      Enabled: true
+      EventSourceArn: !Ref DynamodbKinesisStream
+      FunctionName: !Ref AnalyticsDynamodbLambdaFunction
+      StartingPosition: "LATEST"
   # Lambda Alarms
   AnalyticsBigqueryErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
