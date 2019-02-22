@@ -13,6 +13,11 @@ Metadata:
           - PrimaryType
           - ExpirationField
       - Label:
+          default: Optional Permissions
+        Parameters:
+          - ForeignAccountId
+          - ForeignRoleName
+      - Label:
           default: Metadata
         Parameters:
           - EnvironmentType
@@ -26,6 +31,10 @@ Metadata:
         default: Primary key type
       ExpirationField:
         default: Field to enable expiration on
+      ForeignAccountId:
+        default: Foreign account id
+      ForeignRoleName:
+        default: Role name in foreign account
       EnvironmentType:
         default: Environment type
       ProjectTag:
@@ -47,6 +56,12 @@ Parameters:
   ExpirationField:
     Type: String
     Description: Optionally enable Time-To-Live on this field
+  ForeignAccountId:
+    Type: String
+    Description: Optional account to enable write access to
+  ForeignRoleName:
+    Type: String
+    Description: Optional role name within that account (MUST EXIST)
   EnvironmentType:
     Type: String
     Description: Environment this table is used by.
@@ -59,6 +74,8 @@ Parameters:
     Description: The value used for the Project tag on resources that support tagging.
 Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
+  HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
+  HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
 Mappings:
   DataTypesMap:
     String:
@@ -92,6 +109,40 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: !If [HasExpirationField, !Ref "ExpirationField", !Ref "AWS::NoValue"]
         Enabled: !If [HasExpirationField, true, false]
+  CrossAccountAccessRole:
+    Type: "AWS::IAM::Role"
+    Condition: HasForeignAccount
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Action: "sts:AssumeRole"
+            Principal:
+              !If
+                - HasForeignRole
+                - AWS: !Sub "arn:aws:iam::${ForeignAccountId}:role/${ForeignRoleName}"
+                - AWS: !Ref ForeignAccountId
+      Path: "/"
+      Policies:
+        - PolicyName: DynamoDBWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "dynamodb:BatchGetItem"
+                  - "dynamodb:BatchWriteItem"
+                  - "dynamodb:ConditionCheck"
+                  - "dynamodb:DeleteItem"
+                  - "dynamodb:DescribeTable"
+                  - "dynamodb:DescribeTimeToLive"
+                  - "dynamodb:GetItem"
+                  - "dynamodb:PutItem"
+                  - "dynamodb:Query"
+                  - "dynamodb:UpdateItem"
+                Resource:
+                  - !GetAtt DynamoDBTable.Arn
 Outputs:
   TableArn:
     Description: The created DynamoDB table ARN
