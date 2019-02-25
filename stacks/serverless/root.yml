@@ -37,6 +37,8 @@ Parameters:
     Type: String
   CmsImageLambdaCodeS3ObjectVersion:
     Type: String
+  AnalyticsIngestLambdaCodeS3ObjectVersion:
+    Type: String
 Resources:
   UploadLambdaStack:
     Type: "AWS::CloudFormation::Stack"
@@ -201,3 +203,50 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-image-lambda.yml"]]
       TimeoutInMinutes: 5
+  AnalyticsIngestLambdasStack:
+    Type: "AWS::CloudFormation::Stack"
+    NotificationARNs:
+      - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+    Parameters:
+      CodeS3Bucket:
+        Fn::ImportValue:
+          !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+      CodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
+      EnvironmentType: !Ref EnvironmentType
+      MetricsKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/METRICS_KINESIS_STREAM"
+      DynamodbKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"
+      DynamodbTableName: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TABLE_NAME"
+      DynamodbAccessRole: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_ACCESS_ROLE"
+      DynamodbTTL: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TTL"
+    Tags:
+      - Key: "prx:cloudformation:stack-name"
+        Value: !Ref AWS::StackName
+      - Key: "prx:cloudformation:stack-id"
+        Value: !Ref AWS::StackId
+    TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-lambdas.yml"]]
+    TimeoutInMinutes: 5
+  AnalyticsIngestAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    NotificationARNs:
+      - Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+    Parameters:
+      OpsWarnMessagesSnsTopicArn:
+        Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OpsErrorMessagesSnsTopicArn:
+        Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+      OpsFatalMessagesSnsTopicArn:
+        Fn::ImportValue:
+          !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      EnvironmentType: !Ref EnvironmentType
+      DynamodbFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionArn
+    Tags:
+      - Key: "prx:cloudformation:stack-name"
+        Value: !Ref AWS::StackName
+      - Key: "prx:cloudformation:stack-id"
+        Value: !Ref AWS::StackId
+    TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-alarms.yml"]]
+    TimeoutInMinutes: 5

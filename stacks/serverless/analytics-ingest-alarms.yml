@@ -1,0 +1,89 @@
+# stacks/serverless/analytics-ingest-alarms.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: The many, many alarms on analytics-ingest-lambda functions
+Conditions:
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  DynamodbFunctionArn:
+    Type: String
+Resources:
+  AnalyticsDynamodbErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][DynamoDB][Errors] ${EnvironmentType} > 1"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too many analytics dynamodb lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DynamodbFunctionArn
+  AnalyticsDynamodbIteratorAgeWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][DynamoDB][IteratorAge] ${EnvironmentType} > 15 minutes"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Processing is slightly behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 15
+      Statistic: Maximum
+      Threshold: 900000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DynamodbFunctionArn
+  AnalyticsDynamodbIteratorAgeFatalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][DynamoDB][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DynamodbFunctionArn

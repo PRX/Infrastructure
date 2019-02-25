@@ -18,14 +18,6 @@ Parameters:
     Type: String
   EnvironmentTypeAbbreviation:
     Type: String
-  MetricsKinesisStream:
-    Type: AWS::SSM::Parameter::Value<String>
-  DynamodbKinesisStream:
-    Type: AWS::SSM::Parameter::Value<String>
-  DynamodbTableName:
-    Type: AWS::SSM::Parameter::Value<String>
-  DynamodbAccessRole:
-    Type: AWS::SSM::Parameter::Value<String>
 Mappings:
   VPCSettingsMap:
     test:
@@ -71,24 +63,6 @@ Resources:
                   - "ssm:GetParametersByPath"
                 Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*"
-        - PolicyName: KinesisWritePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "kinesis:DescribeStream"
-                  - "kinesis:PutRecord"
-                  - "kinesis:PutRecords"
-                Resource:
-                  - !Ref MetricsKinesisStream
-        - PolicyName: DynamodbAssumeRolePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action: "sts:AssumeRole"
-                Resource: !Ref DynamodbAccessRole
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
@@ -175,45 +149,6 @@ Resources:
       VpcConfig:
         SecurityGroupIds: !Split [",", !FindInMap [VPCSettingsMap, !Ref EnvironmentTypeAbbreviation, vpcsecurity]]
         SubnetIds: !Split [",", !FindInMap [VPCSettingsMap, !Ref EnvironmentTypeAbbreviation, vpcsubnets]]
-  AnalyticsDynamodbLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket: !Ref CodeS3Bucket
-        S3Key: lambda/PRX-analytics-ingest-lambda.zip
-        S3ObjectVersion: !Ref CodeS3ObjectVersion
-      Description: Dovetail analytics to dynamodb
-      Environment:
-        Variables:
-          DYNAMODB: "true"
-          DDB_TABLE: !Ref DynamodbTableName
-          DDB_ROLE: !Ref DynamodbAccessRole
-          DDB_TTL: "604800"
-          KINESIS_STREAM: !Ref MetricsKinesisStream
-      Handler: index.handler
-      MemorySize: 256
-      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
-      Runtime: nodejs8.10
-      Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 30
-  # Lambda Triggers
-  # TODO: bigquery/pingbacks/redis triggers manually managed, and tricky to move
-  AnalyticsDynamodbKinesisTrigger:
-    Type: "AWS::Lambda::EventSourceMapping"
-    Properties:
-      BatchSize: 100
-      Enabled: true
-      EventSourceArn: !Ref DynamodbKinesisStream
-      FunctionName: !Ref AnalyticsDynamodbLambdaFunction
-      StartingPosition: "LATEST"
   # Lambda Alarms
   AnalyticsBigqueryErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -384,51 +319,3 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref AnalyticsRedisLambdaFunction
-  AnalyticsDynamodbErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[AnalyticsLambda][DynamoDB][Errors] ${EnvironmentType} > 0"
-      AlarmActions:
-        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      InsufficientDataActions:
-        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      OKActions:
-        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription:
-        Too many analytics dynamodb lambda errors
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 300
-      Statistic: Sum
-      Threshold: 0
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref AnalyticsDynamodbLambdaFunction
-  AnalyticsDynamodbIteratorAgeAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[AnalyticsLambda][DynamoDB][IteratorAge] ${EnvironmentType} > 1 Hour"
-      AlarmActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      InsufficientDataActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      OKActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription:
-        Processing is very behind
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: IteratorAge
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Maximum
-      Threshold: 3600000
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref AnalyticsDynamodbLambdaFunction
