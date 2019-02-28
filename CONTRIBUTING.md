@@ -31,6 +31,8 @@ Ensure that Airbnb config is available, as the included `.eslintrc` inherits fro
 
 Templates should be linted to be error-free with [cfn-lint](https://github.com/awslabs/cfn-python-lint).
 
+There is also an atom plugin https://atom.io/packages/atom-cfn-lint.
+
 Always write templates in YAML. CloudFormation templates can be hard to parse. Always use clear, verbose naming and add inline comments when appropriate. Group resources by their function, not by their type. Add the filename at the top of the file as a comment (this makes it easier to identify which template was used to launch a stack).
 
 
