@@ -1,0 +1,107 @@
+# stacks/serverless/analytics-ingest-lambda.yml
+# This stack creates 4 lambda functions subscribed to kinesis streams:
+#   1) TODO: move analytics-bigquery
+#   2) TODO: move analytics-pingbacks
+#   3) TODO: move analytics-redis
+#   4) analytics-dynamodb - IAB 2.0 compliant downloads
+#      a) store temporary 'antebytes' records from dovetail.prx.org in ddb
+#      b) process 'bytes'/'segmentbytes' records from dovetail-counts-lambda,
+#         lookup the records in ddb, change them to type 'postbytes' and place
+#         back onto kinesis to be process by functions 1/2/3.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Analytics ingest lambda functions
+Parameters:
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  EnvironmentType:
+    Type: String
+  MetricsKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbTableName:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbAccessRole:
+    Type: AWS::SSM::Parameter::Value<String>
+  DynamodbTTL:
+    Type: AWS::SSM::Parameter::Value<String>
+Resources:
+  # IAM Roles
+  AnalyticsDynamodbExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: KinesisWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref MetricsKinesisStream
+        - PolicyName: DynamodbAssumeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "sts:AssumeRole"
+                Resource: !Ref DynamodbAccessRole
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+  # Lambda Functions
+  AnalyticsDynamodbLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-analytics-ingest-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics to dynamodb
+      Environment:
+        Variables:
+          DYNAMODB: "true" # set function mode = dynamodb
+          DDB_TABLE: !Ref DynamodbTableName
+          DDB_ROLE: !Ref DynamodbAccessRole
+          DDB_TTL: !Ref DynamodbTTL
+          KINESIS_STREAM: !Ref MetricsKinesisStream
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt AnalyticsDynamodbExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 30
+  # Lambda Triggers
+  AnalyticsDynamodbKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 100
+      Enabled: true
+      EventSourceArn: !Ref DynamodbKinesisStream
+      FunctionName: !Ref AnalyticsDynamodbLambdaFunction
+      StartingPosition: "LATEST"
+Outputs:
+  DynamodbFunctionArn:
+    Value: !GetAtt AnalyticsDynamodbLambdaFunction.Arn

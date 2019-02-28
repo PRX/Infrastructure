@@ -133,8 +133,11 @@ def ok_slack_attachment(alarm):
 
         ok_time = ok_item['Timestamp']
 
-        alarm_time = history_data['oldState']['stateReasonData']['startDate']
-        alarm_time = parse(alarm_time)
+        if 'oldState' in history_data:
+            alarm_time = history_data['oldState']['stateReasonData']['startDate']
+            alarm_time = parse(alarm_time)
+        else:
+            alarm_time = ok_time
 
         dif = ok_time - alarm_time
         duration = f"{round(dif.total_seconds() / 60)} min."

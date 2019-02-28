@@ -8,6 +8,8 @@ Parameters:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
   CodeS3Bucket:
     Type: String
   CodeS3ObjectVersion:
@@ -80,7 +82,7 @@ Resources:
           BQ_DOWNLOADS_TABLE: "downloads"
           BQ_PROJECT_ID: "prx-metrics"
       Handler: index.handler
-      MemorySize: 256
+      MemorySize: 384
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs8.10
       Tags:
@@ -105,7 +107,7 @@ Resources:
         Variables:
           PINGBACKS: "true"
       Handler: index.handler
-      MemorySize: 256
+      MemorySize: 1024
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs8.10
       Tags:
@@ -172,6 +174,30 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref AnalyticsBigqueryLambdaFunction
+  AnalyticsBigqueryIteratorAgeAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryLambdaFunction
   AnalyticsBigqueryInvocationsAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -221,6 +247,30 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref AnalyticsPingbacksLambdaFunction
+  AnalyticsPingbacksIteratorAgeAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Pingbacks][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsPingbacksLambdaFunction
   AnalyticsRedisErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
@@ -241,6 +291,30 @@ Resources:
       Period: 300
       Statistic: Sum
       Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsRedisLambdaFunction
+  AnalyticsRedisIteratorAgeAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Redis][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName

@@ -32,6 +32,10 @@ Parameters:
     Type: String
     Default: ""
   # Application Specific
+  AuguryEcrImageTag:
+    Type: String
+  AugurySecretsVersion:
+    Type: String
   MetricsEcrImageTag:
     Type: String
   MetricsSecretsVersion:
@@ -176,6 +180,8 @@ Mappings:
       prefix: 46
     Courier:
       prefix: 50
+    Augury:
+      prefix: 55
 Resources:
   # Root stacks
   StaticSitesRootStack:
@@ -222,6 +228,7 @@ Resources:
         DovetailCountsLambdaCodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
         CmsAudioLambdaCodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
         CmsImageLambdaCodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
+        AnalyticsIngestLambdaCodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -301,6 +308,10 @@ Resources:
         CourierPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Courier, prefix]
         CourierEcrImageTag: !Ref CourierEcrImageTag
         CourierSecretsVersion: !Ref CourierSecretsVersion
+        # Augury
+        AuguryPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Augury, prefix]
+        AuguryEcrImageTag: !Ref AuguryEcrImageTag
+        AugurySecretsVersion: !Ref AugurySecretsVersion
         # Jingle
         JinglePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Jingle, prefix]
         JingleEcrImageTag: !Ref JingleEcrImageTag
@@ -809,6 +820,9 @@ Resources:
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsFatalMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         CodeS3Bucket:
