@@ -1,0 +1,35 @@
+# stacks/container-apps/scheduled-task.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a scheduled task based on a passed in ECS task definition
+Parameters:
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Scheduling #################################################################
+  ScheduleCommand:
+    Type: String
+    Default: run-scheduled
+  ScheduleExpression:
+    Type: String
+  ScheduleTaskDefinitionName:
+    Type: String
+  ScheduleTaskDefinitionArn:
+    Type: String
+Resources:
+   ScheduledRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: Schedule the execution of the ECS task
+      ScheduleExpression: !Ref ScheduleExpression
+      State: "ENABLED"
+      Targets:
+        - Id: "ScheduledWorkerTaskDefinitionTarget"
+          Input: !Sub '{ "containerOverrides": [ { "name": "${ScheduleTaskDefinitionName}", "command": ${ScheduleCommand} } ] }'
+          RoleArn: !Ref ECSServiceIAMRole
+          Arn: !Ref ECSCluster
+          EcsParameters:
+            TaskCount: 1
+            TaskDefinitionArn: !Ref ScheduleTaskDefinitionArn
