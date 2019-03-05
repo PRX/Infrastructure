@@ -19,7 +19,22 @@ Parameters:
   ScheduleTaskDefinitionArn:
     Type: String
 Resources:
-   ScheduledRule:
+  EventsIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "events.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceEventsRole"
+  ScheduledRule:
     Type: "AWS::Events::Rule"
     Properties:
       Description: Schedule the execution of the ECS task
@@ -28,7 +43,7 @@ Resources:
       Targets:
         - Id: "ScheduledWorkerTaskDefinitionTarget"
           Input: !Sub '{ "containerOverrides": [ { "name": "${ScheduleTaskDefinitionName}", "command": ${ScheduleCommand} } ] }'
-          RoleArn: !Ref ECSServiceIAMRoleArn
+          RoleArn: !GetAtt EventsIAMRole.Arn
           Arn: !Ref ECSClusterArn
           EcsParameters:
             TaskCount: 1
