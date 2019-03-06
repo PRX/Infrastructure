@@ -1,50 +1,51 @@
+# db/mysql-instance.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   AWS CloudFormation RDS Template: Template to create RDS MySQL v5.5 instance.
 Parameters:
   DBInstance:
-    Default: 'name_me'
+    Default: "name-me"
     Description: >-
       The database instance name.
       When replacement is required, must be different than existing instance name.
     Type: String
-    MinLength: '0'
-    MaxLength: '64'
-    AllowedPattern: '^$|[a-zA-Z][a-zA-Z0-9\-_]*'
+    MinLength: 0
+    MaxLength: 64
+    AllowedPattern: ^$|[a-zA-Z][a-zA-Z0-9\-]*
     ConstraintDescription: >-
       optional, must begin with a letter and contain only alphanumeric characters or dash.
   CreateDBName:
-    Default: ''
+    Default: ""
     Description: The database schema name for create only
     Type: String
-    MinLength: '0'
-    MaxLength: '64'
-    AllowedPattern: '^$|[a-zA-Z][a-zA-Z0-9\-_]*'
+    MinLength: 0
+    MaxLength: 64
+    AllowedPattern: ^$|[a-zA-Z][a-zA-Z0-9\-_]*
     ConstraintDescription: >-
       must begin with a letter and contain only alphanumeric characters, dash,
       or underscore.
   DBUser:
-    NoEcho: 'true'
+    NoEcho: true
     Description: The database admin account username
     Type: String
-    MinLength: '1'
-    MaxLength: '16'
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9]*$
     ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
   DBPassword:
-    NoEcho: 'true'
+    NoEcho: true
     Description: The database admin account password
     Type: String
-    MinLength: '1'
-    MaxLength: '41'
-    AllowedPattern: '[a-zA-Z0-9]+'
+    MinLength: 1
+    MaxLength: 41
+    AllowedPattern: ^[a-zA-Z0-9]+$
     ConstraintDescription: must contain only alphanumeric characters.
   DBAllocatedStorage:
-    Default: '20'
+    Default: 20
     Description: The size of the database (Gb)
     Type: Number
-    MinValue: '5'
-    MaxValue: '1024'
+    MinValue: 5
+    MaxValue: 1024
     ConstraintDescription: must be between 5 and 1024Gb.
   DBInstanceClass:
     Description: The database instance type
@@ -83,12 +84,12 @@ Parameters:
       - db.t2.large
     ConstraintDescription: must select a valid database instance type.
   DBSnapshot:
-    Default: ''
+    Default: ""
     Description: >-
       optional, the DB snapshot that's used to restore the DB instance,
       not used in conjunction with CreateDBName
     Type: String
-    AllowedPattern: '[a-zA-Z]*[a-zA-Z0-9\-:]*'
+    AllowedPattern: ^[a-zA-Z]*[a-zA-Z0-9\-:]*$
     ConstraintDescription: >-
       must begin with a letter and contain only alphanumeric characters, dash,
       or colon.
@@ -100,43 +101,43 @@ Parameters:
   VPCStack:
     Description: VPC stack to add this cache into
     Type: String
-    Default: VPCStack
+    Default: DataVPCStack
   CloudWatchWarnDiskSpace:
-    Default: '0'
+    Default: 0
     Description: >-
       amount of free disk space in bytes that will trigger warning, 0 means no alarm
     Type: Number
   CloudWatchWarnCPU:
-    Default: '0'
+    Default: 0
     Description: percent of CPU that will trigger warning, 0 means no alarm
     Type: Number
-    MinValue: '0'
-    MaxValue: '100'
+    MinValue: 0
+    MaxValue: 100
     ConstraintDescription: must be between 0 and 100
   CloudWatchWarnConnections:
-    Default: '0'
+    Default: 0
     Description: amount of connections that will trigger warning, 0 means no alarm
     Type: Number
   OpsWarnSnsTopic:
-    Default: ''
+    Default: ""
     Description: ops warn SNS Topic arn
     Type: String
 Conditions:
-  UseSnapshot: !Not [!Equals [!Ref DBSnapshot, '']]
-  CreateDB: !Not [!Equals [!Ref CreateDBName, '']]
-  NamedInstance: !Not [!Equals [!Ref DBInstance, '']]
+  UseSnapshot: !Not [!Equals [!Ref DBSnapshot, ""]]
+  CreateDB: !Not [!Equals [!Ref CreateDBName, ""]]
+  NamedInstance: !Not [!Equals [!Ref DBInstance, ""]]
   CreateCloudWatchWarnDiskSpace: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
-    - !Not [!Equals [!Ref CloudWatchWarnDiskSpace, '0']]
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
+    - !Not [!Equals [!Ref CloudWatchWarnDiskSpace, 0]]
   CreateCloudWatchWarnCPU: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
-    - !Not [!Equals [!Ref CloudWatchWarnCPU, '0']]
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
+    - !Not [!Equals [!Ref CloudWatchWarnCPU, 0]]
   CreateCloudWatchWarnConnections: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, '']]
-    - !Not [!Equals [!Ref CloudWatchWarnConnections, '0']]
+    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
+    - !Not [!Equals [!Ref CloudWatchWarnConnections, 0]]
 Resources:
   RDSSubnetGroup:
-    Type: 'AWS::RDS::DBSubnetGroup'
+    Type: "AWS::RDS::DBSubnetGroup"
     Properties:
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
       DBSubnetGroupDescription: !Ref EnvironmentType
@@ -146,42 +147,32 @@ Resources:
         - Fn::ImportValue:
             !Sub ${VPCStack}-Subnet2
   MasterDB:
-    Type: 'AWS::RDS::DBInstance'
+    Type: "AWS::RDS::DBInstance"
+    DependsOn: RDSSubnetGroup
     Properties:
 # CloudFormation cannot update a stack when a custom-named resource requires replacing,
 # so when replacement is required (such as when restoring from snapshot),
 # use a new instance name such as oldname-restoredYYYYMMDD
-      DBInstanceIdentifier:
-        Fn::If:
-        - NamedInstance
-        - Ref: DBInstance
-        - Ref: AWS::NoValue
-      DBName:
-        Fn::If:
-        - CreateDB
-        - Ref: CreateDBName
-        - Ref: AWS::NoValue
+# Better yet to self manage tearing down of the existing resource, use a new stack with a different instance name
+      DBInstanceIdentifier: !If [NamedInstance, !Ref DBInstance, !Ref "AWS::NoValue"]
+      DBName: !If [CreateDB, !Ref CreateDBName, !Ref "AWS::NoValue"]
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       DBInstanceClass: !Ref DBInstanceClass
-      DBSnapshotIdentifier:
-        Fn::If:
-        - UseSnapshot
-        - Ref: DBSnapshot
-        - Ref: AWS::NoValue
+      DBSnapshotIdentifier: !If [UseSnapshot, !Ref DBSnapshot, !Ref "AWS::NoValue"]
       Engine: MySQL
       EngineVersion: 5.5.46
-      MasterUsername: !Ref DBUser
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBUser]
+      MasterUserPassword: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBPassword]
       MultiAZ: false
       Tags:
         - Key: Project
           Value: cms.prx.org
         - Key: Environment
           Value: !Ref EnvironmentType
-        - Key: 'prx:cloudformation:stack-name'
+        - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
-        - Key: 'prx:cloudformation:stack-id'
+        - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
 # The MySQL_replication_tunnel security group is added and removed manually for use during migration

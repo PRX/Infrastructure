@@ -1,3 +1,4 @@
+# stacks/container-apps/root.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Apps that run in containers (i.e. Docker)
@@ -30,9 +31,13 @@ Parameters:
   # ECS Cluster ################################################################
   ECSCluster:
     Type: String
+  ECSClusterArn:
+    Type: String
   ECSServiceAutoscaleIAMRoleArn:
     Type: String
   ECSServiceIAMRole:
+    Type: String
+  ECSServiceIAMRoleArn:
     Type: String
   # App ENV ####################################################################
   EcrRegion:
@@ -47,6 +52,8 @@ Parameters:
     Type: String
   # Exchange Specific ##########################################################
   ExchangePlatformALBListenerPriorityPrefix:
+    Type: String
+  ExchangeApiPlatformALBListenerPriorityPrefix:
     Type: String
   ExchangeSecretsVersion:
     Type: String
@@ -65,6 +72,27 @@ Parameters:
   JingleSecretsVersion:
     Type: String
   JingleEcrImageTag:
+    Type: String
+  # Courier Specific ###############################################################
+  CourierPlatformALBListenerPriorityPrefix:
+    Type: String
+  CourierSecretsVersion:
+    Type: String
+  CourierEcrImageTag:
+    Type: String
+  # Remix Specific ###############################################################
+  RemixPlatformALBListenerPriorityPrefix:
+    Type: String
+  RemixSecretsVersion:
+    Type: String
+  RemixEcrImageTag:
+    Type: String
+  # Augury Specific ###############################################################
+  AuguryPlatformALBListenerPriorityPrefix:
+    Type: String
+  AugurySecretsVersion:
+    Type: String
+  AuguryEcrImageTag:
     Type: String
 Resources:
   ExchangeStack:
@@ -97,12 +125,130 @@ Resources:
         ContainerMemoryReservation: !Ref ContainerMemoryReservation
         ContainerCpu: !Ref ContainerCpu
         PlatformALBListenerPriorityPrefix: !Ref ExchangePlatformALBListenerPriorityPrefix
+        PlatformALBAltListenerPriorityPrefix: !Ref ExchangeApiPlatformALBListenerPriorityPrefix
         EcrImageTag: !Ref ExchangeEcrImageTag
         SecretsVersion: !Ref ExchangeSecretsVersion
         AppName: "exchange"
+        AltName: "api"
         CreateWorker: "true"
+        DesiredWebsProduction: "3"
+        DesiredWorkersProduction: "6"
+        ErrorAlarmThreshold: "5"
         ContainerPort: "3000"
         HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  ExchangeSayWhenStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        ECSCluster: !Ref ECSCluster
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SecretsBase: !Ref SecretsBase
+        EcrRegion: !Ref EcrRegion
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        AppName: "exchange"
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-say-when.yml"]]
+      TimeoutInMinutes: 5
+  AuguryStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref AuguryPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref AuguryEcrImageTag
+        SecretsVersion: !Ref AugurySecretsVersion
+        AppName: "augury"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/health_check"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  CourierStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref CourierPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref CourierEcrImageTag
+        SecretsVersion: !Ref CourierSecretsVersion
+        AppName: "courier"
+        CreateWorker: "true"
+        ContainerPort: "3000"
+        HealthCheckPath: "/health_check"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -196,4 +342,71 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  RemixStack:
+    Condition: IsStaging
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref RemixPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref RemixEcrImageTag
+        SecretsVersion: !Ref RemixSecretsVersion
+        AppName: "remix"
+        CreateWorker: "true"
+        DesiredWorkersProduction: "0"
+        DesiredWorkers: "0"
+        ContainerPort: "3000"
+        HealthCheckPath: "/api"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  RemixScheduledTaskStack:
+    Condition: IsStaging
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        ECSClusterArn: !Ref ECSClusterArn
+        ECSServiceIAMRoleArn: !Ref ECSServiceIAMRoleArn
+        ScheduleCommand: '["load_episodes"]'
+        ScheduleExpression: "rate(1 hour)"
+        ScheduleTaskDefinitionName: !GetAtt RemixStack.Outputs.WorkerTaskDefinitionName
+        ScheduleTaskDefinitionArn: !GetAtt RemixStack.Outputs.WorkerTaskDefinitionArn
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "scheduled-task.yml"]]
       TimeoutInMinutes: 5

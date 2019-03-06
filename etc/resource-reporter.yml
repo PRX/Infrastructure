@@ -1,0 +1,123 @@
+# etc/cms-resource-reporter.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Handles Resource SNS Events, Sends Report to Slack
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+  ResourceSnsTopicArn:
+    Type: String
+  DescriptiveAttributeKeys:
+    Type: CommaDelimitedList
+  SlackChannel:
+    Type: String
+  AlarmUniqueName:
+    Type: String
+Resources:
+  LambdaIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  PushSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt MessageHandlerFunction.Arn
+      Protocol: "lambda"
+      Region: "us-east-1"
+      TopicArn: !Ref ResourceSnsTopicArn
+  LambdaResourcePolicy:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      FunctionName: !GetAtt MessageHandlerFunction.Arn
+      Principal: "sns.amazonaws.com"
+      Action: "lambda:InvokeFunction"
+      SourceArn: !Ref ResourceSnsTopicArn 
+  MessageHandlerFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: >
+          var AWS = require("aws-sdk");
+          exports.handler = async (event, context) => {
+              let message = JSON.parse(event["Records"][0]["Sns"]["Message"]);
+              let eventBody = JSON.parse(message["body"]);
+
+              let descriptiveAttrKeys = process.env.DESCRIPTIVE_ATTRIBUTE_KEYS.split(',');
+              let resourceActionDesc = process.env.RESOURCE_SNS_TOPIC_ARN
+              .split(":")
+              .reverse()[0];
+
+              let slackMsg = `${resourceActionDesc}:` + '\n' +
+              descriptiveAttrKeys.map((key) => `${key}: ${eventBody[key]}`)
+              .join('\n');
+
+              let relayParams = {
+                  channel: process.env.SLACK_CHANNEL,
+                  username: 'Resource Activity Reporter',
+                  icon_emoji: ':fleur_de_lis:',
+                  text: slackMsg
+              };
+
+              var sns = new AWS.SNS({region: 'us-east-1'});
+              var snsWrapper = {
+                  Message: JSON.stringify(relayParams),
+                  Subject: "Resource Reporter: Resource Action Discovered",
+                  TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN
+              };
+
+              await sns.publish(snsWrapper).promise();
+              return relayParams;
+          };
+      Description: Listens for CMS SNS actions, routes them to slack
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+          RESOURCE_SNS_TOPIC_ARN: !Ref ResourceSnsTopicArn
+          SLACK_CHANNEL: !Ref SlackChannel
+          DESCRIPTIVE_ATTRIBUTE_KEYS:
+            !Join
+              - ","
+              - !Ref DescriptiveAttributeKeys
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 8
+  LambdaErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", [ "[", !Ref AlarmUniqueName, "][ResourceReporter][Lambda][Error] Invocation Error"]]
+      AlarmDescription:
+        The error rate on the CMS Resource reporter has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MessageHandlerFunction

@@ -56,7 +56,7 @@ The configuration for each build is determined by the event Lambda function. Thi
 
 Once a build run has completed, a third Lambda function is generally invoked to complete the CI process. Information about the original GitHub event, as well information about the results of the build run, are published to SNS, and the callback function handles those messages.
 
-Though the function handles some housekeeping tasks, such as updating the GitHub commit status and sending developer notifications, its most important function is to publish information about deployable code artifacts that result from the builds. This only happens when such an artifact exists (ie not when building feature branches). Specifically, the function updates a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) that can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
+Though the function handles some housekeeping tasks, such as updating the GitHub commit status and sending developer notifications, its most important function is to publish information about deployable code artifacts that result from the builds. This only happens when such an artifact exists (i.e., not when building feature branches). Specifically, the function updates a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) that can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
 
 ### Auxiliary Components
 
@@ -73,7 +73,7 @@ CI will attempt to run if the following conditions are met:
 - The repository contains a `buildspec.yml` file
 - The `buildspec.yml` contains the string `PRX_`
 
-Beyond this, there are no technical requirements necessary to be compatible with the CI system. It will happily run any buildspec that it sees, making it possible to write an entirely custom build process for a project.
+Beyond this, there are no technical requirements necessary to be compatible with the CI system. It will happily run any buildspec that it sees, making it possible to write entirely custom build processes project-by-project.
 
 In general, though, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
 
@@ -87,9 +87,9 @@ In order for `post_build` to handle ECS-based apps, the following environment va
 
 - `PRX_ECR_REPOSITORY` – The name of the ECR repository that built Docker images will get pushed to
 - `PRX_ECR_REGION` – The AWS region that the repository defined by `PRX_ECR_REPOSITORY` was created in
-- `PRX_ECR_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the tag of the Docker image that was pushed to ECR (eg `AcmeAppEcrImageTag` or `AcmeAppEcrImageTag,DuplicateAcmeAppEcrImageTag`)
+- `PRX_ECR_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the tag of the Docker image that was pushed to ECR (e.g., `AcmeAppEcrImageTag` or `AcmeAppEcrImageTag,DuplicateAcmeAppEcrImageTag`). The CD process requires that these parameter names include the string `EcrImageTag` in order to work properly.
 
-Additionally, the `post_build` script will only push one image to ECR, and only if it contains a `LABEL` of `org.prx.app`, as set in the image's `Dockerfile`. This allows for the build process to create any number of extra Docker images for testing purposes beyond the applications own image.
+Additionally, the `post_build` script will only push one image to ECR, and only if it contains a `LABEL` of `org.prx.app`, as set in the image's `Dockerfile`. This allows for the build process to create any number of extra Docker images for testing purposes beyond the application's own image.
 
 ### Lambda Targets
 
@@ -98,22 +98,22 @@ For apps and services that run as AWS Lambda functions, the `post_build` script 
 In order for `post_build` to handle Lambda-based apps, the following environment variables must be set:
 
 - `PRX_LAMBDA_CODE_S3_KEY` – The S3 object key to use for the zipped code archive file. This object will always be placed in a bucket based on the `PRX_APPLICATION_CODE_BUCKET` environment variable, which has a default value provided by the CI base system, and generally should not be changed.
-- `PRX_LAMBDA_CODE_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (eg `AcmeAppLambdaVersionId` or `AcmeAppLambdaVersionId,DuplicateAcmeAppLambdaVersionId`)
+- `PRX_LAMBDA_CODE_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (e.g., `AcmeAppLambdaVersionId` or `AcmeAppS3ObjectVersion,DuplicateAcmeAppS3ObjectVersion`). The CD process requires that these parameter names include the string `S3ObjectVersion` in order to work properly.
 
 Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.lambda`, which allows for the build process to involve any number of different Docker images.
 
-How the Lambda code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that Lambda apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works for your project.
+How the Lambda code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that Lambda apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works well for your project.
 
 ### S3 Static Site Targets
 
-For websites and apps that can be run entirely as static files out of an S3 bucket, the `post_build` script can push zipped code archives to S3. It's important to note that the code is as part of the CI process, the code is pushed to an S3 bucket **different** than the bucket the site will ultimately be served from. The archive is pushed to a bucket from which it can be deployed to the static site bucket during the CD process.
+For websites and apps that can be run entirely as static files out of an S3 bucket, the `post_build` script can push zipped code archives to S3. It's important to note that the code resulting from the CI process is pushed to an S3 bucket **different** than the bucket the site will ultimately be served from. The archive is pushed to a bucket from which it can be deployed to the static site bucket during the CD process. You should not attempt to have CI push the code directly to the bucket configured for S3 static site hosting.
 
 The callback function will track the S3 version ID of the zip archive object, and update the metadata used by CD so it is available during a deploy.
 
 In order for `post_build` to handle S3 static sites, the following environment variables must be set:
 
 - `PRX_S3_STATIC_S3_KEY` – The S3 object key to use for the zipped code archive file. This object will always be placed in a bucket based on the `PRX_APPLICATION_CODE_BUCKET` environment variable, which has a default value provided by the CI base system, and generally should not be changed.
-- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (eg `AcmeAppStaticVersionId`)
+- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (e.g., `AcmeAppStaticS3ObjectVersion`). The CD process requires that these parameter names include the string `S3ObjectVersion` in order to work properly.
 
 Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_S3_STATIC_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.s3static`, which allows for the build process to involve any number of different Docker images.
 

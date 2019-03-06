@@ -1,3 +1,4 @@
+# dns/prx.org-hosted_zone.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Hosted zone and record sets for prx.org
@@ -34,10 +35,27 @@ Resources:
         - ResourceRecords:
             - '"status-page-domain-verification=6n18jv5h9b5d"'
             - '"google-site-verification=j5qsGbnU-E37T9lsaAYL1967H0ej6iZAeX_vEWcOA-w"'
-            - '"v=spf1 include:servers.mcsv.net include:_spf.invoicesherpa.com include:spf.mandrillapp.com include:mail.zendesk.com include:_spf.google.com include:amazonses.com include:stspg-customer.com -all"'
+            - '"v=spf1 include:servers.mcsv.net include:_spf.invoicesherpa.com include:mail.zendesk.com include:_spf.google.com include:amazonses.com -all"'
           TTL: "300"
           Type: TXT
           Name: !Ref Domain
+        # BEGIN NOTIFICATIONS SUBDOMAIN RECORDS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        - ResourceRecords:
+            - '"v=spf1 include:stspg-customer.com ~all"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub notifications.${Domain}
+        - ResourceRecords:
+            - '"k=rsa; t=s; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDCUsMXVyvoTUJ3Ov/NAsONt5pXDjUfIJF8h4gZ4qcswAdOXZ8BBqGfLz5uq8PWXdfwZTP8k4aPiqgm8MuGNYXa2Hk974OtgXJSMkJ4XToZHhIXJTxcTO2dpcdn71PBuc4hotsfOGmMP6js3iT2tIppDv+3omcJ/bpb+NoRxpjOuwIDAQAB"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub m1._domainkey.notifications.${Domain}
+        - ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGmpjXCnmmwNbMer0teWRN35zZWg6eF+ZhDIBdQtZH46rP8m5G0PylQ7McHLaPOST1V3Ze3tshxU/uuJde9rOyhZxuh+Tp+CkvF+pZYv//84K5Ev4UdWWklaoPS4KnCQyeTNQZdnXOoiMfMtR2Vs4tLV34ngqbCtBLJc9Sz9408QIDAQAB"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub smtp._domainkey.notifications.${Domain}
+        # END NOTIFICATIONS SUBDOMAIN RECORDS <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         - ResourceRecords:
             - '"E5Armcve3+nXovpZPjTjUOkraFpdG0dcJjxOdScmrMk="'
           TTL: "300"
@@ -48,6 +66,47 @@ Resources:
           TTL: "300"
           Type: TXT
           Name: !Sub google._domainkey.${Domain}
+        - ResourceRecords:
+            - '"72a959b7c3"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub _github-challenge-PRX.${Domain}
+        - ResourceRecords:
+            - '"345d72b442"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub _github-challenge-PRX.www.${Domain}
+        - ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDhbR6vE/h4/KEg6lvClOh1PhgDM83LC90coBFLeDhrp5O92VOViTmHbckO+L9fZCvJzIY8ZM1xbY+o1Rlh0ap7afOze2oIdFZC9yaG3Vs3prl0vI2sbLISZqb3pYG9q33Sy3yavI8Hc0LUbYtnSwlzANhgggDX9EMDWjvDE97B3QIDAQAB"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub smtp._domainkey.${Domain}
+        - ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGekjRBpJt4pFq65ZNr8SV8+XPiZ+hjkkBToUAeEqGoZCyXFKVDfCEWbdPnp9W8VGf0o5ZBay5z4sGkkhUSGyCBlp8CvCFw7PQqjb9HfC+PrVVQgIRxMyh0Ea6FvMISPADBHj8mSYS+G6E1CMvXm76OaTIruo3/VRUfHhnTR4lnQIDAQAB"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub cm._domainkey.${Domain}
+        - ResourceRecords:
+            - '"k=rsa; t=s; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDPtW5iwpXVPiH5FzJ7Nrl8USzuY9zqqzjE0D1r04xDN6qwziDnmgcFNNfMewVKN2D1O+2J9N14hRprzByFwfQW76yojh54Xu3uSbQ3JP0A7k8o8GutRF8zbFUA8n0ZH2y0cIEjMliXY4W4LwPA7m4q0ObmvSjhd63O9d8z1XkUBwIDAQAB"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub smtpapi._domainkey.${Domain}
+        - ResourceRecords:
+            - '"884ea8a417ab496f"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub zendesk_verification.${Domain}
+  Verification:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: CNAME records for domain verification
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - gv-6ejzc4qvwiyxn7.dv.googlehosted.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub lihvrd6fmhem.metrics.${Domain}
   Highwinds:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -335,11 +394,6 @@ Resources:
           TTL: "300"
           Type: CNAME
           Name: !Sub metrics.${Domain}
-        - ResourceRecords:
-            - upload.prx.tech.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub upload.${Domain}
   PrxDotOrg:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -347,10 +401,15 @@ Resources:
       HostedZoneId: !Ref HostedZone
       RecordSets:
         - ResourceRecords:
-            - "199.119.122.237"
+            - exchange.prx.tech.
           TTL: "300"
-          Type: A
+          Type: CNAME
           Name: !Sub exchange.${Domain}
+        - ResourceRecords:
+            - exchange.prx.tech.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub api.${Domain}
         - Type: A
           Name: !Ref Domain
           AliasTarget:
@@ -581,11 +640,6 @@ Resources:
           TTL: "300"
           Type: A
           Name: !Sub activemq.${Domain}
-        - ResourceRecords:
-            - "199.119.122.228"
-          TTL: "300"
-          Type: A
-          Name: !Sub api.${Domain}
         - ResourceRecords:
             - "199.119.122.228"
           TTL: "300"
@@ -1476,6 +1530,26 @@ Resources:
           TTL: "300"
           Type: CNAME
           Name: !Sub help.${Domain}
+        - ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk1.${Domain}
+        - ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk2.${Domain}
+        - ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk3.${Domain}
+        - ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk4.${Domain}
   Squarespace:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
@@ -1492,6 +1566,16 @@ Resources:
           TTL: "300"
           Type: CNAME
           Name: !Sub catapult.${Domain}
+        - ResourceRecords:
+            - verify.squarespace.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub 4a4scdp8wg8t76rfa22j.${Domain}
+        - ResourceRecords:
+            - ext-cust.squarespace.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub googlecp.${Domain}
   GSuite:
     Type: "AWS::Route53::RecordSetGroup"
     Properties:

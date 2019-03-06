@@ -1,3 +1,4 @@
+# stacks/dovetail-stitch-lambda.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Dovetail stitch lambda function
 Conditions:
@@ -19,12 +20,15 @@ Mappings:
   EnvironmentTypeMap:
     Testing:
       Bucket: ""
+      Folder: ""
       Handler: ""
     Staging:
       Bucket: "prx-dovetail"
+      Folder: "stitch-staging"
       Handler: "index-staging.handler"
     Production:
       Bucket: "prx-dovetail"
+      Folder: "stitch-production"
       Handler: "index-production.handler"
 Resources:
   # IAM Roles
@@ -77,8 +81,9 @@ Resources:
                 Action:
                   - "s3:GetObject"
                   - "s3:PutObject"
+                  - "s3:PutObjectTagging"
                 Resource:
-                  - !Join ["", ["arn:aws:s3:::", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, Bucket], "/*"]]
+                  - !Join ["", ["arn:aws:s3:::", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, Bucket], "/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, Folder], "/*"]]
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"

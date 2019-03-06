@@ -2,7 +2,8 @@
 
 Works with the `aws-secrets` project (https://github.com/PRX/aws-secrets) to
 provide the bucket to store secrets, and creates a lambda to watch for changes
-to secrets files in that S3 bucket.
+to `/[app]/[env]/secrets` files in that S3 bucket. It will ignore changes to
+other files stored by `aws-secrets` in the bucket.
 
 When the lambda detects a change, it determines which environment and apps are
 affected, and gets the latest secrets file version IDs. It downloads and updates

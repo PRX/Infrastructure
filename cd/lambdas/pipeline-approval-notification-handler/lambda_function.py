@@ -1,4 +1,4 @@
-# Invoked by: SNS Subscription
+# Invoked by: Approval CodePipeline Action (via SNS Subscription)
 # Returns: Error or status message
 #
 # Receives notifications from CodePipeline when an execution requires manual
@@ -6,6 +6,10 @@
 # deploy. Information regarding the pending changes to the stack are queried
 # from CloudFormation, and sent to Slack along with control to make a decision
 # about the deploy.
+#
+# This creates the Deploy button for production deploys, but does NOT handle
+# what happens when the button is pressed. That is handled by
+# notifications/ike-interactive-messages-callback-handler.
 
 import boto3
 import json
@@ -112,6 +116,12 @@ def approval_action_attachment(notification):
         'value': REJECTED
     }
 
+    release_admonition = """Release Procedure:
+    - Gather up your notes for each principal feature change
+    - Press "Approve" below to trigger *ExecuteChangeSet* and deploy:
+    - Post your release notes to #tech-releases in slack
+    """
+
     return {
         'fallback': f"{notification['approval']['pipelineName']} {notification['approval']['stageName']}: {notification['approval']['actionName']}",
         'color': '#FF8400',
@@ -119,7 +129,7 @@ def approval_action_attachment(notification):
         'author_link': notification['consoleLink'],
         'title': f"{notification['approval']['stageName']}: {notification['approval']['actionName']}",
         'title_link': notification['approval']['approvalReviewLink'],
-        'text': 'Manual approval required to trigger *ExecuteChangeSet*',
+        'text': release_admonition,
         'footer': notification['region'],
         'ts': int(time.time()),
         'mrkdwn_in': ['text'],
@@ -134,6 +144,17 @@ def approval_action_attachment(notification):
                 'confirm': {
                     'title': 'Production Deploy Approval',
                     'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
+                    'ok_text': 'Deploy',
+                    'dismiss_text': 'Cancel'
+                }
+            }, {
+                'type': 'button',
+                'name': 'notes',
+                'text': 'Approve with notes',
+                'value': json.dumps(approved_params),
+                'confirm': {
+                    'title': 'Production Deploy Approval',
+                    'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack, even if you choose not to enter release notes!',
                     'ok_text': 'Deploy',
                     'dismiss_text': 'Cancel'
                 }

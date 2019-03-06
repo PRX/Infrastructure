@@ -1,3 +1,4 @@
+# stacks/root.yml
 # Generally this template is used to launch stacks from the bootstrapping
 # CodePipeline. Primarily is is simply a wrapper around individial app- and
 # service-specific templates, which get nested into this template and are
@@ -31,6 +32,14 @@ Parameters:
     Type: String
     Default: ""
   # Application Specific
+  AuguryEcrImageTag:
+    Type: String
+  AugurySecretsVersion:
+    Type: String
+  RemixEcrImageTag:
+    Type: String
+  RemixSecretsVersion:
+    Type: String
   MetricsEcrImageTag:
     Type: String
   MetricsSecretsVersion:
@@ -46,6 +55,10 @@ Parameters:
   CmsEcrImageTag:
     Type: String
   CmsSecretsVersion:
+    Type: String
+  CourierEcrImageTag:
+    Type: String
+  CourierSecretsVersion:
     Type: String
   CrierEcrImageTag:
     Type: String
@@ -83,6 +96,14 @@ Parameters:
     Type: String
   DovetailStitchLambdaCodeS3ObjectVersion:
     Type: String
+  DovetailBytesLambdaCodeS3ObjectVersion:
+    Type: String
+  DovetailCountsLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsAudioLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsImageLambdaCodeS3ObjectVersion:
+    Type: String
   ProxyPrxOrgCodeS3ObjectVersion:
     Type: String
   PRXUploadAccessKey:
@@ -90,6 +111,8 @@ Parameters:
   RadiotopiaRadioArchiveS3ObjectVersion:
     Type: String
   BetaPrxOrgArchiveS3ObjectVersion:
+    Type: String
+  BacksawArchiveS3ObjectVersion:
     Type: String
   # Parameter Overrides
   InfrastructureStorageStackName:
@@ -139,6 +162,8 @@ Mappings:
   ALBListenerRulePriorityMap:
     Exchange:
       prefix: 13
+    ExchangeApi:
+      prefix: 14
     Cms:
       prefix: 15
     Play:
@@ -157,6 +182,12 @@ Mappings:
       prefix: 42
     StripeProxy:
       prefix: 46
+    Courier:
+      prefix: 50
+    Augury:
+      prefix: 55
+    Remix:
+      prefix: 60
 Resources:
   # Root stacks
   StaticSitesRootStack:
@@ -172,6 +203,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         RadiotopiaRadioArchiveS3ObjectVersion: !Ref RadiotopiaRadioArchiveS3ObjectVersion
         BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
+        BacksawArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -188,12 +220,21 @@ Resources:
       Parameters:
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
+        VPCSecurityGroup: !GetAtt VPCStack.Outputs.SecurityGroup
+        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
+        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
+        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
         TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/"]]
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         WildcardCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
         PRXUploadAccessKey: !Ref PRXUploadAccessKey
         UploadLambdaCodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
+        DovetailBytesLambdaCodeS3ObjectVersion: !Ref DovetailBytesLambdaCodeS3ObjectVersion
+        DovetailCountsLambdaCodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
+        CmsAudioLambdaCodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
+        CmsImageLambdaCodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
+        AnalyticsIngestLambdaCodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -251,8 +292,10 @@ Resources:
         PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
         PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSClusterArn: !GetAtt ECSClusterStack.Outputs.ECSClusterArn
         ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        ECSServiceIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRoleArn
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
@@ -262,16 +305,29 @@ Resources:
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         # Exchange
         ExchangePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Exchange, prefix]
+        ExchangeApiPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, ExchangeApi, prefix]
         ExchangeEcrImageTag: !Ref ExchangeEcrImageTag
         ExchangeSecretsVersion: !Ref ExchangeSecretsVersion
         # Cms
         CmsPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
         CmsEcrImageTag: !Ref CmsEcrImageTag
         CmsSecretsVersion: !Ref CmsSecretsVersion
+        # Courier
+        CourierPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Courier, prefix]
+        CourierEcrImageTag: !Ref CourierEcrImageTag
+        CourierSecretsVersion: !Ref CourierSecretsVersion
+        # Augury
+        AuguryPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Augury, prefix]
+        AuguryEcrImageTag: !Ref AuguryEcrImageTag
+        AugurySecretsVersion: !Ref AugurySecretsVersion
         # Jingle
         JinglePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Jingle, prefix]
         JingleEcrImageTag: !Ref JingleEcrImageTag
         JingleSecretsVersion: !Ref JingleSecretsVersion
+        # Remix
+        RemixPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Remix, prefix]
+        RemixEcrImageTag: !Ref RemixEcrImageTag
+        RemixSecretsVersion: !Ref RemixSecretsVersion
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -406,7 +462,11 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/fourohfour.prx.org.yml"]]
+      TemplateURL: !Join
+        - ""
+        - - Fn::ImportValue: { "Fn::Sub": "${InfrastructureStorageStackName}-SourceBucketUrl" }
+          - !Ref InfrastructureGitCommit
+          - "/stacks/fourohfour.prx.org.yml"
       TimeoutInMinutes: 5
   PublishStack:
     Type: "AWS::CloudFormation::Stack"
@@ -490,32 +550,6 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
-      TimeoutInMinutes: 5
-  UploadLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        PRXUploadAccessKey: !Ref PRXUploadAccessKey
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        WildcardCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
-        CodeS3Bucket:
-          Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
-        LogGroupRetentionPolicyFunctionArn: "/prx/infrastructure/log-group-retention-policy-function-arn"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/upload.prx.org.yml"]]
       TimeoutInMinutes: 5
   PlayStack:
     Type: "AWS::CloudFormation::Stack"
@@ -798,6 +832,9 @@ Resources:
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
             !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsFatalMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         CodeS3Bucket:

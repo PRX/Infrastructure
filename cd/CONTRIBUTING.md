@@ -7,6 +7,8 @@
 - [AWS CloudFormation Pseudo Parameters](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/pseudo-parameter-reference.html)
 - [AWS CloudFormation Intrinsic Functions](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/intrinsic-function-reference.html)
 - [AWS CloudFormation Template Configuration File Reference](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#d0e10050)
+- [AWS CodePipeline Pipeline Structure Reference](https://docs.aws.amazon.com/codepipeline/latest/userguide/pipeline-structure.html)
+- [AWS CodePipeline CloudFormation Action Reference](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-action-reference.html)
 - [AWS CodeBuild Build Specification Reference](https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html)
 - [AWS CodeBuild Build Phase Transitions](https://docs.aws.amazon.com/codebuild/latest/userguide/view-build-details.html#view-build-details-phases)
 - [AWS CodeBuild Build Environment Reference](https://docs.aws.amazon.com/codebuild/latest/userguide/build-env-ref.html)
@@ -20,7 +22,7 @@ The continuous deployment platform is intended to be managed and launched throug
 
 Sensitive information, such as API keys, should be managed through [Parameter Store](http://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-paramstore.html) when possible. In cases where that's not possible, the values can be passed in to the CloudFormation stack as normal [stack parameters](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html).
 
-When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/master/ci/README.md) should include information to help with getting those dependencies set up.
+When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/master/cd/README.md) should include information to help with getting those dependencies set up.
 
 There is no automated process for deploying changes to the CD stack. If the CloudFormation template changes, the stack must be updated manually (through the AWS Console or command line). You should always be sure to carefully review the resources that are changing before executing the stack update (The CloudFormation console will enumerate any resources that will change as a result of the update).
 
@@ -28,7 +30,7 @@ The code for AWS Lambda functions likewise will not deploy automatically, even i
 
 ## Code Review
 
-At this time, there is no native support for testing the CD system. That is to say, it can be hard to test changes outside of the primary deployment. Even though the CD system and the environment stacks that is creates or updates are not dependent on each other, it's very possible to make changes to CD that could negatively impact a previously-launched stack,or the processes that we use to manage production stacks.
+At this time, there is no native support for testing the CD system. That is to say, it can be hard to test changes outside of the primary deployment. Even though the CD system and the environment stacks that it creates or updates are not dependent on each other, it's very possible to make changes to CD that could negatively impact a previously-launched stack, or the processes that we use to manage production stacks.
 
 As such, it is a good idea to have code reviewed, even if the changes have already been deployed and appear to be working. If you're working on feature branches and deploying code that isn't yet committed to `master`, there is the potential that others are also deploying changes that don't include your changes. Good communication is the best method for handling this.
 

@@ -33,16 +33,17 @@ def temp_file_path():
 def get_record_info(record):
     bucket = record['s3']['bucket']['name']
     key = record['s3']['object']['key']
-    app, env, secrets = key.split('/')
-    # print(app, env, secrets)
+    app, env, file = key.split('/')
+    # print(app, env, file)
     version = s3.head_object(Bucket=bucket, Key=key)['VersionId']
-    return {'app' : app, 'env' : env, 'version' : version}
+    return {'app' : app, 'env' : env, 'file' : file, 'version' : version}
 
 def get_secrets_changes(event):
     changes = {}
     for record in event['Records']:
         info = get_record_info(record)
-        changes.setdefault(info['env'], []).append(info)
+        if info['file'] == 'secrets':
+            changes.setdefault(info['env'], []).append(info)
     return changes
 
 def get_config(env):
@@ -66,7 +67,10 @@ def update_config(env, changes):
     env_config = get_config(env)
     for change in changes:
         app_key = change['app'].title() + 'SecretsVersion'
-        current_val = env_config['Parameters'][app_key]
+        if app_key in env_config['Parameters']:
+            current_val = env_config['Parameters'][app_key]
+        else:
+            current_val = None
         new_val = change['version']
         print("...Set %s from %s to %s..." % (app_key, current_val, new_val))
         env_config['Parameters'][app_key] = new_val

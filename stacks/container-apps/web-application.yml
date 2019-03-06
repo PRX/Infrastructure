@@ -1,3 +1,4 @@
+# stacks/container-apps/web-application.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Docker web application with optional worker, using the shared platform ALB
@@ -5,6 +6,7 @@ Conditions:
   CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
+  HasAltName: !Not [!Equals [!Ref AltName, ""]]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -22,6 +24,9 @@ Parameters:
     Type: String
   PlatformALBListenerPriorityPrefix:
     Type: String
+  PlatformALBAltListenerPriorityPrefix:
+    Type: String
+    Default: ""
   # ECS Cluster ################################################################
   ECSCluster:
     Type: String
@@ -58,9 +63,15 @@ Parameters:
   DesiredWorkersProduction:
     Type: String
     Default: 1
+  ErrorAlarmThreshold:
+    Type: String
+    Default: 0
   # App ENV #################################################################
   AppName:
     Type: String # castle, crier, cms, feeder
+  AltName:
+    Type: String
+    Default: ""
   SecretsVersion:
     Type: String
   ContainerPort:
@@ -82,8 +93,10 @@ Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
-      HealthCheckIntervalSeconds: 60
-      UnhealthyThresholdCount: 10
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
       HealthCheckPath: !Ref HealthCheckPath
       Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}
       Port: 80
@@ -128,6 +141,32 @@ Resources:
             - !Sub ${AppName}.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  ALBHTTPSAlternateWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasAltName
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${AltName}.*
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBAltListenerPriorityPrefix, "00"]]
+  ALBHTTPAlternateWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasAltName
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Sub ${AltName}.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBAltListenerPriorityPrefix, "00"]]
   # CloudWatch Alarms
   ALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -149,7 +188,7 @@ Resources:
       Namespace: AWS/ApplicationELB
       Period: 60
       Statistic: Sum
-      Threshold: 0
+      Threshold: !Ref ErrorAlarmThreshold
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
@@ -269,6 +308,12 @@ Resources:
       DesiredCount: !If [CreateProductionResources, !Ref DesiredWorkersProduction, !Ref DesiredWorkers]
       TaskDefinition: !Ref WorkerTaskDefinition
 Outputs:
+  WorkerTaskDefinitionArn:
+    Description: Arn for the worker task definition
+    Value: !If [CreateWorkerResources, !Ref WorkerTaskDefinition, ""]
+  WorkerTaskDefinitionName:
+    Description: Name of the worker task definition
+    Value: !Sub ${AppName}-worker
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |

@@ -1,3 +1,4 @@
+# etc/workable-poller.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates a Lambda function that polls the Workable API and finds new
@@ -11,6 +12,19 @@ Parameters:
     Type: Number
     Default: 5
     Description: In minutes
+  PollingState:
+    Type: String
+    Default: ENABLED
+    AllowedValues:
+      - ENABLED
+      - DISABLED
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
+Conditions:
+  IsPollingPeriodOne: !Equals [!Ref PollingPeriod, 1]
 Resources:
   PollerFunctionIamRole:
     Type: "AWS::IAM::Role"
@@ -119,7 +133,6 @@ Resources:
                       TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
                       Message: json,
                   }, (err) => {
-                      console.log(1);
                       if (err) {
                           reject(err);
                       } else {
@@ -148,7 +161,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt PollerFunctionIamRole.Arn
-      Runtime: nodejs6.10
+      Runtime: nodejs8.10
       Tags:
         - Key: Project
           Value: Misc
@@ -186,8 +199,12 @@ Resources:
       Description: >
         Invokes the Workable poller function
       RoleArn: !GetAtt PollerEventRuleIamRole.Arn
-      ScheduleExpression: !Sub "rate(${PollingPeriod} minutes)"
-      State: ENABLED
+      ScheduleExpression:
+        Fn::If:
+          - IsPollingPeriodOne
+          - !Sub "rate(${PollingPeriod} minute)"
+          - !Sub "rate(${PollingPeriod} minutes)"
+      State: !Ref PollingState
       Targets:
         - Arn: !GetAtt PollerFunction.Arn
           Id: !Sub "${AWS::StackName}.PollerFunction"
@@ -198,3 +215,9 @@ Resources:
       FunctionName: !Ref PollerFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt PollerEventRule.Arn
+  PollerFunctionRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${PollerFunction}"
+      RetentionInDays: 5

@@ -87,7 +87,7 @@ push_to_ecr() {
             echo "ECR Repository already exists"
         else
             echo "Creating ECR repository"
-            aws ecr create-repository "$PRX_ECR_REPOSITORY"
+            aws ecr create-repository --repository-name "$PRX_ECR_REPOSITORY"
         fi
         set -e
 

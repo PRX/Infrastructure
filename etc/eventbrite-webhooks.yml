@@ -1,0 +1,252 @@
+# etc/eventbrite-webhooks.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Handles Eventbrite webhooks
+Parameters:
+  EventbriteToken:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+Resources:
+  # API Gateway
+  RestApi:
+    Type: "AWS::ApiGateway::RestApi"
+    Properties:
+      Name: !Ref AWS::StackName
+      Description: Eventbrite webhook callback endpoints
+  RestApiWebhooksResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "webhooks"
+  RestApiOrdersResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiWebhooksResource
+      PathPart: "orders"
+  RestApiOrdersPlacedResource:
+    Type: "AWS::ApiGateway::Resource"
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiOrdersResource
+      PathPart: "placed"
+  RestApiOrdersPlacedPostMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestApiOrdersPlacedResource
+  RestApiDeployment2:
+    DependsOn:
+      - RestApiOrdersPlacedPostMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref RestApi
+  RestApiStage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: prod
+      Description: "Production API"
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment2
+  # Integration
+  LambdaIamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sns:Publish"
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  LambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        ZipFile: |
+          const https = require('https');
+          const AWS = require('aws-sdk');
+
+          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+          const SLACK_CHANNEL = '#event-registrations';
+          const SLACK_USERNAME = 'Eventbrite';
+          const SLACK_ICON = ':eventbrite:';
+
+          const EVENTBRITE_TOKEN = process.env.EVENTBRITE_TOKEN;
+          const TOKEN = `token=${EVENTBRITE_TOKEN}`;
+
+          exports.handler = async (event) => {
+              try {
+                  const payload = JSON.parse(event.body);
+
+                  const order = await getOrder(payload.api_url);
+                  const orderEvent = await getEvent(order);
+
+                  await snsSlackRelay(message(order, orderEvent));
+
+                  return { statusCode: 200, headers: {}, body: '' };
+              } catch (e) {
+                  console.log(e);
+                  throw(e);
+              }
+          };
+
+          async function getOrder(orderApiUrl) {
+              console.info(`Webhook triggered by object ${orderApiUrl}`);
+              const reqUrl = `${orderApiUrl}?${TOKEN}&expand=event,attendees`;
+              const order = await httpGet(reqUrl);
+              return order;
+          }
+
+          async function getEvent(order) {
+              const reqUrl = `${order.event.resource_uri}?${TOKEN}&expand=ticket_classes`;
+              const event = await httpGet(reqUrl);
+              return event;
+          }
+
+          function httpGet(reqUrl) {
+              return new Promise((resolve, reject) => {
+                  // Request with response handler
+                  const req = https.get(reqUrl, (res) => {
+                      res.setEncoding('utf8');
+
+                      let json = '';
+                      res.on('data', (chunk) => { json += chunk; });
+                      res.on('end', () => {
+                          try {
+                              const resPayload = JSON.parse(json);
+                              resolve(resPayload);
+                          } catch (e) {
+                              console.error('Error handling JSON response!');
+                              reject(e);
+                          }
+                      });
+                  });
+
+                  // Generic request error handling
+                  req.on('error', e => reject(e));
+              });
+          }
+
+          function message(order, event) {
+              const ticket_classes = event.ticket_classes;
+
+              const total_tickets = ticket_classes.reduce((t, c) => (t + c.quantity_total), 0);
+              const total_sold = ticket_classes.reduce((t, c) => (t + c.quantity_sold), 0);
+
+              const remaining = (total_tickets - total_sold);
+
+              const tickets = `${order.attendees.length} ticket${order.attendees.length > 1 ? 's' : ''}`;
+
+              const adminUrl = `https://www.eventbrite.com/myevent?eid=${event.id}`;
+              const orderUrl = `https://www.eventbrite.com/reports?eid=${event.id}&rid=h&filterby=all,${order.id}`;
+
+              // const order_ts = (Date.parse(order.created) / 1000);
+
+              return {
+                  channel: SLACK_CHANNEL,
+                  username: SLACK_USERNAME,
+                  icon_emoji: SLACK_ICON,
+                  text: [
+                      `<mailto:${order.email}|${order.name}> ordered <${orderUrl}|${tickets}> for <${event.url}|${event.name.text}> (<${adminUrl}|Manage>)`,
+                      `> ${total_sold} tickets ordered – ${remaining} remaining`
+                  ].join('\n')
+              };
+          }
+
+          function snsSlackRelay(slackMessage) {
+              return new Promise((resolve, reject) => {
+                  sns.publish({
+                      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+                      Message: JSON.stringify(slackMessage),
+                  }, (err, data) => {
+                      if (err) {
+                          reject(err);
+                      } else {
+                          resolve();
+                      }
+                  });
+              });
+          }
+      Description: Backs Eventbite webhook API Gateway
+      Environment:
+        Variables:
+          EVENTBRITE_TOKEN: !Ref EventbriteToken
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 8
+  RestApiLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"
+  LambdaErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Eventbrite][Lambda][Error] Invocation 4XX"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        The error rate on the Eventbrite lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+  LambdaFunctionLogRetentionPolicy:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
+      RetentionInDays: 5

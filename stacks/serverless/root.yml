@@ -1,15 +1,22 @@
+# stacks/serverless/root.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Serverless (Lambda, API Gateway, etc) apps
 Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureStorageStackName:
     Type: String
   InfrastructureNotificationsStackName:
     Type: String
+  VPCSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
   TemplateUrlPrefix:
     Type: String
   EnvironmentType:
@@ -21,6 +28,16 @@ Parameters:
   PRXUploadAccessKey:
     Type: String
   UploadLambdaCodeS3ObjectVersion:
+    Type: String
+  DovetailBytesLambdaCodeS3ObjectVersion:
+    Type: String
+  DovetailCountsLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsAudioLambdaCodeS3ObjectVersion:
+    Type: String
+  CmsImageLambdaCodeS3ObjectVersion:
+    Type: String
+  AnalyticsIngestLambdaCodeS3ObjectVersion:
     Type: String
 Resources:
   UploadLambdaStack:
@@ -41,6 +58,7 @@ Resources:
           Fn::ImportValue:
             !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
         CodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
+        LogGroupRetentionPolicyFunctionArn: "/prx/infrastructure/log-group-retention-policy-function-arn"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -65,4 +83,172 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "tower.radiotopia.fm.yml"]]
+      TimeoutInMinutes: 5
+  DovetailBytesLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref DovetailBytesLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-bytes-lambda.yml"]]
+      TimeoutInMinutes: 5
+  DovetailCountsLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        VPCSecurityGroup: !Ref VPCSecurityGroup
+        VPCSubnet1: !Ref VPCSubnet1
+        VPCSubnet2: !Ref VPCSubnet2
+        VPCSubnet3: !Ref VPCSubnet3
+        KinesisIn: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_IN"
+        KinesisOut: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_OUT"
+        Kinesis404: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_404"
+        RedisUrl: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/REDIS_URL"
+        S3Bucket: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_BUCKET"
+        S3Prefix: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_PREFIX"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-counts-lambda.yml"]]
+      TimeoutInMinutes: 5
+  CmsAudioLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        AlarmWarnActions:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        AlarmErrorActions:
+          Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        DestinationBucketName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/DESTINATION_BUCKET"
+        SqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/SQS_CALLBACK_NAME"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-audio-lambda.yml"]]
+      TimeoutInMinutes: 5
+  CmsImageLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        AlarmWarnActions:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        AlarmErrorActions:
+          Fn::If:
+          - IsProduction
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+          - Fn::ImportValue:
+              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        DestinationBucketName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-image-lambda/DESTINATION_BUCKET"
+        SqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-image-lambda/SQS_CALLBACK_NAME"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-image-lambda.yml"]]
+      TimeoutInMinutes: 5
+  AnalyticsIngestLambdasStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        MetricsKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/METRICS_KINESIS_STREAM"
+        DynamodbKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"
+        DynamodbTableName: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TABLE_NAME"
+        DynamodbAccessRole: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_ACCESS_ROLE"
+        DynamodbTTL: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TTL"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-lambdas.yml"]]
+      TimeoutInMinutes: 5
+  AnalyticsIngestAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        DynamodbFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionArn
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-alarms.yml"]]
       TimeoutInMinutes: 5

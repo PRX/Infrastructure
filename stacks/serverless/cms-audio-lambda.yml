@@ -1,0 +1,233 @@
+# stacks/serverless/cms-audio-lambda.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Audio processing for cms.prx.org
+Parameters:
+  AlarmWarnActions:
+    Type: CommaDelimitedList
+  AlarmErrorActions:
+    Type: CommaDelimitedList
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  DestinationBucketName:
+    Type: AWS::SSM::Parameter::Value<String>
+  SqsCallbackName:
+    Type: AWS::SSM::Parameter::Value<String>
+Mappings:
+  AnnounceTopicNames:
+    Staging:
+      create: staging_announce_audio_create
+      update: staging_announce_audio_update
+      delete: staging_announce_audio_delete
+    Production:
+      create: production_announce_audio_create
+      update: production_announce_audio_update
+      delete: production_announce_audio_delete
+Resources:
+  CmsAudioLambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: BucketWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "s3:DeleteObject"
+                  - "s3:GetObject"
+                  - "s3:GetObjectAcl"
+                  - "s3:PutObject"
+                  - "s3:PutObjectAcl"
+                Resource:
+                  - !Sub arn:aws:s3:::${DestinationBucketName}/*
+        - PolicyName: SqsWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sqs:SendMessage"
+                Resource:
+                  - !Sub arn:aws:sqs:*:${AWS::AccountId}:${SqsCallbackName}
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+  CmsAudioLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-cms-audio-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Audio processing for cms.prx.org
+      Environment:
+        Variables:
+          DESTINATION_BUCKET: !Ref DestinationBucketName
+          FFPROBE_PATH: bin/ffprobe
+          SQS_CALLBACK: !Sub https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/${SqsCallbackName}
+      Handler: index.handler
+      MemorySize: 512
+      Role: !GetAtt CmsAudioLambdaExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Timeout: 120
+      Tags:
+        - Key: Project
+          Value: cms.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Cms-Audio-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CmsAudioLambdaCreateTrigger:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CmsAudioLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn:  !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, create]]]
+  CmsAudioLambdaCreateTriggerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CmsAudioLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, create]]]
+  CmsAudioLambdaUpdateTrigger:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CmsAudioLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn:  !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, update]]]
+  CmsAudioLambdaUpdateTriggerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CmsAudioLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, update]]]
+  CmsAudioLambdaDeleteTrigger:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Endpoint: !GetAtt CmsAudioLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn:  !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, delete]]]
+  CmsAudioLambdaDeleteTriggerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref CmsAudioLambdaFunction
+      Principal: sns.amazonaws.com
+      SourceArn: !Join ["", [!Sub "arn:aws:sns:${AWS::Region}:${AWS::AccountId}:", !FindInMap [AnnounceTopicNames, !Ref EnvironmentType, delete]]]
+  CmsAudioLambdaLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CmsAudioLambdaFunction}"
+      RetentionInDays: 14
+  CmsAudioLambdaLogErrors:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '"[ERROR]"'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_error"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  CmsAudioLambdaLogWarns:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '"[WARN]"'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_warn"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  CmsAudioLambdaLogProcessed:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '[timestamp, guid, level=INFO, msg="Processed:", num]'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_processed"
+          MetricNamespace: LogMetrics
+          MetricValue: $num
+  CmsAudioLambdaLogDeleted:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '[timestamp, guid, level=INFO, msg="Deleted:", num]'
+      LogGroupName: !Ref CmsAudioLambdaLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_deleted"
+          MetricNamespace: LogMetrics
+          MetricValue: $num
+  CmsAudioLambdaAlarmErrors:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][Errors] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmErrorActions
+      InsufficientDataActions: !Ref AlarmErrorActions
+      OKActions: !Ref AlarmErrorActions
+      AlarmDescription: Errors on the cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CmsAudioLambdaFunction
+  LambdaLogErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][LogErrors] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmErrorActions
+      InsufficientDataActions: !Ref AlarmErrorActions
+      OKActions: !Ref AlarmErrorActions
+      AlarmDescription: Logged errors on cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_error"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  LambdaLogWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CmsAudioLambda][LogWarns] ${EnvironmentType} > 0"
+      AlarmActions: !Ref AlarmWarnActions
+      InsufficientDataActions: !Ref AlarmWarnActions
+      OKActions: !Ref AlarmWarnActions
+      AlarmDescription: Logged warnings on cms audio lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "cms_audio_lambda_${EnvironmentTypeAbbreviation}_warn"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching

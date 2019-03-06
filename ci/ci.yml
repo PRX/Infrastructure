@@ -1,3 +1,4 @@
+# ci/ci.yml
 # This stack should generally only be launched once globally
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
@@ -26,10 +27,6 @@ Metadata:
         Parameters:
           - GitHubToken
           - GitHubWebhookSecret
-      - Label:
-          default: CodeBuild
-        Parameters:
-          - CodeBuildBootstrapUrl
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
@@ -43,8 +40,6 @@ Metadata:
         default: Access token
       GitHubWebhookSecret:
         default: Webhook secret
-      CodeBuildBootstrapUrl:
-        default: Bootstrap script URL
       LogGroupRetentionPolicyFunctionArn:
         default: Log group retention function SSM key
 Parameters:
@@ -74,11 +69,6 @@ Parameters:
   GitHubWebhookSecret:
     Description: >
       The secret provided by GitHub for the push and pull request events webhook
-    Type: String
-  CodeBuildBootstrapUrl:
-    Description: >
-      URL of the bootstrap shell script that the CI runner CodeBuild project
-      will install and execute
     Type: String
   LogGroupRetentionPolicyFunctionArn:
     Type: AWS::SSM::Parameter::Value<String>
@@ -179,6 +169,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - "ecr:GetAuthorizationToken"
+                  - "ecr:CreateRepository"
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -761,7 +752,7 @@ Resources:
           Fn::ImportValue:
             !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: ci/codebuild-callback-handler.zip
-      Description: Handles GitHub events forwarded from the endpoint
+      Description: Handles post-build callbacks from CodeBuild CI projects
       Environment:
         Variables:
           CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
