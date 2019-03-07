@@ -33,6 +33,7 @@ Conditions:
   HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
   HasCloudFrontCustom403ErrorResponseCode: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponseCode, ""]]
   # HasCloudFrontCustom403ErrorResponsePagePath: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponsePagePath, ""]]
+  HasCloudFrontWebACLId: !Not [!Equals [!Ref CloudFrontWebACLId, ""]]
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
@@ -66,6 +67,7 @@ Metadata:
           - CloudFrontOriginProtocolPolicy
           - CloudFrontCustom403ErrorResponseCode
           - CloudFrontCustom403ErrorResponsePagePath
+          - CloudFrontWebACLId
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -108,6 +110,8 @@ Metadata:
         default: Custom 403 error response code
       CloudFrontCustom403ErrorResponsePagePath:
         default: Custom 403 error response page
+      CloudFrontWebACLId:
+        default: AWS WAF web ACL ID
       AcmCertificateArn:
         default: Certificate ARN
       ValidationDomain:
@@ -236,6 +240,10 @@ Parameters:
     Type: String
     Description: >
       A custom page to return when a 403 is returned by the origin
+  CloudFrontWebACLId:
+    Type: String
+    Description: >
+      The AWS WAF web ACL to associate with this distribution
   AcmCertificateArn:
     Type: String
     Description: >
@@ -343,7 +351,7 @@ Resources:
           # IamCertificateId: String
           # MinimumProtocolVersion: String
           SslSupportMethod: sni-only
-        # WebACLId: String
+        WebACLId: !If [HasCloudFrontWebACLId, !Ref "CloudFrontWebACLId", !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
           Value: !Ref ProjectTag
