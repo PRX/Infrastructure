@@ -7,6 +7,7 @@ Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
+  HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -67,6 +68,9 @@ Parameters:
   AppName:
     Type: String # castle, crier, cms, feeder
   AltName:
+    Type: String
+    Default: ""
+  ExplicitHostHeader:
     Type: String
     Default: ""
   SecretsVersion:
@@ -164,6 +168,32 @@ Resources:
             - !Sub ${AltName}.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "01"]]
+  ALBHTTPSExplicitListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasExplicitHostHeader
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Ref ExplicitHostHeader
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "10"]]
+  ALBHTTPExplicitListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasExplicitHostHeader
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Ref ExplicitHostHeader
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "10"]]
   # CloudWatch Alarms
   ALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
