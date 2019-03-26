@@ -7,6 +7,7 @@ Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
+  HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -25,6 +26,9 @@ Parameters:
   PlatformALBListenerPriorityPrefix:
     Type: String
   PlatformALBAltListenerPriorityPrefix:
+    Type: String
+    Default: ""
+  PlatformALBExplicitListenerPriorityPrefix:
     Type: String
     Default: ""
   # ECS Cluster ################################################################
@@ -70,6 +74,9 @@ Parameters:
   AppName:
     Type: String # castle, crier, cms, feeder
   AltName:
+    Type: String
+    Default: ""
+  ExplicitHostHeader:
     Type: String
     Default: ""
   SecretsVersion:
@@ -165,6 +172,32 @@ Resources:
         - Field: host-header
           Values:
             - !Sub ${AltName}.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBAltListenerPriorityPrefix, "00"]]
+  ALBHTTPSExplicitListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasExplicitHostHeader
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Ref ExplicitHostHeader
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBAltListenerPriorityPrefix, "00"]]
+  ALBHTTPExplicitListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: HasExplicitHostHeader
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - !Ref ExplicitHostHeader
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBAltListenerPriorityPrefix, "00"]]
   # CloudWatch Alarms
