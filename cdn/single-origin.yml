@@ -72,7 +72,6 @@ Metadata:
           default: HTTPS Certificate
         Parameters:
           - AcmCertificateArn
-          - ValidationDomain
     ParameterLabels:
       ProjectTag:
         default: Project tag
@@ -114,8 +113,6 @@ Metadata:
         default: AWS WAF web ACL ID
       AcmCertificateArn:
         default: Certificate ARN
-      ValidationDomain:
-        default: Validation domain
 Parameters:
   ProjectTag:
     Type: String
@@ -249,12 +246,6 @@ Parameters:
     Description: >
       ARN for the ACM certificate that will be used with the CloudFront
       distribution. If no value is supplied, a new certificate will be created.
-  ValidationDomain:
-    Type: String
-    Description: >
-      eg. songexploder.net. Must be a superdomain of the public feed domain
-      name. A verification email will be sent to postmast@, webmaster@, etc.
-      (Not used if a certificate ARN is given)
 Resources:
   # ACM Certificate
   # This gets created when no ARN for a pre-existing certificate is provided
@@ -263,9 +254,6 @@ Resources:
     Condition: HasNoAcmCertificateArn
     Properties:
       DomainName: !Select [0, !Ref Cnames]
-      DomainValidationOptions:
-        - ValidationDomain: !Ref ValidationDomain
-          DomainName: !Select [0, !Ref Cnames]
       SubjectAlternativeNames: !Ref Cnames
       Tags:
         - Key: Project
