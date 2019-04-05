@@ -103,28 +103,93 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref TowerLambdaFunction
-  # TowerLambdaDurationAlarm:
-  #   Type: "AWS::CloudWatch::Alarm"
-  #   Condition: CreateProductionResources
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: "[Tower][Lambda][Duration] Unusually slow"
-  #     AlarmActions:
-  #       - !Ref OpsWarnMessagesSnsTopicArn
-  #     InsufficientDataActions:
-  #       - !Ref OpsWarnMessagesSnsTopicArn
-  #     OKActions:
-  #       - !Ref OpsWarnMessagesSnsTopicArn
-  #     AlarmDescription:
-  #       At least one invocation duration exceeded 225ms
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 1
-  #     MetricName: Duration
-  #     Namespace: AWS/Lambda
-  #     Period: 60
-  #     Statistic: Maximum
-  #     Threshold: 10000
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: FunctionName
-  #         Value: !Ref TowerLambdaFunction
+  TowerLambdaPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !GetAtt TowerLambdaIamRole.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${Stage}/*"
+  # API Gateway
+  # https://tower.radiotopia.fm/api/v2/episodes.json
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref AWS::StackName
+      Description: !Sub "${EnvironmentType} tower.radiotopia.fm"
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "api"
+  V2Resource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ApiResource
+      PathPart: "v2"
+  V2EpisodesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref V2Resource
+      PathPart: "episodes.json"
+  V2EpisodesMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref V2EpisodesResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TowerLambdaFunction.Arn}/invocations
+  V2EpisodesOptionsMethod:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref V2EpisodesResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+  Deployment:
+    DependsOn:
+      - V2EpisodesOptionsMethod
+    Type: "AWS::ApiGateway::Deployment"
+    Properties:
+      RestApiId: !Ref RestApi
+  Stage:
+    Type: "AWS::ApiGateway::Stage"
+    Properties:
+      StageName: !If [CreateProductionResources, prod, stag]
+      Description: !Sub "${EnvironmentType} deployment for tower.radiotopia.fm"
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref Deployment
+      MethodSettings:
+        - DataTraceEnabled: true
+          HttpMethod: "*"
+          LoggingLevel: "INFO"
+          MetricsEnabled: true
+          ResourcePath: "/*"
