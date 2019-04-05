@@ -197,7 +197,7 @@ Resources:
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: "tower.radiotopia.fm"
+      DomainName: tower.radiotopia.fm
       Tags:
         - Key: Project
           Value: tower.radiotopia.fm
@@ -208,3 +208,16 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+  DomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: CreateProductionResources
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: tower.radiotopia.fm
+  BasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Condition: CreateProductionResources
+    Properties:
+      DomainName: !Ref DomainName
+      RestApiId: !Ref RestApi
+      Stage: !If [CreateProductionResources, prod, stag]
