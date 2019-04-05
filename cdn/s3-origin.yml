@@ -145,12 +145,6 @@ Parameters:
     Description: >
       ARN for the ACM certificate that will be used with the CloudFront
       distribution. If no value is supplied, a new certificate will be created.
-  ValidationDomain:
-    Type: String
-    Description: >
-      eg. songexploder.net. Must be a superdomain of the public feed domain
-      name. A verification email will be sent to postmast@, webmaster@, etc.
-      (Not used if a certificate ARN is given)
   SinglePageApp:
     Type: String
     Description: >
@@ -168,9 +162,6 @@ Resources:
     Condition: HasNoAcmCertificateArn
     Properties:
       DomainName: !Select [0, !Ref Cnames]
-      DomainValidationOptions:
-        - ValidationDomain: !Ref ValidationDomain
-          DomainName: !Select [0, !Ref Cnames]
       SubjectAlternativeNames: !Ref Cnames
       Tags:
         - Key: Project
@@ -181,6 +172,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+      ValidationMethod: DNS
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
     Properties:
