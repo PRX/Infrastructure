@@ -16,8 +16,6 @@ Metadata:
         default: Origin S3 Bucket
       DistributionDomain:
         default: Domain Name
-      CertificateArn:
-        default: ACM Certificate Arn
 Parameters:
   OriginBucket:
     Type: String
@@ -29,6 +27,20 @@ Parameters:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
 Resources:
+  Certificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Ref DistributionDomain
+      Tags:
+        - Key: Project
+          Value: feeder
+        - Key: Name
+          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
     Properties:
@@ -62,7 +74,7 @@ Resources:
             S3OriginConfig: {}
         PriceClass: PriceClass_200
         ViewerCertificate:
-          AcmCertificateArn: !Ref CertificateArn
+          AcmCertificateArn: !Ref Certificate
           SslSupportMethod: sni-only
       Tags:
         - Key: Project
