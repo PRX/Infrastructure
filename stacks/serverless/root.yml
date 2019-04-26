@@ -41,6 +41,8 @@ Parameters:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
     Type: String
+  PixelPrxOrgCodeS3ObjectVersion:
+    Type: String
 Resources:
   UploadLambdaStack:
     Type: "AWS::CloudFormation::Stack"
@@ -260,4 +262,29 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-alarms.yml"]]
+      TimeoutInMinutes: 5
+  PixelPrxOrgStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref PixelPrxOrgCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "pixel.prx.org.yml"]]
       TimeoutInMinutes: 5
