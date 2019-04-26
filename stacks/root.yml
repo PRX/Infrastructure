@@ -13,6 +13,7 @@ Description: >
   in separate templates.
 Conditions:
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   AwsOrganizationId:
     Type: String
@@ -89,6 +90,10 @@ Parameters:
   PublishSecretsVersion:
     Type: String
   FourohfourEcrImageTag:
+    Type: String
+  StyleguideEcrImageTag:
+    Type: String
+  StyleguideSecretsVersion:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
     Type: String
@@ -188,6 +193,8 @@ Mappings:
       prefix: 55
     Remix:
       prefix: 60
+    Styleguide:
+      prefix: 65
 Resources:
   # Root stacks
   StaticSitesRootStack:
@@ -899,6 +906,48 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/proxy.prx.org.yml"]]
+      TimeoutInMinutes: 5
+  StyleguideStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: "IsStaging"
+    DependsOn: ECSClusterStack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !GetAtt VPCStack.Outputs.VPC
+        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
+        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
+        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Styleguide, prefix]
+        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EcrRegion: !Ref EcrRegion
+        SecretsBase:
+          Fn::ImportValue:
+            !Sub "${SecretsStackName}-SecretsBaseRegion"
+        StyleguideEcrImageTag: !Ref StyleguideEcrImageTag
+        StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
+        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
+        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/styleguide.prx.org.yml"]]
       TimeoutInMinutes: 5
 Outputs:
   VPCCertificateArn:

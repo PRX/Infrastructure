@@ -1,0 +1,208 @@
+# stacks/styleguide.prx.org.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: styleguide.prx.org application running in Docker
+Mappings:
+  Shared:
+    Project:
+      name: styleguide.prx.org
+    Container:
+      name: styleguide-nginx
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  # VPC ########################################################################
+  VPC:
+    Type: "AWS::EC2::VPC::Id"
+  # Load Balancer ##############################################################
+  PlatformALBDNSName:
+    Type: String
+  PlatformALBFullName:
+    Type: String
+  PlatformALBCanonicalHostedZoneID:
+    Type: String
+  PlatformALBHTTPListenerArn:
+    Type: String
+  PlatformALBHTTPSListenerArn:
+    Type: String
+  PlatformALBListenerPriorityPrefix:
+    Type: String
+  # ECS Cluster ################################################################
+  ECSCluster:
+    Type: String
+  ECSServiceAutoscaleIAMRoleArn:
+    Type: String
+  ECSServiceIAMRole:
+    Type: String
+  # Misc #######################################################################
+  OpsDebugMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  EcrRegion:
+    Type: String
+  SecretsBase:
+    Type: String
+  ContainerMemory:
+    Type: String
+  ContainerCpu:
+    Type: String
+  # Shared ENV #################################################################
+  # Styleguide ECS ################################################################
+  StyleguideEcrImageTag:
+    Type: String
+  # Styleguide ENV ################################################################
+  StyleguideSecretsVersion:
+    Type: String
+Resources:
+  StyleguideLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      RetentionInDays: 14
+  StyleguideALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 3
+      HealthCheckPath: /
+      Name: !Sub styleguide-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "15"
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Styleguide-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VPC
+  # ALB Listener Rules
+  StyleguideALBHTTPSHostWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref StyleguideALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - styleguide.*
+      ListenerArn: !Ref PlatformALBHTTPSListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  StyleguideALBHTTPHostWildcardListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref StyleguideALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - styleguide.*
+      ListenerArn: !Ref PlatformALBHTTPListenerArn
+      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  # ECS Service
+  StyleguideTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: !Ref ContainerCpu
+          Environment:
+            - Name: APP_NAME
+              Value: "styleguide"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref StyleguideSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/styleguide.prx.org:${StyleguideEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref StyleguideLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: !Ref ContainerMemory
+          Name: !FindInMap [Shared, Container, name]
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 80
+  StyleguideService:
+    Type: "AWS::ECS::Service"
+    Properties:
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !FindInMap [Shared, Container, name]
+          ContainerPort: 80
+          TargetGroupArn: !Ref StyleguideALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
+      TaskDefinition: !Ref StyleguideTaskDefinition
+  StyleguideWebRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Record sets for dualstack web traffic to a styleguide instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !Sub styleguide.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+        - Type: A
+          Name: !Sub styleguide.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Ref PlatformALBDNSName
+            HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
+  # CloudWatch Alarms
+  StyleguideALBTargetGroup500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Styleguide][ALB][Error] Target 5XX"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >
+        5XX server errors originating from the styleguide target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref PlatformALBFullName
+        - Name: TargetGroup
+          Value: !GetAtt StyleguideALBTargetGroup.TargetGroupFullName
+Outputs:
+  HostedZoneDNSName:
+    Description: Convenience domain name for the ALB in a hosted zone
+    Value: !Sub |
+      styleguide.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
