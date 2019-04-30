@@ -14,6 +14,14 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
+  Destinations:
+    Type: AWS::SSM::Parameter::Value<String>
+  KinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
+  IdHost:
+    Type: AWS::SSM::Parameter::Value<String>
+  SignerSecret:
+    Type: AWS::SSM::Parameter::Value<String>
 Mappings:
   EnvironmentTypeMap:
     Testing:
@@ -55,6 +63,18 @@ Resources:
               Action:
                 - "sts:AssumeRole"
       Path: "/"
+      Policies:
+        - PolicyName: KinesisWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref KinesisStream
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   PixelLambdaFunction:
@@ -65,6 +85,12 @@ Resources:
         S3Key: lambda/PRX-pixel.prx.org.zip
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: API Gateway pixel tracker
+      Environment:
+        Variables:
+          DESTINATIONS: !Ref Destinations
+          KINESIS_STREAM: !Ref KinesisStream
+          ID_HOST: !Ref IdHost
+          SIGNER_SECRET: !Ref SignerSecret
       Handler: index.handler
       MemorySize: 192
       Role: !GetAtt PixelLambdaIamRole.Arn
