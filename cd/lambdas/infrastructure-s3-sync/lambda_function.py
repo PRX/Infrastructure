@@ -58,12 +58,13 @@ def sync_source(job):
     archive = zipfile.ZipFile(archive_path, 'r')
     names = archive.namelist()
     for name in names:
-        print(f'...Uploading {name}...')
+        if f'{name}'.startswith('stacks/'):
+                print(f'...Uploading {name}...')
 
-        f = archive.open(name)
+                f = archive.open(name)
 
-        output_key = "{0}/{1}".format(sha, name)
-        s3.upload_fileobj(f, output_bucket, output_key)
+                output_key = "{0}/{1}".format(sha, name)
+                s3.upload_fileobj(f, output_bucket, output_key)
 
 
 def lambda_handler(event, context):
