@@ -68,160 +68,160 @@ Parameters:
     Type: String
     Default: "/sessions/new"
 Resources:
-  NLB:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
-    Properties:
-      IpAddressType: ipv4
-      Scheme: internet-facing
-      Subnets:
-        - !Ref VPCSubnet1
-        - !Ref VPCSubnet2
-        - !Ref VPCSubnet3
-      Type: network
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub ${AppName}-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  NLBSphinxListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      LoadBalancerArn: !Ref NLB
-      Port: 9312
-      Protocol: TCP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref NLBTargetGroup
-  NLBHTTPListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      LoadBalancerArn: !Ref NLB
-      Port: 80
-      Protocol: TCP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref NLBTargetGroup
-  NLBHTTPSListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
-    Properties:
-      Certificates:
-        - CertificateArn: !Ref VPCCertificateArn
-      LoadBalancerArn: !Ref NLB
-      Port: 443
-      Protocol: TLS
-      SslPolicy: "ELBSecurityPolicy-2016-08"
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref NLBTargetGroup
-  NLBTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
-    DependsOn: NLB
-    Properties:
-      HealthCheckIntervalSeconds: 10
-      HealthyThresholdCount: 3
-      UnhealthyThresholdCount: 3
-      Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}-${VPC}
-      Port: 80
-      Protocol: TCP
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: "30"
-      TargetType: ip
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub ${AppName}-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      VpcId: !Ref VPC
-  # CloudWatch Alarms
-  NLBTarget500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[${AppName}][NLB][Error] Target 5XX"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: !Sub |
-        5XX server errors originating from the ${AppName} application
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
-      MetricName: HTTPCode_Target_5XX_Count
-      Namespace: AWS/ApplicationELB
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt NLB.LoadBalancerFullName
-  NLB500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[${AppName}][NLB][Error] LB 5XX"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: !Sub |
-        5XX load balancer errors originating from the ${AppName} load balancer
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 3
-      MetricName: HTTPCode_ELB_5XX_Count
-      Namespace: AWS/ApplicationELB
-      Period: 60
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt NLB.LoadBalancerFullName
-  NLBResponseTimeP95Alarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[${AppName}][NLB][TargetResponseTime] P95 extremely slow"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      AlarmDescription: !Sub |
-        Target response time value for ${AppName} load balancer targets at 95th
-        percentile higher than expected
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      ExtendedStatistic: p95
-      MetricName: TargetResponseTime
-      Namespace: AWS/ApplicationELB
-      Period: 300
-      Threshold: 0.2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt NLB.LoadBalancerFullName
+  # NLB:
+  #   Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+  #   Properties:
+  #     IpAddressType: ipv4
+  #     Scheme: internet-facing
+  #     Subnets:
+  #       - !Ref VPCSubnet1
+  #       - !Ref VPCSubnet2
+  #       - !Ref VPCSubnet3
+  #     Type: network
+  #     Tags:
+  #       - Key: Project
+  #         Value: !Ref AppName
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentType
+  #       - Key: Name
+  #         Value: !Sub ${AppName}-${EnvironmentType}
+  #       - Key: "prx:cloudformation:stack-name"
+  #         Value: !Ref AWS::StackName
+  #       - Key: "prx:cloudformation:stack-id"
+  #         Value: !Ref AWS::StackId
+  # NLBSphinxListener:
+  #   Type: "AWS::ElasticLoadBalancingV2::Listener"
+  #   Properties:
+  #     LoadBalancerArn: !Ref NLB
+  #     Port: 9312
+  #     Protocol: TCP
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref NLBTargetGroup
+  # NLBHTTPListener:
+  #   Type: "AWS::ElasticLoadBalancingV2::Listener"
+  #   Properties:
+  #     LoadBalancerArn: !Ref NLB
+  #     Port: 80
+  #     Protocol: TCP
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref NLBTargetGroup
+  # NLBHTTPSListener:
+  #   Type: "AWS::ElasticLoadBalancingV2::Listener"
+  #   Properties:
+  #     Certificates:
+  #       - CertificateArn: !Ref VPCCertificateArn
+  #     LoadBalancerArn: !Ref NLB
+  #     Port: 443
+  #     Protocol: TLS
+  #     SslPolicy: "ELBSecurityPolicy-2016-08"
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref NLBTargetGroup
+  # NLBTargetGroup:
+  #   Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+  #   DependsOn: NLB
+  #   Properties:
+  #     HealthCheckIntervalSeconds: 10
+  #     HealthyThresholdCount: 3
+  #     UnhealthyThresholdCount: 3
+  #     Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}-${VPC}
+  #     Port: 80
+  #     Protocol: TCP
+  #     TargetGroupAttributes:
+  #       - Key: deregistration_delay.timeout_seconds
+  #         Value: "30"
+  #     TargetType: ip
+  #     Tags:
+  #       - Key: Project
+  #         Value: !Ref AppName
+  #       - Key: Environment
+  #         Value: !Ref EnvironmentType
+  #       - Key: Name
+  #         Value: !Sub ${AppName}-${EnvironmentType}
+  #       - Key: "prx:cloudformation:stack-name"
+  #         Value: !Ref AWS::StackName
+  #       - Key: "prx:cloudformation:stack-id"
+  #         Value: !Ref AWS::StackId
+  #     VpcId: !Ref VPC
+  # # CloudWatch Alarms
+  # NLBTarget500Alarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[${AppName}][NLB][Error] Target 5XX"
+  #     AlarmActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     AlarmDescription: !Sub |
+  #       5XX server errors originating from the ${AppName} application
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 2
+  #     MetricName: HTTPCode_Target_5XX_Count
+  #     Namespace: AWS/ApplicationELB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 1
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: LoadBalancer
+  #         Value: !GetAtt NLB.LoadBalancerFullName
+  # NLB500Alarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[${AppName}][NLB][Error] LB 5XX"
+  #     AlarmActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref OpsErrorMessagesSnsTopicArn
+  #     AlarmDescription: !Sub |
+  #       5XX load balancer errors originating from the ${AppName} load balancer
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 3
+  #     MetricName: HTTPCode_ELB_5XX_Count
+  #     Namespace: AWS/ApplicationELB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 2
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: LoadBalancer
+  #         Value: !GetAtt NLB.LoadBalancerFullName
+  # NLBResponseTimeP95Alarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[${AppName}][NLB][TargetResponseTime] P95 extremely slow"
+  #     AlarmActions:
+  #       - !Ref OpsWarnMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref OpsWarnMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref OpsWarnMessagesSnsTopicArn
+  #     AlarmDescription: !Sub |
+  #       Target response time value for ${AppName} load balancer targets at 95th
+  #       percentile higher than expected
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     EvaluationPeriods: 1
+  #     ExtendedStatistic: p95
+  #     MetricName: TargetResponseTime
+  #     Namespace: AWS/ApplicationELB
+  #     Period: 300
+  #     Threshold: 0.2
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: LoadBalancer
+  #         Value: !GetAtt NLB.LoadBalancerFullName
   # ECS Service - Web
   WebLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -261,36 +261,36 @@ Resources:
           Command:
             - web
       NetworkMode: awsvpc
-  WebService:
-    Type: "AWS::ECS::Service"
-    DependsOn:
-      - NLBSphinxListener
-      - NLBHTTPListener
-      - NLBHTTPSListener
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
-      LoadBalancers:
-        - ContainerName: !Sub ${AppName}-web
-          ContainerPort: !Ref ContainerPort
-          TargetGroupArn: !Ref NLBTargetGroup
-      Role: !Ref ECSServiceIAMRole
-      TaskDefinition: !Ref WebTaskDefinition
-  # Route 53
-  WebRecordSetGroup:
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Record sets for dualstack web traffic to a web app instance
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: A
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
-          AliasTarget:
-            DNSName: !Sub dualstack.${NLB.DNSName}
-            HostedZoneId: !GetAtt NLB.CanonicalHostedZoneID
+  # WebService:
+  #   Type: "AWS::ECS::Service"
+  #   DependsOn:
+  #     - NLBSphinxListener
+  #     - NLBHTTPListener
+  #     - NLBHTTPSListener
+  #   Properties:
+  #     Cluster: !Ref ECSCluster
+  #     DeploymentConfiguration:
+  #       MaximumPercent: 200
+  #       MinimumHealthyPercent: 50
+  #     DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
+  #     LoadBalancers:
+  #       - ContainerName: !Sub ${AppName}-web
+  #         ContainerPort: !Ref ContainerPort
+  #         TargetGroupArn: !Ref NLBTargetGroup
+  #     Role: !Ref ECSServiceIAMRole
+  #     TaskDefinition: !Ref WebTaskDefinition
+  # # Route 53
+  # WebRecordSetGroup:
+  #   Type: "AWS::Route53::RecordSetGroup"
+  #   Properties:
+  #     Comment: Record sets for dualstack web traffic to a web app instance
+  #     HostedZoneName: prx.tech.
+  #     RecordSets:
+  #       - Type: A
+  #         Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+  #         AliasTarget:
+  #           DNSName: !Sub dualstack.${NLB.DNSName}
+  #           HostedZoneId: !GetAtt NLB.CanonicalHostedZoneID
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the NLB in a hosted zone
