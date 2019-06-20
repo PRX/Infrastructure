@@ -15,8 +15,27 @@ Metadata:
       - Label:
           default: CloudFormation Stacks
         Parameters:
+          - InfrastructureNotificationsStackName
           - StagingCloudFormationStackName
           - ProductionCloudFormationStackName
+      - Label:
+          default: Staging Dovetail CDN
+        Parameters:
+          - StagingOriginBucket
+          - StagingOriginPath
+          - StagingDistributionDomain
+      - Label:
+          default: Production Dovetail CDN
+        Parameters:
+          - ProductionOriginBucket
+          - ProductionOriginPath
+          - ProductionDistributionDomain
+      - Label:
+          default: Common CDN
+        Parameters:
+          - CertificateArn
+          - BytesLambdaFunctionArn
+          - StitchLambdaFunctionArn
     ParameterLabels:
       GitHubToken:
         default: Access token
@@ -28,7 +47,57 @@ Metadata:
         default: Staging stack name
       ProductionCloudFormationStackName:
         default: Production stack name
+      StagingOriginBucket:
+        default: Origin bucket
+      StagingOriginPath:
+        default: Origin path
+      StagingDistributionDomain:
+        default: Distribution domain
+      ProductionOriginBucket:
+        default: Origin bucket
+      ProductionOriginPath:
+        default: Origin path
+      ProductionDistributionDomain:
+        default: Distribution domain
+      BytesLambdaFunctionArn:
+        default: Unqualified Bytes Lambda function ARN
+      StitchLambdaFunctionArn:
+        default: Unqualified Stitch Lambda function ARN
 Parameters:
+  StagingOriginBucket:
+    Default: prx-dovetail.s3.amazonaws.com
+    Description: >
+      The DNS name of the Amazon S3 bucket from which you want CloudFront to
+      get objects for this origin, for example, myawsbucket.s3.amazonaws.com.
+    Type: String
+  StagingOriginPath:
+    Default: /stitch-staging
+    Description: >
+      An optional element that causes CloudFront to request your content from a
+      directory in your Amazon S3 bucket or your custom origin, beginning with
+      a / (forward slash).
+    Type: String
+  StagingDistributionDomain:
+    Default: dovetail-cdn-staging.prxu.org
+    Description: eg. dovetail-cdn.prxu.org
+    Type: String
+  ProductionOriginBucket:
+    Default: prx-dovetail.s3.amazonaws.com
+    Description: >
+      The DNS name of the Amazon S3 bucket from which you want CloudFront to
+      get objects for this origin, for example, myawsbucket.s3.amazonaws.com.
+    Type: String
+  ProductionOriginPath:
+    Default: /stitch-production
+    Description: >
+      An optional element that causes CloudFront to request your content from a
+      directory in your Amazon S3 bucket or your custom origin, beginning with
+      a / (forward slash).
+    Type: String
+  ProductionDistributionDomain:
+    Default: dovetail-cdn.prxu.org
+    Description: eg. dovetail-cdn.prxu.org
+    Type: String
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Type: String
@@ -40,36 +109,28 @@ Parameters:
   GitHubWebhookSecret:
     Description: >
       A secret used to sign requests made by GitHub to webhook endpoints.
-      This secret shared by all webhooks created by this template.
+      This secret is shared by all webhooks created by this template.
     Type: String
   StagingCloudFormationStackName:
+    Default: cloudfront-dovetail-cdn-staging
     Description: >
       The name of the CloudFormation stack that manages the staging deployment
       of Dovetail CloudFront distribution
     Type: String
   ProductionCloudFormationStackName:
+    Default: cloudfront-dovetail-cdn-production
     Description: >
       The name of the CloudFormation stack that manages the production
       deployment of Dovetail CloudFront distribution
     Type: String
   StitchLambdaFunctionArn:
     Description: >
-      e.g., arn:aws:lambda:<region>:<account>:function:<name>:<version>
+      e.g., arn:aws:lambda:<region>:<account>:function:<name>
     Type: String
   BytesLambdaFunctionArn:
     Description: >
-      e.g., arn:aws:lambda:<region>:<account>:function:<name>:<version>
+      e.g., arn:aws:lambda:<region>:<account>:function:<name>
     Type: String
-  # TODO Clean these up
-  OriginBucket:
-    Type: String
-    Description: eg. prx-dovetail.s3.amazonaws.com
-  OriginPath:
-    Type: String
-    Description: eg. /stitch-production, /stitch-staging
-  DistributionDomain:
-    Type: String
-    Description: eg. dovetail-cdn.prxu.org
   CertificateArn:
     Type: String
     Description: eg. arn:aws:acm:<region>:<account>:certificate/<guid>
@@ -187,9 +248,9 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     # These are the parameters of cdn/dovetail-cdn.yml
-                    "OriginBucket": "${OriginBucket}",
-                    "OriginPath": "${OriginPath}",
-                    "DistributionDomain": "${DistributionDomain}",
+                    "OriginBucket": "${StagingOriginBucket}",
+                    "OriginPath": "${StagingOriginPath}",
+                    "DistributionDomain": "${StagingDistributionDomain}",
                     "CertificateArn": "${CertificateArn}",
                     "LambdaFunctionArn": "${StitchLambdaFunctionArn}",
                     "LambdaBytesFunctionArn": "${BytesLambdaFunctionArn}",
@@ -243,9 +304,9 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     # These are the parameters of cdn/dovetail-cdn.yml
-                    "OriginBucket": "${OriginBucket}",
-                    "OriginPath": "${OriginPath}",
-                    "DistributionDomain": "${DistributionDomain}",
+                    "OriginBucket": "${ProductionOriginBucket}",
+                    "OriginPath": "${ProductionOriginPath}",
+                    "DistributionDomain": "${ProductionDistributionDomain}",
                     "CertificateArn": "${CertificateArn}",
                     "LambdaFunctionArn": "${StitchLambdaFunctionArn}",
                     "LambdaBytesFunctionArn": "${BytesLambdaFunctionArn}",
