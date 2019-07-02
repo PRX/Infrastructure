@@ -569,42 +569,44 @@ Resources:
   GroveStack:
     Type: "AWS::CloudFormation::Stack"
     Condition: IsStaging
-    DependsOn: ECSClusterStack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
       Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Grove, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
-        GroveEcrImageTag: !Ref GroveEcrImageTag
-        GroveSecretsVersion: !Ref GroveSecretsVersion
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        PlatformALBListenerPriorityPrefix: !Ref GrovePlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref GroveEcrImageTag
+        SecretsVersion: !Ref GroveSecretsVersion
+        AppName: "grove"
+        CreateWorker: "false"
+        ContainerPort: "4000"
+        HealthCheckPath: "/api/v1"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/grove.prx.org.yml"]]
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
       TimeoutInMinutes: 5
