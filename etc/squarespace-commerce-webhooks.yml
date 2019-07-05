@@ -1,0 +1,258 @@
+# etc/squarespace-commerce-webhooks.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Wires up Stripe payments webhooks and the Squarespace Commerce API to allow
+  sales notifications to Slack
+Parameters:
+  SquarespaceApiToken:
+    Type: String
+  StripeWebhookSigningSecret:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+  LogGroupRetentionPolicyFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: >
+      The Parameter Store key for the log group retention policy function's
+      ARN (not the ARN itself)
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+Resources:
+  # API Gateway
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref AWS::StackName
+      Description: Stripe webhook callback endpoints
+  RestApiWebhooksResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: webhooks
+  RestApiWebhooksPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestApiWebhooksResource
+  RestApiDeployment:
+    DependsOn:
+      - RestApiWebhooksPostMethod
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref RestApi
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: prod
+      Description: Production API
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeployment
+  # Integration
+  LambdaIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          const https = require('https');
+          const AWS = require('aws-sdk');
+          const url = require('url');
+
+          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+          const SLACK_CHANNEL = '#garage-registration';
+          const SLACK_USERNAME = 'Squarespace';
+          const SLACK_ICON = ':squarespace:';
+
+          function snsSlackRelay(slackMessage) {
+              return new Promise((resolve, reject) => {
+                  sns.publish({
+                      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+                      Message: JSON.stringify(slackMessage),
+                  }, (err, data) => {
+                      if (err) {
+                          reject(err);
+                      } else {
+                          resolve();
+                      }
+                  });
+              });
+          }
+
+          function httpGet(reqUrl) {
+              return new Promise((resolve, reject) => {
+                  // Setup request options
+                  const options = url.parse(reqUrl);
+                  options.method = 'GET';
+                  options.headers = {
+                      'Authorization': `Bearer ${process.env.SQUARESPACE_API_TOKEN}`,
+                      'User-Agent': 'PRX/1.0.0 (AWS Lambda/Node)',
+                  };
+
+                  // Request with response handler
+                  const req = https.request(options, (res) => {
+                      res.setEncoding('utf8');
+
+                      let json = '';
+                      res.on('data', (chunk) => { json += chunk; });
+                      res.on('end', () => {
+                          try {
+
+                              const resPayload = JSON.parse(json);
+                              resolve(resPayload);
+                          } catch (e) {
+                              console.error('Error handling JSON response!');
+                              reject(e);
+                          }
+                      });
+                  });
+
+                  // Generic request error handling
+                  req.on('error', e => reject(e));
+
+                  req.end();
+              });
+          }
+
+          async function getOrder(orderId) {
+              console.info(`Getting Sqsqp order ${orderId}`);
+              const orderUrl = `https://api.squarespace.com/1.0/commerce/orders/${orderId}`;
+              const order = await httpGet(orderUrl);
+              return order;
+          }
+
+          async function getAllInventory(cursor) {
+              console.info(`Getting Sqsqp inventory ${cursor}`);
+              const param = cursor ? `?cursor=${cursor}` : '';
+              const inventoryUrl = `https://api.squarespace.com/1.0/commerce/inventory${param}`;
+
+              const response = await httpGet(inventoryUrl);
+
+              if (response.pagination.hasNextPage) {
+                  console.log(`Paging ${response.pagination.nextPageCursor}`);
+                  const more = await getAllInventory(response.pagination.nextPageCursor);
+                  response.inventory.push(...more.inventory);
+              }
+
+              return response;
+          }
+
+          async function getInventory(variantId1) {
+              console.info(`Getting Sqsqp inventory ${variantId1}`);
+              const inventoryUrl = `https://api.squarespace.com/1.0/commerce/inventory/${variantId1}`;
+              const inventory = await httpGet(inventoryUrl);
+              return inventory.inventory[0];
+          }
+
+          exports.handler = async (event) => {
+              try {
+                  const stripePayload = JSON.parse(event.body);
+
+                  const sqspOrderId = stripePayload.data.object.metadata.id;
+                  const order = await getOrder(sqspOrderId);
+                  const allInventory = await getAllInventory();
+
+                  for (const lineItem of order.lineItems) {
+                      const variant = allInventory.inventory.find(i => i.sku === lineItem.sku);
+                      const inventory = await getInventory(variant.variantId);
+
+                      await snsSlackRelay({
+                          channel: SLACK_CHANNEL,
+                          username: SLACK_USERNAME,
+                          icon_emoji: SLACK_ICON,
+                          text: [
+                              `<mailto:${order.customerEmail}|${order.billingAddress.firstName} ${order.billingAddress.lastName}> ordered ${lineItem.quantity} ticket${lineItem.quantity === 1 ? '' : 's' } for *${inventory.descriptor}*`,
+                          ].join('\n')
+                      });
+                  }
+
+                  return { statusCode: 200, headers: {}, body: '' };
+              } catch (e) {
+                  console.error(e);
+                  return { statusCode: 200, headers: {}, body: '' };
+              }
+          };
+      Description: Backs Stripe/Squarespace webhook API Gateway
+      Environment:
+        Variables:
+          STRIPE_WEBHOOK_SIGNING_SECRET: !Ref StripeWebhookSigningSecret
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+          SQUARESPACE_API_TOKEN: !Ref SquarespaceApiToken
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 8
+  RestApiLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${RestApiStage}/*"
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Squarespace][Lambda][Error] Invocation 4XX"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        The error rate on the Squarespace sales lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref LambdaFunction
+  LambdaFunctionLogRetentionPolicy:
+    Type: Custom::LogGroupRetentionPolicy
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
+      RetentionInDays: 5
