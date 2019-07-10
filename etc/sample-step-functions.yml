@@ -1,0 +1,305 @@
+# etc/sample-step-functions.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  TKTKTK
+Resources:
+  # API Gateway
+  RestApiStepFunctionExecutionIamRole:
+    # This role is assumed by API Gateway to trigger the state machine. It's not
+    # used by Step Functions to perform the execution itself.
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !Ref StateMachine
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Ref AWS::StackName
+      Description: Step Functions HTTP API
+  RestApiFooResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: foo
+  RestApiBarResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref RestApiFooResource
+      PathPart: bar
+  RestApiBarPostMethod:
+    # Provides an HTTP POST endpoint to execute the Step Functions state
+    # machine. The request body is passed to the execution as `input`. The
+    # request body must be valid JSON.
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt RestApiStepFunctionExecutionIamRole.Arn
+        IntegrationHttpMethod: POST
+        IntegrationResponses:
+            - ResponseTemplates:
+                application/json: ""
+              StatusCode: "200"
+            - ResponseTemplates:
+                application/json: ""
+              StatusCode: "400"
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json:
+            Fn::Sub:
+              - |
+                {
+                  "input": "$util.escapeJavaScript($input.json('$'))",
+                  "stateMachineArn": "${stateMachineArn}"
+                }
+              - stateMachineArn: !Ref StateMachine
+        Type: AWS
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:states:action/StartExecution
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: "200"
+        - ResponseModels:
+            application/json: Empty
+          StatusCode: "400"
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestApiBarResource
+  RestApiDeploymentX:
+    DependsOn:
+      - RestApiBarPostMethod
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref RestApi
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: main
+      Description: Main stage
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestApiDeploymentX
+  # SNS
+  ## Messages sent to this topic will be handled by a Lambda function which
+  ## executes the Step Functions state machine. The `input` to the state machine
+  ## execution will be the body of the SNS message. The SNS message must be
+  ## valic JSON.
+  SnsTopic:
+    Type: AWS::SNS::Topic
+  SnsTopicLambdaIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource:
+                  - !Ref StateMachine
+  SnsTopicLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |-
+          const AWS = require('aws-sdk');
+          const stepfunctions = new AWS.StepFunctions({ apiVersion: '2016-11-23' });
+
+          function stepfunctionsStartExecution(stateMachineArn, input) {
+            return (new Promise((resolve, reject) => {
+              stepfunctions.startExecution({
+                stateMachineArn,
+                input,
+              },  (e) => {
+                  if (e) {
+                      console.error(e);
+                      reject(e);
+                  } else {
+                      console.log('startExecution done');
+                      resolve();
+                  }
+              });
+            }));
+          }
+
+          exports.handler = async (event) => {
+            await stepfunctionsStartExecution(process.env.STATE_MACHINE_ARN, event.Records[0].Sns.Message);
+          };
+      Description: >
+        tktktk
+      Environment:
+        Variables:
+          ACCOUNT_ID: !Ref AWS::AccountId
+          STATE_MACHINE_ARN: !Ref StateMachine
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt SnsTopicLambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: foo
+          Value: bar
+      Timeout: 8
+  SnsTopicLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SnsTopicLambdaFunction.Arn
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref SnsTopic
+  SnsTopicLambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt SnsTopicLambdaFunction.Arn
+      Protocol: lambda
+      TopicArn: !Ref SnsTopic
+  # Step Functions
+  StateMachineIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub states.${AWS::Region}.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaTaskPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt AnalyzeLambdaFunction.Arn
+  StateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      DefinitionString:
+        Fn::Sub:
+          - |-
+            {
+              "StartAt": "Analyze",
+              "States": {
+                "Analyze": {
+                  "Type": "Task",
+                  "Resource": "${AnalyzeLambdaFunctionArn}",
+                  "Next": "CompressionChoice"
+                },
+                "CompressionChoice": {
+                  "Type": "Choice",
+                  "Choices": [
+                    {
+                      "Variable": "$.flac",
+                      "BooleanEquals": true,
+                      "Next": "LosslessPath"
+                    }, {
+                      "Variable": "$.flac",
+                      "BooleanEquals": false,
+                      "Next": "LossyPath"
+                    }
+                  ]
+                },
+                "LosslessPath": {
+                  "Type": "Succeed"
+                },
+                "LossyPath": {
+                  "Type": "Succeed"
+                }
+              }
+            }
+          - AnalyzeLambdaFunctionArn: !GetAtt AnalyzeLambdaFunction.Arn
+      RoleArn: !GetAtt StateMachineIamRole.Arn
+      Tags:
+        - Key: foo
+          Value: bar
+  # Tasks
+  ## Analyze Lambda
+  AnalyzeLambdaIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName: XrayPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                Resource:
+                  - "*"
+  AnalyzeLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |-
+          exports.handler = async (event) => {
+              return Object.assign(event, {
+                  inputFormat: 'wav',
+                  inputBitDepth: '16',
+                  inputSampleRate: '44100',
+              });
+          };
+      Description: >
+        tktk
+      Environment:
+        Variables:
+          ACCOUNT_ID: !Ref AWS::AccountId
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt AnalyzeLambdaIamRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: foo
+          Value: bar
+      Timeout: 8
