@@ -12,6 +12,8 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
   BigqueryFunctionName:
     Type: String
   DynamodbFunctionName:
@@ -50,6 +52,24 @@ Resources:
           MetricNamespace: LogMetrics
           MetricValue: "1"
   # dynamodb metrics
+  AnalyticsDynamodbInsertsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dynamodb" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_inserts_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsDynamodbLookupsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "kinesis*" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_lookups_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
   AnalyticsDynamodbErrorsMetric:
     Type: "AWS::Logs::MetricFilter"
     Properties:
@@ -97,6 +117,15 @@ Resources:
           MetricNamespace: LogMetrics
           MetricValue: "1"
   # redis metrics
+  AnalyticsRedisInsertsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "redis*" }'
+      LogGroupName: !Sub "/aws/lambda/${RedisFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_redis_inserts_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
   AnalyticsRedisErrorsMetric:
     Type: "AWS::Logs::MetricFilter"
     Properties:
