@@ -43,6 +43,13 @@ Parameters:
     Type: String
   PixelPrxOrgCodeS3ObjectVersion:
     Type: String
+  # TEMP: legacy analytics-ingest-lambda function names for log filters
+  AnalyticsBigqueryFunctionName:
+    Type: String
+  AnalyticsPingbacksFunctionName:
+    Type: String
+  AnalyticsRedisFunctionName:
+    Type: String
 Resources:
   UploadLambdaStack:
     Type: "AWS::CloudFormation::Stack"
@@ -237,6 +244,34 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-lambdas.yml"]]
+      TimeoutInMinutes: 5
+  AnalyticsIngestFiltersStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        BigqueryFunctionName: !Ref AnalyticsBigqueryFunctionName
+        DynamodbFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionName
+        PingbacksFunctionName: !Ref AnalyticsPingbacksFunctionName
+        RedisFunctionName: !Ref AnalyticsRedisFunctionName
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-filters.yml"]]
       TimeoutInMinutes: 5
   AnalyticsIngestAlarmsStack:
     Type: "AWS::CloudFormation::Stack"
