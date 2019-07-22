@@ -1,0 +1,108 @@
+# stacks/serverless/analytics-ingest-filters.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cloudwatch log metric-filters and alarms for analytics-ingest-lambdas
+Conditions:
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  BigqueryFunctionName:
+    Type: String
+  DynamodbFunctionName:
+    Type: String
+  PingbacksFunctionName:
+    Type: String
+  RedisFunctionName:
+    Type: String
+Resources:
+  # bigquery metrics
+  AnalyticsBigqueryDownloadsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dt_downloads" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_downloads_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsBigqueryImpressionsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dt_impressions" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_impressions_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsBigqueryErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  # dynamodb metrics
+  AnalyticsDynamodbErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  # pingbacks metrics
+  AnalyticsPingbacksAdzerkMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "engine.adzerk.net" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_adzerk_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsPingbacksOtherMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest != "engine.adzerk.net" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_other_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsPingbacksFailMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg != "PINGFAIL" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_fails_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsPingbacksErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  # redis metrics
+  AnalyticsRedisErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${RedisFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_redis_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
