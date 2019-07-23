@@ -1,0 +1,126 @@
+# dns/passengerlist.org-hosted_zone.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for passengerlist.org
+Parameters:
+  Domain:
+    Default: passengerlist.org.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Passenger List
+      HostedZoneTags:
+        - Key: Project
+          Value: Passenger List
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Name: !Ref Domain
+  Feeds:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Type: A
+          Name: !Sub feed.${Domain}
+          AliasTarget:
+            DNSName: d34uzgfh42oway.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+  Aws:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - _e26a0212e6abaaeeb555d763fe3e59cf.duyqrilejt.acm-validations.aws.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub _44fe349aefad3b4fbb2f560148a6968b.feed.${Domain}
+  Website:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: WWW
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Type: A
+          Name: !Ref Domain
+          AliasTarget:
+            DNSName: d1razabfe671zf.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: A
+          Name: !Sub www.${Domain}
+          AliasTarget:
+            DNSName: d1razabfe671zf.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+  Text:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - '"google-site-verification=hajnqPJ2ynpAruXLjJfCHvnxX4J2IepG6dNRb6qDxws"'
+          TTL: "300"
+          Type: TXT
+          Name: !Ref Domain
+        - ResourceRecords:
+            - '"10c08419de222ee3"'
+          TTL: "300"
+          Type: TXT
+          Name: !Sub zendeskverification.${Domain}
+  GSuite:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: G Suite
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "1 ASPMX.L.GOOGLE.COM."
+            - "5 ALT1.ASPMX.L.GOOGLE.COM."
+            - "5 ALT2.ASPMX.L.GOOGLE.COM."
+            - "10 ASPMX2.GOOGLEMAIL.COM."
+            - "10 ASPMX3.GOOGLEMAIL.COM."
+          TTL: "300"
+          Type: MX
+          Name: !Ref Domain
+  Zendesk:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Zendesk
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk1.${Domain}
+        - ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk2.${Domain}
+        - ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk3.${Domain}
+        - ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk4.${Domain}
