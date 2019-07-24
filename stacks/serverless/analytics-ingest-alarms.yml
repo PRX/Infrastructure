@@ -12,9 +12,87 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
+  BigqueryFunctionArn:
+    Type: String
   DynamodbFunctionArn:
     Type: String
+  PingbacksFunctionArn:
+    Type: String
+  RedisFunctionArn:
+    Type: String
 Resources:
+  AnalyticsBigqueryErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][Errors] ${EnvironmentType} > 1"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too many analytics bigquery lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BigqueryFunctionArn
+  AnalyticsBigqueryIteratorAgeWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][IteratorAge] ${EnvironmentType} > 15 minutes"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Processing is slightly behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BigqueryFunctionArn
+  AnalyticsBigqueryIteratorAgeFatalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][BigQuery][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BigqueryFunctionArn
   AnalyticsDynamodbErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
@@ -87,3 +165,147 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref DynamodbFunctionArn
+  AnalyticsPingbacksErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Pingbacks][Errors] ${EnvironmentType} > 1"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too many analytics pingbacks lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PingbacksFunctionArn
+  AnalyticsPingbacksIteratorAgeWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Pingbacks][IteratorAge] ${EnvironmentType} > 15 minutes"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Processing is slightly behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PingbacksFunctionArn
+  AnalyticsPingbacksIteratorAgeFatalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Pingbacks][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PingbacksFunctionArn
+  AnalyticsRedisErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Redis][Errors] ${EnvironmentType} > 1"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too many analytics redis lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RedisFunctionArn
+  AnalyticsRedisIteratorAgeWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Redis][IteratorAge] ${EnvironmentType} > 15 minutes"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Processing is slightly behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RedisFunctionArn
+  AnalyticsRedisIteratorAgeFatalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AnalyticsLambda][Redis][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RedisFunctionArn
