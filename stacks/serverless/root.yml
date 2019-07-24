@@ -226,17 +226,52 @@ Resources:
             !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
         CodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
         EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        VPCSecurityGroup: !Ref VPCSecurityGroup
+        VPCSubnet1: !Ref VPCSubnet1
+        VPCSubnet2: !Ref VPCSubnet2
+        VPCSubnet3: !Ref VPCSubnet3
         MetricsKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/METRICS_KINESIS_STREAM"
         DynamodbKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"
         DynamodbTableName: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TABLE_NAME"
         DynamodbAccessRole: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_ACCESS_ROLE"
         DynamodbTTL: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TTL"
+        RedisHost: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/REDIS_HOST"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-lambdas.yml"]]
+      TimeoutInMinutes: 5
+  AnalyticsIngestFiltersStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        BigqueryFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.BigqueryFunctionName
+        DynamodbFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionName
+        PingbacksFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.PingbacksFunctionName
+        RedisFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.RedisFunctionName
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-filters.yml"]]
       TimeoutInMinutes: 5
   AnalyticsIngestAlarmsStack:
     Type: "AWS::CloudFormation::Stack"
@@ -255,7 +290,10 @@ Resources:
           Fn::ImportValue:
             !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
+        BigqueryFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.BigqueryFunctionArn
         DynamodbFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionArn
+        PingbacksFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.PingbacksFunctionArn
+        RedisFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.RedisFunctionArn
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName

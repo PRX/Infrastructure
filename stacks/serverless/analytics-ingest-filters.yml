@@ -1,0 +1,217 @@
+# stacks/serverless/analytics-ingest-filters.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Cloudwatch log metric-filters and alarms for analytics-ingest-lambdas
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  BigqueryFunctionName:
+    Type: String
+  DynamodbFunctionName:
+    Type: String
+  PingbacksFunctionName:
+    Type: String
+  RedisFunctionName:
+    Type: String
+Resources:
+  # bigquery metrics
+  AnalyticsBigqueryDownloadsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dt_downloads" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_downloads_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsBigqueryImpressionsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dt_impressions" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_impressions_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsBigqueryErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${BigqueryFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_bigquery_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsBigqueryErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Analytics][BigQuery][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Logged errors on the analytics bigquery function
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "analytics_bigquery_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  # dynamodb metrics
+  AnalyticsDynamodbInsertsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "dynamodb" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_inserts_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsDynamodbLookupsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "kinesis*" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_lookups_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsDynamodbErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${DynamodbFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_dynamodb_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsDynamodbErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Analytics][DynamoDB][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Logged errors on the analytics dynamodb function
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "analytics_dynamodb_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  # pingbacks metrics
+  AnalyticsPingbacksAdzerkMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "engine.adzerk.net" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_adzerk_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsPingbacksOtherMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest != "engine.adzerk.net" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_other_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsPingbacksFailMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.msg = "PINGFAIL*" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_fails_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsPingbacksErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${PingbacksFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_pingbacks_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsPingbacksErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Analytics][Pingbacks][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Logged errors on the analytics pingbacks function
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "analytics_pingbacks_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  # redis metrics
+  AnalyticsRedisInsertsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.dest = "redis*" }'
+      LogGroupName: !Sub "/aws/lambda/${RedisFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_redis_inserts_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: $.rows
+  AnalyticsRedisErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${RedisFunctionName}"
+      MetricTransformations:
+        - MetricName: !Sub "analytics_redis_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AnalyticsRedisErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Analytics][Redis][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Logged errors on the analytics redis function
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "analytics_redis_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching

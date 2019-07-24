@@ -1,13 +1,17 @@
 # stacks/serverless/analytics-ingest-lambda.yml
 # This stack creates 4 lambda functions subscribed to kinesis streams:
-#   1) TODO: move analytics-bigquery
-#   2) TODO: move analytics-pingbacks
-#   3) TODO: move analytics-redis
+#   1) analytics-bigquery
+#      - store 'combined' records (downloads and impressions) in bigquery
+#   2) analytics-pingbacks
+#      - run adzerk impression pingbacks for 'combined' records
+#      - run 3rd-party impression pingbacks for 'combined' records
+#   3) analytics-redis
+#      - INCR castle's redis with 'combined' record real-time downloads
 #   4) analytics-dynamodb - IAB 2.0 compliant downloads
-#      a) store temporary 'antebytes' records from dovetail.prx.org in ddb
-#      b) process 'bytes'/'segmentbytes' records from dovetail-counts-lambda,
-#         lookup the records in ddb, change them to type 'postbytes' and place
-#         back onto kinesis to be process by functions 1/2/3.
+#      - store temporary 'antebytes' records from dovetail.prx.org in ddb
+#      - process 'bytes'/'segmentbytes' records from dovetail-counts-lambda,
+#        lookup the records in ddb, change them to type 'postbytes' and place
+#        back onto kinesis to be process by functions 1/2/3.
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Analytics ingest lambda functions
 Parameters:
@@ -17,6 +21,16 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  VPCSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
   MetricsKinesisStream:
     Type: AWS::SSM::Parameter::Value<String>
   DynamodbKinesisStream:
@@ -27,9 +41,11 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   DynamodbTTL:
     Type: AWS::SSM::Parameter::Value<String>
+  RedisHost:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
-  # IAM Roles
-  AnalyticsDynamodbExecutionIAMRole:
+  # Shared IAM Role
+  AnalyticsLambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -61,9 +77,49 @@ Resources:
               - Effect: Allow
                 Action: "sts:AssumeRole"
                 Resource: !Ref DynamodbAccessRole
+        - PolicyName: ParameterStoreReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:DescribeParameters"
+                  - "ssm:GetParameters"
+                  - "ssm:GetParametersByPath"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
   # Lambda Functions
+  AnalyticsBigqueryLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-analytics-ingest-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics to bigquery
+      Environment:
+        Variables:
+          # TODO: get these out of the code and into CFN somehow
+          PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-bigquery"
+          BQ_PROJECT_ID: "prx-metrics"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
+      Handler: index.handler
+      MemorySize: 384
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 30
   AnalyticsDynamodbLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -81,7 +137,7 @@ Resources:
           KINESIS_STREAM: !Ref MetricsKinesisStream
       Handler: index.handler
       MemorySize: 256
-      Role: !GetAtt AnalyticsDynamodbExecutionIAMRole.Arn
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs8.10
       Tags:
         - Key: Project
@@ -93,7 +149,75 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       Timeout: 30
+  AnalyticsPingbacksLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-analytics-ingest-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics http pingbacks
+      Environment:
+        Variables:
+          PINGBACKS: "true"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
+      Handler: index.handler
+      MemorySize: 1024
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 30
+  AnalyticsRedisLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-analytics-ingest-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail analytics redis increments
+      Environment:
+        Variables:
+          REDIS_HOST: !Ref RedisHost
+          REDIS_TTL: "7200"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
+      Handler: index.handler
+      MemorySize: 256
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
+      Runtime: nodejs8.10
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 30
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref VPCSecurityGroup
+        SubnetIds:
+          - !Ref VPCSubnet1
+          - !Ref VPCSubnet2
+          - !Ref VPCSubnet3
   # Lambda Triggers
+  AnalyticsBigqueryKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 400
+      Enabled: true
+      EventSourceArn: !Ref MetricsKinesisStream
+      FunctionName: !Ref AnalyticsBigqueryLambdaFunction
+      StartingPosition: "LATEST"
   AnalyticsDynamodbKinesisTrigger:
     Type: "AWS::Lambda::EventSourceMapping"
     Properties:
@@ -102,6 +226,36 @@ Resources:
       EventSourceArn: !Ref DynamodbKinesisStream
       FunctionName: !Ref AnalyticsDynamodbLambdaFunction
       StartingPosition: "LATEST"
+  AnalyticsPingbacksKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 50
+      Enabled: true
+      EventSourceArn: !Ref MetricsKinesisStream
+      FunctionName: !Ref AnalyticsPingbacksLambdaFunction
+      StartingPosition: "LATEST"
+  AnalyticsRedisKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      BatchSize: 400
+      Enabled: true
+      EventSourceArn: !Ref MetricsKinesisStream
+      FunctionName: !Ref AnalyticsRedisLambdaFunction
+      StartingPosition: "LATEST"
 Outputs:
+  BigqueryFunctionName:
+    Value: !Ref AnalyticsBigqueryLambdaFunction
+  BigqueryFunctionArn:
+    Value: !GetAtt AnalyticsBigqueryLambdaFunction.Arn
+  DynamodbFunctionName:
+    Value: !Ref AnalyticsDynamodbLambdaFunction
   DynamodbFunctionArn:
     Value: !GetAtt AnalyticsDynamodbLambdaFunction.Arn
+  PingbacksFunctionName:
+    Value: !Ref AnalyticsPingbacksLambdaFunction
+  PingbacksFunctionArn:
+    Value: !GetAtt AnalyticsPingbacksLambdaFunction.Arn
+  RedisFunctionName:
+    Value: !Ref AnalyticsRedisLambdaFunction
+  RedisFunctionArn:
+    Value: !GetAtt AnalyticsRedisLambdaFunction.Arn
