@@ -1,13 +1,17 @@
 # stacks/serverless/analytics-ingest-lambda.yml
 # This stack creates 4 lambda functions subscribed to kinesis streams:
-#   1) TODO: move analytics-bigquery
-#   2) TODO: move analytics-pingbacks
-#   3) TODO: move analytics-redis
+#   1) analytics-bigquery
+#      - store 'combined' records (downloads and impressions) in bigquery
+#   2) analytics-pingbacks
+#      - run adzerk impression pingbacks for 'combined' records
+#      - run 3rd-party impression pingbacks for 'combined' records
+#   3) analytics-redis
+#      - INCR castle's redis with 'combined' record real-time downloads
 #   4) analytics-dynamodb - IAB 2.0 compliant downloads
-#      a) store temporary 'antebytes' records from dovetail.prx.org in ddb
-#      b) process 'bytes'/'segmentbytes' records from dovetail-counts-lambda,
-#         lookup the records in ddb, change them to type 'postbytes' and place
-#         back onto kinesis to be process by functions 1/2/3.
+#      - store temporary 'antebytes' records from dovetail.prx.org in ddb
+#      - process 'bytes'/'segmentbytes' records from dovetail-counts-lambda,
+#        lookup the records in ddb, change them to type 'postbytes' and place
+#        back onto kinesis to be process by functions 1/2/3.
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Analytics ingest lambda functions
 Parameters:
@@ -101,6 +105,7 @@ Resources:
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-bigquery"
           BQ_PROJECT_ID: "prx-metrics"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
       Handler: index.handler
       MemorySize: 384
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -155,6 +160,7 @@ Resources:
       Environment:
         Variables:
           PINGBACKS: "true"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
       Handler: index.handler
       MemorySize: 1024
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -181,6 +187,7 @@ Resources:
         Variables:
           REDIS_HOST: !Ref RedisHost
           REDIS_TTL: "7200"
+          PROCESS_AFTER: "1577836800" # 2020-01-01
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
