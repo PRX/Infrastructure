@@ -28,8 +28,8 @@ Parameters:
   DynamodbTTL:
     Type: AWS::SSM::Parameter::Value<String>
 Resources:
-  # IAM Roles
-  AnalyticsDynamodbExecutionIAMRole:
+  # Shared IAM Role
+  AnalyticsLambdaExecutionIAMRole:
     Type: "AWS::IAM::Role"
     Properties:
       AssumeRolePolicyDocument:
@@ -61,8 +61,20 @@ Resources:
               - Effect: Allow
                 Action: "sts:AssumeRole"
                 Resource: !Ref DynamodbAccessRole
+        - PolicyName: ParameterStoreReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:DescribeParameters"
+                  - "ssm:GetParameters"
+                  - "ssm:GetParametersByPath"
+                Resource:
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
   # Lambda Functions
   AnalyticsDynamodbLambdaFunction:
     Type: "AWS::Lambda::Function"
@@ -81,7 +93,7 @@ Resources:
           KINESIS_STREAM: !Ref MetricsKinesisStream
       Handler: index.handler
       MemorySize: 256
-      Role: !GetAtt AnalyticsDynamodbExecutionIAMRole.Arn
+      Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs8.10
       Tags:
         - Key: Project
