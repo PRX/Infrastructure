@@ -12,6 +12,7 @@ Metadata:
           default: Public Feed
         Parameters:
           - FeedDomain
+          - FeedDomainPolicy
       - Label:
           default: Source Feed
         Parameters:
@@ -65,6 +66,8 @@ Metadata:
         default: Comment
       CloudFrontMaxTtl:
         default: Max TTL
+      FeedDomainPolicy:
+        default: Domain policy
 Conditions:
   HasCloudFrontLoggingBucket: !Not [!Equals [!Ref CloudFrontLoggingBucket, ""]]
   HasCloudFrontLoggingBucketPrefix: !Not [!Equals [!Ref CloudFrontLoggingBucketPrefix, ""]]
@@ -72,6 +75,7 @@ Conditions:
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
+  HasFeedDomainOnlyPolicy: !Equals [!Ref FeedDomainPolicy, feed-domain-only]
 Parameters:
   ProjectTag:
     Type: String
@@ -144,10 +148,23 @@ Parameters:
       origin to determine whether the object has been updated. The value that
       you specify applies only when your origin adds HTTP headers such as
       Cache-Control max-age, Cache-Control s-maxage, and Expires to objects
+  FeedDomainPolicy:
+    Type: String
+    AllowedValues:
+      - feed-domain-only
+      - unrestricted
+    Default: unrestricted
+    Description: >
+      When set to unrestricted, the feed can be accessed at either the custom
+      domain or the domain provided by CloudFront. When set to
+      feed-domain-only, attempting to access the feed at any domain other than
+      the feed domain will result in a 403 error. feed-domain-only will enable
+      a viewer-request edge Lambda, which will be invoked on every request to
+      the CloudFront distribution.
 Resources:
   # ACM Certificates
   Certificate:
-    Type: "AWS::CertificateManager::Certificate"
+    Type: AWS::CertificateManager::Certificate
     Condition: HasNoAcmCertificateArn
     Properties:
       DomainName: !Ref FeedDomain
@@ -166,7 +183,7 @@ Resources:
       ValidationMethod: DNS
   # CloudFront
   CloudFrontDistribution:
-    Type: "AWS::CloudFront::Distribution"
+    Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Aliases:
@@ -195,8 +212,11 @@ Resources:
           LambdaFunctionAssociations:
             - EventType: origin-request
               LambdaFunctionARN: !Ref OriginRequestLambdaFunctionVersionB
-            - EventType: viewer-request
-              LambdaFunctionARN: !Ref ViewerRequestLambdaFunctionVersionB
+            - !If
+              - HasFeedDomainOnlyPolicy
+              - EventType: viewer-request
+                LambdaFunctionARN: !Ref ViewerRequestLambdaFunctionVersionB
+              - !Ref AWS::NoValue
           MaxTTL: !Ref CloudFrontMaxTtl
           # MinTTL: Number
           # SmoothStreaming: Boolean
@@ -213,8 +233,8 @@ Resources:
             - HasCloudFrontLoggingBucket
             - Bucket: !Ref CloudFrontLoggingBucket
               IncludeCookies: false
-              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref "CloudFrontLoggingBucketPrefix", !Ref "AWS::NoValue"]
-            - !Ref "AWS::NoValue"
+              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
+            - !Ref AWS::NoValue
         Origins:
           - CustomOriginConfig:
               # HTTPPort: Integer
@@ -228,14 +248,14 @@ Resources:
             Id: feed-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
-            OriginPath: !If [HasOriginPath, !Ref "OriginPath", !Ref "AWS::NoValue"]
+            OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
             # S3OriginConfig:
             #   S3 Origin
         PriceClass: PriceClass_All
         # Restrictions:
         #   Restriction
         ViewerCertificate:
-          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref "AcmCertificateArn", !Ref Certificate]
+          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref AcmCertificateArn, !Ref Certificate]
           # CloudFrontDefaultCertificate: true
           # IamCertificateId: String
           # MinimumProtocolVersion: String
@@ -250,7 +270,7 @@ Resources:
           Value: !Ref AWS::StackId
   # Lambda@Edge functions
   EdgeLambdaExecutionIamRole:
-    Type: "AWS::IAM::Role"
+    Type: AWS::IAM::Role
     DeletionPolicy: Retain
     Properties:
       AssumeRolePolicyDocument:
@@ -289,7 +309,7 @@ Resources:
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   OriginRequestLambdaFunction:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     Properties:
       Code:
@@ -316,12 +336,12 @@ Resources:
           Value: !Ref AWS::StackId
       Timeout: 1
   OriginRequestLambdaFunctionVersionB:
-    Type: "AWS::Lambda::Version"
+    Type: AWS::Lambda::Version
     DeletionPolicy: Retain
     Properties:
       FunctionName: !GetAtt OriginRequestLambdaFunction.Arn
   ViewerRequestLambdaFunction:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Lambda::Function
     DeletionPolicy: Retain
     Properties:
       Code:
@@ -352,13 +372,13 @@ Resources:
           Value: !Ref AWS::StackId
       Timeout: 1
   ViewerRequestLambdaFunctionVersionB:
-    Type: "AWS::Lambda::Version"
+    Type: AWS::Lambda::Version
     DeletionPolicy: Retain
     Properties:
       FunctionName: !GetAtt ViewerRequestLambdaFunction.Arn
   # Route 53
   WebRecordSetGroup:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Condition: HasCnameHostedZone
     Properties:
       Comment: Custom domain for CloudFront distribution
