@@ -40,69 +40,142 @@ def color_for_alarm(alarm):
     else:
         return '#e07701'
 
-    return {
-        ''
-    }[alarm['NewStateValue']]
-
 
 def alarm_slack_attachment(alarm):
+    # Extract datapoint values from the SNS alarm data
+    # eg, "Threshold Crossed: 1 datapoint [10.0 (05/09/18 12:15:00)] was
+    # greater than or equal to the threshold (10.0)."
+    datapoints = re.findall(r'([0-9]+\.[0-9]+) ', alarm['NewStateReason'])
+    datapoints_list = '`\n`'.join(datapoints)
+
     trigger = alarm['Trigger']
 
+    # Get the complete alarm info for this alarm (Only partial data may have
+    # been included in the SNS message)
     alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
     alarm_info = alarm_infos['MetricAlarms'][0]
 
     alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
 
+    # If the alarm doesn't have DatapointsToAlarm defined, force it equal to
+    # the EvaluationPeriods
+    if 'DatapointsToAlarm' not in alarm_info:
+        alarm_info['DatapointsToAlarm'] = alarm_info['EvaluationPeriods']
+
+    # Get a count of how many times this alarm has alarmed in the last 24 hours
+    now = datetime.datetime.now(datetime.timezone.utc)
     alarm_history = cloudwatch.describe_alarm_history(
         AlarmName=alarm['AlarmName'],
         HistoryItemType='StateUpdate',
-        StartDate=datetime.datetime.now() - datetime.timedelta(hours=24),
-        EndDate=datetime.datetime.now(),
+        StartDate=now - datetime.timedelta(hours=24),
+        EndDate=now,
         MaxRecords=100,
     )
+    if 'AlarmHistoryItems' in alarm_history:
+        items = alarm_history['AlarmHistoryItems']
+        alarms = filter(lambda x: ('to ALARM' in x['HistorySummary']), items)
+        alarms_count = len(list(alarms))
+    else:
+        alarms_count = 0
 
-    items = alarm_history['AlarmHistoryItems']
-    alarms = filter(lambda x: ('to ALARM' in x['HistorySummary']), items)
+    # Construct a URL for this alarm in the Console
+    cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
+    alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
+    alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
 
+    cw_logs = 'n/a'
+
+    # All periods are 10, 30, or a multiple of 60
+    # Each datapoint is the aggregate (SUM, AVERAGE, etc) of one period
+    if trigger['Period'] >= 60:
+        each_datapoint = f"{round(trigger['Period'] / 60)} minute"
+    else:
+        each_datapoint = f"{trigger['Period']} second"
+
+    # ExtendedStatistic is used for percentile statistics.
+    # ExtendedStatistic and Statistic are mutually exclusive.
     if 'ExtendedStatistic' in trigger:
         stat = trigger['ExtendedStatistic']
     else:
         stat = trigger['Statistic']
 
-    eper = trigger['EvaluationPeriods']
-    per = trigger['Period']
+    # eg "5 minute TargetResponseTime average"
+    threshold_left = f"{each_datapoint} `{trigger['MetricName']}` {stat.lower()}"
 
-    datapoints = re.findall(r'([0-9]+\.[0-9]+) ', alarm['NewStateReason'])
+    trigger_period = trigger['Period'] * trigger['EvaluationPeriods']
+    trigger_period_label = "seconds"
 
-    cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
-    alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
-    alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
+    if trigger_period >= 60:
+        trigger_period = round(trigger_period / 60)
+        trigger_period_label = "minutes"
+
+    if trigger['EvaluationPeriods'] == 1:
+        # Entire threshold breach was a single period/datapoint
+        threshold_right = ""
+    elif alarm_info['DatapointsToAlarm'] == alarm_info['EvaluationPeriods']:
+        # Threshold breach was multiple, consecutive periods
+        threshold_right = f"for {trigger_period} consecutive {trigger_period_label}"
+    else:
+        # Threshold breach was "M of N" periods
+        threshold_right = f"at least {alarm_info['DatapointsToAlarm']} times in {trigger_period} {trigger_period_label}"
+
+    if trigger['ComparisonOperator'] == 'GreaterThanOrEqualToThreshold':
+        comparison = '≥'
+    elif trigger['ComparisonOperator'] == 'GreaterThanThreshold':
+        comparison = '>'
+    elif trigger['ComparisonOperator'] == 'LessThanThreshold':
+        comparison = '<'
+    elif trigger['ComparisonOperator'] == 'LessThanOrEqualToThreshold':
+        comparison = '≤'
+
+    threshold = f"{threshold_left} *{comparison}* `{trigger['Threshold']}` {threshold_right}"
+
+    # Log URL handling
+    # eg, alarm['StateChangeTime'] = 2019-08-03T01:46:44.418+0000
+    state_change_time = parse(alarm['StateChangeTime'])
+    log_end = state_change_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    log_period = trigger['Period'] * trigger['EvaluationPeriods']
+
+    log_start_time = state_change_time - datetime.timedelta(seconds=log_period)
+    log_start = log_start_time.strftime("%Y-%m-%dT%H:%M:%S")
+
+    if trigger['Namespace'] == 'AWS/Lambda':
+        # Find the function name
+        for dimension in trigger['Dimensions']:
+            if dimension['name'] == 'FunctionName':
+                function_name = dimension['value']
+
+        cw_logs = f"<https://console.aws.amazon.com/cloudwatch/home?region={alarm_region}#logEventViewer:group=/aws/lambda/{function_name};start={log_start}Z;end={log_end}Z|CloudWatch Logs>"
 
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
-        'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title_link': alarm_console_url,
-        'text': f"`{trigger['MetricName']}`: {alarm['NewStateReason']}",
+        'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        'text': f"{alarm['AlarmDescription']}",
         'footer': f"{trigger['Namespace']} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp()),
         'fields': [
             {
-                'title': 'Evaluation',
-                'value': f"{stat} – {eper} × {per}",
-                'short': True,
-            }, {
-                'title': 'Threshold',
-                'value': trigger['Threshold'],
-                'short': True,
-            }, {
                 'title': 'Last 24 Hours',
-                'value': f"{len(list(alarms))} alarms",
+                'value': f"{alarms_count} alarms",
                 'short': True,
-            }, {
+            },
+            {
+                'title': 'Logs',
+                'value': cw_logs,
+                'short': True,
+            },
+            {
+                'title': 'Threshold breach',
+                'value': threshold,
+                'short': False,
+            },
+            {
                 'title': 'Datapoints',
-                'value': f"{', '.join(datapoints)}",
-                'short': True,
+                'value': f"`{datapoints_list}`",
+                'short': False,
             }
         ]
     }
@@ -117,14 +190,12 @@ def ok_slack_attachment(alarm):
     alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
 
     now = datetime.datetime.now(datetime.timezone.utc)
-
     alarm_history = cloudwatch.describe_alarm_history(
         AlarmName=alarm['AlarmName'],
         HistoryItemType='StateUpdate',
         StartDate=now - datetime.timedelta(hours=24),
         EndDate=now,
     )
-
     items = alarm_history['AlarmHistoryItems']
 
     if len(items) > 0:
