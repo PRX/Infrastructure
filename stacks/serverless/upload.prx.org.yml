@@ -7,6 +7,10 @@ Conditions:
 Parameters:
   OpsErrorMessagesSnsTopicArn:
     Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
   CodeS3Bucket:
     Type: String
   CodeS3ObjectVersion:
@@ -14,8 +18,6 @@ Parameters:
   PRXUploadAccessKey:
     Type: String
   EnvironmentType:
-    Type: String
-  EnvironmentTypeAbbreviation:
     Type: String
   WildcardCertificateArn:
     Type: String
@@ -160,7 +162,7 @@ Resources:
     Properties:
       Code:
         S3Bucket: !Ref CodeS3Bucket
-        S3Key: !Sub "lambda/PRX-upload.prx.org.zip"
+        S3Key: lambda/PRX-upload.prx.org.zip
         S3ObjectVersion: !Ref CodeS3ObjectVersion
       Description: File upload Lambda function
       Environment:
@@ -187,20 +189,27 @@ Resources:
       FunctionName: !Ref UploadLambdaFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
-  UploadLambdaErrorAlarm:
+  UploadLambdaLogExpiration:
+    Type: "Custom::LogGroupRetentionPolicy"
+    Properties:
+      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
+      LogGroupName: !Sub "/aws/lambda/${UploadLambdaFunction}"
+      RetentionInDays: 60
+  # Lambda Alarms
+  UploadLambdaElevatedErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Upload][Lambda][Error] Invocation 4XX"
+      AlarmName: "[Upload][Lambda] Elevated error volume"
       AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       AlarmDescription:
-        The error rate on the upload lambda has exceeded 0
+        Signing function has encountered an invocation error
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: Errors
@@ -212,12 +221,12 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadLambdaFunction
-  UploadLambdaThrottleAlarm:
+  UploadLambdaDangerousErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Upload][Lambda][Throttles] Invocation 429"
+      AlarmName: "[Upload][Lambda] Dangerous error volume"
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -225,7 +234,33 @@ Resources:
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription:
-        Throttles on the upload lambda has exceeded 0
+        Signing function has encountered several invocation errors
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 10
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UploadLambdaFunction
+  UploadLambdaElevatedThrottleAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda] Elevated invocation throttling"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Signing function invocations are being throttled
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: Throttles
@@ -237,22 +272,23 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadLambdaFunction
-  UploadLambdaDurationAlarm:
+  UploadLambdaElevatedMaxDurationAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Upload][Lambda][Duration] Unusually slow"
+      AlarmName: "[Upload][Lambda] Elevated maximum duration"
       AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+        - !Ref OpsWarnMessagesSnsTopicArn
       AlarmDescription:
-        At least one invocation duration exceeded 225ms in consecutive periods
+        Several signing function invocations were unusually slow
       ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
       MetricName: Duration
       Namespace: AWS/Lambda
       Period: 60
@@ -262,12 +298,122 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadLambdaFunction
-  UploadLambdaLogExpiration:
-    Type: "Custom::LogGroupRetentionPolicy"
+  UploadLambdaElevatedVolumeAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
     Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
-      LogGroupName: !Sub "/aws/lambda/${UploadLambdaFunction}"
-      RetentionInDays: 60
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda] Elevated invocation volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        The number of signing function invocations has been unusually high for
+        several periods
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref UploadLambdaFunction
+  UploadLambdaDangerousErrorRateAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda] Dangerous error rate"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription:
+        Short-term error rate has reached a dangerous level
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
+      Metrics:
+        - Id: errors
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadLambdaFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 120
+            Stat: Sum
+          ReturnData: false
+        - Id: invocations
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadLambdaFunction
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: 120
+            Stat: Sum
+          ReturnData: false
+        - Id: error_rate
+          Expression: "errors / invocations"
+          ReturnData: true
+      Threshold: 0.3
+      TreatMissingData: notBreaching
+  UploadLambdaCriticalErrorRateAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Upload][Lambda] Critical error rate"
+      AlarmActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      AlarmDescription:
+        Short-term error rate has reached a critical level
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      Metrics:
+        - Id: errors
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadLambdaFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 60
+            Stat: Sum
+          ReturnData: false
+        - Id: invocations
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref UploadLambdaFunction
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: 60
+            Stat: Sum
+          ReturnData: false
+        - Id: error_rate
+          Expression: "errors / invocations"
+          ReturnData: true
+      Threshold: 0.6
+      TreatMissingData: notBreaching
 Outputs:
   ApiDomainName:
     Description: The custom API domain name
