@@ -182,40 +182,50 @@ def alarm_slack_attachment(alarm):
 
 
 def ok_slack_attachment(alarm):
-    duration = 'Unavailable'
-
+    # Get the complete alarm info for this alarm (Only partial data may have
+    # been included in the SNS message)
     alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
     alarm_info = alarm_infos['MetricAlarms'][0]
 
     alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
 
-    now = datetime.datetime.now(datetime.timezone.utc)
-    alarm_history = cloudwatch.describe_alarm_history(
-        AlarmName=alarm['AlarmName'],
-        HistoryItemType='StateUpdate',
-        StartDate=now - datetime.timedelta(hours=24),
-        EndDate=now,
-    )
-    items = alarm_history['AlarmHistoryItems']
+    # Calculate the duration of the previous alarm state. The previous
+    # state may not exist or may not be an alarm, so this needs to fail
+    # gracefully
+    try:
+        # Retrieve the alarm history (only state updates)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        alarm_history = cloudwatch.describe_alarm_history(
+            AlarmName=alarm['AlarmName'],
+            HistoryItemType='StateUpdate',
+            StartDate=now - datetime.timedelta(hours=24),
+            EndDate=now,
+        )
+        items = alarm_history['AlarmHistoryItems']
 
-    if len(items) > 0:
-        ok_item = items[0]
-        history_data = json.loads(ok_item['HistoryData'])
+        # Since a state change triggered this, this should always be > 0
+        if len(items) > 0:
+            # The NewStateValue of the alarm was OK, so the most recent history
+            # item should be an OK state (the inciting OK state, in fact)
+            ok_item = items[0]
 
-        ok_time = ok_item['Timestamp']
+            # See history_data.json
+            history_data = json.loads(ok_item['HistoryData'])
 
-        if 'oldState' in history_data:
-            alarm_time = history_data['oldState']['stateReasonData']['startDate']
-            alarm_time = parse(alarm_time)
-        else:
-            alarm_time = ok_time
+            if history_data['oldState']['stateValue'] == 'ALARM':
+                alarm_time = history_data['oldState']['stateReasonData']['startDate']
+                alarm_time = parse(alarm_time)
 
-        dif = ok_time - alarm_time
-        duration = f"{round(dif.total_seconds() / 60)} min."
+                ok_time = ok_item['Timestamp']
 
-        cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
-        alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
-        alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
+                dif = ok_time - alarm_time
+                duration = f"{round(dif.total_seconds() / 60)} min."
+    except Exception:
+        duration = 'Unavailable'
+
+    cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
+    alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
+    alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
 
     return {
         'color': color_for_alarm(alarm),
