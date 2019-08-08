@@ -683,10 +683,16 @@ Resources:
           # been made since the most recent version, so it is safe to call this
           # multiple times
           def publish_versions():
-              lamb.publish_version(FunctionName=os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN'])
-              lamb.publish_version(FunctionName=os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN'])
-              lamb.publish_version(FunctionName=os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN'])
-              lamb.publish_version(FunctionName=os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN'])
+              try:
+                  lamb.publish_version(FunctionName=os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN'])
+                  lamb.publish_version(FunctionName=os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN'])
+                  lamb.publish_version(FunctionName=os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN'])
+                  lamb.publish_version(FunctionName=os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN'])
+              except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  traceback.print_exc()
+                  put_job_failure(job, 'Function exception: ' + str(e))
 
 
           def lambda_handler(event, context):
