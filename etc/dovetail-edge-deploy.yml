@@ -804,60 +804,72 @@ Resources:
           # Queries for version information about each Dovetail edge Lambda function, and
           # returns a dictionary with the most recent version of each.
           def function_versions():
-              staging_stitch = lamb.list_versions_by_function(
-                  FunctionName=os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN'],
-                  MaxItems=999
-              )
+              try:
+                  staging_stitch = lamb.list_versions_by_function(
+                      FunctionName=os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN'],
+                      MaxItems=999
+                  )
 
-              staging_bytes = lamb.list_versions_by_function(
-                  FunctionName=os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN'],
-                  MaxItems=999
-              )
+                  staging_bytes = lamb.list_versions_by_function(
+                      FunctionName=os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN'],
+                      MaxItems=999
+                  )
 
-              production_stitch = lamb.list_versions_by_function(
-                  FunctionName=os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN'],
-                  MaxItems=999
-              )
+                  production_stitch = lamb.list_versions_by_function(
+                      FunctionName=os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN'],
+                      MaxItems=999
+                  )
 
 
-              production_bytes = lamb.list_versions_by_function(
-                  FunctionName=os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN'],
-                  MaxItems=999
-              )
+                  production_bytes = lamb.list_versions_by_function(
+                      FunctionName=os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN'],
+                      MaxItems=999
+                  )
 
-              return {
-                'staging_bytes': f"{os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN']}:{staging_bytes['Versions'][-1]['Version']}",
-                'staging_stitch': f"{os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN']}:{staging_stitch['Versions'][-1]['Version']}",
-                'production_bytes': f"{os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN']}:{production_bytes['Versions'][-1]['Version']}",
-                'production_stitch': f"{os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN']}:{production_stitch['Versions'][-1]['Version']}"
-              }
+                  return {
+                      'staging_bytes': f"{os.environ['STAGING_BYTES_LAMBDA_FUNCTION_ARN']}:{staging_bytes['Versions'][-1]['Version']}",
+                      'staging_stitch': f"{os.environ['STAGING_STITCH_LAMBDA_FUNCTION_ARN']}:{staging_stitch['Versions'][-1]['Version']}",
+                      'production_bytes': f"{os.environ['PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN']}:{production_bytes['Versions'][-1]['Version']}",
+                      'production_stitch': f"{os.environ['PRODUCTION_STITCH_LAMBDA_FUNCTION_ARN']}:{production_stitch['Versions'][-1]['Version']}"
+                  }
+              except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  traceback.print_exc()
+                  put_job_failure(job, 'Function exception: ' + str(e))
 
 
           # Creates a zipped JSON file output artifact with the version information of
           # the Edge functions. The file is sent to S3 in a location supplied by the
           # triggering CodePipeline execution job
           def export_versions(job):
-              output_artifact = job['data']['outputArtifacts'][0]
+              try:
+                  output_artifact = job['data']['outputArtifacts'][0]
 
-              versions = function_versions()
+                  versions = function_versions()
 
-              print(f"...Publishing versions {versions}...")
+                  print(f"...Publishing versions {versions}...")
 
-              body = json.dumps(versions)
+                  body = json.dumps(versions)
 
-              archive_path = "/tmp/{0}".format(uuid.uuid4())
+                  archive_path = "/tmp/{0}".format(uuid.uuid4())
 
-              # TODO Should be able to do this all in memory
-              archive = zipfile.ZipFile(archive_path, mode='w')
-              archive.writestr('versions.json', body, compress_type=zipfile.ZIP_DEFLATED)
-              archive.close()
+                  # TODO Should be able to do this all in memory
+                  archive = zipfile.ZipFile(archive_path, mode='w')
+                  archive.writestr('versions.json', body, compress_type=zipfile.ZIP_DEFLATED)
+                  archive.close()
 
-              output_location = output_artifact['location']['s3Location']
-              output_bucket = output_location['bucketName']
-              output_key = output_location['objectKey']
-              s3.upload_file(archive_path, output_bucket, output_key)
+                  output_location = output_artifact['location']['s3Location']
+                  output_bucket = output_location['bucketName']
+                  output_key = output_location['objectKey']
+                  s3.upload_file(archive_path, output_bucket, output_key)
 
-              print(f"...Wrote to {output_bucket}/{output_key}...")
+                  print(f"...Wrote to {output_bucket}/{output_key}...")
+              except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  traceback.print_exc()
+                  put_job_failure(job, 'Function exception: ' + str(e))
 
 
           def lambda_handler(event, context):
@@ -873,7 +885,9 @@ Resources:
                   print(e)
                   traceback.print_exc()
                   put_job_failure(job, 'Function exception: ' + str(e))
-      Description: tktktktk
+      Description:
+        Creates a CodePipeline artifact containing versioned ARNs for the
+        Dovetail edge Lambda functions
       Handler: index.lambda_handler
       Environment:
         Variables:
