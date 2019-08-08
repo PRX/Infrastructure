@@ -251,6 +251,7 @@ Resources:
                 Resource:
                   - !GetAtt DiscoverEdgeLambdaVersionsFunction.Arn
                   - !GetAtt PublishEdgeLambdaVersionsFunction.Arn
+                  - !GetAtt ChangeSetDeltaNotificationFunction.Arn
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
@@ -354,7 +355,22 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: LambdaVersionsArtifact
               RunOrder: 1
-        #     # TODO Generate delta and send notification
+            - Name: StagingDeltaNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ChangeSetDeltaNotificationFunction
+                UserParameters: !Sub |
+                  {
+                    "StackName": "${StagingCloudFormationStackName}",
+                    "ChangeSetName": "${AWS::StackName}StagingChangeSet",
+                    "Stage": "Staging"
+                  }
+              RunOrder: 2
+
         #     - Name: ExecuteStagingChangeSet
         #       ActionTypeId:
         #         Category: Deploy
@@ -622,7 +638,6 @@ Resources:
                   - "cloudwatch:EnableAlarmActions"
                   - "cloudwatch:PutMetricAlarm"
                 Resource: "*"
-
   # Pipeline functions
   PublishEdgeLambdaVersionsFunctionIamRole:
     Type: AWS::IAM::Role
@@ -662,6 +677,106 @@ Resources:
                   - codepipeline:PutJobFailureResult
                   - codepipeline:GetPipelineState
                 Resource: "*"
+  DiscoverEdgeLambdaVersionsFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName: S3Policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource:
+                  - !Sub arn:aws:s3:::${PipelineArtifactStore}/*
+        - PolicyName: LambdaInfoPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:ListVersionsByFunction
+                Resource:
+                  - !Ref StagingStitchLambdaFunctionArn
+                  - !Ref StagingBytesLambdaFunctionArn
+                  - !Ref ProductionStitchLambdaFunctionArn
+                  - !Ref ProductionBytesLambdaFunctionArn
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                  - codepipeline:GetPipelineState
+                Resource: "*"
+  ChangeSetDeltaNotificationFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - Fn::ImportValue:
+                      !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+        - PolicyName: CloudFormationReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DescribeStacks
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}/*
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJobSuccessResult
+                  - codepipeline:PutJobFailureResult
+                  - codepipeline:GetPipelineState
+                Resource: "*"
+
+
+
   PublishEdgeLambdaVersionsFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -739,54 +854,6 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       Timeout: 3
-  DiscoverEdgeLambdaVersionsFunctionIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Path: "/"
-      Policies:
-        - PolicyName: S3Policy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource:
-                  - !Sub arn:aws:s3:::${PipelineArtifactStore}/*
-        - PolicyName: LambdaInfoPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - lambda:ListVersionsByFunction
-                Resource:
-                  - !Ref StagingStitchLambdaFunctionArn
-                  - !Ref StagingBytesLambdaFunctionArn
-                  - !Ref ProductionStitchLambdaFunctionArn
-                  - !Ref ProductionBytesLambdaFunctionArn
-        - PolicyName: CodePipelinePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - codepipeline:PutJobSuccessResult
-                  - codepipeline:PutJobFailureResult
-                  - codepipeline:GetPipelineState
-                Resource: "*"
   DiscoverEdgeLambdaVersionsFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -915,6 +982,146 @@ Resources:
           PRODUCTION_BYTES_LAMBDA_FUNCTION_ARN: !Ref ProductionBytesLambdaFunctionArn
       MemorySize: 128
       Role: !GetAtt DiscoverEdgeLambdaVersionsFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Timeout: 3
+
+
+
+
+
+  ChangeSetDeltaNotificationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import boto3
+          import traceback
+          import json
+          import os
+
+          code_pipeline = boto3.client('codepipeline')
+          cloudformation = boto3.client('cloudformation')
+          sns = boto3.client('sns')
+
+
+          def put_job_success(job, message):
+              print('Putting job success')
+              print(message)
+              code_pipeline.put_job_success_result(jobId=job['id'])
+
+
+          def put_job_failure(job, message):
+              print('Putting job failure')
+              print(message)
+              code_pipeline.put_job_failure_result(
+                  jobId=job['id'],
+                  failureDetails={'message': message, 'type': 'JobFailed'})
+
+
+          def lambda_handler(event, context):
+              try:
+                  print('Posting delta notification...')
+
+                  job = event['CodePipeline.job']
+
+                  cfg = job['data']['actionConfiguration']['configuration']
+                  user_parameters = json.loads(cfg['UserParameters'])
+
+                  stack_name = user_parameters['StackName']
+                  change_set_name = user_parameters['ChangeSetName']
+
+                  # Get current stack parameter values
+                  stack = cloudformation.describe_stacks(StackName=stack_name)['Stacks'][0]
+                  stack_parameters = stack['Parameters']
+
+                  # Get new parameter values from change set
+                  change_set = cloudformation.describe_change_set(
+                      ChangeSetName=change_set_name,
+                      StackName=stack_name
+                  )
+                  change_set_parameters = change_set['Parameters']
+
+                  parameters = {}
+
+                  for p in stack_parameters:
+                      if not p['ParameterKey'] in parameters:
+                          parameters[p['ParameterKey']] = {}
+
+                      parameters[p['ParameterKey']]['StackValue'] = p['ParameterValue']
+
+                  for p in change_set_parameters:
+                      if not p['ParameterKey'] in parameters:
+                          parameters[p['ParameterKey']] = {}
+
+                      parameters[p['ParameterKey']]['ChangeSetValue'] = p['ParameterValue']
+
+                  deltas = [f"*{user_parameters['Stage']} Dovetail CDN Delta*"]
+
+                  for k, v in parameters.items():
+                      if k == 'PipelineExecutionNonce':
+                          continue
+
+                      elif 'StackValue' not in v:
+                          deltas.append(f"*{k}*: ❔ ➡ `{v['ChangeSetValue']}`")
+
+                      elif 'ChangeSetValue' not in v:
+                          deltas.append(f"*{k}*: `{v['StackValue']}` ➡ ❌")
+
+                      elif v['StackValue'] != v['ChangeSetValue']:
+                          before = v['StackValue']
+                          after = v['ChangeSetValue']
+                          deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
+
+                  unchanged_count = len(parameters) - len(deltas) + 1
+
+                  slack_message = {
+                      'channel': '#ops-deploys',
+                      'username': 'AWS CodePipeline',
+                      'icon_emoji': ':ops-codepipeline:',
+                      'attachments': [
+                          {
+                              'footer': f'Excludes {unchanged_count} unchanged parameters',
+                              'color': '#a0d0d4',
+                              'mrkdwn_in': ['text'],
+                              'text': '\n'.join(deltas)
+                          }
+                      ]
+                  }
+
+                  sns.publish(
+                      TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
+                      Message=json.dumps(slack_message)
+                  )
+
+                  # Cleanup
+                  put_job_success(job, '')
+
+                  return '...Done'
+
+              except Exception as e:
+                  print('Function failed due to exception.')
+                  print(e)
+                  traceback.print_exc()
+                  put_job_failure(job, 'Function exception: ' + str(e))
+      Description: >
+        Sends a diff to Slack with changes between the current Dovetail Edge
+        Lambda stack and a change set created by a pipeline execution
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue:
+              !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          CD_STACK_NAME: !Ref AWS::StackName
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt ChangeSetDeltaNotificationFunctionIamRole.Arn
       Runtime: python3.6
       Tags:
         - Key: Project
