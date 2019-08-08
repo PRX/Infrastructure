@@ -501,81 +501,81 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 5
-  # # CloudFormation Pipeline
-  # CloudFormationIamRole:
-  #   # This role gets passed to CloudFormation, and is used by CloudFormation to
-  #   # to perform actions against other AWS resources.
-  #   #
-  #   # This is the role used to launch the root stack, and thus all nested app
-  #   # and service stacks. It needs permissions to create any of the resources
-  #   # that those stacks require. Eg, if a stack nested in the root stack
-  #   # includes an S3 bucket resource, this role needs a policy that allows it
-  #   # to create S3 buckets.
-  #   # NOTE This role should not be given to anything other than the CodePipeline
-  #   # CloudFormation actions! It's very powerful!
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: "2012-10-17"
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service:
-  #               - cloudformation.amazonaws.com
-  #           Action:
-  #             - sts:AssumeRole
-  #     Path: "/"
-  #     Policies:
-  #       # Wildcard access to CloudFormation stack and changesets for the
-  #       # staging and producton Dovetail stacks. Explicitly denies stack
-  #       # deletion.
-  #       - PolicyName: StackManipulationPolicy
-  #         PolicyDocument:
-  #           Version: "2012-10-17"
-  #           Statement:
-  #             #
-  #             - Effect: Allow
-  #               Action:
-  #                 - "cloudformation:*"
-  #               Resource:
-  #                 - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}/*"
-  #                 # TODO turn this on only when it's safe
-  #                 # - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}/*"
-  #                 - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*"
-  #             - Effect: Deny
-  #               Action:
-  #                 - "cloudformation:DeleteStack"
-  #               Resource: "*"
-  #       # These are permissions for the services that are needed to create
-  #       # resources defined in the resources that cdn/dovetail-cdn.yml
-  #       # Currently:
-  #       # - CloudFront distribution
-  #       # - CloudWatch alarms
-  #       - PolicyName: CloudFrontPolicy
-  #         PolicyDocument:
-  #           Version: "2012-10-17"
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - "cloudfront:Create*"
-  #                 - "cloudfront:Get*"
-  #                 - "cloudfront:List*"
-  #                 - "cloudfront:Untag*"
-  #                 - "cloudfront:Update*"
-  #                 - "cloudfront:Tag*"
-  #               Resource: "*"
-  #       - PolicyName: CloudWatchAlarmsPolicy
-  #         PolicyDocument:
-  #           Version: "2012-10-17"
-  #           Statement:
-  #             - Effect: Allow
-  #               Action:
-  #                 - "cloudwatch:DeleteAlarms"
-  #                 - "cloudwatch:DescribeAlarms"
-  #                 - "cloudwatch:DisableAlarmActions"
-  #                 - "cloudwatch:EnableAlarmActions"
-  #                 - "cloudwatch:PutMetricAlarm"
-  #               Resource: "*"
+  # CloudFormation Pipeline
+  CloudFormationIamRole:
+    # This role gets passed to CloudFormation, and is used by CloudFormation to
+    # to perform actions against other AWS resources.
+    #
+    # This is the role used to launch the root stack, and thus all nested app
+    # and service stacks. It needs permissions to create any of the resources
+    # that those stacks require. Eg, if a stack nested in the root stack
+    # includes an S3 bucket resource, this role needs a policy that allows it
+    # to create S3 buckets.
+    # NOTE This role should not be given to anything other than the CodePipeline
+    # CloudFormation actions! It's very powerful!
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        # Wildcard access to CloudFormation stack and changesets for the
+        # staging and producton Dovetail stacks. Explicitly denies stack
+        # deletion.
+        - PolicyName: StackManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              #
+              - Effect: Allow
+                Action:
+                  - "cloudformation:*"
+                Resource:
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}/*"
+                  # TODO turn this on only when it's safe
+                  # - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}/*"
+                  - !Sub "arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*"
+              - Effect: Deny
+                Action:
+                  - "cloudformation:DeleteStack"
+                Resource: "*"
+        # These are permissions for the services that are needed to create
+        # resources defined in the resources that cdn/dovetail-cdn.yml
+        # Currently:
+        # - CloudFront distribution
+        # - CloudWatch alarms
+        - PolicyName: CloudFrontPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudfront:Create*"
+                  - "cloudfront:Get*"
+                  - "cloudfront:List*"
+                  - "cloudfront:Untag*"
+                  - "cloudfront:Update*"
+                  - "cloudfront:Tag*"
+                Resource: "*"
+        - PolicyName: CloudWatchAlarmsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "cloudwatch:DeleteAlarms"
+                  - "cloudwatch:DescribeAlarms"
+                  - "cloudwatch:DisableAlarmActions"
+                  - "cloudwatch:EnableAlarmActions"
+                  - "cloudwatch:PutMetricAlarm"
+                Resource: "*"
 
   # Pipeline functions
   PublishEdgeLambdaVersionsFunctionIamRole:
