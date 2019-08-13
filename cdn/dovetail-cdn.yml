@@ -3,6 +3,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Creates a CloudFront distribution to origin-pull from a Dovetail S3 bucket,
   with an origin-request Lambda to do the actual file stitching.
+Conditions:
+  IsProduction: !Equals [!Ref DistributionDomain, "dovetail-cdn.prxu.org"]
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -110,6 +112,10 @@ Resources:
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
+        Logging:
+          Bucket: prx-dovetail.s3.amazonaws.com
+          IncludeCookies: false
+          Prefix: !If [IsProduction, "cf-logs-production/", "cf-logs-staging/"]
         Origins:
           - DomainName: !Ref OriginBucket
             Id: dovetail-stitch-s3
