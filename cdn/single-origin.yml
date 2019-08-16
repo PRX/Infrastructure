@@ -36,10 +36,16 @@ Conditions:
   HasCloudFrontWebACLId: !Not [!Equals [!Ref CloudFrontWebACLId, ""]]
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
+  HasDetachedCertificate: !Equals [!Ref CertificateAttachment, "Detached"]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
+      - Label:
+          default: HTTPS Certificate
+        Parameters:
+          - CertificateAttachment
+          - AcmCertificateArn
       - Label:
           default: Distribution
         Parameters:
@@ -68,10 +74,6 @@ Metadata:
           - CloudFrontCustom403ErrorResponseCode
           - CloudFrontCustom403ErrorResponsePagePath
           - CloudFrontWebACLId
-      - Label:
-          default: HTTPS Certificate
-        Parameters:
-          - AcmCertificateArn
     ParameterLabels:
       ProjectTag:
         default: Project tag
@@ -113,6 +115,8 @@ Metadata:
         default: AWS WAF web ACL ID
       AcmCertificateArn:
         default: Certificate ARN
+      CertificateAttachment:
+        default: Certificate attachment
 Parameters:
   ProjectTag:
     Type: String
@@ -252,9 +256,23 @@ Parameters:
     Description: >
       ARN for the ACM certificate that will be used with the CloudFront
       distribution. If no value is supplied, a new certificate will be created.
+  CertificateAttachment:
+    Type: String
+    Description: >
+      When "Detached" is chosen, an ACM certificate will be created for the
+      provided CNAMEs, but it will not be associated with the CloudFront
+      distribution. The CNAMEs will also not added as aliases to the
+      distribution. This allows the certificate and the distribution to be
+      created simultaneously. If a Certificate ARN is provided this should
+      always be set to "Attached".
+    AllowedValues:
+      - Attached
+      - Detached
 Resources:
-  # ACM Certificate
-  # This gets created when no ARN for a pre-existing certificate is provided
+  # If no ACM certificate ARN was provided as a stack parameter, a new ACM
+  # certificate will be minted. It will be a single certificate covering all
+  # domain names listed in the CNAMEs parameter. The certificate will be
+  # created even if the stack has a detached certificate.
   Certificate:
     Type: "AWS::CertificateManager::Certificate"
     Condition: HasNoAcmCertificateArn
@@ -275,7 +293,11 @@ Resources:
     Type: "AWS::CloudFront::Distribution"
     Properties:
       DistributionConfig:
-        Aliases: !Ref Cnames
+        # Aliases can only be configured on a distribution if there is an
+        # associated, validated certificate that covers every alias domain.
+        # When the stack has a detached certificate, that is not possible, so
+        # the aliases are ignored until the certificate is attached.
+        Aliases: !If [HasDetachedCertificate, !Ref "AWS::NoValue", !Ref "Cnames"]
         # CacheBehaviors:
           # CacheBehavior
         Comment: !Ref CloudFrontComment
@@ -341,11 +363,18 @@ Resources:
         # Restrictions:
         #   Restriction
         ViewerCertificate:
-          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref "AcmCertificateArn", !Ref Certificate]
-          # CloudFrontDefaultCertificate: true
-          # IamCertificateId: String
-          # MinimumProtocolVersion: String
-          SslSupportMethod: sni-only
+          # When the stack has a detached certificate, the distribution will
+          # use the default CloudFront certificate (*.cloudfront.net). When
+          # the certificate is attached it conditionally uses a provided ACM
+          # certificate, or the one created by the stack.
+          !If
+            - HasDetachedCertificate
+            - !Ref "AWS::NoValue"
+            - AcmCertificateArn: !If [HasAcmCertificateArn, !Ref AcmCertificateArn, !Ref Certificate]
+              # CloudFrontDefaultCertificate: true
+              # IamCertificateId: String
+              # MinimumProtocolVersion: String
+              SslSupportMethod: sni-only
         WebACLId: !If [HasCloudFrontWebACLId, !Ref "CloudFrontWebACLId", !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
