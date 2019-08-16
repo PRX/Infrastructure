@@ -398,58 +398,73 @@ Resources:
               OutputArtifacts:
                 - Name: AcceptanceTestArtifact
               RunOrder: 1
-        # - Name: Production
-        #   Actions:
-        #     - Name: CreateChangeSet
-        #       ActionTypeId:
-        #         Category: Deploy
-        #         Owner: AWS
-        #         Provider: CloudFormation
-        #         Version: "1"
-        #       Configuration:
-        #         ActionMode: CHANGE_SET_REPLACE
-        #         Capabilities: CAPABILITY_IAM
-        #         ChangeSetName: !Sub ${AWS::StackName}ProductionChangeSet
-        #         ParameterOverrides: !Sub |
-        #           {
-        #             # These are the parameters of cdn/dovetail-cdn.yml
-        #             "OriginBucket": "${ProductionOriginBucket}",
-        #             "OriginPath": "${ProductionOriginPath}",
-        #             "DistributionDomain": "${ProductionDistributionDomain}",
-        #             "LambdaFunctionArn": { "Fn::GetParam" : ["LambdaVersionsArtifact", "versions.json", "production_stitch"]},
-        #             "LambdaBytesFunctionArn": { "Fn::GetParam" : ["LambdaVersionsArtifact", "versions.json", "production_bytes"]},
-        #             "InfrastructureNotificationsStackName": "${InfrastructureNotificationsStackName}"
-        #           }
-        #         RoleArn: !GetAtt CloudFormationIamRole.Arn
-        #         StackName: !Ref ProductionCloudFormationStackName
-        #         TemplatePath: InfrastructureRepoSourceArtifact::cdn/dovetail-cdn.yml
-        #       InputArtifacts:
-        #         - Name: InfrastructureRepoSourceArtifact
-        #         - Name: LambdaVersionsArtifact
-        #       RunOrder: 2
-        #     - Name: ApproveChangeSet
-        #       ActionTypeId:
-        #         Category: Approval
-        #         Owner: AWS
-        #         Provider: Manual
-        #         Version: "1"
-        #       Configuration:
-        #         # NotificationArn: !Ref CodePipelineApprovalsSnsTopic
-        #         CustomData: {}
-        #       RunOrder: 3
-        #     - Name: ExecuteChangeSet
-        #       ActionTypeId:
-        #         Category: Deploy
-        #         Owner: AWS
-        #         Provider: CloudFormation
-        #         Version: "1"
-        #       Configuration:
-        #         ActionMode: CHANGE_SET_EXECUTE
-        #         Capabilities: CAPABILITY_IAM
-        #         ChangeSetName: !Sub ${AWS::StackName}ProductionChangeSet
-        #         RoleArn: !GetAtt CloudFormationIamRole.Arn
-        #         StackName: !Ref ProductionCloudFormationStackName
-        #       RunOrder: 4
+        - Name: Production
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${AWS::StackName}ProductionChangeSet
+                # These are the parameters of cdn/dovetail-cdn.yml
+                ParameterOverrides: !Sub |
+                  {
+                    "OriginBucket": "${ProductionOriginBucket}",
+                    "OriginPath": "${ProductionOriginPath}",
+                    "DistributionDomain": "${ProductionDistributionDomain}",
+                    "LambdaFunctionArn": { "Fn::GetParam" : ["LambdaVersionsArtifact", "versions.json", "production_stitch"]},
+                    "LambdaBytesFunctionArn": { "Fn::GetParam" : ["LambdaVersionsArtifact", "versions.json", "production_bytes"]},
+                    "InfrastructureNotificationsStackName": "${InfrastructureNotificationsStackName}"
+                  }
+                RoleArn: !GetAtt CloudFormationIamRole.Arn
+                StackName: !Ref ProductionCloudFormationStackName
+                TemplatePath: InfrastructureRepoSourceArtifact::cdn/dovetail-cdn.yml
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: LambdaVersionsArtifact
+              RunOrder: 1
+            - Name: ProductionDeltaNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ChangeSetDeltaNotificationFunction
+                UserParameters: !Sub |
+                  {
+                    "StackName": "${ProductionCloudFormationStackName}",
+                    "ChangeSetName": "${AWS::StackName}ProductionChangeSet",
+                    "Stage": "Production"
+                  }
+              RunOrder: 2
+            - Name: ApproveChangeSet
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              # Configuration:
+              #   # NotificationArn: !Ref CodePipelineApprovalsSnsTopic
+              #   CustomData: {}
+              RunOrder: 3
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${AWS::StackName}ProductionChangeSet
+                RoleArn: !GetAtt CloudFormationIamRole.Arn
+                StackName: !Ref ProductionCloudFormationStackName
+              RunOrder: 4
   # PipelineInfrastructureRepoGitHubWebhook:
   #   Type: AWS::CodePipeline::Webhook
   #   Properties:
