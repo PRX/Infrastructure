@@ -192,6 +192,7 @@ def ok_slack_attachment(alarm):
     # Calculate the duration of the previous alarm state. The previous
     # state may not exist or may not be an alarm, so this needs to fail
     # gracefully
+    duration = 'Unavailable'
     try:
         # Retrieve the alarm history (only state updates)
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -221,7 +222,7 @@ def ok_slack_attachment(alarm):
                 dif = ok_time - alarm_time
                 duration = f"{round(dif.total_seconds() / 60)} min."
     except Exception:
-        duration = 'Unavailable'
+        pass
 
     cw_console_url = 'https://console.aws.amazon.com/cloudwatch/home'
     alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
