@@ -3,6 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: API Gateway pixel tracker
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+  HasAltDomainName: !Not [!Equals [!FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, AltDomainName], ""]]
 Parameters:
   OpsWarnMessagesSnsTopicArn:
     Type: String
@@ -26,18 +27,27 @@ Mappings:
   EnvironmentTypeMap:
     Testing:
       DomainName: "pixel.test.prx.tech"
+      AltDomainName: ""
       HostedZoneName: "prx.tech."
     Staging:
       DomainName: "pixel.staging.prx.tech"
+      AltDomainName: ""
       HostedZoneName: "prx.tech."
     Production:
       DomainName: "pixel.prx.org"
+      AltDomainName: "pixel.pri.org"
       HostedZoneName: "prx.org."
 Resources:
   Certificate:
     Type: "AWS::CertificateManager::Certificate"
     Properties:
       DomainName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
+      SubjectAlternativeNames:
+        - !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
+        - !If
+          - HasAltDomainName
+          - !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, AltDomainName]
+          - !Ref AWS::NoValue
       ValidationMethod: DNS
       Tags:
         - Key: Project
@@ -190,6 +200,19 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt PixelRestApiDomainName.DistributionDomainName
             HostedZoneId: Z2FDTNDATAQYW2
+  PixelRestApiAltDomainName:
+    Type: "AWS::ApiGateway::DomainName"
+    Condition: HasAltDomainName
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, AltDomainName]
+  PixelRestApiAltBasePathMapping:
+    Type: "AWS::ApiGateway::BasePathMapping"
+    Condition: HasAltDomainName
+    Properties:
+      DomainName: !Ref PixelRestApiAltDomainName
+      RestApiId: !Ref PixelRestApi
+      Stage: prod
   ApiGateway5XXAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
