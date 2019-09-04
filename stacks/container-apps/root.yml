@@ -194,6 +194,32 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-say-when.yml"]]
       TimeoutInMinutes: 5
+  ExchangeAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        ECSCluster: !Ref ECSCluster
+        WorkerServiceName: !GetAtt ExchangeStack.WorkerServiceName
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-alarms.yml"]]
+      TimeoutInMinutes: 5
   NetworksStack:
     Type: "AWS::CloudFormation::Stack"
     Condition: IsStaging
