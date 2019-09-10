@@ -53,6 +53,25 @@ def alarm_slack_attachment(alarm):
     # Get the complete alarm info for this alarm (Only partial data may have
     # been included in the SNS message)
     alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+
+    if not alarm_infos['MetricAlarms']:
+        # Usually this list will be empty because the alarm is in a different
+        # account. Use a simplified message in those cases.
+        return {
+            'color': color_for_alarm(alarm),
+            'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+            'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+            'text': f"{alarm['AlarmDescription']}",
+            'ts': round(parse(alarm['StateChangeTime']).timestamp()),
+            'fields': [
+                {
+                    'title': 'Datapoints',
+                    'value': f"`{datapoints_list}`",
+                    'short': False,
+                }
+            ]
+        }
+
     alarm_info = alarm_infos['MetricAlarms'][0]
 
     alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
@@ -185,6 +204,15 @@ def ok_slack_attachment(alarm):
     # Get the complete alarm info for this alarm (Only partial data may have
     # been included in the SNS message)
     alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+
+    if not alarm_infos['MetricAlarms']:
+        return {
+            'color': color_for_alarm(alarm),
+            'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+            'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+            'ts': round(parse(alarm['StateChangeTime']).timestamp())
+        }
+
     alarm_info = alarm_infos['MetricAlarms'][0]
 
     alarm_region = alarm_info['AlarmArn'].split(':', 4)[3]
