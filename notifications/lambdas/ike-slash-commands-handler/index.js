@@ -7,11 +7,83 @@
 const querystring = require('querystring');
 const AWS = require('aws-sdk');
 const crypto = require('crypto');
+const url = require('url');
+const https = require('https');
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
-const codepipeline = new AWS.CodePipeline({apiVersion: '2015-07-09'});
+const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const cloudfront = new AWS.CloudFront({ apiVersion: '2019-03-26' });
 
+const SLACK_API_DIALOG_OPEN = 'https://slack.com/api/dialog.open';
 const ROLLBACK_VERSION_SELECTION_CALLBACK = 'rollback-version-selection-action';
+const CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK = 'CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK';
+
+// Calls a method in the Slack Web API with a provided POST body. The payload
+// argument is an object. If responseProperty is provided, rather than the
+// entire response being resolved from the promise, only that property will be.
+// https://api.slack.com/web
+// https://api.slack.com/methods
+function slackWebMethod(uri, responseProperty, payload) {
+    return new Promise((resolve, reject) => {
+        const urlencodedBody = querystring.stringify(payload);
+
+        // Setup request options
+        const options = url.parse(uri);
+        options.method = 'POST';
+        options.headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(urlencodedBody),
+        };
+
+        const method = uri.split('/').pop();
+
+        // Request with response handler
+        console.log(`[Slack] Calling ${method}`);
+        const req = https.request(options, (res) => {
+            res.setEncoding('utf8');
+
+            let json = '';
+            res.on('data', (chunk) => { json += chunk; });
+            res.on('end', () => {
+                try {
+                    const resPayload = JSON.parse(json);
+
+                    if (resPayload.ok) {
+                        console.error(`[Slack] ${method} ok`);
+                        resolve(resPayload[responseProperty] || resPayload);
+                    } else {
+                        console.error(`[Slack] ${method} error`);
+                        reject(new Error(resPayload.error));
+                    }
+                } catch (e) {
+                    console.error(`[Slack] Error parsing ${method}`);
+                    reject(e);
+                }
+            });
+        });
+
+        // Generic request error handling
+        req.on('error', e => reject(e));
+
+        req.write(urlencodedBody);
+        req.end();
+    });
+}
+
+function getCloudFrontDistributuons() {
+    return new Promise((resolve, reject) => {
+        cloudfront.listDistributions({
+            MaxItems: '50',
+        }, (error, data) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve(data);
+            }
+        });
+    });
+
+}
 
 function handleRollbackRequest(payload, callback) {
     s3.listObjectVersions({
@@ -82,8 +154,8 @@ function handleRollbackRequest(payload, callback) {
 
 function handleRelease(payload, callback) {
     codepipeline.startPipelineExecution({
-            name: process.env.INFRASTRUCTURE_CD_PIPELINE_NAME
-        }, function(err, data) {
+        name: process.env.INFRASTRUCTURE_CD_PIPELINE_NAME,
+    }, (err) => {
         if (err) {
             console.log(err, err.stack); // an error occurred
         } else {
@@ -95,6 +167,49 @@ function handleRelease(payload, callback) {
             const body = JSON.stringify(msg);
             callback(null, { statusCode: 200, headers: {}, body });
         }
+    });
+}
+
+async function handleCfInvalidate(payload, callback) {
+    const dists = await getCloudFrontDistributuons();
+
+    const options = dists.DistributionList.Items.map((dist) => {
+        let aliases = '';
+
+        if (dist.Aliases && dist.Aliases.Items) {
+            aliases = dist.Aliases.Items.join(', ');
+        }
+
+        return {
+            label: `${dist.Id}: ${aliases} ${dist.Comment}`.substring(0, 47),
+            value: dist.Id,
+        };
+    });
+
+    slackWebMethod(SLACK_API_DIALOG_OPEN, null, {
+        trigger_id: payload.trigger_id,
+        token: process.env.SLACK_ACCESS_TOKEN,
+        dialog: JSON.stringify({
+            callback_id: CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK,
+            title: 'CloudFront Invalidation',
+            submit_label: 'Invalidate',
+            elements: [
+                {
+                    type: 'select',
+                    label: 'Distribution ID',
+                    name: 'distribution_id',
+                    options,
+                }, {
+                    type: 'textarea',
+                    label: 'Object Paths',
+                    name: 'object_paths',
+                    placeholder: 'e.g., "/images/*", "/images/image1.jpg", "*"',
+                    hint: 'One object path per line',
+                },
+            ],
+        }),
+    }).then(() => {
+        callback(null, { statusCode: 200, headers: {}, body: null });
     });
 }
 
@@ -115,6 +230,8 @@ function main(event, context, callback) {
         handleRollbackRequest(payload, callback);
     } else if (payload.command === '/ops-release' && payload.channel_id === 'CDTU41WFP') {
         handleRelease(payload, callback);
+    } else if (payload.command === '/ops-cf-invalidate' && payload.channel_id === 'CDTU41WFP') {
+        handleCfInvalidate(payload, callback);
     } else {
         // Unauthorized use
         console.log(`Channel ID: ${payload.channel_id}`);

@@ -17,6 +17,7 @@ const aws = require('aws-sdk');
 const s3 = new aws.S3({apiVersion: '2006-03-01'});
 const codepipeline = new aws.CodePipeline({apiVersion: '2015-07-09'});
 const sns = new aws.SNS({ apiVersion: '2010-03-31' });
+const cloudfront = new aws.CloudFront({ apiVersion: '2019-03-26' });
 
 const APPROVED = 'Approved';
 const REJECTED = 'Rejected';
@@ -24,6 +25,7 @@ const REJECTED = 'Rejected';
 const CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = 'codepipeline-approval-action';
 const RELEASE_NOTES_DIALOG_CALLBACK = 'release-notes-dialog';
 const ROLLBACK_VERSION_SELECTION_CALLBACK = 'rollback-version-selection-action';
+const CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK = 'CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK';
 
 const SLACK_API_DIALOG_OPEN = 'https://slack.com/api/dialog.open';
 
@@ -118,6 +120,9 @@ function processEvent(event, context, callback) {
             case RELEASE_NOTES_DIALOG_CALLBACK:
                 handleReleaseNotesDialog(payload, callback);
                 break;
+            case CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK:
+                handleCloudFrontInvalidationDialog(payload, callback);
+                break;
             default:
                 // Unknown message callback
                 callback(null, { statusCode: 400, headers: {}, body: null });
@@ -139,7 +144,6 @@ function handleReleaseNotesDialog(payload, callback) {
     }, () => {
         callback(null, { statusCode: 200, headers: {}, body: null });
     });
-
 }
 
 function handleRollbackCallback(payload, callback) {
@@ -284,4 +288,41 @@ function handleReleaseButtons(payload, callback) {
             }
         }
     });
+}
+
+async function handleCloudFrontInvalidationDialog(payload, callback) {
+    const paths = payload.submission.object_paths.split('\n');
+
+    try {
+        const invalidation = await cloudfront.createInvalidation({
+            DistributionId: payload.submission.distribution_id,
+            InvalidationBatch: {
+                CallerReference: `${+(new Date())}`,
+                Paths: {
+                    Quantity: paths.length,
+                    Items: paths,
+                },
+            }
+        }).promise();
+
+        const consoleUrl = `https://console.aws.amazon.com/cloudfront/home?region=us-east-1#distribution-settings:${payload.submission.distribution_id}`;
+
+        await sns.publish({
+            TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+            Message: JSON.stringify({
+                channel: '#tech-devops',
+                username: 'CloudFront',
+                icon_emoji: ':ops-cloudfront:',
+                text: [
+                    `These object for distribution *<${consoleUrl}|${payload.submission.distribution_id}>* have been invalidated by <@${payload.user.id}>:`,
+                    `> \`${paths.join('`\n> `')}\``,
+                    `Invalidation ID: ${invalidation.Invalidation.Id}`,
+                ].join('\n'),
+            }),
+        }).promise();
+    } catch (error) {
+        console.log(error);
+    }
+
+    callback(null, { statusCode: 200, headers: {}, body: null });
 }
