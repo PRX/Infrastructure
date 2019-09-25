@@ -1,6 +1,8 @@
 # stacks/serverless/dovetail-counts-lambda.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Dovetail counts lambda function
+Conditions:
+  HasRedisBackupUrl: !Not [!Equals [!Ref RedisBackupUrl, ""]]
 Parameters:
   OpsWarnMessagesSnsTopicArn:
     Type: String
@@ -27,6 +29,8 @@ Parameters:
   KinesisOut:
     Type: AWS::SSM::Parameter::Value<String>
   Kinesis404:
+    Type: AWS::SSM::Parameter::Value<String>
+  RedisBackupUrl:
     Type: AWS::SSM::Parameter::Value<String>
   RedisUrl:
     Type: AWS::SSM::Parameter::Value<String>
@@ -86,6 +90,7 @@ Resources:
         Variables:
           KINESIS_ARRANGEMENT_STREAM: !Ref Kinesis404
           KINESIS_IMPRESSION_STREAM: !Ref KinesisOut
+          REDIS_BACKUP_URL: !If [HasRedisBackupUrl, !Ref RedisBackupUrl, !Ref "AWS::NoValue"]
           REDIS_URL: !Ref RedisUrl
           S3_BUCKET: !Ref S3Bucket
           S3_PREFIX: !Ref S3Prefix
