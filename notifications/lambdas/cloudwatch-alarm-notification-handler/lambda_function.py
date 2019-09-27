@@ -115,11 +115,20 @@ def alarm_slack_attachment(alarm):
     # ExtendedStatistic and Statistic are mutually exclusive.
     if 'ExtendedStatistic' in trigger:
         stat = trigger['ExtendedStatistic']
-    else:
+    elif 'Statistic' in trigger:
         stat = trigger['Statistic']
+    elif 'Metrics' in trigger:
+        stat = 'metric math'
+    else:
+        stat = 'unknown'
+
+    if 'MetricName' in trigger:
+        metric_name = trigger['MetricName']
+    else:
+        metric_name = 'expression'
 
     # eg "5 minute TargetResponseTime average"
-    threshold_left = f"{each_datapoint} `{trigger['MetricName']}` {stat.lower()}"
+    threshold_left = f"{each_datapoint} `{metric_name}` {stat.lower()}"
 
     trigger_period = trigger['Period'] * trigger['EvaluationPeriods']
     trigger_period_label = "seconds"
@@ -159,13 +168,17 @@ def alarm_slack_attachment(alarm):
     log_start_time = state_change_time - datetime.timedelta(seconds=log_period)
     log_start = log_start_time.strftime("%Y-%m-%dT%H:%M:%S")
 
-    if trigger['Namespace'] == 'AWS/Lambda':
-        # Find the function name
-        for dimension in trigger['Dimensions']:
-            if dimension['name'] == 'FunctionName':
-                function_name = dimension['value']
+    namespace = 'Math/Multiple'
+    if 'Namespace' in trigger:
+        namespace = trigger['Namespace']
 
-        cw_logs = f"<https://console.aws.amazon.com/cloudwatch/home?region={alarm_region}#logEventViewer:group=/aws/lambda/{function_name};start={log_start}Z;end={log_end}Z|CloudWatch Logs>"
+        if trigger['Namespace'] == 'AWS/Lambda':
+            # Find the function name
+            for dimension in trigger['Dimensions']:
+                if dimension['name'] == 'FunctionName':
+                    function_name = dimension['value']
+
+            cw_logs = f"<https://console.aws.amazon.com/cloudwatch/home?region={alarm_region}#logEventViewer:group=/aws/lambda/{function_name};start={log_start}Z;end={log_end}Z|CloudWatch Logs>"
 
     return {
         'color': color_for_alarm(alarm),
@@ -173,7 +186,7 @@ def alarm_slack_attachment(alarm):
         'title_link': alarm_console_url,
         'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'text': f"{alarm['AlarmDescription']}",
-        'footer': f"{trigger['Namespace']} – {alarm['Region']}",
+        'footer': f"{namespace} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp()),
         'fields': [
             {
@@ -256,13 +269,17 @@ def ok_slack_attachment(alarm):
     alarm_name_escaped = urllib.parse.quote(alarm['AlarmName'])
     alarm_console_url = f"{cw_console_url}?region={alarm_region}#alarm:alarmFilter=ANY;name={alarm_name_escaped}"
 
+    namespace = 'Math/Multiple'
+    if 'Namespace' in alarm['Trigger']:
+        namespace = alarm['Trigger']['Namespace']
+
     return {
         'color': color_for_alarm(alarm),
         'fallback': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title': f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
         'title_link': alarm_console_url,
         'text': f"Alarm duration: {duration}",
-        'footer': f"{alarm['Trigger']['Namespace']} – {alarm['Region']}",
+        'footer': f"{namespace} – {alarm['Region']}",
         'ts': round(parse(alarm['StateChangeTime']).timestamp())
     }
 
