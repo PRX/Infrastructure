@@ -79,13 +79,6 @@ Parameters:
     Type: String
   CmsEcrImageTag:
     Type: String
-  # Jingle Specific ############################################################
-  JinglePlatformALBListenerPriorityPrefix:
-    Type: String
-  JingleSecretsVersion:
-    Type: String
-  JingleEcrImageTag:
-    Type: String
   # Styleguide Specific ############################################################
   StyleguidePlatformALBListenerPriorityPrefix:
     Type: String
@@ -436,50 +429,6 @@ Resources:
         AppName: "cms"
         CreateWorker: "true"
         ContainerPort: "3000"
-        HealthCheckPath: "/api/v1"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
-      TimeoutInMinutes: 5
-  JingleStack:
-    Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        VPC: !Ref VPC
-        PlatformALBDNSName: !Ref PlatformALBDNSName
-        PlatformALBFullName: !Ref PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
-        ECSCluster: !Ref ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !Ref ECSServiceIAMRole
-        OpsDebugMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        EcrRegion: !Ref EcrRegion
-        SecretsBase: !Ref SecretsBase
-        ContainerMemory: !Ref ContainerMemory
-        ContainerMemoryReservation: !Ref ContainerMemoryReservation
-        ContainerCpu: !Ref ContainerCpu
-        PlatformALBListenerPriorityPrefix: !Ref JinglePlatformALBListenerPriorityPrefix
-        EcrImageTag: !Ref JingleEcrImageTag
-        SecretsVersion: !Ref JingleSecretsVersion
-        AppName: "jingle"
-        CreateWorker: "false"
-        ContainerPort: "4000"
         HealthCheckPath: "/api/v1"
       Tags:
         - Key: "prx:cloudformation:stack-name"
