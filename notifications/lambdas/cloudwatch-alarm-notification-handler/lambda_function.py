@@ -301,14 +301,26 @@ def slack_message(sns_payload):
 
 
 def lambda_handler(event, context):
-    sns_payload = event['Records'][0]['Sns']
+    try:
+        sns_payload = event['Records'][0]['Sns']
 
-    # TODO This isn't necessary once all stacks stop using the log-level SNS
-    # topics for deployment notifications
-    if sns_payload['Subject'] == 'AWS CloudFormation Notification':
-        return
+        # TODO This isn't necessary once all stacks stop using the log-level
+        # SNS topics for deployment notifications
+        if sns_payload['Subject'] == 'AWS CloudFormation Notification':
+            return
 
-    sns.publish(
-        TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
-        Message=json.dumps(slack_message(sns_payload))
-    )
+        sns.publish(
+            TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
+            Message=json.dumps(slack_message(sns_payload))
+        )
+    except Exception as e:
+        print(e)
+        sns.publish(
+            TopicArn=os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN'],
+            Message=json.dumps({
+                'channel': '#ops-warn',
+                'username': SLACK_USERNAME,
+                'icon_emoji': SLACK_ICON,
+                'text': f"The following CloudWatch Alarm notification was not handled successfully:\n\n {json.dumps(event)}\n\n{e}"
+            })
+        )
