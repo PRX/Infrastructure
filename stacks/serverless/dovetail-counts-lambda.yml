@@ -1,12 +1,15 @@
 # stacks/serverless/dovetail-counts-lambda.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Dovetail counts lambda function
-# Conditions:
-#   HasRedisBackupUrl: !Not [!Equals [!Ref RedisBackupUrl, ""]]
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  # HasRedisBackupUrl: !Not [!Equals [!Ref RedisBackupUrl, ""]]
 Parameters:
   OpsWarnMessagesSnsTopicArn:
     Type: String
   OpsErrorMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
     Type: String
   CodeS3Bucket:
     Type: String
@@ -125,3 +128,115 @@ Resources:
       EventSourceArn: !Ref KinesisIn
       FunctionName: !Ref DovetailCountsLambdaFunction
       StartingPosition: "LATEST"
+  # log metrics
+  DovetailCountsLambdaWarnsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "warn" }'
+      LogGroupName: !Sub "/aws/lambda/${DovetailCountsLambdaFunction}"
+      MetricTransformations:
+        - MetricName: !Sub "dovetail_counts_warns_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  DovetailCountsLambdaErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Sub "/aws/lambda/${DovetailCountsLambdaFunction}"
+      MetricTransformations:
+        - MetricName: !Sub "dovetail_counts_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  # alarms
+  DovetailCountsLoggedErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Logged errors on the dovetail counts lambda
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "dovetail_counts_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  DovetailCountsErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][Errors] ${EnvironmentType}"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Too many dovetail counts lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DovetailCountsLambdaFunction
+  DovetailCountsIteratorAgeWarnAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][IteratorAge] ${EnvironmentType} > 15 minutes"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription:
+        Dovetail Counts Lambda processing is slightly behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DovetailCountsLambdaFunction
+  DovetailCountsIteratorAgeFatalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][IteratorAge] ${EnvironmentType} > 1 Hour"
+      AlarmActions:
+        - !If [IsProduction, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [IsProduction, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [IsProduction, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription:
+        Dovetail Counts Lambda processing is very behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DovetailCountsLambdaFunction
