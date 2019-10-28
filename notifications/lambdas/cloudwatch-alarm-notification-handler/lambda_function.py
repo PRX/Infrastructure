@@ -292,6 +292,11 @@ def slack_message(sns_payload):
     else:
         attachment = alarm_slack_attachment(alarm)
 
+    print(json.dumps({
+        'NewStateValue': alarm['NewStateValue'],
+        'TopicArn': sns_payload['TopicArn']
+    }))
+
     return {
         'channel': channel_for_topic(sns_payload['TopicArn']),
         'username': SLACK_USERNAME,
