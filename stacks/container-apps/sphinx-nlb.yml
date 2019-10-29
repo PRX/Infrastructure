@@ -47,6 +47,10 @@ Parameters:
   DesiredWebsProduction:
     Type: String
     Default: 0
+  SecretsInstanceDecryptPolicyArn:
+    Type: String
+  SecretsInstanceAccessPolicyArn:
+    Type: String
   # App ENV #################################################################
   AppName:
     Type: String # castle, crier, cms, feeder
@@ -332,6 +336,32 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  WebTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Description: Task Role for tasks using the sphinx NLB
+      ManagedPolicyArns:
+        - !Ref SecretsInstanceDecryptPolicyArn
+        - !Ref SecretsInstanceAccessPolicyArn
+      Path: /
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   WebTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -376,6 +406,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt WebTaskRole.Arn
   WebService:
     Type: "AWS::ECS::Service"
     DependsOn:
