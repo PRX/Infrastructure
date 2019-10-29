@@ -68,53 +68,6 @@ Parameters:
     Type: String
     Default: "/sessions/new"
 Resources:
-  SphinxEcsTaskExecutionIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - ecs-tasks.amazonaws.com
-      Description: String
-      Path: /
-      Policies:
-        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-ecr-conditionkeys
-        # An alternative to the managed AmazonECSTaskExecutionRolePolicy, which
-        # restrics access to a specific VPC and VPC endpoint
-        - PolicyName: TaskExecutionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ecr:GetAuthorizationToken
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource:
-                  - "*"
-              - Effect: Allow
-                Action:
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:GetDownloadUrlForLayer
-                  - ecr:BatchGetImage
-                Condition:
-                  StringEquals:
-                    # aws:sourceVpce: !Ref EcrVpcEndpoint
-                    aws:sourceVpc: !Ref VPC
-                Resource:
-                  - "*"
-      Tags:
-        - Key: Project
-          Value: Networks
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
   NLB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -170,7 +123,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: NLB
     Properties:
-      HealthCheckIntervalSeconds: 300
+      HealthCheckIntervalSeconds: 10
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
       Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}-${VPC}
@@ -196,7 +149,7 @@ Resources:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: NLB
     Properties:
-      HealthCheckIntervalSeconds: 300
+      HealthCheckIntervalSeconds: 10
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
       Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}-sx-${VPC}
@@ -300,6 +253,52 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
+  WebTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Description: Execution Role for tasks using the sphinx NLB
+      Path: /
+      Policies:
+        - PolicyName: TaskExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource:
+                  - "*"
+                Condition:
+                  StringEquals:
+                    # aws:sourceVpce: !Ref EcrVpcEndpoint
+                    aws:sourceVpc: !Ref VPC
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   WebTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -334,7 +333,7 @@ Resources:
           Command:
             - web
       NetworkMode: awsvpc
-      ExecutionRoleArn: !GetAtt SphinxEcsTaskExecutionIamRole.Arn
+      ExecutionRoleArn: !GetAtt WebTaskExecutionRole.Arn
       Tags:
         - Key: Project
           Value: !Ref AppName
