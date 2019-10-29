@@ -68,6 +68,39 @@ Parameters:
     Type: String
     Default: "/sessions/new"
 Resources:
+  SphinxSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow web and SSH traffic to the ALB
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 9312
+          ToPort: 9312
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AppName}-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   NLB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -365,6 +398,8 @@ Resources:
       # Role: !Ref ECSServiceIAMRole
       NetworkConfiguration:
         AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref SphinxSecurityGroup
           AssignPublicIp: DISABLED
           Subnets:
             - !Ref VPCSubnet1
