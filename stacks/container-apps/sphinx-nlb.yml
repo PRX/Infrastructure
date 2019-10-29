@@ -72,7 +72,7 @@ Parameters:
     Type: String
     Default: "/sessions/new"
 Resources:
-  SphinxSecurityGroup:
+  SphinxInboundSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
       VpcId: !Ref VPC
@@ -94,6 +94,25 @@ Resources:
           IpProtocol: tcp
           FromPort: 9312
           ToPort: 9312
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AppName}-${EnvironmentType}
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  SphinxOutboundSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow all outbound traffic
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
       Tags:
         - Key: Project
           Value: !Ref AppName
@@ -430,7 +449,8 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           SecurityGroups:
-            - !Ref SphinxSecurityGroup
+            - !Ref SphinxInboundSecurityGroup
+            - !Ref SphinxOutboundSecurityGroup
           AssignPublicIp: DISABLED
           Subnets:
             - !Ref VPCSubnet1
