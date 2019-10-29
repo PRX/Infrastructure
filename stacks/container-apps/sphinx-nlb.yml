@@ -253,6 +253,52 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
+  WebTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Description: Execution Role for tasks using the sphinx NLB
+      Path: /
+      Policies:
+        - PolicyName: TaskExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource:
+                  - "*"
+                Condition:
+                  StringEquals:
+                    # aws:sourceVpce: !Ref EcrVpcEndpoint
+                    aws:sourceVpc: !Ref VPC
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   WebTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -287,7 +333,7 @@ Resources:
           Command:
             - web
       NetworkMode: awsvpc
-      ExecutionRoleArn: !Ref ECSServiceIAMRole
+      ExecutionRoleArn: !GetAtt WebTaskExecutionRole.Arn
       Tags:
         - Key: Project
           Value: !Ref AppName
