@@ -68,6 +68,53 @@ Parameters:
     Type: String
     Default: "/sessions/new"
 Resources:
+  SphinxEcsTaskExecutionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Description: String
+      Path: /
+      Policies:
+        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_execution_IAM_role.html#task-execution-ecr-conditionkeys
+        # An alternative to the managed AmazonECSTaskExecutionRolePolicy, which
+        # restrics access to a specific VPC and VPC endpoint
+        - PolicyName: TaskExecutionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Condition:
+                  StringEquals:
+                    # aws:sourceVpce: !Ref EcrVpcEndpoint
+                    aws:sourceVpc: !Ref VPC
+                Resource:
+                  - "*"
+      Tags:
+        - Key: Project
+          Value: Networks
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
   NLB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
@@ -287,7 +334,7 @@ Resources:
           Command:
             - web
       NetworkMode: awsvpc
-      ExecutionRoleArn: !Ref ECSServiceIAMRole
+      ExecutionRoleArn: !GetAtt SphinxEcsTaskExecutionIamRole.Arn
       Tags:
         - Key: Project
           Value: !Ref AppName
