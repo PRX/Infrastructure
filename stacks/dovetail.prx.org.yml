@@ -51,6 +51,11 @@ Parameters:
     Type: String
   DovetailSecretsVersion:
     Type: String
+  # Dovetail Elixir ############################################################
+  DovetailElixirEcrImageTag:
+    Type: String
+  DovetailElixirSecretsVersion:
+    Type: String
 Mappings:
   EnvironmentTypeMap:
     Testing:
@@ -124,6 +129,30 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+  DovetailALBHTTPListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail.*
+      ListenerArn: !Ref DovetailALBHTTPListener
+      Priority: 10
+  DovetailElixirALBHTTPListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail3.*
+      ListenerArn: !Ref DovetailALBHTTPListener
+      Priority: 20
   DovetailALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -135,6 +164,30 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+  DovetailALBHTTPSListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailApplicationALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail.*
+      ListenerArn: !Ref DovetailALBHTTPSListener
+      Priority: 10
+  DovetailElixirALBHTTPSListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail3.*
+      ListenerArn: !Ref DovetailALBHTTPSListener
+      Priority: 20
   # Domain
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
@@ -145,6 +198,18 @@ Resources:
       RecordSets:
         - Type: A
           Name: !Sub dovetail.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Sub dualstack.${DovetailALB.DNSName}
+            HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
+  DovetailElixirRecordSetGroup:
+    Type: "AWS::Route53::RecordSetGroup"
+    DependsOn: DovetailALB
+    Properties:
+      Comment: Record sets for dualstack web traffic to a dovetail elixir instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub dovetail3.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
@@ -289,7 +354,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !GetAtt DovetailServiceDesiredCountRolloverResource.DesiredCount
+      DesiredCount: 10
       LoadBalancers:
         - ContainerName: "dovetail-express"
           ContainerPort: 8080
@@ -350,72 +415,98 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-  # Config Persistence
-  DovetailServiceDesiredCountRolloverIamRole:
-    Type: "AWS::IAM::Role"
+  # Dovetail Elixir
+  DovetailElixirALBTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn: DovetailALB
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        - PolicyName: EcsServicesPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "ecs:DescribeServices"
-                Resource:
-                  - "*"
-                  # - !Sub ${AWS::StackName}-DovetailService TODO
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckPath: /
+      Name: !Sub dovetail-elixir-${EnvironmentTypeAbbreviation}-${VPC}
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "20"
       Tags:
         - Key: Project
-          Value: Infrastructure
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub DovetailElixir-${EnvironmentType}
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-  DovetailServiceDesiredCountRolloverLambdaFunction:
-    Type: "AWS::Lambda::Function"
+      VpcId: !Ref VPC
+  DovetailElixirService:
+    Type: "AWS::ECS::Service"
     Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: utility/ecs-service-size-rollover.zip
-      Description: Allows for DesiredCount persistence on ECS services
-      Environment:
-        Variables:
-          DEFAULT_DESIRED_COUNT: "2"
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt DovetailServiceDesiredCountRolloverIamRole.Arn
-      Runtime: nodejs8.10
+      Cluster: !Ref ECSCluster
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LoadBalancers:
+        - ContainerName: "dovetail-elixir"
+          ContainerPort: 4000
+          TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+      Role: !Ref ECSServiceIAMRole
       Tags:
         - Key: Project
-          Value: Infrastructure
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      Timeout: 8
-  DovetailServiceDesiredCountRolloverResource:
-    Type: "Custom::EcsServiceSizeRollover"
-    Version: "1.0"
+      TaskDefinition: !Ref DovetailElixirTaskDefinition
+  DovetailElixirLogGroup:
+    Type: "AWS::Logs::LogGroup"
     Properties:
-      ClusterName: !Ref ECSCluster
-      Rotation: !Ref PipelineExecutionNonce
-      ServiceName: !Sub ${AWS::StackName}-DovetailApp
-      ServiceToken: !GetAtt DovetailServiceDesiredCountRolloverLambdaFunction.Arn
+      RetentionInDays: 14
+  DovetailElixirTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      ContainerDefinitions:
+        - Cpu: !Ref ContainerCpu
+          Environment:
+            - Name: APP_NAME
+              Value: "dovetail-elixir"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref DovetailElixirSecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail-elixir:${DovetailElixirEcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref DovetailElixirLogGroup
+              awslogs-region: !Ref AWS::Region
+          Memory: !Ref ContainerMemory
+          Name: "dovetail-elixir"
+          PortMappings:
+            - HostPort: 0
+              ContainerPort: 4000
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   # Autoscaling
   DovetailAutoScaling:
     Type: "AWS::ApplicationAutoScaling::ScalableTarget"
