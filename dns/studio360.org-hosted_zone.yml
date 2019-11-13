@@ -1,0 +1,144 @@
+# dns/radiotopia.com-hosted_zone.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for studio360.org
+Parameters:
+  Domain:
+    Default: studio360.org.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Secondary Radiotopia domain
+      HostedZoneTags:
+        - Key: Project
+          Value: Studio 360
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Name: !Ref Domain
+  Pantheon:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: WWW
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "3600"
+          Type: A
+          Name: !Ref Domain
+        - ResourceRecords:
+            - "2620:12a:8000::3"
+          TTL: "3600"
+          Type: AAAA
+          Name: !Ref Domain
+        - ResourceRecords:
+            - "2620:12a:8001::3"
+          TTL: "3600"
+          Type: AAAA
+          Name: !Ref Domain
+        - ResourceRecords:
+            - live-pri9.pantheonsite.io.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub www.${Domain}
+  Text:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - '"MS=ms65380927"'
+            - '"google-site-verification=2Ptzi9xtGGGxYXKerv1ZxYUyn6rUEFH7y4rCmPVvG0s"'
+            - '"v=spf1 include:_spf.google.com ~all"'
+          TTL: "3600"
+          Type: TXT
+          Name: !Ref Domain
+        - ResourceRecords:
+            - '"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0iFkMCts60uNhzBOLeVIeBs2FSpNH3P6m9e/MVqalPiAWFZ/GTh+ruhqdlBOGaQgBa8bRd9pyeXItopubtGPIsdXtKRxHHgIKsKfHhZ5Ivq1qysr7I5hPohwsbwPiJBIGKDoqe79EsopykLWuVJb7sB5jwcgPXKpOU545EiQqB0xOxU13EhvoCRYIb8KT/wWg" "VsE8fcF/Z0KLvCTlhUatF3j6USnk+zZWP3vzefviUH1y48WO4uFEJ5BVSZkrNqGGqzKjNygXUIGwxw1OnBX1Ommp+DJRUlqWLfMCMqDc8DDAwwA8MQ2ihZ0ij/4KBkG/IMLbVtqTGM/12McZ53ZAwIDAQAB"'
+          TTL: "3600"
+          Type: TXT
+          Name: !Sub google._domainkey.${Domain}
+  GSuite:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: G Suite
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "1 ASPMX.L.GOOGLE.COM."
+            - "5 ALT1.ASPMX.L.GOOGLE.COM."
+            - "5 ALT2.ASPMX.L.GOOGLE.COM."
+            - "10 ASPMX2.GOOGLEMAIL.COM."
+            - "10 ASPMX3.GOOGLEMAIL.COM."
+          TTL: "3600"
+          Type: MX
+          Name: !Ref Domain
+        - ResourceRecords:
+            - connect.domains.google.com.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub _domainconnect.${Domain}
+  Microsoft:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Microsoft
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - autodiscover.outlook.com.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub autodiscover.${Domain}
+        - ResourceRecords:
+            - enterpriseenrollment.manage.microsoft.com.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub enterpriseenrollment.${Domain}
+        - ResourceRecords:
+            - enterpriseregistration.windows.net.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub enterpriseregistration.${Domain}
+        - ResourceRecords:
+            - clientconfig.microsoftonline-p.net.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub msoid.${Domain}
+  Lync:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Microsoft
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - webdir.online.lync.com.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub lyncdiscover.${Domain}
+        - ResourceRecords:
+            - sipdir.online.lync.com.
+          TTL: "3600"
+          Type: CNAME
+          Name: !Sub sip.${Domain}
+        - ResourceRecords:
+            - "10 10 8080 sipdir.online.lync.com."
+          TTL: "3600"
+          Type: SRV
+          Name: !Sub _sip.${Domain}
+        - ResourceRecords:
+            - "10 10 8080 sipfed.online.lync.com."
+          TTL: "3600"
+          Type: SRV
+          Name: !Sub _sipfederationtls.${Domain}
