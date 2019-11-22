@@ -37,6 +37,13 @@ Conditions:
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
+  HasCnames: !Not [!Equals [!Join ["", !Ref Cnames], ""]]
+  CreateCertificate: !And
+    - !Condition HasNoAcmCertificateArn
+    - !Condition HasCnames
+  UseCertificate: !Or
+    - !Condition CreateCertificate
+    - !Condition HasAcmCertificateArn
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -268,7 +275,7 @@ Resources:
   # This gets created when no ARN for a pre-existing certificate is provided
   Certificate:
     Type: "AWS::CertificateManager::Certificate"
-    Condition: HasNoAcmCertificateArn
+    Condition: CreateCertificate
     Properties:
       DomainName: !Select [0, !Ref Cnames]
       SubjectAlternativeNames: !Ref Cnames
@@ -286,7 +293,7 @@ Resources:
     Type: "AWS::CloudFront::Distribution"
     Properties:
       DistributionConfig:
-        Aliases: !Ref Cnames
+        Aliases: !If [HasCnames, !Ref Cnames, !Ref "AWS::NoValue"]
         # CacheBehaviors:
           # CacheBehavior
         Comment: !Ref CloudFrontComment
@@ -352,11 +359,14 @@ Resources:
         # Restrictions:
         #   Restriction
         ViewerCertificate:
-          AcmCertificateArn: !If [HasAcmCertificateArn, !Ref "AcmCertificateArn", !Ref Certificate]
-          # CloudFrontDefaultCertificate: true
-          # IamCertificateId: String
-          # MinimumProtocolVersion: String
-          SslSupportMethod: sni-only
+          !If
+            - UseCertificate
+            - AcmCertificateArn: !If [CreateCertificate, !Ref Certificate, !Ref AcmCertificateArn]
+              # CloudFrontDefaultCertificate: true
+              # IamCertificateId: String
+              # MinimumProtocolVersion: String
+              SslSupportMethod: sni-only
+            - !Ref "AWS::NoValue"
         WebACLId: !If [HasCloudFrontWebACLId, !Ref "CloudFrontWebACLId", !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
