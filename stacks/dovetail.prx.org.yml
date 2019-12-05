@@ -52,9 +52,9 @@ Parameters:
   DovetailSecretsVersion:
     Type: String
   # Dovetail Elixir ############################################################
-  Dovetail3EcrImageTag:
+  DovetailRouterEcrImageTag:
     Type: String
-  Dovetail3SecretsVersion:
+  DovetailRouterSecretsVersion:
     Type: String
 Mappings:
   EnvironmentTypeMap:
@@ -141,18 +141,18 @@ Resources:
             - dovetail.*
       ListenerArn: !Ref DovetailALBHTTPListener
       Priority: 10
-  DovetailElixirALBHTTPListenerRule:
+  DovetailRouterALBHTTPListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+        - TargetGroupArn: !Ref DovetailRouterALBTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
           Values:
-            - dovetail3.*
+            - dovetail-router.*
       ListenerArn: !Ref DovetailALBHTTPListener
-      Priority: 20
+      Priority: 21
   DovetailALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -176,18 +176,18 @@ Resources:
             - dovetail.*
       ListenerArn: !Ref DovetailALBHTTPSListener
       Priority: 10
-  DovetailElixirALBHTTPSListenerRule:
+  DovetailRouterALBHTTPSListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Properties:
       Actions:
-        - TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+        - TargetGroupArn: !Ref DovetailRouterALBTargetGroup
           Type: forward
       Conditions:
         - Field: host-header
           Values:
-            - dovetail3.*
+            - dovetail-router.*
       ListenerArn: !Ref DovetailALBHTTPSListener
-      Priority: 20
+      Priority: 21
   # Domain
   DovetailWebRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
@@ -201,7 +201,7 @@ Resources:
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
-  DovetailElixirRecordSetGroup:
+  DovetailRouterRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
     DependsOn: DovetailALB
     Properties:
@@ -209,7 +209,7 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: A
-          Name: !Sub dovetail3.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub dovetail-router.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Sub dualstack.${DovetailALB.DNSName}
             HostedZoneId: !GetAtt DovetailALB.CanonicalHostedZoneID
@@ -416,7 +416,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   # Dovetail Elixir
-  DovetailElixirALBTargetGroup:
+  DovetailRouterALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     DependsOn: DovetailALB
     Properties:
@@ -425,7 +425,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 2
       HealthCheckPath: /
-      Name: !Sub dovetail3-${EnvironmentTypeAbbreviation}-${VPC}
+      Name: !Sub dtrouter-${EnvironmentTypeAbbreviation}-${VPC}
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -437,13 +437,13 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub DovetailElixir-${EnvironmentType}
+          Value: !Sub DovetailRouter-${EnvironmentType}
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       VpcId: !Ref VPC
-  DovetailElixirService:
+  DovetailRouterService:
     Type: "AWS::ECS::Service"
     Properties:
       Cluster: !Ref ECSCluster
@@ -452,9 +452,9 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: 2
       LoadBalancers:
-        - ContainerName: "dovetail-elixir"
+        - ContainerName: "dovetail-router"
           ContainerPort: 4000
-          TargetGroupArn: !Ref DovetailElixirALBTargetGroup
+          TargetGroupArn: !Ref DovetailRouterALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       Tags:
         - Key: Project
@@ -465,36 +465,36 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TaskDefinition: !Ref DovetailElixirTaskDefinition
-  DovetailElixirLogGroup:
+      TaskDefinition: !Ref DovetailRouterTaskDefinition
+  DovetailRouterLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
-  DovetailElixirTaskDefinition:
+  DovetailRouterTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
         - Cpu: !Ref ContainerCpu
           Environment:
             - Name: APP_NAME
-              Value: "dovetail3"
+              Value: "dovetailrouter"
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
               Value: !Ref SecretsBase
             - Name: AWS_SECRETS_VERSION
-              Value: !Ref Dovetail3SecretsVersion
+              Value: !Ref DovetailRouterSecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail-elixir:${Dovetail3EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/dovetail-router.prx.org:${DovetailRouterEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref DovetailElixirLogGroup
+              awslogs-group: !Ref DovetailRouterLogGroup
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
-          Name: "dovetail-elixir"
+          Name: "dovetail-router"
           PortMappings:
             - HostPort: 0
               ContainerPort: 4000
