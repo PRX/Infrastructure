@@ -526,6 +526,7 @@ Resources:
                 Branch: master
                 OAuthToken: !Ref GitHubToken
                 PollForSourceChanges: false
+              Namespace: infrastructure_repo
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -572,19 +573,6 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            - Name: InfrastructureCommit
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref InfrastructureCommitProxyFunction
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              OutputArtifacts:
-                - Name: RepoStateArtifact
-              RunOrder: 1
             - Name: DeploymentNotification
               ActionTypeId:
                 Category: Invoke
@@ -621,7 +609,7 @@ Resources:
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
-                    "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
+                    "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
                   }
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
@@ -629,7 +617,6 @@ Resources:
               InputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
-                - Name: RepoStateArtifact
               RunOrder: 1
             - Name: StagingDeltaNotification
               ActionTypeId:
@@ -736,7 +723,7 @@ Resources:
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
                     "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
-                    "InfrastructureGitCommit": { "Fn::GetParam" : ["RepoStateArtifact", "state.json", "commit"]},
+                    "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
                   }
                 RoleArn: !GetAtt CloudFormationIAMRole.Arn
@@ -746,7 +733,6 @@ Resources:
               InputArtifacts:
                 - Name: TemplateConfigProductionZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
-                - Name: RepoStateArtifact
               RunOrder: 2
             # TODO Production delta seem to work better as part of the approval
             # notification, just so the changes are always locked up to the
