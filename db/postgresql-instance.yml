@@ -1,181 +1,261 @@
 # db/postgresql-instance.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >-
-  AWS CloudFormation RDS Template: Template to create a PostgreSQL RDS instance.
+Description: Create a shared access RDS Postgres instance
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: General
+        Parameters:
+          - UniqueName
+          - ProjectName
+          - EnvironmentType
+      - Label:
+          default: RDS Setup
+        Parameters:
+          - EngineVersion
+          - DBInstanceClass
+          - AllocatedStorage
+          - BackupRetentionPeriod
+      - Label:
+          default: DB Setup
+        Parameters:
+          - MasterUsername
+          - MasterUserPassword
+      - Label:
+          default: Networking
+        Parameters:
+          - VPCStackName
+      - Label:
+          default: Alarms
+        Parameters:
+          - AlarmSnsTopic
+      - Label:
+          default: Metadata
+        Parameters:
+          - ProjectName
+          - EnvironmentType
+      - Label:
+          default: Restore from Snapshot
+        Parameters:
+          - DBSnapshotIdentifier
 Parameters:
-  ProjectTag:
-    Description: >-
-      Overall project signifier, distilled to a single word-tag.
+  AlarmSnsTopic:
     Type: String
-    MinLength: 1
-    MaxLength: 256
-    AllowedPattern : ^.+$
-    Default: "ChangeMe"
-  DBInstance:
-    Default: "name-me"
-    Description: >-
-      The database instance name.
-      When replacement is required, must be different than existing instance name.
-    Type: String
-    MinLength: 0
-    MaxLength: 64
-    AllowedPattern: ^$|[a-zA-Z][a-zA-Z0-9\-]*
-    ConstraintDescription: >-
-      optional, must begin with a letter and contain only alphanumeric characters or dash.
-  CreateDBName:
-    Default: ""
-    Description: The database name for create only
-    Type: String
-    MinLength: 0
-    MaxLength: 64
-    AllowedPattern: ^$|[a-zA-Z][a-zA-Z0-9\-_]*
-    ConstraintDescription: >-
-      must begin with a letter and contain only alphanumeric characters, dash,
-      or underscore.
-  DBUser:
-    NoEcho: true
-    Description: The database admin account username
-    Type: String
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9_]*$
-    ConstraintDescription: must begin with a letter and contain only alphanumeric characters or underscore.
-  DBPassword:
-    NoEcho: true
-    Description: The database admin account password
-    Type: String
-    MinLength: 1
-    MaxLength: 41
-    AllowedPattern: ^[a-zA-Z0-9]+$
-    ConstraintDescription: must contain only alphanumeric characters.
-  DBAllocatedStorage:
-    Default: 20
-    Description: The size of the database (Gb)
+    Description: Optional topic arn for CloudWatch RDS alarms
+  AllocatedStorage:
     Type: Number
-    MinValue: 20
-    MaxValue: 16384
-    ConstraintDescription: must be between 5 and 16384Gb.
+    Description: The size of the database (GB)
+    Default: 100
+    AllowedValues: [100, 200, 300, 400, 500]
+  BackupRetentionPeriod:
+    Type: Number
+    Description: Days to retain backups (0 = no backups)
+    Default: 7
+    AllowedValues: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
   DBInstanceClass:
+    Type: String
     Description: The database instance type
+    Default: db.t3.small
+    AllowedValues: ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large", "db.t3.xlarge", "db.m5.large", "db.m5.xlarge", "db.r5.large", "db.r5.xlarge"]
+  DBSnapshotIdentifier:
     Type: String
-    Default: db.t2.small
-    ConstraintDescription: must select a valid database instance type.
-  DBSnapshot:
-    Default: ""
-    Description: >-
-      optional, the DB snapshot that is used to restore the DB instance,
-      not used in conjunction with CreateDBName
+    Description: Optional snapshot to restore from (DO NOT REMOVE/CHANGE FROM EXISTING STACK)
+  EngineVersion:
     Type: String
-    AllowedPattern: ^[a-zA-Z]*[a-zA-Z0-9\-:]*$
-    ConstraintDescription: >-
-      must begin with a letter and contain only alphanumeric characters, dash,
-      or colon.
+    Description: Postgres version to use
+    AllowedValues: ["9.4.24", "9.5.19", "9.6.15", "10.10", "11.5"]
   EnvironmentType:
     Type: String
-    AllowedValues:
-      - Staging
-      - Production
+    Description: Environment for this database
+    Default: Staging
+    AllowedValues: ["Testing", "Beta", "Staging", "Production"]
+  MasterUsername:
+    Type: String
+    Description: Postgres root user name
+  MasterUserPassword:
+    Type: String
+    Description: Postgres root user password
+    NoEcho: true
+  ProjectName:
+    Type: String
+    Description: Value for the project tag
+    MinLength: 1
+    MaxLength: 256
+  UniqueName:
+    Type: String
+    Description: Unique name for this database and associated resources (CamelCase; should not include env name)
+    AllowedPattern: ^$|^[a-zA-Z][a-zA-Z0-9\-]*$
   VPCStackName:
-    Description: DBInstance will be added to the VPC created by a stack with this name
     Type: String
+    Description: VPC stack to launch the database into
     Default: DataVPCStack
-  CloudWatchWarnDiskSpace:
-    Default: 0
-    Description: >-
-      amount of free disk space in bytes that will trigger warning, 0 means no alarm
-    Type: Number
-  CloudWatchWarnCPU:
-    Default: 0
-    Description: percent of CPU that will trigger warning, 0 means no alarm
-    Type: Number
-    MinValue: 0
-    MaxValue: 100
-    ConstraintDescription: must be between 0 and 100
-  CloudWatchWarnConnections:
-    Default: 0
-    Description: amount of connections that will trigger warning, 0 means no alarm
-    Type: Number
-  OpsWarnSnsTopic:
-    Default: ""
-    Description: ops warn SNS Topic arn
-    Type: String
-  EngineVersion:
-    Description: PostgreSQL Engine Version 
-    Type: String
 Conditions:
-  UseSnapshot: !Not [!Equals [!Ref DBSnapshot, ""]]
-  CreateDB: !Not [!Equals [!Ref CreateDBName, ""]]
-  NamedInstance: !Not [!Equals [!Ref DBInstance, ""]]
-  CreateCloudWatchWarnDiskSpace: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
-    - !Not [!Equals [!Ref CloudWatchWarnDiskSpace, 0]]
-  CreateCloudWatchWarnCPU: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
-    - !Not [!Equals [!Ref CloudWatchWarnCPU, 0]]
-  CreateCloudWatchWarnConnections: !And
-    - !Not [!Equals [!Ref OpsWarnSnsTopic, ""]]
-    - !Not [!Equals [!Ref CloudWatchWarnConnections, 0]]
+  CreateAlarms: !Not [!Equals [!Ref AlarmSnsTopic, ""]]
+  HasDBSnapshotIdentifier: !Not [!Equals [!Ref DBSnapshotIdentifier, ""]]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+Mappings:
+  EngineVersionMap:
+    "9.4.24":
+      family: postgres9.4
+    "9.5.19":
+      family: postgres9.5
+    "9.6.15":
+      family: postgres9.6
+    "10.10":
+      family: postgres10
+    "11.5":
+      family: postgres11
+  StorageAlarmMap:
+    "100":
+      threshold: 10
+    "200":
+      threshold: 20
+    "300":
+      threshold: 30
+    "400":
+      threshold: 40
+    "500":
+      threshold: 50
+  ConnectionAlarmMap:
+    # for pg 10/11 max_connections = LEAST({DBInstanceClassMemory/9531392},5000)
+    db.t3.micro:
+      # 1 GiB = 1073741824 B -> 112 conns
+      threshold: 90
+    db.t3.small:
+      # 2 GiB = 2147483648 B -> 225 conns
+      threshold: 180
+    db.t3.medium:
+      # 4 GiB = 4294967296 B -> 450 conns
+      threshold: 400
+    db.t3.large:
+      # 8 GiB  = 8589934592 B -> 901 conns
+      threshold: 800
+    db.t3.xlarge:
+      # 16 GiB  = 17179869184 B -> 1802 conns
+      threshold: 1600
+    db.m5.large:
+      # 8 GiB  = 8589934592 B -> 901 conns
+      threshold: 800
+    db.m5.xlarge:
+      # 16 GiB  = 17179869184 B -> 1802 conns
+      threshold: 1600
+    db.r5.large:
+      # 16 GiB  = 17179869184 B -> 1802 conns
+      threshold: 1600
+    db.r5.xlarge:
+      # 32 GiB = 34359738368 B -> 3604 conns
+      threshold: 3000
 Resources:
-  RDSSubnetGroup:
-    Type: "AWS::RDS::DBSubnetGroup"
+  PostgresInstance:
+    Type: "AWS::RDS::DBInstance"
+    DeletionPolicy: Retain
     Properties:
-      DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
-      DBSubnetGroupDescription: !Ref EnvironmentType
+      AllocatedStorage: !Ref AllocatedStorage
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: false
+      BackupRetentionPeriod: !Ref BackupRetentionPeriod
+      CopyTagsToSnapshot: true
+      DBInstanceClass: !Ref DBInstanceClass
+      DBInstanceIdentifier: !Sub ${UniqueName}${EnvironmentType}
+      DBParameterGroupName: !Ref PostgresParameterGroup
+      DBSnapshotIdentifier: !Ref DBSnapshotIdentifier
+      DBSubnetGroupName: !Ref PostgresSubnetGroup
+      DeleteAutomatedBackups: true
+      DeletionProtection: true
+      EnablePerformanceInsights: !If [IsProduction, true, false]
+      Engine: postgres
+      EngineVersion: !Ref EngineVersion
+      MasterUsername: !If [HasDBSnapshotIdentifier, !Ref "AWS::NoValue", !Ref MasterUsername]
+      MasterUserPassword: !If [HasDBSnapshotIdentifier, !Ref "AWS::NoValue", !Ref MasterUserPassword]
+      MultiAZ: !If [IsProduction, true, false]
+      PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref "AWS::NoValue"]
+      PreferredBackupWindow: "08:00-08:30"
+      PreferredMaintenanceWindow: "tue:06:15-tue:06:45"
+      PubliclyAccessible: true
+      StorageType: gp2
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      VPCSecurityGroups: [!Ref PostgresVPCSecurityGroup]
+  PostgresParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    DeletionPolicy: Retain
+    Properties:
+      Description: !Sub ${UniqueName} ${EnvironmentType} Parameter Group
+      Family: !FindInMap [EngineVersionMap, !Ref EngineVersion, family]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  PostgresSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    DeletionPolicy: Retain
+    Properties:
+      DBSubnetGroupDescription: !Sub ${UniqueName} ${EnvironmentType} Subnet Group
+      DBSubnetGroupName: !Sub ${UniqueName}-${EnvironmentType}-Postgres
       SubnetIds:
         - Fn::ImportValue:
             !Sub ${VPCStackName}-Subnet1
         - Fn::ImportValue:
             !Sub ${VPCStackName}-Subnet2
       Tags:
+        - Key: Project
+          Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-        - Key: Project
-          Value: !Ref ProjectTag
-  MasterDB:
-    Type: "AWS::RDS::DBInstance"
-    DependsOn: RDSSubnetGroup
+  PostgresVPCSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    DeletionPolicy: Retain
     Properties:
-# CloudFormation cannot update a stack when a custom-named resource requires replacing,
-# so when replacement is required (such as when restoring from snapshot),
-# use a new instance name such as oldname-restoredYYYYMMDD
-# Better yet to self manage tearing down of the existing resource, use a new stack with a different instance name
-      DBInstanceIdentifier: !If [NamedInstance, !Ref DBInstance, !Ref "AWS::NoValue"]
-      DBName: !If [CreateDB, !Ref CreateDBName, !Ref "AWS::NoValue"]
-      AllocatedStorage: !Ref DBAllocatedStorage
-      StorageType: gp2
-      DBInstanceClass: !Ref DBInstanceClass
-      DBSnapshotIdentifier: !If [UseSnapshot, !Ref DBSnapshot, !Ref "AWS::NoValue"]
-      Engine: postgres
-      EngineVersion: !Ref EngineVersion
-      MasterUsername: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBUser]
-      MasterUserPassword: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBPassword]
-      MultiAZ: false
+      GroupName: !Sub ${UniqueName}${EnvironmentType}Postgres
+      GroupDescription: !Sub ${UniqueName} ${EnvironmentType} Postgres Security Group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "tcp"
+          FromPort: 5432
+          ToPort: 5432
+        - CidrIpv6: "::/0"
+          IpProtocol: "tcp"
+          FromPort: 5432
+          ToPort: 5432
       Tags:
+        - Key: Name
+          Value: !Sub ${UniqueName}${EnvironmentType}Postgres
+        - Key: Project
+          Value: !Ref ProjectName
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-        - Key: Project
-          Value: !Ref ProjectTag
-      DBSubnetGroupName: !Ref RDSSubnetGroup
-#     PubliclyAccessible: true
-      DeletionProtection: true
-    DeletionPolicy: Snapshot
+      VpcId:
+        Fn::ImportValue: !Sub ${VPCStackName}-VPC
   DiskSpaceAlarm:
-    Condition: CreateCloudWatchWarnDiskSpace
     Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] Disk Space"
-      AlarmActions: [!Ref OpsWarnSnsTopic]
-      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
-      OKActions: [!Ref OpsWarnSnsTopic]
+      AlarmName: !Sub "[RDS][${UniqueName}][${EnvironmentType}] Disk Space"
+      AlarmActions: [!Ref AlarmSnsTopic]
+      InsufficientDataActions: [!Ref AlarmSnsTopic]
+      OKActions: [!Ref AlarmSnsTopic]
       AlarmDescription: Free Storage Space getting low
       ComparisonOperator: LessThanOrEqualToThreshold
       EvaluationPeriods: 1
@@ -183,57 +263,35 @@ Resources:
       Namespace: AWS/RDS
       Period: 300
       Statistic: Average
-      Threshold: !Ref CloudWatchWarnDiskSpace
-      Unit: Bytes
+      Threshold: !FindInMap [StorageAlarmMap, !Ref AllocatedStorage, threshold]
+      Unit: Gigabytes
       TreatMissingData: notBreaching
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MasterDB
-  CPUAlarm:
-    Condition: CreateCloudWatchWarnCPU
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] CPU"
-      AlarmActions: [!Ref OpsWarnSnsTopic]
-      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
-      OKActions: [!Ref OpsWarnSnsTopic]
-      AlarmDescription: CPU utilization high
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 5
-      MetricName: CPUUtilization
-      Namespace: AWS/RDS
-      Period: 60
-      Statistic: Maximum
-      Threshold: !Ref CloudWatchWarnCPU
-      Unit: Percent
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref MasterDB
+          Value: !Ref PostgresInstance
   MaxConnectionsAlarm:
-    Condition: CreateCloudWatchWarnConnections
     Type: "AWS::CloudWatch::Alarm"
+    Condition: CreateAlarms
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[RDS][${EnvironmentType}][${MasterDB}] Database Connections"
-      AlarmActions: [!Ref OpsWarnSnsTopic]
-      InsufficientDataActions: [!Ref OpsWarnSnsTopic]
-      OKActions: [!Ref OpsWarnSnsTopic]
-      AlarmDescription: Database Connections nearing max
+      AlarmName: !Sub "[RDS][${UniqueName}][${EnvironmentType}] Database Connections"
+      AlarmActions: [!Ref AlarmSnsTopic]
+      InsufficientDataActions: [!Ref AlarmSnsTopic]
+      OKActions: [!Ref AlarmSnsTopic]
+      AlarmDescription: Database connections nearing max
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: DatabaseConnections
       Namespace: AWS/RDS
-      Period: 60
+      Period: 300
       Statistic: Maximum
-      Threshold: !Ref CloudWatchWarnConnections
+      Threshold: !FindInMap [ConnectionAlarmMap, !Ref DBInstanceClass, threshold]
       Unit: Count
       TreatMissingData: notBreaching
       Dimensions:
         - Name: DBInstanceIdentifier
-          Value: !Ref MasterDB
+          Value: !Ref PostgresInstance
 Outputs:
-  EC2Platform:
-    Description: Platform in which this stack is deployed
-    Value: EC2-VPC
+  InstanceId:
+    Description: InstanceId of the newly created RDS Instance
+    Value: !Ref PostgresInstance
