@@ -1,6 +1,6 @@
 # db/postgresql-instance.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Create a shared access RDS Postgres instance
+Description: Create an RDS Postgres instance
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -30,15 +30,6 @@ Metadata:
           default: Alarms
         Parameters:
           - AlarmSnsTopic
-      - Label:
-          default: Metadata
-        Parameters:
-          - ProjectName
-          - EnvironmentType
-      - Label:
-          default: Restore from Snapshot
-        Parameters:
-          - DBSnapshotIdentifier
 Parameters:
   AlarmSnsTopic:
     Type: String
@@ -58,9 +49,6 @@ Parameters:
     Description: The database instance type
     Default: db.t3.small
     AllowedValues: ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large", "db.t3.xlarge", "db.m5.large", "db.m5.xlarge", "db.r5.large", "db.r5.xlarge"]
-  DBSnapshotIdentifier:
-    Type: String
-    Description: Optional snapshot to restore from (DO NOT REMOVE/CHANGE FROM EXISTING STACK)
   EngineVersion:
     Type: String
     Description: Postgres version to use
@@ -92,7 +80,6 @@ Parameters:
     Default: DataVPCStack
 Conditions:
   CreateAlarms: !Not [!Equals [!Ref AlarmSnsTopic, ""]]
-  HasDBSnapshotIdentifier: !Not [!Equals [!Ref DBSnapshotIdentifier, ""]]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 Mappings:
   EngineVersionMap:
@@ -157,17 +144,16 @@ Resources:
       BackupRetentionPeriod: !Ref BackupRetentionPeriod
       CopyTagsToSnapshot: true
       DBInstanceClass: !Ref DBInstanceClass
-      DBInstanceIdentifier: !Sub ${UniqueName}${EnvironmentType}
+      DBInstanceIdentifier: !Sub ${UniqueName}-${EnvironmentType}
       DBParameterGroupName: !Ref PostgresParameterGroup
-      DBSnapshotIdentifier: !Ref DBSnapshotIdentifier
       DBSubnetGroupName: !Ref PostgresSubnetGroup
       DeleteAutomatedBackups: true
       DeletionProtection: true
       EnablePerformanceInsights: !If [IsProduction, true, false]
       Engine: postgres
       EngineVersion: !Ref EngineVersion
-      MasterUsername: !If [HasDBSnapshotIdentifier, !Ref "AWS::NoValue", !Ref MasterUsername]
-      MasterUserPassword: !If [HasDBSnapshotIdentifier, !Ref "AWS::NoValue", !Ref MasterUserPassword]
+      MasterUsername: !Ref MasterUsername
+      MasterUserPassword: !Ref MasterUserPassword
       MultiAZ: !If [IsProduction, true, false]
       PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref "AWS::NoValue"]
       PreferredBackupWindow: "08:00-08:30"
