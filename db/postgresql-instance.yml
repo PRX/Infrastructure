@@ -8,6 +8,7 @@ Metadata:
           default: General
         Parameters:
           - UniqueName
+          - DBInstanceIdentifier
           - ProjectName
           - EnvironmentType
       - Label:
@@ -49,6 +50,10 @@ Parameters:
     Description: The database instance type
     Default: db.t3.small
     AllowedValues: ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.t3.large", "db.t3.xlarge", "db.m5.large", "db.m5.xlarge", "db.r5.large", "db.r5.xlarge"]
+  DBInstanceIdentifier:
+    Type: String
+    Description: Unique name for the database instance (lower-case-dashed; SHOULD include env name)
+    AllowedPattern: ^[a-z][a-z0-9\-]*$
   EngineVersion:
     Type: String
     Description: Postgres version to use
@@ -72,8 +77,8 @@ Parameters:
     MaxLength: 256
   UniqueName:
     Type: String
-    Description: Unique name for this database and associated resources (CamelCase; should not include env name)
-    AllowedPattern: ^$|^[a-zA-Z][a-zA-Z0-9\-]*$
+    Description: Unique name for associated resources (CamelCase; should not include env name)
+    AllowedPattern: ^[a-zA-Z][a-zA-Z0-9\-]*$
   VPCStackName:
     Type: String
     Description: VPC stack to launch the database into
@@ -144,7 +149,7 @@ Resources:
       BackupRetentionPeriod: !Ref BackupRetentionPeriod
       CopyTagsToSnapshot: true
       DBInstanceClass: !Ref DBInstanceClass
-      DBInstanceIdentifier: !Sub ${UniqueName}-${EnvironmentType}
+      DBInstanceIdentifier: !Ref DBInstanceIdentifier
       DBParameterGroupName: !Ref PostgresParameterGroup
       DBSubnetGroupName: !Ref PostgresSubnetGroup
       DeleteAutomatedBackups: true
