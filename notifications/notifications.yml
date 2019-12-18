@@ -91,6 +91,10 @@ Parameters:
     Type: String
     Description: >
       The name of the main CD pipeline in CodePipeline
+  FatalNotificationEmailAddress:
+    Type: String
+    Description: >
+      An email address to deliver fatal alarm notifications to
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -813,6 +817,18 @@ Resources:
                 "AWS:SourceOwner": !Ref AWS::AccountId
       Topics:
         - !Ref OpsFatalMessagesSnsTopic
+  # ## Fatal email redundancy
+  OpsFatalMessagesSnsTopicEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      # DeliveryPolicy: Json
+      Endpoint: !Ref FatalNotificationEmailAddress
+      # FilterPolicy: Json
+      Protocol: email
+      # RawMessageDelivery: Boolean
+      # RedrivePolicy: Json
+      # Region: String
+      TopicArn: !Ref OpsFatalMessagesSnsTopic
   # ## SNS Triggers for the Lambda function
   CloudWatchAlarmNotificationHandlerDebugSubscription:
     Type: "AWS::SNS::Subscription"
