@@ -1,0 +1,115 @@
+# dns/trax.fm-hosted_zone.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Hosted zone and record sets for trax.fm
+Parameters:
+  Domain:
+    Default: trax.fm.
+    Description: The domain name and hosted zone
+    Type: String
+Resources:
+  HostedZone:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: Primary TRAX domain
+      HostedZoneTags:
+        - Key: Project
+          Value: trax.fm
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Name: !Ref Domain
+  Text:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - '"google-site-verification=7cKc03UZJucOt-6JQmZBegsYFvCZdHspQ03Bd9L_fwk"'
+            - '"v=spf1 include:mail.zendesk.com include:servers.mcsv.net ?all"'
+          TTL: "300"
+          Type: TXT
+          Name: !Ref Domain
+        # - ResourceRecords:
+        #     - '"26777e86e5712a38"'
+        #   TTL: "300"
+        #   Type: TXT
+        #   Name: !Sub zendesk_verification.${Domain}
+        # - ResourceRecords:
+        #     - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDYge8wksKTUDp27iGsOvkwkTSaO7iXVwMPiHqG8x9JH/Pi9YBwQ8Ld1laKERFi7JSMR0VAr7BCBF935LRPrNuTtE7p3E1EAbjn7ZO5ZpWE0cvBEAYOXDh2RLTWZnW294CvvzhWhg77Oe43rNl0+0duHSCbM4/q2BT8Y4voea3nIwIDAQAB"'
+        #   TTL: "300"
+        #   Type: TXT
+        #   Name: !Sub cm._domainkey.${Domain}
+  GSuite:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: G Suite
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "1 ASPMX.L.GOOGLE.COM."
+            - "5 ALT1.ASPMX.L.GOOGLE.COM."
+            - "5 ALT2.ASPMX.L.GOOGLE.COM."
+            - "10 ASPMX2.GOOGLEMAIL.COM."
+            - "10 ASPMX3.GOOGLEMAIL.COM."
+          TTL: "300"
+          Type: MX
+          Name: !Ref Domain
+  Squarespace:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Squarespace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "198.185.159.144"
+            - "198.185.159.145"
+            - "198.49.23.144"
+            - "198.49.23.145"
+          TTL: "300"
+          Type: A
+          Name: !Ref Domain
+        - ResourceRecords:
+            - ext-cust.squarespace.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub www.${Domain}
+        - ResourceRecords:
+            - verify.squarespace.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub s92xmll9f5b5h3zgtwxe.${Domain}
+  Zendesk:
+    Type: "AWS::Route53::RecordSetGroup"
+    Properties:
+      Comment: Zendesk
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk1.${Domain}
+        - ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk2.${Domain}
+        - ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk3.${Domain}
+        - ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "300"
+          Type: CNAME
+          Name: !Sub zendesk4.${Domain}
