@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates an ACM Certificate
+Conditions:
+  HasSubjectAlternativeNames: !Not [!Equals [!Join ["", !Ref SubjectAlternativeNames], ""]]
+Parameters:
+  ProjectTag:
+    Type: String
+    AllowedPattern: ^.+$
+    ConstraintDescription: must not be blank
+    Description: >
+      The value used for the Project tag on resources that support tagging.
+  DomainName:
+    Type: String
+    AllowedPattern: ^(\*\.)?(((?!-)[A-Za-z0-9-]{0,62}[A-Za-z0-9])\.)+((?!-)[A-Za-z0-9-]{1,62}[A-Za-z0-9])$
+    ConstraintDescription: must be a fully qualified domain name
+    Description: >
+      The fully qualified domain name (FQDN), with which you want to secure an
+      ACM certificate
+  SubjectAlternativeNames:
+    Type: CommaDelimitedList
+    Description: >
+      (optional) Additional FQDNs to be included in the Subject Alternative
+      Name extension of the ACM certificate
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames: !If [HasSubjectAlternativeNames, !Ref SubjectAlternativeNames, !Ref "AWS::NoValue"]
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Name
+          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
