@@ -1,12 +1,12 @@
 // Invoked by: SNS Subscription
 // Returns: Error or status message
 //
-// Receives notifications from the CI process, generally as a result of
+// Recieves notifications from the CI process, generally as a result of
 // CodeBuild status changes. The messages are sent to the Slack Message Relay
 // SNS topic in order to be sent to Slack. All messages handled by this function
 // are sent to the #ops-builds (this could change at some point).
 //
-// CI Status messages can be sent from several sources. The GitHub event handler
+// CI Status message can be sent from several sources. The GitHub event handler
 // will send messages after a build has started, and includes data about the
 // GitHub event that triggered the build, and the build itself.
 // eg { event: {...}, build: {...} }
@@ -19,13 +19,13 @@ const SLACK_CHANNEL = '#ops-builds';
 const SLACK_ICON = ':ops-codebuild:';
 const SLACK_USERNAME = 'AWS CodeBuild';
 
-function attachmentsForGitHubEvent(gitHubEvent, codeBuildBuild) {
+function attachmentsForGitHubEvent(gitHubEvent, gitHubBuild) {
     const repo = gitHubEvent.repository.full_name;
     const sha = gitHubEvent.after || gitHubEvent.pull_request.head.sha;
     const sha7 = sha.substring(0, 7);
     const branch = gitHubEvent.pull_request ? gitHubEvent.pull_request.head.ref : gitHubEvent.ref.replace(/refs\/heads\//, '');
 
-    const { arn } = codeBuildBuild;
+    const { arn } = gitHubBuild;
     const region = arn.split(':')[3];
     const buildId = arn.split('/')[1];
 
@@ -33,7 +33,7 @@ function attachmentsForGitHubEvent(gitHubEvent, codeBuildBuild) {
     const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
 
     const attachment = {
-        ts: Math.floor(Date.parse(codeBuildBuild.startTime) / 1000),
+        ts: Math.floor(Date.parse(gitHubBuild.startTime) / 1000),
         footer: branch,
         color: 'warning',
         mrkdwn_in: ['text'],
