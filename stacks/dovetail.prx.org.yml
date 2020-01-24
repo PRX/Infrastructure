@@ -51,6 +51,9 @@ Parameters:
     Type: String
   DovetailSecretsVersion:
     Type: String
+  DynamodbKinesisArn:
+    type: String
+    default: Kinesis Stream Arn
   # Dovetail Elixir ############################################################
   DovetailRouterEcrImageTag:
     Type: String
@@ -509,6 +512,46 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # connect dovetail-router impressions to ddb kinesis
+  DovetailRouterSubscriptionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - !Sub "logs.${AWS::Region}.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: DovetailRouterSubscriptionKinesisPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref DynamodbKinesisArn
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  DovetailRouterDynamodbKinesisSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DynamodbKinesisArn
+      FilterPattern: '{$.msg = impression}'
+      LogGroupName: !Ref DovetailRouterLogGroup.LogGroupName
+      RoleArn: !GetAtt DovetailRouterSubscriptionRole.arn
   # Autoscaling
   DovetailAutoScaling:
     Type: "AWS::ApplicationAutoScaling::ScalableTarget"
