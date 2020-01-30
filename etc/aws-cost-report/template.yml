@@ -1,0 +1,72 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Creates a Lambda function that runs some basic reports against Cost Explorer,
+  and posts the results to Slack
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+Resources:
+  ReportFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+        - PolicyName: CostExplorerPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ce:GetReservationCoverage
+                  - ce:GetCostAndUsage
+                  - ce:GetSavingsPlansCoverage
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Tags:
+        - Key: Project
+          Value: Admin
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  ReportFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_function.py
+      Description: >-
+        Sends daily messages to Slack with AWS billing information
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: lambda_function.lambda_handler
+      MemorySize: 512
+      Role: !GetAtt ReportFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        Project: Admin
+        # - Key: prx:cloudformation:stack-name
+        #   Value: !Ref AWS::StackName
+        # - Key: prx:cloudformation:stack-id
+        #   Value: !Ref AWS::StackId
+      Timeout: 16
