@@ -17,6 +17,26 @@ Parameters:
   CodeS3ObjectVersion:
     Type: String
 Resources:
+  # Domain
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: CreateProductionResources
+    Properties:
+      DomainName: tower.radiotopia.fm
+      Tags:
+        - Key: Project
+          Value: tower.radiotopia.fm
+        - Key: Name
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
+  # API
+  # https://tower.radiotopia.fm/api/v2/episodes.json
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
   TowerLambdaIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -42,26 +62,29 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   TowerLambdaFunction:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        S3Bucket: !Ref CodeS3Bucket
-        S3Key: "lambda/PRX-tower.radiotopia.fm.zip"
-        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: lambda/PRX-tower.radiotopia.fm.zip
+        Version: !Ref CodeS3ObjectVersion
       Description: Radiotopia Radio API v2
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /api/v2/episodes.json
+          Type: HttpApi
       Handler: lambda_function.lambda_handler
       MemorySize: 512
       Role: !GetAtt TowerLambdaIamRole.Arn
       Runtime: python2.7
       Tags:
-        - Key: Project
-          Value: tower.radiotopia.fm
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        Project: tower.radiotopia.fm
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
       Timeout: 8
   TowerLambdaErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -113,168 +136,3 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref TowerLambdaFunction
-  TowerLambdaPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !GetAtt TowerLambdaFunction.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${Stage}/*"
-
-
-  # HTTP API
-  HttpApi:
-    Type: AWS::Serverless::HttpApi
-  TowerLambdaHttpFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri:
-        Bucket: !Ref CodeS3Bucket
-        Key: lambda/PRX-tower.radiotopia.fm.zip
-        Version: !Ref CodeS3ObjectVersion
-      Description: Radiotopia Radio API v2
-      Events:
-        ApiRequest:
-          Properties:
-            ApiId: !Ref HttpApi
-            Method: get
-            Path: /api/v2/episodes.json
-          Type: HttpApi
-      Handler: lambda_function.lambda_handler
-      MemorySize: 512
-      Role: !GetAtt TowerLambdaIamRole.Arn
-      Runtime: python2.7
-      Tags:
-        Project: tower.radiotopia.fm
-        Environment: !Ref EnvironmentType
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-      Timeout: 8
-  # API Gateway
-  # https://tower.radiotopia.fm/api/v2/episodes.json
-  RestApi:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: !Ref AWS::StackName
-      Description: !Sub "${EnvironmentType} tower.radiotopia.fm"
-      Tags:
-        - Key: Project
-          Value: tower.radiotopia.fm
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  ApiResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !GetAtt RestApi.RootResourceId
-      PathPart: "api"
-  V2Resource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !Ref ApiResource
-      PathPart: "v2"
-  V2EpisodesResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !Ref V2Resource
-      PathPart: "episodes.json"
-  V2EpisodesMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref RestApi
-      ResourceId: !Ref V2EpisodesResource
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TowerLambdaFunction.Arn}/invocations
-  V2EpisodesOptionsMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref RestApi
-      ResourceId: !Ref V2EpisodesResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ''
-            StatusCode: '200'
-        PassthroughBehavior: NEVER
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - ResponseModels:
-            application/json: Empty
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-          StatusCode: '200'
-  Deployment:
-    DependsOn:
-      - V2EpisodesOptionsMethod
-    Type: "AWS::ApiGateway::Deployment"
-    Properties:
-      RestApiId: !Ref RestApi
-  Stage:
-    Type: "AWS::ApiGateway::Stage"
-    Properties:
-      StageName: !If [CreateProductionResources, prod, stag]
-      Description: !Sub "${EnvironmentType} deployment for tower.radiotopia.fm"
-      RestApiId: !Ref RestApi
-      DeploymentId: !Ref Deployment
-      MethodSettings:
-        - DataTraceEnabled: true
-          HttpMethod: "*"
-          LoggingLevel: "INFO"
-          MetricsEnabled: true
-          ResourcePath: "/*"
-  # Domain
-  Certificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: CreateProductionResources
-    Properties:
-      DomainName: tower.radiotopia.fm
-      Tags:
-        - Key: Project
-          Value: tower.radiotopia.fm
-        - Key: Name
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      ValidationMethod: DNS
-  DomainName:
-    Type: AWS::ApiGateway::DomainName
-    Condition: CreateProductionResources
-    Properties:
-      CertificateArn: !Ref Certificate
-      DomainName: tower.radiotopia.fm
-      Tags:
-        - Key: Project
-          Value: tower.radiotopia.fm
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  BasePathMapping:
-    Type: AWS::ApiGateway::BasePathMapping
-    Condition: CreateProductionResources
-    Properties:
-      DomainName: !Ref DomainName
-      RestApiId: !Ref RestApi
-      Stage: !If [CreateProductionResources, prod, stag]
