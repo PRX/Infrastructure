@@ -1,5 +1,6 @@
 # stacks/serverless/tower.radiotopia.fm.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: Radiotopia Radio API
 Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
@@ -119,6 +120,37 @@ Resources:
       FunctionName: !GetAtt TowerLambdaFunction.Arn
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/${Stage}/*"
+
+
+  # HTTP API
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+  TowerLambdaHttpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        FunctionCode:
+          Bucket: !Ref CodeS3Bucket
+          Key: lambda/PRX-tower.radiotopia.fm.zip
+          Version: !Ref CodeS3ObjectVersion
+      Description: Radiotopia Radio API v2
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /api/v2/episodes.json
+          Type: HttpApi
+      Handler: lambda_function.lambda_handler
+      MemorySize: 512
+      Role: !GetAtt TowerLambdaIamRole.Arn
+      Runtime: python2.7
+      Tags:
+        Project: tower.radiotopia.fm
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 8
   # API Gateway
   # https://tower.radiotopia.fm/api/v2/episodes.json
   RestApi:
