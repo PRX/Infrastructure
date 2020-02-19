@@ -4,6 +4,7 @@ Description: >
   Serverless (Lambda, API Gateway, etc) apps
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   InfrastructureStorageStackName:
     Type: String
@@ -32,6 +33,8 @@ Parameters:
   DovetailBytesLambdaCodeS3ObjectVersion:
     Type: String
   DovetailCountsLambdaCodeS3ObjectVersion:
+    Type: String
+  DovetailTrafficLambdaCodeS3ObjectVersion:
     Type: String
   CmsAudioLambdaCodeS3ObjectVersion:
     Type: String
@@ -158,6 +161,30 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-counts-lambda.yml"]]
+      TimeoutInMinutes: 5
+  DovetailTrafficLambdaStack:
+    Type: "AWS::CloudFormation::Stack"
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        CodeS3Bucket:
+          Fn::ImportValue:
+            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+        CodeS3ObjectVersion: !Ref DovetailTrafficLambdaCodeS3ObjectVersion
+        DownloaderBatchSize: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-traffic-lambda/DOWNLOADER_BATCH_SIZE"
+        ScheduleIntervalMinutes: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-traffic-lambda/SCHEDULE_INTERVAL_MINUTES"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-traffic-lambda.yml"]]
       TimeoutInMinutes: 5
   CmsAudioLambdaStack:
     Type: "AWS::CloudFormation::Stack"
