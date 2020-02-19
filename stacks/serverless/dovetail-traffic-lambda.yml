@@ -1,0 +1,142 @@
+# stacks/serverless/dovetail-traffic-lambda.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Dovetail traffic lambda function
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  CodeS3Bucket:
+    Type: String
+  CodeS3ObjectVersion:
+    Type: String
+  DownloaderBatchSize:
+    Type: AWS::SSM::Parameter::Value<String>
+  ScheduleIntervalMinutes:
+    Type: AWS::SSM::Parameter::Value<String>
+Resources:
+  #
+  # lambda function
+  #
+  DovetailTrafficLambdaExecutionIAMRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service: "lambda.amazonaws.com"
+              Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: SqsWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "sqs:SendMessage"
+                Resource: !GetAtt DovetailTrafficSqsQueue.Arn
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: Staging
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  DovetailTrafficLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: lambda/PRX-dovetail-traffic-lambda.zip
+        S3ObjectVersion: !Ref CodeS3ObjectVersion
+      Description: Dovetail traffic generator
+      Environment:
+        Variables:
+          DOWNLOADER_BATCH_SIZE: !Ref DownloaderBatchSize
+          SCHEDULE_INTERVAL_MINUTES: !Ref ScheduleIntervalMinutes
+          SQS_QUEUE_URL: !Ref DovetailTrafficSqsQueue
+          SQS_QUEUE_REGION: !Ref AWS::Region
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt DovetailTrafficLambdaExecutionIAMRole.Arn
+      Runtime: nodejs12.x
+      Timeout: 30
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: Staging
+        - Key: Name
+          Value: "Dovetail-Traffic-Staging"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  #
+  # queue for downloads (TODO: trigger for this)
+  #
+  DovetailTrafficSqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 7200
+      QueueName: staging_dovetail_traffic
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: Staging
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  #
+  # Cron to trigger the scheduler
+  #
+  DovetailTrafficSchedulerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "events.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: "lambda:InvokeFunction"
+                Resource: !GetAtt DovetailTrafficLambdaFunction.Arn
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: Staging
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  DovetailTrafficSchedulerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DovetailTrafficLambdaFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DovetailTrafficSchedulerTrigger.Arn
+  DovetailTrafficSchedulerTrigger:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >
+        Runs the dovetail traffic lambda scheduler
+      RoleArn: !GetAtt DovetailTrafficSchedulerRole.Arn
+      ScheduleExpression: !Join ["", ["rate(", !Ref ScheduleIntervalMinutes, " minutes)"]]
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DovetailTrafficLambdaFunction.Arn
+          Id: "Staging-Dovetail-Traffic-Scheduler"
