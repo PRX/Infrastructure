@@ -78,7 +78,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   #
-  # queue for downloads (TODO: trigger for this)
+  # Downloads SQS queue and trigger
   #
   DovetailTrafficSqsQueue:
     Type: AWS::SQS::Queue
@@ -94,6 +94,13 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  DovetailTrafficSqsTrigger:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      Enabled: true
+      EventSourceArn: !GetAtt DovetailTrafficSqsQueue.Arn
+      FunctionName: !Ref DovetailTrafficLambdaFunction
   #
   # Cron to trigger the scheduler
   #
