@@ -120,7 +120,8 @@ Resources:
           - DomainName: !Ref OriginBucket
             Id: dovetail-stitch-s3
             OriginPath: !Ref OriginPath
-            S3OriginConfig: {}
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
         PriceClass: PriceClass_200
         ViewerCertificate:
           AcmCertificateArn: !Ref Certificate
@@ -132,6 +133,11 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CloudFrontOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !If [IsProduction, "Dovetail CDN Production", "Dovetail CDN Staging"]
   CloudFrontDistribution400Alarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
