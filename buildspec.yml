@@ -6,13 +6,16 @@ phases:
   install:
     runtime-versions:
       python: 3.7
+      ruby: 2.x
     commands:
       - 'echo "Installing CloudFormation Linter"'
       - 'pip install cfn-lint --upgrade'
+      - 'gem install cfn-nag'
   build:
     commands:
       - 'cd $(ls -d */|head -n 1)'
       - 'find . -name "*.yml" -type f ! -path "./node_modules/*" -mindepth 2 -print0 | xargs -0 -n1 cfn-lint --ignore-checks W --template'
+      - 'find . -name "*.yml" -type f ! -path "./node_modules/*" -mindepth 2 -print0 | xargs -0 -n1 cfn_nag_scan --input-path'
   post_build:
       commands:
         - 'curl -sO "https://raw.githubusercontent.com/PRX/Infrastructure/master/ci/utility/post_build.sh" && chmod +x post_build.sh && bash ./post_build.sh'
