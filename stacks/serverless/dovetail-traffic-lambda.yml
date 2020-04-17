@@ -12,6 +12,8 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   ScheduleIntervalMinutes:
     Type: AWS::SSM::Parameter::Value<String>
+  MetricsKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   #
   # lambda function
@@ -28,6 +30,7 @@ Resources:
               Action: "sts:AssumeRole"
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole"
       Path: "/"
       Policies:
@@ -101,6 +104,19 @@ Resources:
       Enabled: true
       EventSourceArn: !GetAtt DovetailTrafficSqsQueue.Arn
       FunctionName: !Ref DovetailTrafficLambdaFunction
+  #
+  # Kinesis cloned podcast scheduler
+  #
+  DovetailTrafficKinesisTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    Properties:
+      # use a large batch size. since we only care about a very small subset of
+      # records matching certain podcast ids, we end up discarding most.
+      BatchSize: 1000
+      Enabled: true
+      EventSourceArn: !Ref MetricsKinesisStream
+      FunctionName: !Ref DovetailTrafficLambdaFunction
+      StartingPosition: "LATEST"
   #
   # Cron to trigger the scheduler
   #
