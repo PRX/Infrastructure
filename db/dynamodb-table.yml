@@ -18,6 +18,12 @@ Metadata:
           - ForeignAccountId
           - ForeignRoleName
       - Label:
+          default: Billing
+        Parameters:
+          - BillingMode
+          - ProvisionedReadCapacityUnits
+          - ProvisionedWriteCapacityUnits
+      - Label:
           default: Metadata
         Parameters:
           - EnvironmentType
@@ -38,7 +44,13 @@ Metadata:
       EnvironmentType:
         default: Environment type
       ProjectTag:
-        default: Project Tag
+        default: Project tag
+      BillingMode:
+        default: Billing mode
+      ProvisionedReadCapacityUnits:
+        default: Provisioned read capacity (RCU)
+      ProvisionedWriteCapacityUnits:
+        default: Provisioned write capacity (WCU)
 Parameters:
   TableName:
     Type: String
@@ -69,6 +81,18 @@ Parameters:
       - Testing
       - Staging
       - Production
+  BillingMode:
+    Type: String
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Default: PAY_PER_REQUEST
+  ProvisionedReadCapacityUnits:
+    Type: Number
+    Description: Only used under provisioned billing
+  ProvisionedWriteCapacityUnits:
+    Type: Number
+    Description: Only used under provisioned billing
   ProjectTag:
     Type: String
     Description: The value used for the Project tag on resources that support tagging.
@@ -76,6 +100,7 @@ Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
   HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
+  HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
 Mappings:
   DataTypesMap:
     String:
@@ -92,11 +117,17 @@ Resources:
         - AttributeName: !Ref PrimaryKey
           AttributeType: !FindInMap [DataTypesMap, !Ref PrimaryType, Symbol]
       # https://github.com/awslabs/cfn-python-lint/issues/509
-      BillingMode: PAY_PER_REQUEST
+      BillingMode: !Ref BillingMode
       KeySchema:
         - AttributeName: !Ref PrimaryKey
           KeyType: HASH
       TableName: !Ref TableName
+      ProvisionedThroughput:
+        !If
+          - HasProvisionedBilling
+          - ReadCapacityUnits: !Ref ProvisionedReadCapacityUnits
+            WriteCapacityUnits: !Ref ProvisionedWriteCapacityUnits
+          - !Ref "AWS::NoValue"
       Tags:
         - Key: Project
           Value: !Ref ProjectTag
