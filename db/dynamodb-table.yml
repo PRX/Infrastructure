@@ -18,11 +18,19 @@ Metadata:
           - ForeignAccountId
           - ForeignRoleName
       - Label:
-          default: Billing
+          default: Capacity
         Parameters:
           - BillingMode
           - ProvisionedReadCapacityUnits
           - ProvisionedWriteCapacityUnits
+          - EnableAutoScaling
+          - WriteCapacityMin
+          - WriteCapacityMax
+          - ReadCapacityMin
+          - ReadCapacityMax
+          - AutoScalingCooldown
+          - WriteUtilizationScalingTarget
+          - ReadUtilizationScalingTarget
       - Label:
           default: Metadata
         Parameters:
@@ -51,6 +59,22 @@ Metadata:
         default: Provisioned read capacity (RCU)
       ProvisionedWriteCapacityUnits:
         default: Provisioned write capacity (WCU)
+      EnableAutoScaling:
+        default: Enable auto scaling
+      WriteCapacityMin:
+        default: Write capacity minimum (WCU)
+      WriteCapacityMax:
+        default: Write capacity maximum (WCU)
+      ReadCapacityMin:
+        default: Read capacity minimum (RCU)
+      ReadCapacityMax:
+        default: Read capacity maximum (RCU)
+      AutoScalingCooldown:
+        default: Auto scaling cooldown period
+      WriteUtilizationScalingTarget:
+        default: Write capacity utilization scaling target (%)
+      ReadUtilizationScalingTarget:
+        default: Read capacity utilization scaling target (%)
 Parameters:
   TableName:
     Type: String
@@ -93,6 +117,37 @@ Parameters:
   ProvisionedWriteCapacityUnits:
     Type: Number
     Description: Only used under provisioned billing
+  EnableAutoScaling:
+    Type: String
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "False"
+    Description: Only used under provisioned billing
+  WriteCapacityMin:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  WriteCapacityMax:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  ReadCapacityMin:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  ReadCapacityMax:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  AutoScalingCooldown:
+    Type: Number
+    Default: 60
+    Description: Only used under provisioned billing with auto scaling
+  WriteUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing with auto scaling
+  ReadUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing with auto scaling
   ProjectTag:
     Type: String
     Description: The value used for the Project tag on resources that support tagging.
@@ -101,6 +156,10 @@ Conditions:
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
   HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
   HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
+  AutoScalingRequested: !Equals [!Ref EnableAutoScaling, "True"]
+  CreateAutoScaling: !And
+    - !Condition AutoScalingRequested
+    - !Condition HasProvisionedBilling
 Mappings:
   DataTypesMap:
     String:
@@ -183,6 +242,53 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # Auto scaling
+  TableWriteCapacityScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: CreateAutoScaling
+    Properties:
+      MaxCapacity: !Ref WriteCapacityMax
+      MinCapacity: !Ref WriteCapacityMin
+      ResourceId: !Sub table/${DynamoDBTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+  TableWriteCapacityScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: CreateAutoScaling
+    Properties:
+      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref TableWriteCapacityScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: !Ref AutoScalingCooldown
+        ScaleOutCooldown: !Ref AutoScalingCooldown
+        TargetValue: !Ref WriteUtilizationScalingTarget
+  TableReadCapacityScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: CreateAutoScaling
+    Properties:
+      MaxCapacity: !Ref ReadCapacityMax
+      MinCapacity: !Ref ReadCapacityMin
+      ResourceId: !Sub table/${DynamoDBTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+  TableReadCapacityScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: CreateAutoScaling
+    Properties:
+      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref TableReadCapacityScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: !Ref AutoScalingCooldown
+        ScaleOutCooldown: !Ref AutoScalingCooldown
+        TargetValue: !Ref ReadUtilizationScalingTarget
 Outputs:
   TableArn:
     Description: The created DynamoDB table ARN
