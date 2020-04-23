@@ -151,6 +151,12 @@ Parameters:
   ProjectTag:
     Type: String
     Description: The value used for the Project tag on resources that support tagging.
+  WarnMessagesSnsTopicArn:
+    Type: String
+  ErrorMessagesSnsTopicArn:
+    Type: String
+  FatalMessagesSnsTopicArn:
+    Type: String
 Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
@@ -289,6 +295,85 @@ Resources:
         ScaleInCooldown: !Ref AutoScalingCooldown
         ScaleOutCooldown: !Ref AutoScalingCooldown
         TargetValue: !Ref ReadUtilizationScalingTarget
+  # Alarms
+  ScanThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} Scan throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        Scan operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: Scan
+  BatchGetItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchGetItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchGetItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchGetItem
+  BatchWriteItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchWriteItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchWriteItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchWriteItem
 Outputs:
   TableArn:
     Description: The created DynamoDB table ARN
