@@ -1,0 +1,93 @@
+# cdn/Lambda@Edge/origin-request-path-mapping.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates a Lambda function intended to be used as a Lambda@Edge origin-request
+  handler. For CDN requests that match the provided path, the origin request
+  will use the defined alternate path.
+Parameters:
+  StaticViewerRequestPath:
+    Type: String
+    Description: >
+      eg. /songexploder. This is a path that will be statically mapped to a path
+      in the origin. It can be used when migrating feeds off of FeedBurner. This
+      would be the path in the feeds.feedburner.com URL.
+  StaticOriginRequestPath:
+    Type: String
+    Description: >
+      eg. /feed-rss.xml. The path that the static viewer request path is
+      remapped to. (ie, If a request is made for /songexploder, the CDN
+      will request /feed-rss.xml from the origin instead.)
+Resources:
+  LambdaExecutionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaEdgePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:GetFunction
+                  - lambda:EnableReplication*
+                  - iam:CreateServiceLinkedRole
+                Resource:
+                  - "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile:
+          Fn::Sub: |
+            exports.handler = (event, context, callback) => {
+              const request = event.Records[0].cf.request;
+              if (request.uri === '${StaticViewerRequestPath}') {
+                request.uri = '${StaticOriginRequestPath}';
+              }
+              callback(null, request);
+            };
+      Description: Remaps static paths on origin requests
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt LambdaExecutionIamRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      Timeout: 1
+  # Lambda Versions
+  # These versions are referenced EXPLICITLY by CloudFront distributions, which
+  # will not start using new versions as soon as they are available.
+  #
+  # !!!! DO NOT DELETE VERSIONS !!!!
+  #
+  # Instead, create new AWS::Lambda::Version resources when there are updates
+  # to the Lambda code.
+  LambdaFunctionVersion1:
+    Type: AWS::Lambda::Version
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: !GetAtt LambdaFunction.Arn
+Outputs:
+  LambdaFunctionVersion1Arn:
+    Value: !Ref LambdaFunctionVersion1
