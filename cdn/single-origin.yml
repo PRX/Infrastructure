@@ -44,6 +44,11 @@ Conditions:
   UseCertificate: !Or
     - !Condition CreateCertificate
     - !Condition HasAcmCertificateArn
+  HasOriginRequestLambdaFunctionAssociations: !Not [!Equals [!Ref CloudFrontLambdaFunctionAssociationsOriginRequestArn, ""]]
+  HasOriginResponseLambdaFunctionAssociations: !Not [!Equals [!Ref CloudFrontLambdaFunctionAssociationsOriginResponseArn, ""]]
+  HasLambdaFunctionAssociations: !Or
+    - !Condition HasOriginRequestLambdaFunctionAssociations
+    - !Condition HasOriginResponseLambdaFunctionAssociations
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -75,6 +80,8 @@ Metadata:
           - CloudFrontCustom403ErrorResponseCode
           - CloudFrontCustom403ErrorResponsePagePath
           - CloudFrontWebACLId
+          - CloudFrontLambdaFunctionAssociationsOriginRequestArn
+          - CloudFrontLambdaFunctionAssociationsOriginResponseArn
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -118,6 +125,10 @@ Metadata:
         default: Custom 403 error response page
       CloudFrontWebACLId:
         default: AWS WAF web ACL ID
+      CloudFrontLambdaFunctionAssociationsOriginRequestArn:
+        default: Origin request Lambda@Edge ARN
+      CloudFrontLambdaFunctionAssociationsOriginResponseArn:
+        default: Origin response Lambda@Edge ARN
       AcmCertificateArn:
         default: Certificate ARN
 Parameters:
@@ -264,6 +275,16 @@ Parameters:
     Type: String
     Description: >
       (optional) The AWS WAF web ACL to associate with this distribution
+  CloudFrontLambdaFunctionAssociationsOriginRequestArn:
+    Type: String
+    Description: >
+      (optional) The ARN for a Lambda function version to be used on
+      origin-request events
+  CloudFrontLambdaFunctionAssociationsOriginResponseArn:
+    Type: String
+    Description: >
+      (optional) The ARN for a Lambda function version to be used on
+      origin-response events
   AcmCertificateArn:
     Type: String
     Description: >
@@ -314,7 +335,21 @@ Resources:
             #   - String
             QueryString: false
             # QueryStringCacheKeys:
-          # LambdaFunctionAssociations:
+          LambdaFunctionAssociations:
+            !If
+              - HasLambdaFunctionAssociations
+              -
+                - !If
+                  - HasOriginRequestLambdaFunctionAssociations
+                  - EventType: origin-request
+                    LambdaFunctionARN: !Ref CloudFrontLambdaFunctionAssociationsOriginRequestArn
+                  - !Ref "AWS::NoValue"
+                - !If
+                  - HasOriginResponseLambdaFunctionAssociations
+                  - EventType: origin-response
+                    LambdaFunctionARN: !Ref CloudFrontLambdaFunctionAssociationsOriginResponseArn
+                  - !Ref "AWS::NoValue"
+              - !Ref "AWS::NoValue"
           MaxTTL: !If [HasCloudFrontMaxTtl, !Ref "CloudFrontMaxTtl", !Ref "AWS::NoValue"]
           MinTTL: !If [HasCloudFrontMinTtl, !Ref "CloudFrontMinTtl", !Ref "AWS::NoValue"]
           # SmoothStreaming: Boolean
