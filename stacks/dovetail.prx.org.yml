@@ -510,6 +510,59 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # Dovetail Elixir Alarms
+  DovetailRouterLogErrorsMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '{ $.level = "error" }'
+      LogGroupName: !Ref DovetailRouterLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "dovetail_router_errors_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  DovetailRouterLogErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: !Sub "[DovetailRouter][LogErrors] ${EnvironmentType}"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Logged errors on the dovetail router application
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "dovetail_router_errors_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  DovetailRouter500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: !Sub "[DovetailRouter][ALB][Error] ${EnvironmentType} Target 5XX"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: 5XX responses from the dovetail router target group
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref DovetailALB
+        - Name: TargetGroup
+          Value: !GetAtt DovetailRouterALBTargetGroup.TargetGroupFullName
   # connect dovetail-router impressions to ddb kinesis
   DovetailRouterSubscriptionRole:
     Type: "AWS::IAM::Role"
