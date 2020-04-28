@@ -56,6 +56,7 @@ Resources:
           import boto3
           import datetime
           import urllib.request
+          import re
 
           sns = boto3.client('sns')
 
@@ -81,14 +82,14 @@ Resources:
                       'short': True
                   })
 
-                  if flight['LifetimeCapAmount']:
+                  if 'LifetimeCapAmount' in flight and flight['LifetimeCapAmount']:
                       fields.append({
                           'title': 'LifetimeCapAmount',
                           'value': flight['LifetimeCapAmount'],
                           'short': True
                       })
 
-                  if flight['EndDate']:
+                  if 'EndDate' in flight and flight['EndDate']:
                       fields.append({
                           'title': 'EndDate',
                           'value': flight['EndDate'],
@@ -103,9 +104,11 @@ Resources:
               return attachments
 
 
-          def lambda_handler(event, context):
+          # Finds all active flights starting tomorrow, and sends a message to Slack
+          # with their details
+          def upcoming_flight_report():
               flights = []
-              problem_flights = []
+              # problem_flights = []
 
               t1 = datetime.datetime.utcnow() + datetime.timedelta(days=0)
               t2 = datetime.datetime.utcnow() + datetime.timedelta(days=2)
@@ -129,10 +132,12 @@ Resources:
                       flight_data = json.loads(json_str)
                       flights.append(flight_data)
 
-                      if not flight_data['EndDate'].endswith('59:00Z'):
-                          problem_flights.append(flight_data)
+                      # if 'EndDate' in flight_data and flight_data['EndDate']:
+                      #     if not flight_data['EndDate'].endswith('59:00Z'):
+                      #         problem_flights.append(flight_data)
 
               print(f"Found {len(flights)} flights for this period")
+              # print(f"Found {len(problem_flights)} problem flights for this period")
 
               if len(flights) > 0:
                   sns.publish(
@@ -144,6 +149,34 @@ Resources:
                           'attachments': slack_attachments(flights)
                       })
                   )
+
+          def problem_flight_report():
+              flights = []
+              problem_flights = []
+
+              t1 = datetime.datetime.utcnow() + datetime.timedelta(days=0)
+              s1 = t1.strftime("%Y-%m-%d%%2023:59:59")
+
+              api_url = f"https://api.adzerk.net/v1/fast/flight?isActive=true&afterStartDate={s1}"
+
+              flight_filter_req = urllib.request.Request(
+                  api_url,
+                  headers=ADZERK_REQUEST_HEADERS)
+              with urllib.request.urlopen(flight_filter_req) as response:
+                  response_data = response.read()
+
+              # The response is a line-delimited set of JSON flight objects
+              for json_str in response_data.decode("utf-8").split("\n"):
+                  if len(json_str) > 1:
+                      flight_data = json.loads(json_str)
+                      flights.append(flight_data)
+
+                      if 'EndDate' in flight_data and flight_data['EndDate']:
+                          if not flight_data['EndDate'].endswith('59:00Z'):
+                              problem_flights.append(flight_data)
+
+              print(f"Found {len(flights)} active flights")
+              print(f"Found {len(problem_flights)} problem flights for this period")
 
               if len(problem_flights) > 0:
                   attachments = slack_attachments(problem_flights)
@@ -169,8 +202,23 @@ Resources:
                           'attachments': attachments
                       })
                   )
+
+
+          def lambda_handler(event, context):
+              print(event)
+
+              # Set the default behavior, by pretending this is the Hourly rule
+              rule_arn = 'Hourly'
+
+              if 'resources' in event:
+                rule_arn = event['resources'][0]
+
+              if re.search(r'Daily', rule_arn):
+                  upcoming_flight_report()
+              elif re.search(r'Hourly', rule_arn):
+                  problem_flight_report()
       Description: >-
-        Finds ad flights starting soon in Adzerk and sends them to Slack via the
+        Finds ad flights Adzerk and sends them to Slack via the
         Slack relay
       Environment:
         Variables:
@@ -211,10 +259,10 @@ Resources:
                   - "lambda:InvokeFunction"
                 Resource:
                   - !GetAtt PollerFunction.Arn
-  PollerEventRule:
+  DailyPollerEventRule:
     Type: "AWS::Events::Rule"
     Properties:
-      Description: >
+      Description: >-
         Runs the Adzerk poller once a day
       RoleArn: !GetAtt PollerEventRuleIamRole.Arn
       ScheduleExpression: "cron(0 14 * * ? *)"
@@ -222,16 +270,52 @@ Resources:
       Targets:
         - Arn: !GetAtt PollerFunction.Arn
           Id: !Sub "${AWS::StackName}.PollerFunction"
-  PollerFunctionEventInvokePermission:
+  HourlyPollerEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Description: >-
+        Runs the Adzerk poller once an hour
+      RoleArn: !GetAtt PollerEventRuleIamRole.Arn
+      ScheduleExpression: "rate(1 hour)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PollerFunction.Arn
+          Id: !Sub "${AWS::StackName}.PollerFunction"
+  DailyPollerFunctionEventInvokePermission:
     Type: "AWS::Lambda::Permission"
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref PollerFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt PollerEventRule.Arn
+      SourceArn: !GetAtt DailyPollerEventRule.Arn
+  HourlyPollerFunctionEventInvokePermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PollerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt HourlyPollerEventRule.Arn
   PollerFunctionLogRetentionPolicy:
     Type: "Custom::LogGroupRetentionPolicy"
     Properties:
       ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
       LogGroupName: !Sub "/aws/lambda/${PollerFunction}"
       RetentionInDays: 5
+  PollerFunctionErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Adzerk Flight Checker] Elevated error volume"
+      AlarmDescription:
+        The error rate on the Adzerk flight checker has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PollerFunction
