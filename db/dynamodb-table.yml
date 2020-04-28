@@ -24,13 +24,13 @@ Metadata:
           - ProvisionedReadCapacityUnits
           - ProvisionedWriteCapacityUnits
           - EnableAutoScaling
-          - WriteCapacityMin
-          - WriteCapacityMax
           - ReadCapacityMin
           - ReadCapacityMax
+          - WriteCapacityMin
+          - WriteCapacityMax
           - AutoScalingCooldown
-          - WriteUtilizationScalingTarget
           - ReadUtilizationScalingTarget
+          - WriteUtilizationScalingTarget
       - Label:
           default: Metadata
         Parameters:
@@ -151,6 +151,12 @@ Parameters:
   ProjectTag:
     Type: String
     Description: The value used for the Project tag on resources that support tagging.
+  WarnMessagesSnsTopicArn:
+    Type: String
+  ErrorMessagesSnsTopicArn:
+    Type: String
+  FatalMessagesSnsTopicArn:
+    Type: String
 Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
@@ -251,7 +257,7 @@ Resources:
       MinCapacity: !Ref WriteCapacityMin
       ResourceId: !Sub table/${DynamoDBTable}
       RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
-      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
       ServiceNamespace: dynamodb
   TableWriteCapacityScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
@@ -274,21 +280,100 @@ Resources:
       MinCapacity: !Ref ReadCapacityMin
       ResourceId: !Sub table/${DynamoDBTable}
       RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
-      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
       ServiceNamespace: dynamodb
   TableReadCapacityScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Condition: CreateAutoScaling
     Properties:
-      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyName: TableReadCapacityScalingPolicy
       PolicyType: TargetTrackingScaling
       ScalingTargetId: !Ref TableReadCapacityScalableTarget
       TargetTrackingScalingPolicyConfiguration:
         PredefinedMetricSpecification:
-          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
         ScaleInCooldown: !Ref AutoScalingCooldown
         ScaleOutCooldown: !Ref AutoScalingCooldown
         TargetValue: !Ref ReadUtilizationScalingTarget
+  # Alarms
+  ScanThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} Scan throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        Scan operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: Scan
+  BatchGetItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchGetItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchGetItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchGetItem
+  BatchWriteItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchWriteItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchWriteItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchWriteItem
 Outputs:
   TableArn:
     Description: The created DynamoDB table ARN

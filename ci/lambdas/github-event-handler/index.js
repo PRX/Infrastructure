@@ -374,7 +374,7 @@ function handlePullRequestEvent(event, callback) {
     console.log('...Handling pull_request event...');
 
     const { action } = event;
-    const triggers = ['opened', 'reopened', 'synchronize'];
+    const triggers = ['opened', 'reopened', 'synchronize', 'ready_for_review'];
 
     if (triggers.includes(action)) {
         console.log(`...With action: ${action}...`);
