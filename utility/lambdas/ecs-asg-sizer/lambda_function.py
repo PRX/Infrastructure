@@ -46,8 +46,11 @@ def lambda_handler(event, context):
                 Message=json.dumps(msg),
             )
 
-    # return early if already scaling
+    # lookup cluster instances, removing any disconnected agents
     usages = get_usages(ECS_CLUSTER)
+    usages = list(filter(lambda u: u['connected'], usages))
+
+    # return early if already scaling
     if len(usages) == 0:
         log_error(f'No instances running in cluster {ECS_CLUSTER}')
         return
@@ -215,6 +218,7 @@ def get_usage(details):
     reg = details['registeredResources']
     return {
         'id': details['ec2InstanceId'],
+        'connected': details['agentConnected'],
         'cpu': next(r['integerValue'] for r in rem if r['name'] == 'CPU'),
         'mem': next(r['integerValue'] for r in rem if r['name'] == 'MEMORY'),
         'tcpu': next(r['integerValue'] for r in reg if r['name'] == 'CPU'),
