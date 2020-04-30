@@ -45,13 +45,17 @@ exports.handler = async (event) => {
     // TODO This won't work if the content is base64 encoded
     if (!content.includes(process.env.ACTIVE_CAMPAIGN_NAME)) { return; }
 
-    const name = subject.match(/receipt for (.*)/)[1];
-    const amount = content.match(/\$([0-9,]+)/)[1];
+    let name = 'Anonymous';
+    if (subject.match(/receipt for (.*)/)) {
+        name = subject.match(/receipt for (.*)/)[1];
+    }
+
+    const amount = content.match(/\$([0-9,]+([0-9.]+)?)/)[1];
     const isRecurring = content.includes('Every 1 month');
 
     const file = process.env.COUNTER_FILE_OBJECT_KEY;
 
-    let count = await getCount(file);
+    const count = await getCount(file);
 
     await s3.putObject({
         Body: `${count + 1}`,
@@ -60,7 +64,7 @@ exports.handler = async (event) => {
     }).promise();
 
     let icon = '';
-    if (+amount >= 1000) {
+    if (+amount.replace(',', '') >= 1000) {
         icon = ':rotating_light::moneybag::rotating_light:';
     } else if (+amount >= 250) {
         icon = ':moneybag::moneybag:';
@@ -68,7 +72,7 @@ exports.handler = async (event) => {
         icon = ':moneybag:';
     }
 
-    const text = `${icon}#${newCount} – ${name || 'Anonymous'}: $${amount} ${isRecurring ? '(monthly) :calendar:' : ''}`;
+    const text = `${icon}#${count + 1} – ${name}: $${amount} ${isRecurring ? '(monthly) :calendar:' : ''}`;
 
     await sns.publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
