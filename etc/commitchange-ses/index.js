@@ -22,14 +22,28 @@ function getCount(file) {
 }
 
 exports.handler = async (event) => {
-    const message = JSON.parse(event.Records[0].Sns.Message);
+    let message;
+
+    try {
+        message = JSON.parse(event.Records[0].Sns.Message);
+    } catch (error) {
+        console.log(error);
+    }
+
     // message has: notificationType, receipt, mail, content
     // https://docs.aws.amazon.com/ses/latest/DeveloperGuide/receiving-email-notifications-contents.html
+
+    // Exit if there was no SNS message data
+    if (!message) { return; }
 
     const { content } = message;
     const { commonHeaders } = message.mail;
 
     const { subject } = commonHeaders;
+
+    // Exit if the campaign name isn't found in the email's content
+    // TODO This won't work if the content is base64 encoded
+    if (!content.includes(process.env.ACTIVE_CAMPAIGN_NAME)) { return; }
 
     const name = subject.match(/receipt for (.*)/)[1];
     const amount = content.match(/\$([0-9,]+)/)[1];
@@ -37,11 +51,10 @@ exports.handler = async (event) => {
 
     const file = process.env.COUNTER_FILE_OBJECT_KEY;
 
-    const oldCount = await getCount(file);
-    const newCount = oldCount + 1;
+    let count = await getCount(file);
 
     await s3.putObject({
-        Body: `${newCount}`,
+        Body: `${count + 1}`,
         Bucket: 'farski-sandbox-prx',
         Key: file,
     }).promise();
@@ -57,15 +70,13 @@ exports.handler = async (event) => {
 
     const text = `${icon}#${newCount} – ${name || 'Anonymous'}: $${amount} ${isRecurring ? '(monthly) :calendar:' : ''}`;
 
-    if (content.includes(process.env.ACTIVE_CAMPAIGN_NAME)) {
-        await sns.publish({
-            TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-            Message: JSON.stringify({
-                channel: process.env.DESTINATION_SLACK_CHANNEL,
-                username: SLACK_USERNAME,
-                icon_emoji: SLACK_ICON,
-                text,
-            }),
-        }).promise();
-    }
+    await sns.publish({
+        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+        Message: JSON.stringify({
+            channel: process.env.DESTINATION_SLACK_CHANNEL,
+            username: SLACK_USERNAME,
+            icon_emoji: SLACK_ICON,
+            text,
+        }),
+    }).promise();
 };
