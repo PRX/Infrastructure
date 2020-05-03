@@ -26,6 +26,7 @@ Description: >
   Creates a CloudFront distribution with a single origin (either web or S3)
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
+  HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
@@ -66,6 +67,7 @@ Metadata:
           - CloudFrontViewerProtocolPolicy
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
+          - CloudFrontDefaultTtl
           - CloudFrontMinTtl
           - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
@@ -94,6 +96,8 @@ Metadata:
         default: Log file prefix
       CloudFrontComment:
         default: Comment
+      CloudFrontDefaultTtl:
+        default: Default TTL
       CloudFrontMinTtl:
         default: Min TTL
       CloudFrontMaxTtl:
@@ -171,12 +175,21 @@ Parameters:
     Description: >
       Any comments that you want to include about the CloudFront distribution
     MaxLength: 128
+  CloudFrontDefaultTtl:
+    Type: String
+    Description: >
+      (optional) The default amount of time, in seconds, that you want objects
+      to stay in CloudFront caches before CloudFront forwards another request
+      to your origin to determine whether the object has been updated. The
+      value that you specify applies only when your origin does not add HTTP
+      headers such as Cache-Control max-age, Cache-Control s-maxage, and
+      Expires to objects.
   CloudFrontMinTtl:
     Type: String
     Description: >
-      (optional) The minimum amount of time that you want objects to stay in
-      CloudFront caches before CloudFront forwards another request to your
-      origin to determine whether the object has been updated.
+      (optional) The minimum amount of time, in seconds, that you want objects
+      to stay in CloudFront caches before CloudFront forwards another request
+      to your origin to determine whether the object has been updated.
   CloudFrontMaxTtl:
     Type: String
     Description: >
@@ -185,7 +198,7 @@ Parameters:
       to your origin to determine whether the object has been updated. The
       value that you specify applies only when your origin adds HTTP headers
       such as Cache-Control max-age, Cache-Control s-maxage, and Expires to
-      objects
+      objects.
   CloudFrontPriceClass:
     Type: String
     Description: >
@@ -306,7 +319,7 @@ Resources:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
           Compress: true
-          # DefaultTTL: Number
+          DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref "CloudFrontDefaultTtl", !Ref "AWS::NoValue"]
           ForwardedValues:
             # Cookies:
             #   Cookies
