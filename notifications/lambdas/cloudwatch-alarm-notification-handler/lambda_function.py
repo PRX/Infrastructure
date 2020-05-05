@@ -76,6 +76,8 @@ def alarm_slack_attachment(alarm):
     # been included in the SNS message)
     alarm_infos = cw.describe_alarms(AlarmNames=[alarm['AlarmName']])
 
+    # TODO There shouldn't be any cases where this is happening anymore, since
+    # alarm data is being queried using a privileged role in all cases now
     if not alarm_infos['MetricAlarms']:
         # Usually this list will be empty because the alarm is in a different
         # account. Use a simplified message in those cases.
