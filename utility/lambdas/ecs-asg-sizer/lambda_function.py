@@ -16,7 +16,7 @@ ecs_client = session.client(service_name='ecs')
 sns_client = session.client(service_name='sns')
 
 EMPTY_SLOTS = 2
-ECS_AGENT_WAIT = 600
+ECS_AGENT_WAIT = 300
 SLACK_CHANNEL = '#ops-debug'
 SLACK_ICON = ':ops-autoscaling:'
 
@@ -24,7 +24,7 @@ SLACK_ICON = ':ops-autoscaling:'
 DISCONNECTS_TAG = 'ecs-asg-sizer:disconnects'
 DISCONNECTS_DELIMITER = ' '
 DISCONNECTS_SEPARATOR = ':'
-DISCONNECT_THRESHOLD_SECONDS = 600
+DISCONNECT_THRESHOLD_SECONDS = 300
 
 def lambda_handler(event, context):
     ASG_NAME = get_env('ASG_NAME')
