@@ -20,6 +20,11 @@ ECS_AGENT_WAIT = 600
 SLACK_CHANNEL = '#ops-debug'
 SLACK_ICON = ':ops-autoscaling:'
 
+# encode disconnect timestamps into a tag on the cluster
+DISCONNECTS_TAG = 'ecs-asg-sizer:disconnects'
+DISCONNECTS_DELIMITER = ' '
+DISCONNECTS_SEPARATOR = ':'
+DISCONNECT_THRESHOLD_SECONDS = 600
 
 def lambda_handler(event, context):
     ASG_NAME = get_env('ASG_NAME')
@@ -46,9 +51,9 @@ def lambda_handler(event, context):
                 Message=json.dumps(msg),
             )
 
-    # lookup cluster instances, removing any disconnected agents
-    usages = get_usages(ECS_CLUSTER)
-    usages = list(filter(lambda u: u['connected'], usages))
+    # lookup cluster instances and remove disconnected agents
+    all_usages = get_usages(ECS_CLUSTER)
+    usages = list(filter(lambda u: u['disconnectseconds'] < DISCONNECT_THRESHOLD_SECONDS, all_usages))
 
     # return early if already scaling
     if len(usages) == 0:
@@ -60,14 +65,14 @@ def lambda_handler(event, context):
             log_warn(f'Already scaling: {reason}')
         else:
             log_debug(f'Already scaling: {reason}')
+        log_usages(all_usages)
         return
 
     # find max cpu/mem reservations in this cluster (SLOW)
     [MAX_CPU, MAX_MEM] = get_max_reservations(ECS_CLUSTER)
     target = f'Targeting {EMPTY_SLOTS}x [{MAX_CPU} cpu / {MAX_MEM} mem]'
     log_debug(target)
-    for usage in usages:
-        log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]")
+    log_usages(usages)
 
     # how many MAX-sized tasks can fit in this cluster
     num_slots = 0
@@ -144,6 +149,15 @@ def log_error(msg):
     raise Exception(msg)
 
 
+def log_usages(usages):
+    for usage in usages:
+        if usage['disconnected']:
+            seconds = usage['disconnectseconds']
+            log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}] - DISCONNECTED {seconds}")
+        else:
+            log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]")
+
+
 def get_env(name, default_val=None):
     if name in os.environ:
         return os.environ[name]
@@ -210,7 +224,18 @@ def get_usages(cluster_name):
     instance_arns = instance_list['containerInstanceArns']
     details = ecs_client.describe_container_instances(
         cluster=cluster_name, containerInstances=instance_arns)
-    return list(map(get_usage, details['containerInstances']))
+    usages = list(map(get_usage, details['containerInstances']))
+
+    # mark elapsed time agents have been disconnected
+    cluster_arn = get_cluster_arn(cluster_name)
+    disconnects = get_disconnects(cluster_arn)
+    now = int(datetime.datetime.now().timestamp())
+    for usage in usages:
+        if usage['disconnected'] and disconnects.get(usage['id']):
+            usage['disconnectseconds'] = now - disconnects.get(usage['id'])
+    set_disconnects(cluster_arn, disconnects, usages, now)
+
+    return usages
 
 
 def get_usage(details):
@@ -218,12 +243,41 @@ def get_usage(details):
     reg = details['registeredResources']
     return {
         'id': details['ec2InstanceId'],
-        'connected': details['agentConnected'],
+        'disconnected': details['agentConnected'] == False,
+        'disconnectseconds': 0,
         'cpu': next(r['integerValue'] for r in rem if r['name'] == 'CPU'),
         'mem': next(r['integerValue'] for r in rem if r['name'] == 'MEMORY'),
         'tcpu': next(r['integerValue'] for r in reg if r['name'] == 'CPU'),
         'tmem': next(r['integerValue'] for r in reg if r['name'] == 'MEMORY'),
     }
+
+
+def get_cluster_arn(cluster_name):
+    clusters = ecs_client.describe_clusters(clusters=[cluster_name])
+    return clusters['clusters'][0]['clusterArn']
+
+
+def get_disconnects(cluster_arn):
+    tags = ecs_client.list_tags_for_resource(resourceArn=cluster_arn)
+    disconnects = {}
+    for tag in tags['tags']:
+        if tag['key'] == DISCONNECTS_TAG:
+            for value in tag['value'].split(DISCONNECTS_DELIMITER):
+                parts = value.split(DISCONNECTS_SEPARATOR)
+                if len(parts) == 2:
+                    disconnects[parts[0]] = int(parts[1])
+    return disconnects
+
+
+def set_disconnects(cluster_arn, previous_disconnects, usages, now):
+    disconnects = []
+    for usage in usages:
+        if usage['disconnected']:
+            disconnected_at = previous_disconnects.get(usage['id'], now)
+            disconnects.append(f"{usage['id']}{DISCONNECTS_SEPARATOR}{disconnected_at}")
+    val = DISCONNECTS_DELIMITER.join(disconnects)
+    tags = [{'key': DISCONNECTS_TAG, 'value': val}]
+    ecs_client.tag_resource(resourceArn=cluster_arn, tags=tags)
 
 
 def scale_asg(asg_name, delta, dry_run):
