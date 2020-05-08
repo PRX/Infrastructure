@@ -867,6 +867,29 @@ Resources:
       Targets:
         - Arn: !GetAtt ASGSizerFunction.Arn
           Id: !Sub "${EnvironmentType}-ECS-ASG-Sizing"
+  ASGSizerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[ECS][ASGSizerLambda] ${EnvironmentType} Errors"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: ASG Sizer Lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ASGSizerFunction
 Outputs:
   ECSCluster:
     Description: >
