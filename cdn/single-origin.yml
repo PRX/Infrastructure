@@ -26,6 +26,7 @@ Description: >
   Creates a CloudFront distribution with a single origin (either web or S3)
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
+  HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
   HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
@@ -234,6 +235,14 @@ Parameters:
     AllowedValues:
       - "HEAD,GET"
       - "GET,HEAD,OPTIONS"
+  CloudFrontCompress:
+    Type: String
+    Description: >
+      Whether you want CloudFront to automatically compress certain files.
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "False"
   CloudFrontOriginAccess:
     Type: String
     Description: >
@@ -318,7 +327,7 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
-          Compress: true
+          Compress: !If [HasCloudFrontCompress, true, false]
           DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref "CloudFrontDefaultTtl", !Ref "AWS::NoValue"]
           ForwardedValues:
             # Cookies:
