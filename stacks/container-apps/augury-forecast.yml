@@ -161,6 +161,7 @@ Resources:
                   - iam:PassRole
                 Resource:
                   - !GetAtt AuguryForecastExecutionRole.Arn
+                  - !GetAtt AuguryForecastTaskRole.Arn
       Tags:
         - Key: Project
           Value: augury
@@ -193,15 +194,15 @@ Resources:
 
         // default ECS runTask parameters
         const params = {
-            cluster: process.env.ECS_CLUSTER,
-            launchType: 'FARGATE',
-            networkConfiguration: {
-                awsvpcConfiguration: {
-                    subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
-                    assignPublicIp: 'ENABLED',
-                },
+          cluster: process.env.ECS_CLUSTER,
+          launchType: 'FARGATE',
+          networkConfiguration: {
+            awsvpcConfiguration: {
+              subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
+              assignPublicIp: 'ENABLED',
             },
-            taskDefinition: process.env.ECS_TASK_DEFINITION,
+          },
+          taskDefinition: process.env.ECS_TASK_DEFINITION,
         };
 
         // lightweight json logger
@@ -224,7 +225,7 @@ Resources:
           return null;
         }
 
-        exports.handler = async function (event) {
+        exports.handler = async (event) => {
           const goodRecords = (event.Records || []).map(r => decode(r)).filter(r => r);
           const badRecords = (event.Records || []).filter(r => !decode(r));
           for (const rec of goodRecords) {
