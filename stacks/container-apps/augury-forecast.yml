@@ -1,9 +1,12 @@
 # stacks/container-apps/augury-forecast.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: >
   Augury Forecast FARGATE execution
 Parameters:
   # Configuration ##############################################################
+  ECSCluster:
+    Type: String
   EcrImageTag:
     Type: String
   EcrRegion:
@@ -14,8 +17,18 @@ Parameters:
     Type: String
   SecretsBase:
     Type: String
+  SecretsInstanceDecryptPolicyArn:
+    Type: String
+  SecretsInstanceAccessPolicyArn:
+    Type: String
   SecretsVersion:
     Type: String
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
   # Monitoring #################################################################
   OpsDebugMessagesSnsTopicArn:
     Type: String
@@ -24,6 +37,7 @@ Parameters:
   OpsErrorMessagesSnsTopicArn:
     Type: String
 Resources:
+  # Augury task running under Fargate
   AuguryForecastLogGroup:
     Type: "AWS::Logs::LogGroup"
     Properties:
@@ -42,6 +56,30 @@ Resources:
                 - ecs-tasks.amazonaws.com
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+      Tags:
+        - Key: Project
+          Value: augury
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AuguryForecastTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+        - !Ref SecretsInstanceDecryptPolicyArn
+        - !Ref SecretsInstanceAccessPolicyArn
       Tags:
         - Key: Project
           Value: augury
@@ -90,3 +128,74 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt AuguryForecastTaskRole.Arn
+  # SNS relay for launching Fargate tasks
+  AuguryForecastRelaySnsTopic:
+    Type: "AWS::SNS::Topic"
+  AuguryForecastRelayLambdaRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Path: "/"
+      Policies:
+        - PolicyName: FargateLauncher
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Resource: !Ref AuguryForecastTaskDefinition
+                Action:
+                  - ecs:RunTask
+      Tags:
+        - Key: Project
+          Value: augury
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AuguryForecastRelayLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Launches fargate forecast executions from SNS
+      Environment:
+        Variables:
+          AWS_DEFAULT_REGION: !Ref AWS::Region
+          ECS_CLUSTER: !Ref ECSCluster
+          ECS_TASK_DEFINITION: !Ref AuguryForecastTaskDefinition
+          VPC_SUBNET_1: !Ref VPCSubnet1
+          VPC_SUBNET_2: !Ref VPCSubnet2
+          VPC_SUBNET_3: !Ref VPCSubnet3
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref AuguryForecastRelaySnsTopic
+          Type: SNS
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const ecs = new AWS.ECS();
+        exports.handler = async (event) => {
+          // TODO: many things
+          console.log(JSON.stringify(event));
+        };
+      MemorySize: 256
+      Role: !GetAtt AuguryForecastRelayLambdaRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        Project: augury
+        Environment: !Ref EnvironmentType
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 5
