@@ -1,5 +1,6 @@
 # stacks/container-apps/augury-forecast.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: >
   Augury Forecast FARGATE execution
 Parameters:
@@ -127,6 +128,8 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt AuguryForecastTaskRole.Arn
+  AuguryForecastRelaySnsTopic:
+    Type: "AWS::SNS::Topic"
   AuguryForecastRelayLambdaRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -161,16 +164,8 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   AuguryForecastRelayLambdaFunction:
-    Type: AWS::Lambda::Function
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        ZipFile: |
-          const AWS = require('aws-sdk');
-          const ecs = new AWS.ECS();
-          exports.handler = async (event) => {
-            // TODO: many things
-            console.log(JSON.stringify(event));
-          };
       Description: Launches fargate forecast executions from SNS
       Environment:
         Variables:
@@ -180,32 +175,25 @@ Resources:
           VPC_SUBNET_1: !Ref VPCSubnet1
           VPC_SUBNET_2: !Ref VPCSubnet2
           VPC_SUBNET_3: !Ref VPCSubnet3
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref AuguryForecastRelaySnsTopic
+          Type: SNS
       Handler: index.handler
-      MemorySize: 128
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const ecs = new AWS.ECS();
+        exports.handler = async (event) => {
+          // TODO: many things
+          console.log(JSON.stringify(event));
+        };
+      MemorySize: 256
       Role: !GetAtt AuguryForecastRelayLambdaRole.Arn
       Runtime: nodejs12.x
       Tags:
-        - Key: Project
-          Value: augury
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        Project: augury
+        Environment: !Ref EnvironmentType
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 5
-  AuguryForecastRelaySnsTopic:
-    Type: "AWS::SNS::Topic"
-  AuguryForecastRelayPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref AuguryForecastRelayLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref AuguryForecastRelaySnsTopic
-  AuguryForecastRelaySubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt AuguryForecastRelayLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref AuguryForecastRelaySnsTopic
