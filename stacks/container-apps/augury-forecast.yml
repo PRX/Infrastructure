@@ -156,6 +156,11 @@ Resources:
                 Resource: !Ref AuguryForecastTaskDefinition
                 Action:
                   - ecs:RunTask
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt AuguryForecastExecutionRole.Arn
       Tags:
         - Key: Project
           Value: augury
@@ -185,11 +190,65 @@ Resources:
       InlineCode: |
         const AWS = require('aws-sdk');
         const ecs = new AWS.ECS();
-        exports.handler = async (event) => {
-          // TODO: many things
-          console.log(JSON.stringify(event));
+
+        // default ECS runTask parameters
+        const params = {
+            cluster: process.env.ECS_CLUSTER,
+            launchType: 'FARGATE',
+            networkConfiguration: {
+                awsvpcConfiguration: {
+                    subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
+                    assignPublicIp: 'ENABLED',
+                },
+            },
+            taskDefinition: process.env.ECS_TASK_DEFINITION,
         };
-      MemorySize: 256
+
+        // lightweight json logger
+        function log(level, msg, extra = {}) {
+          console[level](JSON.stringify({level, msg, ...extra}));
+        }
+
+        // look for well formatted SNS forecast requests
+        function decode(record) {
+          if (record && record.Sns && record.Sns.Message) {
+            try {
+              const json = JSON.parse(record.Sns.Message);
+              if (json && json.forecast_id) {
+                return json;
+              }
+            } catch (err) {
+              return null;
+            }
+          }
+          return null;
+        }
+
+        exports.handler = async function (event) {
+          const goodRecords = (event.Records || []).map(r => decode(r)).filter(r => r);
+          const badRecords = (event.Records || []).filter(r => !decode(r));
+          for (const rec of goodRecords) {
+            log('info', 'running forecast', rec);
+            const command = ['forecast', `${rec.forecast_id}`];
+            if (rec.options) {
+              command.push('--');
+              command.push(rec.options);
+            }
+            const overrides = {containerOverrides: [{name: 'augury-forecast', command}]};
+            try {
+              const res = await ecs.runTask({...params, overrides}).promise();
+              log('debug', 'ran task', res);
+            } catch (err) {
+              log('error', 'error running task', err);
+              throw err;
+            }
+          }
+          if (badRecords.length) {
+            log('error', 'bad input records', {badRecords});
+            throw new Error('Bad input records');
+          }
+        };
+      MemorySize: 128
       Role: !GetAtt AuguryForecastRelayLambdaRole.Arn
       Runtime: nodejs12.x
       Tags:
