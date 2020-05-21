@@ -7,6 +7,8 @@ Parameters:
   # Configuration ##############################################################
   ECSCluster:
     Type: String
+  ECSServiceIAMRoleArn:
+    Type: String
   EcrImageTag:
     Type: String
   EcrRegion:
@@ -30,10 +32,6 @@ Parameters:
   VPCSubnet3:
     Type: "AWS::EC2::Subnet::Id"
   # Monitoring #################################################################
-  OpsDebugMessagesSnsTopicArn:
-    Type: String
-  OpsWarnMessagesSnsTopicArn:
-    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
 Resources:
@@ -139,10 +137,10 @@ Resources:
         Id: AuguryForecastRelayPolicy
         Version: '2012-10-17'
         Statement:
-          - Sid: AccountPublish
+          - Sid: ECSServicePublish
             Effect: Allow
             Principal:
-              AWS: !Ref AWS::AccountId
+              AWS: !Ref ECSServiceIAMRoleArn
             Action:
               - sns:Publish
             Resource: !Ref AuguryForecastRelaySnsTopic
@@ -274,6 +272,29 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 5
+  AuguryForecastRelayLambdaErrors:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[AuguryForecastRelay][Errors] ${EnvironmentType} > 0"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Errors on the augury forecast relay lambda exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AuguryForecastRelayLambdaFunction
 Outputs:
   SnsTopicArn:
     Description: Arn for the worker task definition
