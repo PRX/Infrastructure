@@ -132,6 +132,22 @@ Resources:
   # SNS relay for launching Fargate tasks
   AuguryForecastRelaySnsTopic:
     Type: "AWS::SNS::Topic"
+  AuguryForecastRelaySnsTopicPolicy:
+    Type: "AWS::SNS::TopicPolicy"
+    Properties:
+      PolicyDocument:
+        Id: AuguryForecastRelayPolicy
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AccountPublish
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+            Action:
+              - sns:Publish
+            Resource: !Ref AuguryForecastRelaySnsTopic
+      Topics:
+        - !Ref AuguryForecastRelaySnsTopic
   AuguryForecastRelayLambdaRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -258,3 +274,7 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 5
+Outputs:
+  SnsTopicArn:
+    Description: Arn for the worker task definition
+    Value: !Ref AuguryForecastRelaySnsTopic
