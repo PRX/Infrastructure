@@ -1,0 +1,75 @@
+# etc/adzerk-poller/template.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Creates a simple API that redirects to a location passed into as part of the
+  request. This makes it easy to create CloudFront distributions that redirect.
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+  IamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+            - Action:
+                - sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      # Policies:
+      #   - PolicyDocument:
+      #       Version: "2012-10-17"
+      #       Statement:
+      #         - Action:
+      #             - s3:List*
+      #           Effect: Allow
+      #           Resource:
+      #             - !GetAtt Bucket.Arn
+      #     PolicyName: S3List
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: index.js
+      Description: >-
+        Responds to a request with a redirect to the included location
+      Events:
+        Redirect200:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /200/{proxy+}
+          Type: HttpApi
+        Redirect301:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /301/{proxy+}
+          Type: HttpApi
+        Redirect302:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /302/{proxy+}
+          Type: HttpApi
+        Redirect307:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /307/{proxy+}
+          Type: HttpApi
+        Redirect308:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /308/{proxy+}
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt IamRole.Arn
+      Runtime: nodejs12.x
+      Timeout: 4
