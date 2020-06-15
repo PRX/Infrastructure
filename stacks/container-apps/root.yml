@@ -46,6 +46,8 @@ Parameters:
     Type: String
   ECSClusterArn:
     Type: String
+  ECSInstanceIAMRoleArn:
+    Type: String
   ECSServiceAutoscaleIAMRoleArn:
     Type: String
   ECSServiceIAMRole:
@@ -356,6 +358,36 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  AuguryForecastStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        ECSCluster: !Ref ECSCluster
+        ECSInstanceIAMRoleArn: !Ref ECSInstanceIAMRoleArn
+        EcrImageTag: !Ref AuguryEcrImageTag
+        EcrRegion: !Ref EcrRegion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SecretsBase: !Ref SecretsBase
+        SecretsInstanceDecryptPolicyArn: !Ref SecretsInstanceDecryptPolicyArn
+        SecretsInstanceAccessPolicyArn: !Ref SecretsInstanceAccessPolicyArn
+        SecretsVersion: !Ref AugurySecretsVersion
+        VPCSubnet1: !Ref VPCSubnet1
+        VPCSubnet2: !Ref VPCSubnet2
+        VPCSubnet3: !Ref VPCSubnet3
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "augury-forecast.yml"]]
       TimeoutInMinutes: 5
   CourierStack:
     Type: "AWS::CloudFormation::Stack"
