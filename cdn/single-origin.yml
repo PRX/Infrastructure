@@ -28,6 +28,7 @@ Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
   HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
+  HasCloudFrontForwardedHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedHeaders], ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
@@ -188,6 +189,15 @@ Parameters:
       value that you specify applies only when your origin does not add HTTP
       headers such as Cache-Control max-age, Cache-Control s-maxage, and
       Expires to objects.
+  CloudFrontForwardedHeaders:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The headers, if any, that you want CloudFront to forward to
+      the origin (whitelisted headers). For the headers that you specify,
+      CloudFront also caches separate versions of a specified object that is
+      based on the header values in viewer requests. Provide a
+      comma-delimited list (e.g. "Origin,Access-Control-Request-Headers,
+      Access-Control-Request-Method")
   CloudFrontMinTtl:
     Type: String
     Description: >-
@@ -335,8 +345,7 @@ Resources:
           ForwardedValues:
             # Cookies:
             #   Cookies
-            # Headers:
-            #   - String
+            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
             QueryString: false
             # QueryStringCacheKeys:
           # LambdaFunctionAssociations:
