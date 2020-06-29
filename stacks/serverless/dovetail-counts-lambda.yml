@@ -166,6 +166,46 @@ Resources:
           MetricNamespace: LogMetrics
           MetricValue: "$.count"
   # alarms
+  DovetailCountsMissingArrangementMetric:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][ArrangementsMissing] ${EnvironmentType}"
+      AlarmActions:
+        - OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Arrangement JSON not found in S3, for some reason? Crazy!
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "dovetail_counts_missing_arrangement_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 300
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
+  DovetailCountsKinesisFailureAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Dovetail][Counts][KinesisFailures] ${EnvironmentType}"
+      AlarmActions:
+        - OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Kinesis PUTs failing and getting retried on the dovetail counts lambda
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 5
+      MetricName: !Sub "dovetail_counts_kinesis_failure_${EnvironmentTypeAbbreviation}"
+      Namespace: LogMetrics
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
   DovetailCountsLoggedErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
