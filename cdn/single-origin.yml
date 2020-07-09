@@ -67,13 +67,13 @@ Metadata:
           - CloudFrontPriceClass
           - CloudFrontDefaultRootObject
           - CloudFrontViewerProtocolPolicy
+          - CloudFrontViewerCertificateMinimumProtocolVersion
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
           - CloudFrontCompress
           - CloudFrontDefaultTtl
           - CloudFrontMinTtl
           - CloudFrontMaxTtl
-          - CloudFrontForwardedHeaders
           - CloudFrontLoggingBucket
           - CloudFrontLoggingBucketPrefix
           - CloudFrontOriginAccess
@@ -106,8 +106,6 @@ Metadata:
         default: Min TTL
       CloudFrontMaxTtl:
         default: Max TTL
-      CloudFrontForwardedHeaders:
-        default: Forwarded headers
       CloudFrontPriceClass:
         default: Price class
       CloudFrontDefaultRootObject:
@@ -124,6 +122,8 @@ Metadata:
         default: Origin protocol policy
       CloudFrontViewerProtocolPolicy:
         default: Viewer protocol policy
+      CloudFrontViewerCertificateMinimumProtocolVersion:
+        default: Viewer security policy
       CloudFrontCustom403ErrorResponseCode:
         default: Custom 403 error response code
       CloudFrontCustom403ErrorResponsePagePath:
@@ -289,6 +289,21 @@ Parameters:
       - allow-all
       - redirect-to-https
       - https-only
+  CloudFrontViewerCertificateMinimumProtocolVersion:
+    Type: String
+    Description: >-
+      The security policy to use for HTTPS connections with viewers, which
+      determines the minimum SSL/TLS protocol that CloudFront can use to
+      communicate with viewers, and the ciphers that CloudFront can use to
+      encrypt the content that it returns to viewers.
+    Default: TLSv1
+    AllowedValues:
+      - SSLv3
+      - TLSv1
+      - TLSv1_2016
+      - TLSv1.1_2016
+      - TLSv1.2_2018
+      - TLSv1.2_2019
   CloudFrontCustom403ErrorResponseCode:
     Type: String
     Description: >-
@@ -401,7 +416,7 @@ Resources:
             - AcmCertificateArn: !If [CreateCertificate, !Ref Certificate, !Ref AcmCertificateArn]
               # CloudFrontDefaultCertificate: true
               # IamCertificateId: String
-              # MinimumProtocolVersion: String
+              MinimumProtocolVersion: !Ref CloudFrontViewerCertificateMinimumProtocolVersion
               SslSupportMethod: sni-only
             - !Ref AWS::NoValue
         WebACLId: !If [HasCloudFrontWebACLId, !Ref CloudFrontWebACLId, !Ref "AWS::NoValue"]
