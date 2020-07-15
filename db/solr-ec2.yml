@@ -1,4 +1,4 @@
-# etc/simple-ec2.yml
+# db/solr-ec2.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Parameters:
   KeyPairName:
@@ -32,6 +32,8 @@ Parameters:
       - t3.small
       - t3.medium
       - t3.large
+  DataVolumeSize:
+    Type: Number
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   CreateAlarms: !Not [!Equals [!Ref AlarmSnsTopic, ""]]
@@ -56,6 +58,28 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  SolrDataEbsVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !GetAtt Ec2Instance.AvailabilityZone
+      Size: !Ref DataVolumeSize
+      Tags:
+        # - Key: Project
+        #   Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  SolrDataEbsVolumeAttachent:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: /dev/xvdb
+      InstanceId: !Ref Ec2Instance
+      VolumeId: !Ref SolrDataEbsVolume
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     DeletionPolicy: Retain
