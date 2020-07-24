@@ -121,6 +121,11 @@ Parameters:
     Type: String
   GroveSecretsVersion:
     Type: String
+  # Iframely Specific ##########################################################
+  IframelyPlatformALBListenerPriorityPrefix:
+    Type: String
+  IframelyEcrImageTag:
+    Type: String
 Resources:
   ExchangeStack:
     Type: "AWS::CloudFormation::Stack"
@@ -649,6 +654,51 @@ Resources:
         AppName: "grove"
         CreateWorker: "false"
         ContainerPort: "4204"
+        HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  IframelyStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        WebContainerCommand: cluster.js
+        PlatformALBListenerPriorityPrefix: !Ref IframelyPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref IframelyEcrImageTag
+        ExplicitHostHeader: embed.pri.org
+        SecretsVersion: none
+        AppName: "iframely"
+        CreateWorker: "false"
+        ContainerPort: "8061"
         HealthCheckPath: "/"
       Tags:
         - Key: "prx:cloudformation:stack-name"
