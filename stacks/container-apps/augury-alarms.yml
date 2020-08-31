@@ -1,0 +1,45 @@
+# stacks/container-apps/augury-alarms.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Augury alarms
+Parameters:
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+Resources:
+  AuguryActualsIngestJobInvocationMetric:
+    Type: "AWS::Logs::MetricFilter"
+    Properties:
+      FilterPattern: '[ImpressionsFetchJob] Success'
+      LogGroupName:
+        Fn::ImportValue: !Sub "AuguryStack-${EnvironmentType}-WorkerLogGroup"
+      MetricTransformations:
+        - MetricName: !Sub "augury_actuals_rollups_ct_${EnvironmentTypeAbbreviation}"
+          MetricNamespace: LogMetrics
+          MetricValue: "1"
+  AuguryActualsAreBehindAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Augury][Worker][ActiveJob] ${EnvironmentType} Augury actuals are behind"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Augury actuals are behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      MetricName: AuguryActualsIngestJobInvocationMetric
+      Namespace: AWS/ECS
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: breaching
