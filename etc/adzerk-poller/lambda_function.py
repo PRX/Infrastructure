@@ -9,8 +9,8 @@ sns = boto3.client('sns')
 
 SLACK_ICON = ':adzerk:'
 SLACK_USERNAME = 'Adzerk'
-SLACK_CHANNEL = '#adzerk-flights'
-SLACK_CHANNEL_PROBLEMS = '#adzerk-flights-problems'
+SLACK_CHANNEL = '#ad-ops-adzerk-flights'
+SLACK_CHANNEL_PROBLEMS = '#ad-ops-flight-problems'
 
 ADZERK_REQUEST_HEADERS = {
     'X-Adzerk-ApiKey': os.environ['ADZERK_API_KEY']
@@ -101,7 +101,7 @@ def problem_flight_report():
     flights = []
     problem_flights = []
 
-    t1 = datetime.datetime.utcnow() + datetime.timedelta(days=0)
+    t1 = datetime.datetime.utcnow() + datetime.timedelta(days=-28)
     s1 = t1.strftime("%Y-%m-%d%%2023:59:59")
 
     api_url = f"https://api.adzerk.net/v1/fast/flight?isActive=true&afterStartDate={s1}"
