@@ -69,6 +69,12 @@ Parameters:
       - db.m4.2xlarge
       - db.m4.4xlarge
       - db.m4.10xlarge
+      - db.m5.large
+      - db.m5.xlarge
+      - db.m5.2xlarge
+      - db.m5.4xlarge
+      - db.m5.12xlarge
+      - db.m5.24xlarge
       - db.r3.large
       - db.r3.xlarge
       - db.r3.2xlarge
@@ -142,28 +148,29 @@ Resources:
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
       DBSubnetGroupDescription: !Ref EnvironmentType
       SubnetIds:
-        - Fn::ImportValue:
-            !Sub ${VPCStack}-Subnet1
-        - Fn::ImportValue:
-            !Sub ${VPCStack}-Subnet2
+        - Fn::ImportValue: !Sub ${VPCStack}-Subnet1
+        - Fn::ImportValue: !Sub ${VPCStack}-Subnet2
   MasterDB:
     Type: "AWS::RDS::DBInstance"
     DependsOn: RDSSubnetGroup
     Properties:
-# CloudFormation cannot update a stack when a custom-named resource requires replacing,
-# so when replacement is required (such as when restoring from snapshot),
-# use a new instance name such as oldname-restoredYYYYMMDD
-# Better yet to self manage tearing down of the existing resource, use a new stack with a different instance name
-      DBInstanceIdentifier: !If [NamedInstance, !Ref DBInstance, !Ref "AWS::NoValue"]
+      # CloudFormation cannot update a stack when a custom-named resource requires replacing,
+      # so when replacement is required (such as when restoring from snapshot),
+      # use a new instance name such as oldname-restoredYYYYMMDD
+      # Better yet to self manage tearing down of the existing resource, use a new stack with a different instance name
+      DBInstanceIdentifier:
+        !If [NamedInstance, !Ref DBInstance, !Ref "AWS::NoValue"]
       DBName: !If [CreateDB, !Ref CreateDBName, !Ref "AWS::NoValue"]
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp2
       DBInstanceClass: !Ref DBInstanceClass
-      DBSnapshotIdentifier: !If [UseSnapshot, !Ref DBSnapshot, !Ref "AWS::NoValue"]
+      DBSnapshotIdentifier:
+        !If [UseSnapshot, !Ref DBSnapshot, !Ref "AWS::NoValue"]
       Engine: MySQL
       EngineVersion: 5.5.46
       MasterUsername: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBUser]
-      MasterUserPassword: !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBPassword]
+      MasterUserPassword:
+        !If [UseSnapshot, !Ref "AWS::NoValue", !Ref DBPassword]
       MultiAZ: false
       Tags:
         - Key: Project
@@ -175,13 +182,13 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
-# The MySQL_replication_tunnel security group is added and removed manually for use during migration
-#     VPCSecurityGroups: [!Ref EC2SecurityGroup]
-# replication won't connect via tunnel if false
-# Post migration, we want to set PubliclyAccessible to false
-# But we have to set this manually because if flipped with a stack update, the RDS instance is rebuilt
-# It does not change with other stack updates if set manually
-#     PubliclyAccessible: true
+    # The MySQL_replication_tunnel security group is added and removed manually for use during migration
+    #     VPCSecurityGroups: [!Ref EC2SecurityGroup]
+    # replication won't connect via tunnel if false
+    # Post migration, we want to set PubliclyAccessible to false
+    # But we have to set this manually because if flipped with a stack update, the RDS instance is rebuilt
+    # It does not change with other stack updates if set manually
+    #     PubliclyAccessible: true
     DeletionPolicy: Snapshot
   DiskSpaceAlarm:
     Condition: CreateCloudWatchWarnDiskSpace
