@@ -261,37 +261,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/serverless/root.yml"]]
       TimeoutInMinutes: 5
-  LegacySupportRootStack:
-    Type: "AWS::CloudFormation::Stack"
-    DependsOn: ECSClusterStack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
-        InfrastructureNotificationsStackName: !Ref NotificationsStackName
-        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/legacy-support/"]]
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerStripeProxyPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, StripeProxy, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        EcrRegion: !Ref EcrRegion
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/legacy-support/root.yml"]]
-      TimeoutInMinutes: 5
   ContainerAppsRootStack:
     Type: "AWS::CloudFormation::Stack"
     DependsOn: ECSClusterStack
