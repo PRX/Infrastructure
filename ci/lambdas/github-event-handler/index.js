@@ -191,14 +191,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     const status = updateGitHubStatus(event, data.build);
     const notification = postNotification(event, data.build);
 
-    Promise.all([status, notification])
-        .then(() => {
-            console.log('...Post-build actions finished!');
-        })
-        .catch((e) => {
-            console.error('...Post-build actions failed!');
-            throw e;
-        });
+    Promise.all([status, notification]);
 }
 
 /**
