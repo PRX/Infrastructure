@@ -190,35 +190,39 @@ Parameters:
     Type: String
     Description: >-
       (optional) The default amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated. The
-      value that you specify applies only when your origin does not add HTTP
-      headers such as Cache-Control max-age, Cache-Control s-maxage, and
-      Expires to objects.
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. CloudFront uses this
+      value as the object’s time to live (TTL) only when the origin does not
+      send Cache-Control or Expires headers with the object. The default value
+      for this field is 86400 seconds (one day). If the value of MinTTL is more
+      than 86400 seconds, then the default value for this field is the same as
+      the value of MinTTL.
   CloudFrontForwardedHeaders:
     Type: CommaDelimitedList
     Description: >-
-      (optional) The headers, if any, that you want CloudFront to forward to
-      the origin (whitelisted headers). For the headers that you specify,
-      CloudFront also caches separate versions of a specified object that is
-      based on the header values in viewer requests. Provide a
-      comma-delimited list (e.g. "Origin,Access-Control-Request-Headers,
+      (optional) The HTTP headers, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those headers' values in the viewer request. Provide a comma-delimited
+      list (e.g. "Origin,Access-Control-Request-Headers,
       Access-Control-Request-Method")
   CloudFrontMinTtl:
     Type: String
     Description: >-
       (optional) The minimum amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated.
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. The default value
+      for this field is 0 seconds.
   CloudFrontMaxTtl:
     Type: String
     Description: >-
-      (optional) The maximum amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated. The
-      value that you specify applies only when your origin adds HTTP headers
-      such as Cache-Control max-age, Cache-Control s-maxage, and Expires to
-      objects.
+      (optional) The maximum amount of time, in seconds, that objects stay in
+      the CloudFront cache before CloudFront sends another request to the
+      origin to see if the object has been updated. CloudFront uses this value
+      only when the origin sends Cache-Control or Expires headers with the
+      object. The default value for this field is 31536000 seconds (one year).
+      If the value of MinTTL or DefaultTTL is more than 31536000 seconds, then
+      the default value for this field is the same as the value of DefaultTTL.
   CloudFrontPriceClass:
     Type: String
     Description: >-
@@ -345,6 +349,42 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+  CloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, 86400]
+        MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, 31536000]
+        MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, 0]
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+            # Cookies:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+          QueryStringsConfig:
+            QueryStringBehavior: none
+            # QueryStrings:
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+          # Cookies:
+        HeadersConfig:
+          HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+          Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+          # QueryStrings:
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -361,17 +401,10 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
+          CachePolicyId: !Ref CloudFrontCachePolicy
           Compress: !If [HasCloudFrontCompress, true, false]
-          DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, !Ref "AWS::NoValue"]
-          ForwardedValues:
-            # Cookies:
-            #   Cookies
-            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-            QueryString: false
-            # QueryStringCacheKeys:
           # LambdaFunctionAssociations:
-          MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
-          MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, !Ref "AWS::NoValue"]
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           # SmoothStreaming: Boolean
           TargetOriginId: web-origin
           # TrustedSigners:
