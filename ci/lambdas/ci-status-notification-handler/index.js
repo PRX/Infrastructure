@@ -115,7 +115,6 @@ function attachmentsForCiCallback(ciResult) {
     } else {
         attachment.color = 'danger';
         attachment.fallback = `Failed to build ${repo}${extra} with commit ${sha7}`;
-        attachment.title = `Failed to build <${buildUrl}|${repo}>${extra} with commit <${commitUrl}|${sha7}>`;
         attachment.title = `Failed to <${buildUrl}|build> ${repo}${extra} with commit <${commitUrl}|${sha7}>`;
         attachment.text = `> _${ciResult.reason}_`;
     }
