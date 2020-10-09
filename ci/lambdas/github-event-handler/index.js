@@ -153,7 +153,7 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         const num = event.pull_request.number;
         const branch = event.pull_request.head.ref;
         environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
-        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
         environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
     } else {
         // All other events should be code pushes to the master branch. These
@@ -163,7 +163,7 @@ function triggerBuild(versionId, ciContentsResponse, event, callback) {
         // push the code, etc).
 
         const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
-        environmentVariables.push({ name: 'PRX_BRANCH', value: branch});
+        environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
         environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
     }
 
