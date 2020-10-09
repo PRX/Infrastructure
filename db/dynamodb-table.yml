@@ -18,6 +18,20 @@ Metadata:
           - ForeignAccountId
           - ForeignRoleName
       - Label:
+          default: Capacity
+        Parameters:
+          - BillingMode
+          - ProvisionedReadCapacityUnits
+          - ProvisionedWriteCapacityUnits
+          - EnableAutoScaling
+          - ReadCapacityMin
+          - ReadCapacityMax
+          - WriteCapacityMin
+          - WriteCapacityMax
+          - AutoScalingCooldown
+          - ReadUtilizationScalingTarget
+          - WriteUtilizationScalingTarget
+      - Label:
           default: Metadata
         Parameters:
           - EnvironmentType
@@ -38,7 +52,29 @@ Metadata:
       EnvironmentType:
         default: Environment type
       ProjectTag:
-        default: Project Tag
+        default: Project tag
+      BillingMode:
+        default: Billing mode
+      ProvisionedReadCapacityUnits:
+        default: Provisioned read capacity (RCU)
+      ProvisionedWriteCapacityUnits:
+        default: Provisioned write capacity (WCU)
+      EnableAutoScaling:
+        default: Enable auto scaling
+      WriteCapacityMin:
+        default: Write capacity minimum (WCU)
+      WriteCapacityMax:
+        default: Write capacity maximum (WCU)
+      ReadCapacityMin:
+        default: Read capacity minimum (RCU)
+      ReadCapacityMax:
+        default: Read capacity maximum (RCU)
+      AutoScalingCooldown:
+        default: Auto scaling cooldown period
+      WriteUtilizationScalingTarget:
+        default: Write capacity utilization scaling target (%)
+      ReadUtilizationScalingTarget:
+        default: Read capacity utilization scaling target (%)
 Parameters:
   TableName:
     Type: String
@@ -69,13 +105,67 @@ Parameters:
       - Testing
       - Staging
       - Production
+  BillingMode:
+    Type: String
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Default: PAY_PER_REQUEST
+  ProvisionedReadCapacityUnits:
+    Type: Number
+    Description: Only used under provisioned billing
+  ProvisionedWriteCapacityUnits:
+    Type: Number
+    Description: Only used under provisioned billing
+  EnableAutoScaling:
+    Type: String
+    AllowedValues:
+      - "True"
+      - "False"
+    Default: "False"
+    Description: Only used under provisioned billing
+  WriteCapacityMin:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  WriteCapacityMax:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  ReadCapacityMin:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  ReadCapacityMax:
+    Type: Number
+    Description: Only used under provisioned billing with auto scaling
+  AutoScalingCooldown:
+    Type: Number
+    Default: 60
+    Description: Only used under provisioned billing with auto scaling
+  WriteUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing with auto scaling
+  ReadUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing with auto scaling
   ProjectTag:
     Type: String
     Description: The value used for the Project tag on resources that support tagging.
+  WarnMessagesSnsTopicArn:
+    Type: String
+  ErrorMessagesSnsTopicArn:
+    Type: String
+  FatalMessagesSnsTopicArn:
+    Type: String
 Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
   HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
+  HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
+  AutoScalingRequested: !Equals [!Ref EnableAutoScaling, "True"]
+  CreateAutoScaling: !And
+    - !Condition AutoScalingRequested
+    - !Condition HasProvisionedBilling
 Mappings:
   DataTypesMap:
     String:
@@ -92,11 +182,17 @@ Resources:
         - AttributeName: !Ref PrimaryKey
           AttributeType: !FindInMap [DataTypesMap, !Ref PrimaryType, Symbol]
       # https://github.com/awslabs/cfn-python-lint/issues/509
-      BillingMode: PAY_PER_REQUEST
+      BillingMode: !Ref BillingMode
       KeySchema:
         - AttributeName: !Ref PrimaryKey
           KeyType: HASH
       TableName: !Ref TableName
+      ProvisionedThroughput:
+        !If
+          - HasProvisionedBilling
+          - ReadCapacityUnits: !Ref ProvisionedReadCapacityUnits
+            WriteCapacityUnits: !Ref ProvisionedWriteCapacityUnits
+          - !Ref "AWS::NoValue"
       Tags:
         - Key: Project
           Value: !Ref ProjectTag
@@ -152,6 +248,132 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # Auto scaling
+  TableWriteCapacityScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: CreateAutoScaling
+    Properties:
+      MaxCapacity: !Ref WriteCapacityMax
+      MinCapacity: !Ref WriteCapacityMin
+      ResourceId: !Sub table/${DynamoDBTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+  TableWriteCapacityScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: CreateAutoScaling
+    Properties:
+      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref TableWriteCapacityScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: !Ref AutoScalingCooldown
+        ScaleOutCooldown: !Ref AutoScalingCooldown
+        TargetValue: !Ref WriteUtilizationScalingTarget
+  TableReadCapacityScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: CreateAutoScaling
+    Properties:
+      MaxCapacity: !Ref ReadCapacityMax
+      MinCapacity: !Ref ReadCapacityMin
+      ResourceId: !Sub table/${DynamoDBTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+  TableReadCapacityScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: CreateAutoScaling
+    Properties:
+      PolicyName: TableReadCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref TableReadCapacityScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: !Ref AutoScalingCooldown
+        ScaleOutCooldown: !Ref AutoScalingCooldown
+        TargetValue: !Ref ReadUtilizationScalingTarget
+  # Alarms
+  ScanThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} Scan throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        Scan operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: Scan
+  BatchGetItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchGetItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchGetItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchGetItem
+  BatchWriteItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} BatchWriteItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription:
+        BatchWriteItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: BatchWriteItem
 Outputs:
   TableArn:
     Description: The created DynamoDB table ARN

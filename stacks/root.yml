@@ -100,6 +100,8 @@ Parameters:
     Type: String
   GroveSecretsVersion:
     Type: String
+  IframelyEcrImageTag:
+    Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
     Type: String
   PixelPrxOrgCodeS3ObjectVersion:
@@ -115,10 +117,6 @@ Parameters:
   DovetailCountsLambdaCodeS3ObjectVersion:
     Type: String
   DovetailTrafficLambdaCodeS3ObjectVersion:
-    Type: String
-  CmsAudioLambdaCodeS3ObjectVersion:
-    Type: String
-  CmsImageLambdaCodeS3ObjectVersion:
     Type: String
   ProxyPrxOrgCodeS3ObjectVersion:
     Type: String
@@ -206,6 +204,8 @@ Mappings:
       prefix: 65
     Networks:
       prefix: 70
+    Iframely:
+      prefix: 73
 Resources:
   # Root stacks
   StaticSitesRootStack:
@@ -217,7 +217,7 @@ Resources:
       Parameters:
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
-        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/static-sites/"]]
+        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/static-sites/"]]
         EnvironmentType: !Ref EnvironmentType
         RadiotopiaRadioArchiveS3ObjectVersion: !Ref RadiotopiaRadioArchiveS3ObjectVersion
         BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
@@ -227,7 +227,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/static-sites/root.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/static-sites/root.yml"]]
       TimeoutInMinutes: 5
   ServerlessRootStack:
     Type: "AWS::CloudFormation::Stack"
@@ -242,7 +242,7 @@ Resources:
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
         VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
         VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/"]]
+        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/serverless/"]]
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         WildcardCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
@@ -251,8 +251,6 @@ Resources:
         DovetailBytesLambdaCodeS3ObjectVersion: !Ref DovetailBytesLambdaCodeS3ObjectVersion
         DovetailCountsLambdaCodeS3ObjectVersion: !Ref DovetailCountsLambdaCodeS3ObjectVersion
         DovetailTrafficLambdaCodeS3ObjectVersion: !Ref DovetailTrafficLambdaCodeS3ObjectVersion
-        CmsAudioLambdaCodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
-        CmsImageLambdaCodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
         AnalyticsIngestLambdaCodeS3ObjectVersion: !Ref AnalyticsIngestLambdaCodeS3ObjectVersion
         RadiotopiaTowerLambdaCodeS3ObjectVersion: !Ref RadiotopiaTowerLambdaCodeS3ObjectVersion
         PixelPrxOrgCodeS3ObjectVersion: !Ref PixelPrxOrgCodeS3ObjectVersion
@@ -261,38 +259,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/serverless/root.yml"]]
-      TimeoutInMinutes: 5
-  LegacySupportRootStack:
-    Type: "AWS::CloudFormation::Stack"
-    DependsOn: ECSClusterStack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
-        InfrastructureNotificationsStackName: !Ref NotificationsStackName
-        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/legacy-support/"]]
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerStripeProxyPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, StripeProxy, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        EcrRegion: !Ref EcrRegion
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/legacy-support/root.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/serverless/root.yml"]]
       TimeoutInMinutes: 5
   ContainerAppsRootStack:
     Type: "AWS::CloudFormation::Stack"
@@ -303,7 +270,7 @@ Resources:
             !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
       Parameters:
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
-        TemplateUrlPrefix: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/"]]
+        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/"]]
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         VPC: !GetAtt VPCStack.Outputs.VPC
@@ -318,6 +285,7 @@ Resources:
         PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
         ECSClusterArn: !GetAtt ECSClusterStack.Outputs.ECSClusterArn
+        ECSInstanceIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSInstanceIAMRoleArn
         ECSServiceAutoscaleIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceAutoscaleIAMRoleArn
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         ECSServiceIAMRoleArn: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRoleArn
@@ -366,12 +334,15 @@ Resources:
         GrovePlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Grove, prefix]
         GroveEcrImageTag: !Ref GroveEcrImageTag
         GroveSecretsVersion: !Ref GroveSecretsVersion
+        # Iframely
+        IframelyPlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Iframely, prefix]
+        IframelyEcrImageTag: !Ref IframelyEcrImageTag
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/root.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/root.yml"]]
       TimeoutInMinutes: 5
   # App and shared resource stacks
   VPCStack:
@@ -388,7 +359,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/vpc.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/vpc.yml"]]
       TimeoutInMinutes: 5
   CertificateStack:
     Type: "AWS::CloudFormation::Stack"
@@ -405,7 +376,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/certificate.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/certificate.yml"]]
       TimeoutInMinutes: 5
   ECSClusterStack:
     Type: "AWS::CloudFormation::Stack"
@@ -450,7 +421,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/ecs.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/ecs.yml"]]
       TimeoutInMinutes: 5
   LoadBalancersStack:
     Type: "AWS::CloudFormation::Stack"
@@ -477,7 +448,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/load-balancers.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/load-balancers.yml"]]
       TimeoutInMinutes: 5
   PublishStack:
     Type: "AWS::CloudFormation::Stack"
@@ -518,7 +489,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/publish.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/publish.prx.org.yml"]]
       TimeoutInMinutes: 5
   CastleStack:
     Type: "AWS::CloudFormation::Stack"
@@ -560,7 +531,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/castle.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/castle.prx.org.yml"]]
       TimeoutInMinutes: 5
   PlayStack:
     Type: "AWS::CloudFormation::Stack"
@@ -602,7 +573,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/play.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/play.prx.org.yml"]]
       TimeoutInMinutes: 5
   CrierStack:
     Type: "AWS::CloudFormation::Stack"
@@ -648,7 +619,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/web-application.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   FeederStack:
     Type: "AWS::CloudFormation::Stack"
@@ -697,7 +668,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/web-alb-application.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/web-alb-application.yml"]]
       TimeoutInMinutes: 5
   DovetailStack:
     Type: "AWS::CloudFormation::Stack"
@@ -744,7 +715,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/dovetail.prx.org.yml"]]
       TimeoutInMinutes: 5
   IdStack:
     Type: "AWS::CloudFormation::Stack"
@@ -784,13 +755,13 @@ Resources:
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
         ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-        HealthCheckPath: "/api/v1/certs"
+        HealthCheckPath: "/healthcheck"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/container-apps/web-application.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   MetricsStack:
     Type: "AWS::CloudFormation::Stack"
@@ -831,7 +802,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/metrics.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/metrics.prx.org.yml"]]
       TimeoutInMinutes: 5
   DovetailStitchLambdaStack:
     Type: "AWS::CloudFormation::Stack"
@@ -852,12 +823,13 @@ Resources:
           Fn::ImportValue:
             !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
         CodeS3ObjectVersion: !Ref DovetailStitchLambdaCodeS3ObjectVersion
+        PorterSnsArn: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/dovetail-stitch-lambda/PORTER_SNS_ARN"]]
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/dovetail-stitch-lambda.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/dovetail-stitch-lambda.yml"]]
       TimeoutInMinutes: 5
   ProxyPrxOrgStack:
     Type: "AWS::CloudFormation::Stack"
@@ -883,7 +855,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["http://s3", !If [IsUsEast1, "", "-"], !If [IsUsEast1, "", !Ref "AWS::Region"], ".amazonaws.com/", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/", !Ref InfrastructureGitCommit, "/stacks/proxy.prx.org.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/proxy.prx.org.yml"]]
       TimeoutInMinutes: 5
 Outputs:
   VPCCertificateArn:

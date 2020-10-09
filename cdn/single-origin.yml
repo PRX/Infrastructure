@@ -22,10 +22,13 @@
 #     ]
 # }
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Description: >-
   Creates a CloudFront distribution with a single origin (either web or S3)
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
+  HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
+  HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
+  HasCloudFrontForwardedHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedHeaders], ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
@@ -64,8 +67,12 @@ Metadata:
           - CloudFrontPriceClass
           - CloudFrontDefaultRootObject
           - CloudFrontViewerProtocolPolicy
+          - CloudFrontViewerCertificateMinimumProtocolVersion
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
+          - CloudFrontForwardedHeaders
+          - CloudFrontCompress
+          - CloudFrontDefaultTtl
           - CloudFrontMinTtl
           - CloudFrontMaxTtl
           - CloudFrontLoggingBucket
@@ -94,6 +101,8 @@ Metadata:
         default: Log file prefix
       CloudFrontComment:
         default: Comment
+      CloudFrontDefaultTtl:
+        default: Default TTL
       CloudFrontMinTtl:
         default: Min TTL
       CloudFrontMaxTtl:
@@ -106,12 +115,18 @@ Metadata:
         default: Allowed methods
       CloudFrontCachedMethods:
         default: Cached methods
+      CloudFrontForwardedHeaders:
+        default: Forwarded Headers
+      CloudFrontCompress:
+        default: Compress objects automatically
       CloudFrontOriginAccess:
         default: Origin access identity
       CloudFrontOriginProtocolPolicy:
         default: Origin protocol policy
       CloudFrontViewerProtocolPolicy:
         default: Viewer protocol policy
+      CloudFrontViewerCertificateMinimumProtocolVersion:
+        default: Viewer security policy
       CloudFrontCustom403ErrorResponseCode:
         default: Custom 403 error response code
       CloudFrontCustom403ErrorResponsePagePath:
@@ -125,70 +140,92 @@ Parameters:
     Type: String
     AllowedPattern: ^.+$
     ConstraintDescription: must not be blank
-    Description: >
+    Description: >-
       The value used for the Project tag on resources that support tagging.
   Cnames:
     Type: CommaDelimitedList
-    Description: >
+    Description: >-
       (optional) The CNAMEs (alternate domain names) for the distribution, as a
       comma-delimited list (e.g. "cdn1.example.com,cdn2.example.com")
   OriginDomain:
     Type: String
     AllowedPattern: ^.+\.[a-zA-Z]+$
-    ConstraintDescription: >
+    ConstraintDescription: >-
       must be a hostname or of the format mybucket.s3.amazonaws.com
-    Description: >
+    Description: >-
       The DNS name of the Amazon Simple Storage Service (S3) bucket or the HTTP
       server from which you want CloudFront to get objects for this origin.
       (e.g. "example.com" or "mybucket.s3.amazonaws.com")
   OriginPath:
     Type: String
     AllowedPattern: ^$|^\/..+(?<!\/)$
-    ConstraintDescription: >
+    ConstraintDescription: >-
       must start with a slash and must not end with a slash
-    Description: >
+    Description: >-
       (optional) The path that CloudFront uses to request content from an S3
       bucket or custom origin. The combination of the DomainName and OriginPath
       properties must resolve to a valid path. The value must start with a slash
       mark (/) and cannot end with a slash mark.
   CloudFrontLoggingBucket:
     Type: String
-    AllowedPattern: ^$|^.+\.s3\.amazonaws\.com$
-    ConstraintDescription: >
+    AllowedPattern: ^$|^.+\.s3\..+\.amazonaws\.com$
+    ConstraintDescription: >-
       must be of the format mybucket.s3.amazonaws.com
-    Description: >
+    Description: >-
       (optional) The Amazon S3 bucket address where access logs are stored for
       CloudFront. (e.g., mybucket.s3.amazonaws.com)
   CloudFrontLoggingBucketPrefix:
     Type: String
-    Description: >
+    Description: >-
       (optional) A prefix for the access log file names for the CloudFront
       distribution. (e.g., myprefix/)
   CloudFrontComment:
     Type: String
     AllowedPattern: ^.+$
     ConstraintDescription: must not be blank
-    Description: >
+    Description: >-
       Any comments that you want to include about the CloudFront distribution
     MaxLength: 128
+  CloudFrontDefaultTtl:
+    Type: String
+    Description: >-
+      (optional) The default amount of time, in seconds, that you want objects
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. CloudFront uses this
+      value as the object’s time to live (TTL) only when the origin does not
+      send Cache-Control or Expires headers with the object. The default value
+      for this field is 86400 seconds (one day). If the value of MinTTL is more
+      than 86400 seconds, then the default value for this field is the same as
+      the value of MinTTL.
+  CloudFrontForwardedHeaders:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The HTTP headers, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those headers' values in the viewer request. Provide a comma-delimited
+      list (e.g. "Origin,Access-Control-Request-Headers,
+      Access-Control-Request-Method")
   CloudFrontMinTtl:
     Type: String
-    Description: >
-      (optional) The minimum amount of time that you want objects to stay in
-      CloudFront caches before CloudFront forwards another request to your
-      origin to determine whether the object has been updated.
+    Description: >-
+      (optional) The minimum amount of time, in seconds, that you want objects
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. The default value
+      for this field is 0 seconds.
   CloudFrontMaxTtl:
     Type: String
-    Description: >
-      (optional) The maximum amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated. The
-      value that you specify applies only when your origin adds HTTP headers
-      such as Cache-Control max-age, Cache-Control s-maxage, and Expires to
-      objects
+    Description: >-
+      (optional) The maximum amount of time, in seconds, that objects stay in
+      the CloudFront cache before CloudFront sends another request to the
+      origin to see if the object has been updated. CloudFront uses this value
+      only when the origin sends Cache-Control or Expires headers with the
+      object. The default value for this field is 31536000 seconds (one year).
+      If the value of MinTTL or DefaultTTL is more than 31536000 seconds, then
+      the default value for this field is the same as the value of DefaultTTL.
   CloudFrontPriceClass:
     Type: String
-    Description: >
+    Description: >-
       The price class that corresponds with the maximum price that you want to
       pay for CloudFront service.
     Default: PriceClass_All
@@ -199,14 +236,14 @@ Parameters:
   CloudFrontDefaultRootObject:
     Type: String
     Default: index.html
-    Description: >
+    Description: >-
       Optional. The object that you want CloudFront to return (for example,
       index.html) when a viewer request points to your root URL
       (http://www.example.com) instead of to a specific object in your
       distribution (http://www.example.com/index.html).
   CloudFrontAllowedMethods:
     Type: CommaDelimitedList
-    Description: >
+    Description: >-
       HTTP methods that CloudFront processes and forwards to your Amazon S3 bucket or your custom origin.
     Default: "HEAD,GET"
     AllowedValues:
@@ -215,27 +252,35 @@ Parameters:
       - "DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT"
   CloudFrontCachedMethods:
     Type: CommaDelimitedList
-    Description: >
+    Description: >-
       HTTP methods for which CloudFront caches responses.
     Default: "HEAD,GET"
     AllowedValues:
       - "HEAD,GET"
       - "GET,HEAD,OPTIONS"
+  CloudFrontCompress:
+    Type: String
+    Description: >-
+      Whether you want CloudFront to automatically compress certain files.
+    Default: "True"
+    AllowedValues:
+      - "True"
+      - "False"
   CloudFrontOriginAccess:
     Type: String
-    Description: >
+    Description: >-
       Create an origin access identity which can be used to grant the CloudFront
       distribution access to an S3 bucket via a bucket policy. Only use this
-      when the origin is an S3 bucket. The Comment is required when an origin
-      access identity is created. Turning this on will not update an S3 bucket
-      policies.
+      when the origin is an S3 bucket. Turning this on will not update any S3
+      bucket policies, but such a policy is required to allow the origin access
+      identity to function properly.
     Default: 'No'
     AllowedValues:
       - 'Yes'
       - 'No'
   CloudFrontOriginProtocolPolicy:
     Type: String
-    Description: >
+    Description: >-
       The origin protocol policy to apply to your origin
     Default: https-only
     AllowedValues:
@@ -244,29 +289,44 @@ Parameters:
       - https-only
   CloudFrontViewerProtocolPolicy:
     Type: String
-    Description: >
+    Description: >-
       The protocol that viewers can use to access the files in the origin
     Default: redirect-to-https
     AllowedValues:
       - allow-all
       - redirect-to-https
       - https-only
+  CloudFrontViewerCertificateMinimumProtocolVersion:
+    Type: String
+    Description: >-
+      The security policy to use for HTTPS connections with viewers, which
+      determines the minimum SSL/TLS protocol that CloudFront can use to
+      communicate with viewers, and the ciphers that CloudFront can use to
+      encrypt the content that it returns to viewers.
+    Default: TLSv1
+    AllowedValues:
+      - SSLv3
+      - TLSv1
+      - TLSv1_2016
+      - TLSv1.1_2016
+      - TLSv1.2_2018
+      - TLSv1.2_2019
   CloudFrontCustom403ErrorResponseCode:
     Type: String
-    Description: >
+    Description: >-
       (optional) A custom HTTP response code to return when a 403 is returned
       by the origin
   CloudFrontCustom403ErrorResponsePagePath:
     Type: String
-    Description: >
+    Description: >-
       (optional) A custom page to return when a 403 is returned by the origin
   CloudFrontWebACLId:
     Type: String
-    Description: >
+    Description: >-
       (optional) The AWS WAF web ACL to associate with this distribution
   AcmCertificateArn:
     Type: String
-    Description: >
+    Description: >-
       (optional) ARN for the ACM certificate that will be used with the
       CloudFront distribution. If no value is supplied, a new certificate will
       be created.
@@ -274,7 +334,7 @@ Resources:
   # ACM Certificate
   # This gets created when no ARN for a pre-existing certificate is provided
   Certificate:
-    Type: "AWS::CertificateManager::Certificate"
+    Type: AWS::CertificateManager::Certificate
     Condition: CreateCertificate
     Properties:
       DomainName: !Select [0, !Ref Cnames]
@@ -283,14 +343,50 @@ Resources:
         - Key: Project
           Value: !Ref ProjectTag
         - Key: Name
-          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+          Value: !Sub ${AWS::StackName} ${AWS::Region}
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+  CloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, 86400]
+        MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, 31536000]
+        MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, 0]
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+            # Cookies:
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+          QueryStringsConfig:
+            QueryStringBehavior: none
+            # QueryStrings:
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+          # Cookies:
+        HeadersConfig:
+          HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+          Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+          # QueryStrings:
   CloudFrontDistribution:
-    Type: "AWS::CloudFront::Distribution"
+    Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Aliases: !If [HasCnames, !Ref Cnames, !Ref "AWS::NoValue"]
@@ -305,24 +401,16 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
-          Compress: true
-          # DefaultTTL: Number
-          ForwardedValues:
-            # Cookies:
-            #   Cookies
-            # Headers:
-            #   - String
-            QueryString: false
-            # QueryStringCacheKeys:
+          CachePolicyId: !Ref CloudFrontCachePolicy
+          Compress: !If [HasCloudFrontCompress, true, false]
           # LambdaFunctionAssociations:
-          MaxTTL: !If [HasCloudFrontMaxTtl, !Ref "CloudFrontMaxTtl", !Ref "AWS::NoValue"]
-          MinTTL: !If [HasCloudFrontMinTtl, !Ref "CloudFrontMinTtl", !Ref "AWS::NoValue"]
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           # SmoothStreaming: Boolean
           TargetOriginId: web-origin
           # TrustedSigners:
           #   - String
           ViewerProtocolPolicy : !Ref CloudFrontViewerProtocolPolicy
-        DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref "CloudFrontDefaultRootObject", !Ref "AWS::NoValue"]
+        DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref CloudFrontDefaultRootObject, !Ref "AWS::NoValue"]
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
@@ -331,13 +419,13 @@ Resources:
             - HasCloudFrontLoggingBucket
             - Bucket: !Ref CloudFrontLoggingBucket
               IncludeCookies: false
-              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref "CloudFrontLoggingBucketPrefix", !Ref "AWS::NoValue"]
-            - !Ref "AWS::NoValue"
+              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
+            - !Ref AWS::NoValue
         Origins:
           - CustomOriginConfig:
               !If
                 - HasCloudFrontOriginAccess
-                - !Ref "AWS::NoValue"
+                - !Ref AWS::NoValue
                 - HTTPSPort: 443
                   # HTTPPort: Integer
                   OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
@@ -349,12 +437,12 @@ Resources:
             Id: web-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
-            OriginPath: !If [HasOriginPath, !Ref "OriginPath", !Ref "AWS::NoValue"]
+            OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
             S3OriginConfig:
               !If
                 - HasCloudFrontOriginAccess
-                - OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
-                - !Ref "AWS::NoValue"
+                - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+                - !Ref AWS::NoValue
         PriceClass: !Ref CloudFrontPriceClass
         # Restrictions:
         #   Restriction
@@ -364,10 +452,10 @@ Resources:
             - AcmCertificateArn: !If [CreateCertificate, !Ref Certificate, !Ref AcmCertificateArn]
               # CloudFrontDefaultCertificate: true
               # IamCertificateId: String
-              # MinimumProtocolVersion: String
+              MinimumProtocolVersion: !Ref CloudFrontViewerCertificateMinimumProtocolVersion
               SslSupportMethod: sni-only
-            - !Ref "AWS::NoValue"
-        WebACLId: !If [HasCloudFrontWebACLId, !Ref "CloudFrontWebACLId", !Ref "AWS::NoValue"]
+            - !Ref AWS::NoValue
+        WebACLId: !If [HasCloudFrontWebACLId, !Ref CloudFrontWebACLId, !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
           Value: !Ref ProjectTag
@@ -376,7 +464,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   CloudFrontOriginAccessIdentity:
-    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Condition: HasCloudFrontOriginAccess
     Properties:
       CloudFrontOriginAccessIdentityConfig:

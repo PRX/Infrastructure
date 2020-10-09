@@ -13,10 +13,30 @@ import datetime
 import re
 
 sns = boto3.client('sns')
+sts = boto3.client('sts')
 cloudwatch = boto3.client('cloudwatch')
 
 SLACK_ICON = ':ops-cloudwatch-alarm:'
 SLACK_USERNAME = 'Amazon CloudWatch Alarms'
+
+
+# Return a boto3 CloudWatch client with credentials for the account where the
+# alarm originated
+def cloudwatch_client(alarm):
+    account_id = alarm['AWSAccountId']
+    role_name = os.environ['CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME']
+
+    role = sts.assume_role(
+        RoleArn=f"arn:aws:iam::{account_id}:role/{role_name}",
+        RoleSessionName='notifications_lambda_reader',
+    )
+
+    return boto3.client(
+        'cloudwatch',
+        aws_access_key_id=role['Credentials']['AccessKeyId'],
+        aws_secret_access_key=role['Credentials']['SecretAccessKey'],
+        aws_session_token=role['Credentials']['SessionToken'],
+    )
 
 
 def channel_for_topic(sns_topic_arn):
@@ -50,10 +70,14 @@ def alarm_slack_attachment(alarm):
 
     trigger = alarm['Trigger']
 
+    cw = cloudwatch_client(alarm)
+
     # Get the complete alarm info for this alarm (Only partial data may have
     # been included in the SNS message)
-    alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+    alarm_infos = cw.describe_alarms(AlarmNames=[alarm['AlarmName']])
 
+    # TODO There shouldn't be any cases where this is happening anymore, since
+    # alarm data is being queried using a privileged role in all cases now
     if not alarm_infos['MetricAlarms']:
         # Usually this list will be empty because the alarm is in a different
         # account. Use a simplified message in those cases.
@@ -83,7 +107,7 @@ def alarm_slack_attachment(alarm):
 
     # Get a count of how many times this alarm has alarmed in the last 24 hours
     now = datetime.datetime.now(datetime.timezone.utc)
-    alarm_history = cloudwatch.describe_alarm_history(
+    alarm_history = cw.describe_alarm_history(
         AlarmName=alarm['AlarmName'],
         HistoryItemType='StateUpdate',
         StartDate=now - datetime.timedelta(hours=24),
@@ -214,9 +238,11 @@ def alarm_slack_attachment(alarm):
 
 
 def ok_slack_attachment(alarm):
+    cw = cloudwatch_client(alarm)
+
     # Get the complete alarm info for this alarm (Only partial data may have
     # been included in the SNS message)
-    alarm_infos = cloudwatch.describe_alarms(AlarmNames=[alarm['AlarmName']])
+    alarm_infos = cw.describe_alarms(AlarmNames=[alarm['AlarmName']])
 
     if not alarm_infos['MetricAlarms']:
         return {
@@ -237,7 +263,7 @@ def ok_slack_attachment(alarm):
     try:
         # Retrieve the alarm history (only state updates)
         now = datetime.datetime.now(datetime.timezone.utc)
-        alarm_history = cloudwatch.describe_alarm_history(
+        alarm_history = cw.describe_alarm_history(
             AlarmName=alarm['AlarmName'],
             HistoryItemType='StateUpdate',
             StartDate=now - datetime.timedelta(hours=24),

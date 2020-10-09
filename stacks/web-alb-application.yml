@@ -87,11 +87,23 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
         - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIpv6: ::/0
           IpProtocol: tcp
           FromPort: 22
           ToPort: 22
@@ -109,7 +121,7 @@ Resources:
   ALB:
     Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
     Properties:
-      # IpAddressType: dualstack
+      IpAddressType: dualstack
       Scheme: internet-facing
       SecurityGroups:
         - !Ref ALBSecurityGroup
@@ -242,7 +254,7 @@ Resources:
         Target response time value for ${AppName} load balancer targets at 95th
         percentile higher than expected
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
+      EvaluationPeriods: 2
       ExtendedStatistic: p95
       MetricName: TargetResponseTime
       Namespace: AWS/ApplicationELB
@@ -331,6 +343,11 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: A
+          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Sub dualstack.${ALB.DNSName}
+            HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+        - Type: AAAA
           Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Sub dualstack.${ALB.DNSName}

@@ -1,20 +1,21 @@
-# etc/publicfeeds-hostedzone-deploy.yml
+# etc/publicfeeds-hostedzone-deploy/template.yml
 # Creates a CodePipeline that continuously deploys the
 # dns/publicfeeds.net-hosted_zone.yml template.
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Transform: AWS::Serverless-2016-10-31
+Description: >-
   Builds a release pipeline via CodePipeline to deploy the publicfeeds.net
   hosted zone stack.
 Parameters:
   HostedZoneStackName:
     Type: String
   GitHubToken:
-    Description: >
+    Description: >-
       A GitHub access token with permissions to update statuses, request
       content, etc
     Type: String
   GitHubWebhookSecret:
-    Description: >
+    Description: >-
       A secret used to sign requests made by GitHub to webhook endpoints.
       This secret is shared by all webhooks created by this template.
     Type: String
@@ -25,6 +26,7 @@ Resources:
     # app, infrastructure, or user data.
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LifecycleConfiguration:
         Rules:
@@ -49,7 +51,6 @@ Resources:
                 - codepipeline.amazonaws.com
             Action:
               - sts:AssumeRole
-      Path: "/"
       Policies:
         # CodePipeline seems to need access to special buckets
         - PolicyName: GenericCodePipelineS3PutPolicy
@@ -169,6 +170,13 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: !Ref HostedZoneStackName
               RunOrder: 2
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
   PipelineInfrastructureRepoGitHubWebhook:
     Type: AWS::CodePipeline::Webhook
     Properties:
@@ -211,7 +219,6 @@ Resources:
                 - cloudformation.amazonaws.com
             Action:
               - sts:AssumeRole
-      Path: "/"
       Policies:
         # Wildcard access to CloudFormation stack and changesets. Explicitly
         # denies stack deletion.
@@ -254,3 +261,54 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # Notifications
+  PipelineNotifications:
+    Type: AWS::CodeStarNotifications::NotificationRule
+    Properties:
+      DetailType: FULL
+      EventTypeIds:
+        - codepipeline-pipeline-pipeline-execution-failed
+        - codepipeline-pipeline-pipeline-execution-succeeded
+      Name: publicfeeds-hostedzone-pipeline-notifications
+      Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+      Targets:
+        - TargetType: AWSChatbotSlack
+          TargetAddress: !Ref SlackChannelConfiguration
+  SlackChannelConfigurationIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - chatbot.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      Policies:
+        - PolicyName: ChatbotNotificationsOnly
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:Describe*
+                  - cloudwatch:Get*
+                  - cloudwatch:List*
+                Resource:
+                  - "*"
+  SlackChannelConfiguration:
+    Type: AWS::Chatbot::SlackChannelConfiguration
+    Properties:
+      ConfigurationName: publicfeeds-hostedzone-deploys
+      IamRoleArn: !GetAtt SlackChannelConfigurationIamRole.Arn
+      SlackChannelId: G56AY609G
+      SlackWorkspaceId: T0256R4CK

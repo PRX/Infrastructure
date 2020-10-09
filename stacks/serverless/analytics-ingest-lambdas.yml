@@ -43,6 +43,8 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   RedisHost:
     Type: AWS::SSM::Parameter::Value<String>
+  RedisImpressionsHost:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   # Shared IAM Role
   AnalyticsLambdaExecutionIAMRole:
@@ -70,6 +72,7 @@ Resources:
                   - "kinesis:PutRecords"
                 Resource:
                   - !Ref MetricsKinesisStream
+                  - !Ref DynamodbKinesisStream
         - PolicyName: DynamodbAssumeRolePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -91,6 +94,7 @@ Resources:
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        - "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
       Tags:
         - Key: Project
           Value: Dovetail
@@ -143,6 +147,7 @@ Resources:
           DDB_ROLE: !Ref DynamodbAccessRole
           DDB_TTL: !Ref DynamodbTTL
           KINESIS_STREAM: !Ref MetricsKinesisStream
+          KINESIS_RETRY_STREAM: !Ref DynamodbKinesisStream
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -156,7 +161,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      Timeout: 30
+      Timeout: 10
   AnalyticsPingbacksLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -194,6 +199,8 @@ Resources:
         Variables:
           REDIS_HOST: !Ref RedisHost
           REDIS_TTL: "7200"
+          REDIS_IMPRESSIONS_HOST: !Ref RedisImpressionsHost
+          REDIS_IMPRESSIONS_TTL: "90000"
       Handler: index.handler
       MemorySize: 256
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn

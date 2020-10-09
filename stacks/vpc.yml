@@ -34,7 +34,7 @@ Parameters:
     Type: String
 Resources:
   VPC:
-    Type: AWS::EC2::VPC
+    Type: "AWS::EC2::VPC"
     Properties:
       CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
@@ -51,6 +51,13 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  IPv6VCPCidrBlock:
+    Type: "AWS::EC2::VPCCidrBlock"
+    Properties:
+      VpcId: !Ref VPC
+      AmazonProvidedIpv6CidrBlock: true
+
+  # Internet gateways
   InternetGateway:
     Type: "AWS::EC2::InternetGateway"
     Properties:
@@ -70,6 +77,8 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
+
+  # Routing for public subnets
   RouteTable:
     Type: "AWS::EC2::RouteTable"
     Properties:
@@ -92,6 +101,14 @@ Resources:
       RouteTableId: !Ref RouteTable
       GatewayId: !Ref InternetGateway
       DestinationCidrBlock: 0.0.0.0/0
+  IPv6Route:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  # VPC endpoints
   S3Endpoint:
     Type: "AWS::EC2::VPCEndpoint"
     Properties:
@@ -107,6 +124,10 @@ Resources:
       GroupDescription: Allow kinesis traffic
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIpv6: ::/0
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
@@ -145,9 +166,13 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
       Tags:
         - Key: Project
-          Value: Porter
+          Value: platform.prx.org
         - Key: Name
           Value: !Sub ${AWS::StackName}-EcsEndpointsSecurityGroup
         - Key: prx:cloudformation:stack-name
@@ -196,12 +221,17 @@ Resources:
         - !Ref Subnet3
       VpcEndpointType: Interface
       VpcId: !Ref VPC
+
+  # Public subnets
   Subnet1:
     Type: "AWS::EC2::Subnet"
+    DependsOn: IPv6VCPCidrBlock
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !Join ["", [!Ref "AWS::Region", a]]
       CidrBlock: 10.0.1.0/24
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]] # 64 CIDR bits = (128 - 64) = /64 mask
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -215,10 +245,13 @@ Resources:
           Value: !Ref AWS::StackId
   Subnet2:
     Type: "AWS::EC2::Subnet"
+    DependsOn: IPv6VCPCidrBlock
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !If [IsUsEast1, us-east-1c, !Join ["", [!Ref "AWS::Region", b]]]
       CidrBlock: 10.0.2.0/24
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]] # 64 CIDR bits = (128 - 64) = /64 mask
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -232,10 +265,13 @@ Resources:
           Value: !Ref AWS::StackId
   Subnet3:
     Type: "AWS::EC2::Subnet"
+    DependsOn: IPv6VCPCidrBlock
+    UpdateReplacePolicy: Retain
     Properties:
       VpcId: !Ref VPC
       AvailabilityZone: !If [IsUsEast1, us-east-1d, !Join ["", [!Ref "AWS::Region", c]]]
       CidrBlock: 10.0.3.0/24
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 3, 64]] # 64 CIDR bits = (128 - 64) = /64 mask
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -262,6 +298,8 @@ Resources:
     Properties:
       SubnetId: !Ref Subnet3
       RouteTableId: !Ref RouteTable
+
+  # Network ACL
   NetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:
@@ -277,7 +315,9 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-  InboundHTTPSNetworkAclEntry:
+
+  # ACL inbound rules
+  InboundIPv4HTTPSNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -288,8 +328,21 @@ Resources:
         To: 443
       Protocol: 6 # TCP
       RuleAction : allow
-      RuleNumber : 100
-  InboundHTTPNetworkAclEntry:
+      RuleNumber : 120
+  InboundIPv6HTTPSNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6 # TCP
+      RuleAction : allow
+      RuleNumber : 121
+
+  InboundIPv4HTTPNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -300,8 +353,21 @@ Resources:
         To: 80
       Protocol: 6 # TCP
       RuleAction : allow
-      RuleNumber : 101
-  InboundUDPHTTPSNetworkAclEntry:
+      RuleNumber : 130
+  InboundIPv6HTTPNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6 # TCP
+      RuleAction : allow
+      RuleNumber : 131
+
+  InboundIPv4UDPHTTPSNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -312,8 +378,21 @@ Resources:
         To: 443
       Protocol: 17 # UDP
       RuleAction : allow
-      RuleNumber : 110
-  InboundUDPHTTPNetworkAclEntry:
+      RuleNumber : 140
+  InboundIPv6UDPHTTPSNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 17 # UDP
+      RuleAction : allow
+      RuleNumber : 141
+
+  InboundIPv4UDPHTTPNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -324,8 +403,21 @@ Resources:
         To: 80
       Protocol: 17 # UDP
       RuleAction : allow
-      RuleNumber : 111
-  InboundSSHNetworkAclEntry:
+      RuleNumber : 150
+  InboundIPv6UDPHTTPNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 17 # UDP
+      RuleAction : allow
+      RuleNumber : 151
+
+  InboundIPv4SSHNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -336,8 +428,21 @@ Resources:
         To: 22
       Protocol: 6 # TCP
       RuleAction : allow
-      RuleNumber : 200
-  InboundUDPSSHNetworkAclEntry:
+      RuleNumber : 230
+  InboundIPv6SSHNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6 # TCP
+      RuleAction : allow
+      RuleNumber : 231
+
+  InboundIPv4UDPSSHNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -348,8 +453,21 @@ Resources:
         To: 22
       Protocol: 17 # UDP
       RuleAction : allow
-      RuleNumber : 210
-  InboundNTPNetworkAclEntry:
+      RuleNumber : 240
+  InboundIPv6UDPSSHNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 17 # UDP
+      RuleAction : allow
+      RuleNumber : 241
+
+  InboundIPv4NTPNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -360,8 +478,21 @@ Resources:
         To: 123
       Protocol: 17 # UDP
       RuleAction : allow
-      RuleNumber : 220
-  InboundReturnTrafficNetworkAclEntry:
+      RuleNumber : 250
+  InboundIPv6NTPNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 123
+        To: 123
+      Protocol: 17 # UDP
+      RuleAction : allow
+      RuleNumber : 251
+
+  InboundIPv4ReturnTrafficNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -372,8 +503,21 @@ Resources:
         To: 65535
       Protocol: 6 # TCP
       RuleAction : allow
-      RuleNumber : 500
-  InboundUDPReturnTrafficNetworkAclEntry:
+      RuleNumber : 520
+  InboundIPv6ReturnTrafficNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6 # TCP
+      RuleAction : allow
+      RuleNumber : 521
+
+  InboundIPv4UDPReturnTrafficNetworkAclEntry:
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -384,8 +528,23 @@ Resources:
         To: 65535
       Protocol: 17 # UDP
       RuleAction : allow
-      RuleNumber : 510
-  OutboudTrafficNetworkAclEntry:
+      RuleNumber : 530
+  InboundIPv6UDPReturnTrafficNetworkAclEntry:
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 17 # UDP
+      RuleAction : allow
+      RuleNumber : 531
+
+  # ACL outbound rules
+  OutboudIPv4TrafficNetworkAclEntry:
+    # Allow allw outbound IPv4 traffic
     Type: "AWS::EC2::NetworkAclEntry"
     Properties:
       CidrBlock: 0.0.0.0/0
@@ -393,7 +552,19 @@ Resources:
       NetworkAclId: !Ref NetworkAcl
       Protocol: -1 # All
       RuleAction : allow
-      RuleNumber : 100
+      RuleNumber : 120
+  OutboudIPv6TrafficNetworkAclEntry:
+    # Allow allw outbound IPv6 traffic
+    Type: "AWS::EC2::NetworkAclEntry"
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref NetworkAcl
+      Protocol: -1 # All
+      RuleAction : allow
+      RuleNumber : 121
+
+  # Public subnet ACL associations
   Subnet1NetworkAclAssociation:
     Type: "AWS::EC2::SubnetNetworkAclAssociation"
     Properties:
@@ -409,6 +580,8 @@ Resources:
     Properties:
       SubnetId: !Ref Subnet3
       NetworkAclId: !Ref NetworkAcl
+
+  # DHCP
   DHCPOptions:
     Type: "AWS::EC2::DHCPOptions"
     Properties:

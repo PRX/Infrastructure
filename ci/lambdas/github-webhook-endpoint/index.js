@@ -15,17 +15,19 @@ const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 function publishEvent(event, callback) {
     console.log('...Publishing event to SNS...');
 
+    const body = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf-8') : event.body;
+
     sns.publish({
         TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
-        Message: event.body,
+        Message: body,
         MessageAttributes: {
             githubEvent: {
                 DataType: 'String',
-                StringValue: event.headers['X-GitHub-Event'],
+                StringValue: event.headers['x-github-event'],
             },
             githubDeliveryId: {
                 DataType: 'String',
-                StringValue: event.headers['X-GitHub-Delivery'],
+                StringValue: event.headers['x-github-delivery'],
             },
         },
     }, (err) => {
@@ -40,8 +42,8 @@ function publishEvent(event, callback) {
 }
 
 function handleEvent(event, callback) {
-    console.log(`...Handling event: ${event.headers['X-GitHub-Event']}...`);
-    switch (event.headers['X-GitHub-Event']) {
+    console.log(`...Handling event: ${event.headers['x-github-event']}...`);
+    switch (event.headers['x-github-event']) {
         case 'ping':
             // Blackhole `ping` events
             callback(null, OK_RESPONSE);
@@ -52,7 +54,7 @@ function handleEvent(event, callback) {
 }
 
 function main(event, context, callback) {
-    const githubSignature = event.headers['X-Hub-Signature'].split('=')[1];
+    const githubSignature = event.headers['x-hub-signature'].split('=')[1];
 
     console.log(`Checking event signature: ${githubSignature}...`);
 

@@ -46,6 +46,8 @@ Parameters:
     Type: String
   ECSClusterArn:
     Type: String
+  ECSInstanceIAMRoleArn:
+    Type: String
   ECSServiceAutoscaleIAMRoleArn:
     Type: String
   ECSServiceIAMRole:
@@ -118,6 +120,11 @@ Parameters:
   GroveEcrImageTag:
     Type: String
   GroveSecretsVersion:
+    Type: String
+  # Iframely Specific ##########################################################
+  IframelyPlatformALBListenerPriorityPrefix:
+    Type: String
+  IframelyEcrImageTag:
     Type: String
 Resources:
   ExchangeStack:
@@ -338,7 +345,7 @@ Resources:
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EcrRegion: !Ref EcrRegion
         SecretsBase: !Ref SecretsBase
-        ContainerMemory: !Ref ContainerMemory
+        ContainerMemory: !If [IsProduction, !Ref ContainerMemory, 2000]
         ContainerMemoryReservation: !Ref ContainerMemoryReservation
         ContainerCpu: !Ref ContainerCpu
         PlatformALBListenerPriorityPrefix: !Ref AuguryPlatformALBListenerPriorityPrefix
@@ -348,7 +355,7 @@ Resources:
         CreateWorker: "true"
         ContainerPort: "3000"
         HealthCheckPath: "/health_check"
-        DesiredWebs: "1"
+        DesiredWebs: "2"
         DesiredWebsProduction: "1"
       Tags:
         - Key: "prx:cloudformation:stack-name"
@@ -356,6 +363,62 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  AuguryAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AuguryWorkerLogGroupName: !GetAtt AuguryStack.Outputs.WorkerLogGroupName
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "augury-alarms.yml"]]
+      TimeoutInMinutes: 5
+  AuguryForecastStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        ECSCluster: !Ref ECSCluster
+        ECSInstanceIAMRoleArn: !Ref ECSInstanceIAMRoleArn
+        EcrImageTag: !Ref AuguryEcrImageTag
+        EcrRegion: !Ref EcrRegion
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SecretsBase: !Ref SecretsBase
+        SecretsInstanceDecryptPolicyArn: !Ref SecretsInstanceDecryptPolicyArn
+        SecretsInstanceAccessPolicyArn: !Ref SecretsInstanceAccessPolicyArn
+        SecretsVersion: !Ref AugurySecretsVersion
+        VPCSubnet1: !Ref VPCSubnet1
+        VPCSubnet2: !Ref VPCSubnet2
+        VPCSubnet3: !Ref VPCSubnet3
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "augury-forecast.yml"]]
       TimeoutInMinutes: 5
   CourierStack:
     Type: "AWS::CloudFormation::Stack"
@@ -443,6 +506,33 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  CmsAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AudioSqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/SQS_CALLBACK_NAME"
+        ImageSqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-image-lambda/SQS_CALLBACK_NAME"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-alarms.yml"]]
       TimeoutInMinutes: 5
   StyleguideStack:
     Type: "AWS::CloudFormation::Stack"
@@ -591,6 +681,51 @@ Resources:
         CreateWorker: "false"
         ContainerPort: "4204"
         HealthCheckPath: "/"
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  IframelyStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        VPC: !Ref VPC
+        PlatformALBDNSName: !Ref PlatformALBDNSName
+        PlatformALBFullName: !Ref PlatformALBFullName
+        PlatformALBCanonicalHostedZoneID: !Ref PlatformALBCanonicalHostedZoneID
+        PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
+        PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
+        ECSCluster: !Ref ECSCluster
+        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
+        ECSServiceIAMRole: !Ref ECSServiceIAMRole
+        OpsDebugMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcrRegion: !Ref EcrRegion
+        SecretsBase: !Ref SecretsBase
+        ContainerMemory: !Ref ContainerMemory
+        ContainerMemoryReservation: !Ref ContainerMemoryReservation
+        ContainerCpu: !Ref ContainerCpu
+        WebContainerCommand: cluster.js
+        PlatformALBListenerPriorityPrefix: !Ref IframelyPlatformALBListenerPriorityPrefix
+        EcrImageTag: !Ref IframelyEcrImageTag
+        ExplicitHostHeader: embed.pri.org
+        SecretsVersion: none
+        AppName: "iframely"
+        CreateWorker: "false"
+        ContainerPort: "8061"
+        HealthCheckPath: "/s/css/bootstrap.css"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName

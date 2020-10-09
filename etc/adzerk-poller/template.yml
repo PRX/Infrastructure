@@ -1,0 +1,107 @@
+# etc/adzerk-poller/template.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Creates a Lambda function that polls the Adzerk API and finds ad flight
+  starting soon, which get sent to Slack
+Parameters:
+  AdzerkApiKey:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+  AlarmSnsTopicArn:
+    Type: String
+Resources:
+  PollerFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: SnsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref SlackMessageRelayTopicArn
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Tags:
+        - Key: Project
+          Value: Misc
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  PollerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_function.py
+      Description: >-
+        Finds ad flights Adzerk and sends them to Slack via the
+        Slack relay
+      Environment:
+        Variables:
+          ADZERK_API_KEY: !Ref AdzerkApiKey
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        DailyPoller:
+          Properties:
+            Description: Runs the Adzerk poller once per day
+            Enabled: true
+            Schedule: cron(0 14 * * ? *) # At 10 AM EDT or 9 AM EST
+          Type: Schedule
+        HourlyPoller:
+          Properties:
+            Description: Runs the Adzerk poller once per hour
+            Enabled: true
+            Schedule: rate(1 hour)
+          Type: Schedule
+      Handler: lambda_function.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt PollerFunctionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        Project: Misc
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 16
+  PollerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PollerFunction}
+      RetentionInDays: 30
+  PollerFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Adzerk Flight Checker] Elevated error volume"
+      AlarmActions:
+        - !Ref AlarmSnsTopicArn
+      InsufficientDataActions:
+        - !Ref AlarmSnsTopicArn
+      OKActions:
+        - !Ref AlarmSnsTopicArn
+      AlarmDescription: >-
+        The error rate on the Adzerk flight checker has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PollerFunction

@@ -61,7 +61,7 @@ Mappings:
     Testing:
       InstanceType: t2.micro
       InstanceStorage: 22
-      AmiName: "amzn-ami-2018.03.20191114-amazon-ecs-optimized"
+      AmiName: "amzn-ami-2018.03.20200430-amazon-ecs-optimized"
       MinSize: "1"
       DefaultDesiredCapacity: "1"
       WarningThreshold: "2"
@@ -69,7 +69,7 @@ Mappings:
     Staging:
       InstanceType: t2.small
       InstanceStorage: 22
-      AmiName: "amzn-ami-2018.03.20191114-amazon-ecs-optimized"
+      AmiName: "amzn-ami-2018.03.20200430-amazon-ecs-optimized"
       MinSize: "2"
       DefaultDesiredCapacity: "5"
       WarningThreshold: "9"
@@ -77,7 +77,7 @@ Mappings:
     Production:
       InstanceType: t2.medium
       InstanceStorage: 72
-      AmiName: "amzn-ami-2018.03.20191114-amazon-ecs-optimized"
+      AmiName: "amzn-ami-2018.03.20200430-amazon-ecs-optimized"
       MinSize: "4"
       DefaultDesiredCapacity: "5"
       WarningThreshold: "35"
@@ -297,7 +297,15 @@ Resources:
           IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
         - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIpv6: ::/0
           IpProtocol: tcp
           FromPort: 80
           ToPort: 80
@@ -322,6 +330,10 @@ Resources:
           IpProtocol: tcp
           FromPort: 22
           ToPort: 22
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
       Tags:
         - Key: Project
           Value: platform.prx.org
@@ -343,7 +355,15 @@ Resources:
           IpProtocol: udp
           FromPort: 123
           ToPort: 123
+        - CidrIpv6: ::/0
+          IpProtocol: udp
+          FromPort: 123
+          ToPort: 123
         - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 1024
+          ToPort: 65535
+        - CidrIpv6: ::/0
           IpProtocol: tcp
           FromPort: 1024
           ToPort: 65535
@@ -365,6 +385,8 @@ Resources:
       GroupDescription: Enable outbound traffic on cluster instances
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+        - CidrIpv6: ::/0
           IpProtocol: "-1"
       Tags:
         - Key: Project
@@ -767,6 +789,9 @@ Resources:
                   - ecs:DescribeTaskDefinition
                   - ecs:ListContainerInstances
                   - ecs:ListServices
+                  - ecs:DescribeClusters
+                  - ecs:ListTagsForResource
+                  - ecs:TagResource
               - Effect: "Allow"
                 Resource: "*" # TODO: how to get an ASG ARN?
                 Action:
@@ -864,6 +889,29 @@ Resources:
       Targets:
         - Arn: !GetAtt ASGSizerFunction.Arn
           Id: !Sub "${EnvironmentType}-ECS-ASG-Sizing"
+  ASGSizerErrorAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[ECS][ASGSizerLambda] ${EnvironmentType} Errors"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: ASG Sizer Lambda errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ASGSizerFunction
 Outputs:
   ECSCluster:
     Description: >
@@ -873,6 +921,10 @@ Outputs:
     Description: >
       The Arn of the ECS cluster
     Value: !GetAtt ECSCluster.Arn
+  ECSInstanceIAMRoleArn:
+    Description: >
+      The Arn of the IAM role used by ECS instances
+    Value: !GetAtt ECSInstanceIAMRole.Arn
   ECSServiceAutoscaleIAMRoleArn:
     Description: >
       The ARN of the IAM role used for service auto scaling

@@ -95,6 +95,11 @@ Parameters:
     Type: String
     Description: >
       An email address to deliver fatal alarm notifications to
+  CrossAccountCloudWatchAlarmReaderRoleName:
+    Type: String
+    Description: >-
+      The name of an IAM role that exists in other AWS accounts that are
+      generating CloudWatch Alarms that this stack will handle.
 Resources:
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -119,6 +124,15 @@ Resources:
                 Action:
                   - "cloudwatch:DescribeAlarmHistory"
                   - "cloudwatch:DescribeAlarms"
+                Resource:
+                  - "*"
+        - PolicyName: StsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
                 Resource:
                   - "*"
         - PolicyName: SnsPolicy
@@ -486,7 +500,8 @@ Resources:
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Handler: lamda_function.lambda_handler
+          CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmReaderRoleName
+      Handler: lambda_function.lambda_handler
       MemorySize: 192
       Role: !GetAtt LambdaBasicExecutionIamRole.Arn
       Runtime: python3.6

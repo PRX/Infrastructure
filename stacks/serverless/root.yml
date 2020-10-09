@@ -36,10 +36,6 @@ Parameters:
     Type: String
   DovetailTrafficLambdaCodeS3ObjectVersion:
     Type: String
-  CmsAudioLambdaCodeS3ObjectVersion:
-    Type: String
-  CmsImageLambdaCodeS3ObjectVersion:
-    Type: String
   AnalyticsIngestLambdaCodeS3ObjectVersion:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
@@ -179,76 +175,13 @@ Resources:
         CodeS3ObjectVersion: !Ref DovetailTrafficLambdaCodeS3ObjectVersion
         DownloaderBatchSize: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-traffic-lambda/DOWNLOADER_BATCH_SIZE"
         ScheduleIntervalMinutes: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-traffic-lambda/SCHEDULE_INTERVAL_MINUTES"
+        MetricsKinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/dovetail-traffic-lambda/METRICS_KINESIS_STREAM"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-traffic-lambda.yml"]]
-      TimeoutInMinutes: 5
-  CmsAudioLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        AlarmWarnActions:
-          Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        AlarmErrorActions:
-          Fn::If:
-          - IsProduction
-          - Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-          - Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        CodeS3Bucket:
-          Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectVersion: !Ref CmsAudioLambdaCodeS3ObjectVersion
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        DestinationBucketName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/DESTINATION_BUCKET"
-        SqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-audio-lambda/SQS_CALLBACK_NAME"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-audio-lambda.yml"]]
-      TimeoutInMinutes: 5
-  CmsImageLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        AlarmWarnActions:
-          Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        AlarmErrorActions:
-          Fn::If:
-          - IsProduction
-          - Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-          - Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        CodeS3Bucket:
-          Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectVersion: !Ref CmsImageLambdaCodeS3ObjectVersion
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        DestinationBucketName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-image-lambda/DESTINATION_BUCKET"
-        SqsCallbackName: !Sub "/prx/${EnvironmentTypeAbbreviation}/cms-image-lambda/SQS_CALLBACK_NAME"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "cms-image-lambda.yml"]]
       TimeoutInMinutes: 5
   AnalyticsIngestLambdasStack:
     Type: "AWS::CloudFormation::Stack"
@@ -273,6 +206,7 @@ Resources:
         DynamodbAccessRole: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_ACCESS_ROLE"
         DynamodbTTL: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/DYNAMODB_TTL"
         RedisHost: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/REDIS_HOST"
+        RedisImpressionsHost: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-ingest-lambda/REDIS_IMPRESSIONS_HOST"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -327,9 +261,13 @@ Resources:
             !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
         BigqueryFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.BigqueryFunctionArn
+        BigqueryFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.BigqueryFunctionName
         DynamodbFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionArn
+        DynamodbFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.DynamodbFunctionName
         PingbacksFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.PingbacksFunctionArn
+        PingbacksFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.PingbacksFunctionName
         RedisFunctionArn: !GetAtt AnalyticsIngestLambdasStack.Outputs.RedisFunctionArn
+        RedisFunctionName: !GetAtt AnalyticsIngestLambdasStack.Outputs.RedisFunctionName
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
@@ -365,14 +303,4 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "pixel.prx.org.yml"]]
-      TimeoutInMinutes: 15
-  PorterStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "porter.yml"]]
       TimeoutInMinutes: 15
