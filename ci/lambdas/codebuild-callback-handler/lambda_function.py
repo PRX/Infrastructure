@@ -213,7 +213,7 @@ def post_notification_status(sns_message):
     if attrs['STATUS']['Value'] == 'true':
         attachment['color'] = 'good'
         attachment['fallback'] = f"Built {repo}{extra} with commit {sha7}"
-        attachment['title'] = f"Built <{build_url}|{repo}>{extra} with commit <{commit_url}|{sha7}>"
+        attachment['title'] = f"<{build_url}|Built> {repo}{extra} with commit <{commit_url}|{sha7}>"
 
         text_lines = []
 
@@ -240,7 +240,7 @@ def post_notification_status(sns_message):
     else:
         attachment['color'] = 'danger'
         attachment['fallback'] = f"Failed to build {repo}{extra} with commit {sha7}"
-        attachment['title'] = f"Failed to build <{build_url}|{repo}>{extra} with commit <{commit_url}|{sha7}>"
+        attachment['title'] = f"Failed to <{build_url}|build> {repo}{extra} with commit <{commit_url}|{sha7}>"
         attachment['text'] = f"> _{message}_"
 
     slack_message = json.dumps({
