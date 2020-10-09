@@ -44,11 +44,11 @@ function attachmentsForGitHubEvent(gitHubEvent, gitHubBuild) {
         const action = gitHubEvent.action.charAt(0).toUpperCase() + gitHubEvent.action.slice(1);
 
         attachment.fallback = `Building ${repo} #${pr.number} with commit ${sha7}`;
-        attachment.title = `Building <${buildUrl}|${repo}> with commit <${commitUrl}|${sha7}>`;
+        attachment.title = `<${buildUrl}|Building> ${repo} with commit <${commitUrl}|${sha7}>`;
         attachment.text = `${action} <${pr.html_url}|#${pr.number}> ${pr.title} – ${pr.user.login}`;
     } else {
         attachment.fallback = `Building ${repo}:${branch} with commit ${sha7}`;
-        attachment.title = `Building <${buildUrl}|${repo}:${branch}> with commit <${commitUrl}|${sha7}>`;
+        attachment.title = `<${buildUrl}|Building> ${repo}:${branch} with commit <${commitUrl}|${sha7}>`;
 
         const compareUrl = `https://github.com/${repo}/compare/${gitHubEvent.before}...${gitHubEvent.after}`;
 
@@ -92,6 +92,7 @@ function attachmentsForCiCallback(ciResult) {
     } else {
         // This assumes that anything other than PR is master, which, for the
         // time being, is true. But that may not always be the case
+        // TODO This needs to be determined from the event info
         extra = ':master';
     }
 
@@ -114,6 +115,7 @@ function attachmentsForCiCallback(ciResult) {
         attachment.color = 'danger';
         attachment.fallback = `Failed to build ${repo}${extra} with commit ${sha7}`;
         attachment.title = `Failed to build <${buildUrl}|${repo}>${extra} with commit <${commitUrl}|${sha7}>`;
+        attachment.title = `Failed to <${buildUrl}|build> ${repo}${extra} with commit <${commitUrl}|${sha7}>`;
         attachment.text = `> _${ciResult.reason}_`;
     }
 
