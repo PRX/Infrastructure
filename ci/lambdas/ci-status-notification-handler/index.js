@@ -100,6 +100,7 @@ function attachmentsForCiCallback(ciResult) {
         attachment.color = 'good';
         attachment.fallback = `Built ${repo}${extra} with commit ${sha7}`;
         attachment.title = `Built <${buildUrl}|${repo}>${extra} with commit <${commitUrl}|${sha7}>`;
+        attachment.title = `<${buildUrl}|Built> ${repo}${extra} with commit <${commitUrl}|${sha7}>`;
 
         if (ciResult.prxGithubPr) {
             const num = ciResult.prxGithubPr;
