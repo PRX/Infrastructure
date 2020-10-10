@@ -485,6 +485,7 @@ function handlePushEvent(event) {
 
 /**
  * @param {SNSEvent} event
+ * @returns {Promise<void>}
  */
 exports.handler = async (event) => {
     const snsMsg = event.Records[0].Sns;
