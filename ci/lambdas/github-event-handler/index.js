@@ -23,6 +23,27 @@ const codebuild = new AWS.CodeBuild({ apiVersion: '2016-10-06' });
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
+/** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
+/** @typedef { import('@octokit/types').ReposGetResponseData } ReposGetResponseData */
+/** @typedef { import('@octokit/types').ReposGetContentResponseData } ReposGetContentResponseData */
+/** @typedef { import('@octokit/types').PullsGetResponseData } PullsGetResponseData */
+
+/**
+ * @typedef {object} GitHubPushWebhookPayload
+ * @property {!string} ref
+ * @property {!string} before
+ * @property {!string} after
+ * @property {!ReposGetResponseData} repository
+ */
+
+/**
+ * @typedef {object} GitHubPullRequestWebhookPayload
+ * @property {!string} action
+ * @property {!number} number
+ * @property {!ReposGetResponseData} repository
+ * @property {!PullsGetResponseData} pull_request
+ */
+
 const PR_ACTION_TRIGGERS = [
     'opened',
     'reopened',
@@ -37,20 +58,31 @@ const GITHUB_HEADERS = {
 };
 
 /**
+ * @param {*} event
+ * @returns {event is GitHubPullRequestWebhookPayload}
+ */
+function eventIsPullRequest(event) {
+    if (Object.prototype.hasOwnProperty.call(event, 'pull_request')) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
  * Note: The response to this request should be a 201
  * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#statuses
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  * @param {object} build
- * @returns {Promise<object>}
+ * @returns {Promise<undefined>}
  */
 function updateGitHubStatus(event, build) {
     return new Promise((resolve, reject) => {
         console.log('...Updating GitHub status...');
 
         // Get request properties
-        const api = 'api.github.com';
         const repo = event.repository.full_name;
-        const sha = event.after || event.pull_request.head.sha;
+        const sha = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
 
         const { arn } = build;
         const region = arn.split(':')[3];
@@ -66,14 +98,17 @@ function updateGitHubStatus(event, build) {
         const json = JSON.stringify(payload);
 
         // Setup request options
-        const apiUrl = `https://${api}/repos/${repo}/statuses/${sha}`;
-        const options = url.parse(apiUrl);
-        options.method = 'POST';
-        options.headers = GITHUB_HEADERS;
+        const options = {
+            host: 'api.github.com',
+            path: `/repos/${repo}/statuses/${sha}`,
+            method: 'POST',
+            headers: GITHUB_HEADERS,
+        };
+
         options.headers['Content-Length'] = Buffer.byteLength(json);
 
         // Request with response handler
-        console.log(`...Calling statuses API: ${apiUrl}...`);
+        console.log(`...Calling statuses API: ${options.path}...`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -85,7 +120,7 @@ function updateGitHubStatus(event, build) {
                 switch (res.statusCode) {
                     case 201:
                         console.log('...GitHub status updated...');
-                        resolve(event);
+                        resolve();
                         break;
                     default:
                         console.error('...GitHub status update failed...');
@@ -105,9 +140,9 @@ function updateGitHubStatus(event, build) {
 }
 
 /**
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  * @param {object} build
- * @returns {Promise<object>}
+ * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
  */
 function postNotification(event, build) {
     return sns
@@ -123,7 +158,7 @@ function postNotification(event, build) {
  * https://docs.aws.amazon.com/codebuild/latest/APIReference/API_Build.html
  * @param {string} versionId - The S3 version ID of the repository zip archive
  * @param {string} ciContentsResponse - The response from the GitHub repository contents API for buildspec.yml
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  */
 async function triggerBuild(versionId, ciContentsResponse, event) {
     console.log('...Starting CodeBuild run...');
@@ -132,6 +167,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     // to GitHub for a buildspec.yml file in the project that triggered the
     // webhook event. It contains a base 64 encoded string which is the contents
     // of that file.
+    /** @type {ReposGetContentResponseData} */
     const ghData = JSON.parse(ciContentsResponse);
     const buildspec = Buffer.from(ghData.content, 'base64').toString('utf8');
 
@@ -142,7 +178,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
         return;
     }
 
-    const commitRef = event.after || event.pull_request.head.sha;
+    const commitRef = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
 
     const environmentVariables = [
         {
@@ -155,7 +191,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
         },
     ];
 
-    if (event.pull_request) {
+    if (eventIsPullRequest(event)) {
         // Pull requests are test-only builds. The pull request number is not
         // used by the build process, but needs to be passed along to the
         // callback for setting the GitHub status.
@@ -197,7 +233,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
 /**
  * Copies a repository zip archive at the given path to S3
  * @param {string} path - The path of the file to copy to S3
- * @returns {string} The S3 version ID of the resulting object
+ * @returns {Promise<string>} The S3 version ID of the resulting object
  */
 async function copyToS3(path) {
     console.log('...Copying archive to S3...');
@@ -215,7 +251,7 @@ async function copyToS3(path) {
 /**
  * Requests the URL to download a repository zip archive
  * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#download-a-repository-archive-zip
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  * @returns {Promise<string>} The URL of the zip archive
  */
 function getSourceArchiveLink(event) {
@@ -223,19 +259,21 @@ function getSourceArchiveLink(event) {
         console.log('...Getting source code archive URL...');
 
         // Get request properties
-        const api = 'api.github.com';
         const repo = event.repository.full_name;
-        const sha = event.after || event.pull_request.head.sha;
+        const sha = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
 
         // Setup request options
-        const apiUrl = `https://${api}/repos/${repo}/zipball/${sha}`;
-        const options = url.parse(apiUrl);
-        options.method = 'GET';
-        options.headers = GITHUB_HEADERS;
+        const options = {
+            host: 'api.github.com',
+            path: `/repos/${repo}/zipball/${sha}`,
+            method: 'GET',
+            headers: GITHUB_HEADERS,
+        };
+
         options.headers['Content-Length'] = Buffer.byteLength('');
 
         // Request with response handler
-        console.log(`...Calling archive link API: ${apiUrl}...`);
+        console.log(`...Calling archive link API: ${options.path}...`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -273,19 +311,25 @@ function getSourceArchiveLink(event) {
 /**
  * Downloads the zip archive of a reposity to a temporary local file and
  * returns the file path
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  * @returns {Promise<string>} The local file path
  */
 async function getSourceArchive(event) {
     const location = await getSourceArchiveLink(event);
+    const q = new URL(location);
 
     return new Promise((resolve, reject) => {
         console.log('...Saving source archive...');
 
         // Setup request options
-        const options = url.parse(location);
-        options.method = 'GET';
-        options.headers = GITHUB_HEADERS;
+        const options = {
+            host: q.host,
+            port: q.port,
+            path: `${q.pathname || ''}${q.search || ''}`,
+            method: 'GET',
+            headers: GITHUB_HEADERS,
+        };
+
         options.headers['Content-Length'] = Buffer.byteLength('');
 
         // Setup write stream
@@ -315,7 +359,7 @@ async function getSourceArchive(event) {
         // Generic file error handling
         file.on('error', (e) => {
             // Handle errors
-            fs.unlink(dest);
+            fs.unlink(dest, er => { if (er) { throw er; }});
             reject(e);
         });
 
@@ -328,28 +372,30 @@ async function getSourceArchive(event) {
  * Hits the GitHub repot contents API to determine if the commit that triggered
  * event supports the PRX CI system by looking for a buildspec.yml file
  * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#contents
- * @param {object} event
- * @returns {Promise<string>} The JSON response
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
+ * @returns {Promise<string|false>} The JSON response
  */
 function getBuildspecContentJson(event) {
     return new Promise((resolve, reject) => {
         console.log('...Checking for CodeBuild support...');
 
         // Get request properties
-        const api = 'api.github.com';
         const repo = event.repository.full_name;
         const path = 'buildspec.yml';
-        const ref = event.after || event.pull_request.head.sha;
+        const ref = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
 
         // Setup request options
-        const apiUrl = `https://${api}/repos/${repo}/contents/${path}?ref=${ref}`;
-        const options = url.parse(apiUrl);
-        options.method = 'GET';
-        options.headers = GITHUB_HEADERS;
+        const options = {
+            host: 'api.github.com',
+            path: `/repos/${repo}/contents/${path}?ref=${ref}`,
+            method: 'GET',
+            headers: GITHUB_HEADERS,
+        };
+
         options.headers['Content-Length'] = Buffer.byteLength('');
 
         // Request with response handler
-        console.log(`...Calling contents API: ${apiUrl}...`);
+        console.log(`...Calling contents API: ${options.path}...`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -388,6 +434,10 @@ function getBuildspecContentJson(event) {
     });
 }
 
+/**
+ *
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
+ */
 async function handleCiEvent(event) {
     const buildspecContentJson = await getBuildspecContentJson(event);
 
@@ -403,7 +453,7 @@ async function handleCiEvent(event) {
  * a change that requires CI, such as opening, synchornizing, or moving from
  * draft to ready for review.
  * https://docs.github.com/en/free-pro-team@latest/developers/webhooks-and-events/webhook-events-and-payloads#pull_request
- * @param {object} event
+ * @param {GitHubPullRequestWebhookPayload} event
  */
 function handlePullRequestEvent(event) {
     console.log('...Handling pull_request event...');
@@ -420,7 +470,7 @@ function handlePullRequestEvent(event) {
  * the build, so this only needs to proceed if the event is for the default
  * branch.
  * https://docs.github.com/en/free-pro-team@latest/developers/webhooks-and-events/webhook-events-and-payloads#push
- * @param {object} event
+ * @param {GitHubPushWebhookPayload} event
  */
 function handlePushEvent(event) {
     console.log('...Handling push event...');
@@ -432,7 +482,7 @@ function handlePushEvent(event) {
 }
 
 /**
- * @param {object} event
+ * @param {SNSEvent} event
  */
 exports.handler = async (event) => {
     const snsMsg = event.Records[0].Sns;
