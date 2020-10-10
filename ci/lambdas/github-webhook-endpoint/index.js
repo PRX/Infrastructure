@@ -1,17 +1,29 @@
-// Invoked by: API Gateway
-// Returns: Error, or API Gateway proxy response object
-//
-// Handles GitHub webhook event payload requests. It does a bit of validation on
-// the request, and then forwards the payload to an SNS topic, where other
-// Lambdas will pick it up and process the event.
+/**
+ * Invoked by: API Gateway
+ * Returns: Error, or API Gateway proxy response object
+ *
+ * Handles GitHub webhook event payload requests. It does a bit of validation
+ * on the request, and then forwards the payload to an SNS topic, where other
+ * Lambdas will pick it up and process the event. This is done in two steps so
+ * the GitHub request can return quickly.
+ */
 
 const crypto = require('crypto');
 const AWS = require('aws-sdk');
 
-const OK_RESPONSE = { statusCode: 200, headers: {}, body: null };
-
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
+/** @typedef { import('aws-lambda').APIGatewayProxyStructuredResultV2 } APIGatewayProxyStructuredResultV2 */
+/** @typedef { import('aws-lambda').APIGatewayProxyEventV2 } APIGatewayProxyEventV2 */
+
+/** @type {APIGatewayProxyStructuredResultV2} */
+const OK_RESPONSE = { statusCode: 200 };
+
+/**
+ *
+ * @param {APIGatewayProxyEventV2} event
+ * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
+ */
 function publishEvent(event) {
     console.log('Publishing event to SNS');
 
@@ -33,6 +45,12 @@ function publishEvent(event) {
     }).promise();
 }
 
+/**
+ *
+ * @param {APIGatewayProxyEventV2} event Proxy integration payload
+ * @returns {Promise<APIGatewayProxyStructuredResultV2>} Proxy integration response
+ * @throws GitHub webhook validation error
+ */
 exports.handler = async (event) => {
     const githubSignature = event.headers['x-hub-signature'].split('=')[1];
 
