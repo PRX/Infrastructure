@@ -27,11 +27,15 @@ const OK_RESPONSE = { statusCode: 200 };
 function publishEvent(event) {
     console.log('Publishing event to SNS');
 
+    const msg = event.isBase64Encoded
+        ? Buffer.from(event.body, 'base64').toString('utf-8')
+        : event.body;
+
+    console.log(msg);
+
     return sns.publish({
         TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
-        Message: event.isBase64Encoded
-            ? Buffer.from(event.body, 'base64').toString('utf-8')
-            : event.body,
+        Message: msg,
         MessageAttributes: {
             githubEvent: {
                 DataType: 'String',
