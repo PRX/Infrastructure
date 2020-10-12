@@ -493,6 +493,7 @@ exports.handler = async (event) => {
     const githubEventObj = JSON.parse(snsMsg.Message);
 
     console.log(`Received message for event: ${githubEvent}`);
+    console.log(snsMsg.Message);
 
     switch (githubEvent) {
         case 'push':
