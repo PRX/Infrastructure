@@ -140,8 +140,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - cloudformation:DescribeChangeSet
-              - cloudformation:DescribeStacks
+              - cloudwatch:PutMetricData
             Resource: "*"
   StagingConfigObjectReadOnlyAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -154,7 +153,7 @@ Resources:
               - s3:GetObject
             Resource:
               - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-  ProductionConfigObjectReadWriteAccessPolicy:
+  ProductionConfigObjectReadOnlyAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
@@ -165,7 +164,7 @@ Resources:
               - s3:GetObject
             Resource:
               - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
-  SnapshotsBucketWriteAccessPolicy:
+  ProductionConfigObjectReadWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
@@ -174,6 +173,18 @@ Resources:
           - Effect: Allow
             Action:
               - s3:GetObject
+              - s3:PutObject
+            Resource:
+              - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
+  SnapshotsBucketWriteAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
             Resource:
               - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
   SourceBucketWriteAccessPolicy:
@@ -184,7 +195,7 @@ Resources:
         Statement:
           - Effect: Allow
             Action:
-              - s3:GetObject
+              - s3:PutObject
             Resource:
               - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
   ArtifactBucketReadWriteAccessPolicy:
@@ -196,6 +207,7 @@ Resources:
           - Effect: Allow
             Action:
               - s3:GetObject
+              - s3:PutObject
             Resource:
               - !Sub ${ArtifactStore.Arn}/*
 
