@@ -79,7 +79,7 @@ function eventIsPullRequest(event) {
  */
 function updateGitHubStatus(event, build) {
     return new Promise((resolve, reject) => {
-        console.log('...Updating GitHub status...');
+        console.log('Updating GitHub status');
 
         // Get request properties
         const repo = event.repository.full_name;
@@ -109,7 +109,7 @@ function updateGitHubStatus(event, build) {
         options.headers['Content-Length'] = Buffer.byteLength(json);
 
         // Request with response handler
-        console.log(`...Calling statuses API: ${options.path}...`);
+        console.log(`Calling statuses API: ${options.path}`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -120,12 +120,12 @@ function updateGitHubStatus(event, build) {
             res.on('end', () => {
                 switch (res.statusCode) {
                     case 201:
-                        console.log('...GitHub status updated...');
+                        console.log('GitHub status updated');
                         resolve();
                         break;
                     default:
-                        console.error('...GitHub status update failed...');
-                        console.error(`...HTTP ${res.statusCode}...`);
+                        console.error('GitHub status update failed');
+                        console.error(`HTTP ${res.statusCode}`);
                         console.error(json2);
                         reject(new Error('GitHub status update failed!'));
                 }
@@ -146,6 +146,7 @@ function updateGitHubStatus(event, build) {
  * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
  */
 function postNotification(event, build) {
+    console.log('Sending Slack notification message')
     return sns
         .publish({
             TopicArn: process.env.CI_STATUS_TOPIC_ARN,
@@ -162,7 +163,7 @@ function postNotification(event, build) {
  * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  */
 async function triggerBuild(versionId, ciContentsResponse, event) {
-    console.log('...Starting CodeBuild run...');
+    console.log('Starting CodeBuild run');
 
     // ciContentsResponse is the JSON body response from a Contents API request
     // to GitHub for a buildspec.yml file in the project that triggered the
@@ -223,7 +224,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
         })
         .promise();
 
-    console.log('...CodeBuild started...');
+    console.log('CodeBuild started');
 
     const status = updateGitHubStatus(event, data.build);
     const notification = postNotification(event, data.build);
@@ -237,7 +238,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
  * @returns {Promise<string>} The S3 version ID of the resulting object
  */
 async function copyToS3(path) {
-    console.log('...Copying archive to S3...');
+    console.log('Copying archive to S3');
 
     const params = {
         Bucket: process.env.CODEBUILD_SOURCE_ARCHIVE_BUCKET,
@@ -257,7 +258,7 @@ async function copyToS3(path) {
  */
 function getSourceArchiveLink(event) {
     return new Promise((resolve, reject) => {
-        console.log('...Getting source code archive URL...');
+        console.log('Getting source code archive URL');
 
         // Get request properties
         const repo = event.repository.full_name;
@@ -274,7 +275,7 @@ function getSourceArchiveLink(event) {
         options.headers['Content-Length'] = Buffer.byteLength('');
 
         // Request with response handler
-        console.log(`...Calling archive link API: ${options.path}...`);
+        console.log(`Calling archive link API: ${options.path}`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -285,14 +286,14 @@ function getSourceArchiveLink(event) {
             res.on('end', () => {
                 switch (res.statusCode) {
                     case 302:
-                        console.log('...GitHub archive URL found...');
+                        console.log('GitHub archive URL found');
                         resolve(res.headers.location);
                         break;
                     default:
                         console.error(
-                            '...GitHub archive link request failed...',
+                            'GitHub archive link request failed',
                         );
-                        console.error(`...HTTP ${res.statusCode}...`);
+                        console.error(`HTTP ${res.statusCode}`);
                         console.error(json);
                         reject(
                             new Error('GitHub archive link request failed!'),
@@ -320,7 +321,7 @@ async function getSourceArchive(event) {
     const q = new URL(location);
 
     return new Promise((resolve, reject) => {
-        console.log('...Saving source archive...');
+        console.log('Fetching source archive');
 
         // Setup request options
         const options = {
@@ -340,14 +341,14 @@ async function getSourceArchive(event) {
         // Request with response handler
         const req = https.request(options, (res) => {
             if (res.statusCode !== 200) {
-                console.error('...Source archive request failed!');
+                console.error('Source archive request failed!');
                 reject(new Error('Could not get source archive'));
             } else {
                 res.pipe(file);
 
                 file.on('finish', () => {
                     file.close(() => {
-                        console.log('...Finished downloading archive...');
+                        console.log('Finished downloading archive');
                         resolve(dest);
                     });
                 });
@@ -378,7 +379,7 @@ async function getSourceArchive(event) {
  */
 function getBuildspecContentJson(event) {
     return new Promise((resolve, reject) => {
-        console.log('...Checking for CodeBuild support...');
+        console.log('Getting buildspec contents');
 
         // Get request properties
         const repo = event.repository.full_name;
@@ -396,7 +397,7 @@ function getBuildspecContentJson(event) {
         options.headers['Content-Length'] = Buffer.byteLength('');
 
         // Request with response handler
-        console.log(`...Calling contents API: ${options.path}...`);
+        console.log(`Calling contents API: ${options.path}`);
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');
 
@@ -408,15 +409,15 @@ function getBuildspecContentJson(event) {
             res.on('end', () => {
                 switch (res.statusCode) {
                     case 200:
-                        console.log('...Found CodeBuild support...');
+                        console.log('Found CodeBuild support');
                         resolve(json);
                         break;
                     case 404:
-                        console.log('...No CodeBuild support!');
+                        console.log('No CodeBuild support!');
                         resolve(false);
                         break;
                     default:
-                        console.error(`...Request failed ${res.statusCode}!`);
+                        console.error(`Request failed ${res.statusCode}!`);
                         console.error(json);
                         reject(new Error('Contents request failed!'));
                 }
