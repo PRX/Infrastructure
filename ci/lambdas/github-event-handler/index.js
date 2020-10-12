@@ -447,6 +447,8 @@ async function handleCiEvent(event) {
         const filePath = await getSourceArchive(event);
         const versionId = await copyToS3(filePath);
         await triggerBuild(versionId, buildspecContentJson, event);
+
+        console.log('Done');
     }
 }
 

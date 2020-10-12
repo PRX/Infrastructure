@@ -132,6 +132,8 @@ function messageForEvent(event) {
     const noteJson = event.Records[0].Sns.Message;
     const note = JSON.parse(noteJson);
 
+    console.log(note);
+
     let attachments;
 
     // Note is either data related to a GitHub event, or the result of a CI
@@ -158,6 +160,7 @@ function messageForEvent(event) {
  * @returns {Promise<void>}
  */
 exports.handler = async (event) => {
+    console.log('Handling notification request');
     const message = messageForEvent(event);
 
     await sns.publish({
