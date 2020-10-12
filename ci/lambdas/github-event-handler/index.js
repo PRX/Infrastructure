@@ -229,7 +229,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     const status = updateGitHubStatus(event, data.build);
     const notification = postNotification(event, data.build);
 
-    Promise.all([status, notification]);
+    await Promise.all([status, notification]);
 }
 
 /**
