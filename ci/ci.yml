@@ -71,11 +71,6 @@ Parameters:
     Description: >
       The secret provided by GitHub for the push and pull request events webhook
     Type: String
-  LogGroupRetentionPolicyFunctionArn:
-    Type: AWS::SSM::Parameter::Value<String>
-    Description: >
-      The Parameter Store key for the log group retention policy function's
-      ARN (not the ARN itself)
 Resources:
   # CodeBuild Project
   CiCodeBuildSourceArchiveBucket:
@@ -353,10 +348,9 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 3
-  GitHubWebhookEndpointLambdaFunctionRetentionPolicy:
-    Type: Custom::LogGroupRetentionPolicy
+  GitHubWebhookEndpointLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
       LogGroupName: !Sub /aws/lambda/${GitHubWebhookEndpointLambdaFunction}
       RetentionInDays: 5
   GitHubWebhookEndpointErrorAlarm:
@@ -479,6 +473,11 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 30
+  GitHubEventHandlerLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GitHubEventHandlerLambdaFunction}
+      RetentionInDays: 5
   GitHubEventHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -507,12 +506,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref GitHubEventHandlerLambdaFunction
-  GitHubEventHandlerLambdaFunctionRetentionPolicy:
-    Type: Custom::LogGroupRetentionPolicy
-    Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
-      LogGroupName: !Sub /aws/lambda/${GitHubEventHandlerLambdaFunction}
-      RetentionInDays: 5
   # CodeBuild Callback
   # Once a CI build finishes, it posts information about the build result to an
   # SNS topic. A Lambda function is subscribed to the topic, and can process the
@@ -620,6 +613,11 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 3
+  CodeBuildCallbackHandlerLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CodeBuildCallbackHandlerLambdaFunction}
+      RetentionInDays: 5
   CodeBuildCallbackHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -648,12 +646,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CodeBuildCallbackHandlerLambdaFunction
-  CodeBuildCallbackHandlerLambdaFunctionRetentionPolicy:
-    Type: Custom::LogGroupRetentionPolicy
-    Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
-      LogGroupName: !Sub /aws/lambda/${CodeBuildCallbackHandlerLambdaFunction}
-      RetentionInDays: 5
   # CI Status notifications
   # Status notifications for the CI system are handled by a single Lambda
   # function, which is susbscribed to a dedicaed SNS topic. Various parts of the
@@ -718,6 +710,11 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 10
+  CiStatusNotificationHandlerLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CiStatusNotificationHandlerLambdaFunction}
+      RetentionInDays: 5
   CiStatusNotificationHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -746,12 +743,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CiStatusNotificationHandlerLambdaFunction
-  CiStatusNotificationHandlerLambdaFunctionRetentionPolicy:
-    Type: Custom::LogGroupRetentionPolicy
-    Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
-      LogGroupName: !Sub /aws/lambda/${CiStatusNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
 Outputs:
   GitHubWebhookEndpointUrl:
     Value: !Sub "https://api.${AWS::Region}.${AWS::StackName}.prx.tech/v1/github/webhook"
