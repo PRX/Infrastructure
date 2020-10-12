@@ -208,7 +208,7 @@ def post_notification_status(sns_message):
         pr_url = f"https://github.com/{repo}/pull/{num}"
         extra = f" <{pr_url}|#{num}>"
     else:
-        extra = ':master'
+        extra = f":{attrs['PRX_BRANCH']['Value']}"
 
     if attrs['STATUS']['Value'] == 'true':
         attachment['color'] = 'good'

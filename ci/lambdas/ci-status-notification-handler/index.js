@@ -1,19 +1,23 @@
-// Invoked by: SNS Subscription
-// Returns: Error or status message
-//
-// Recieves notifications from the CI process, generally as a result of
-// CodeBuild status changes. The messages are sent to the Slack Message Relay
-// SNS topic in order to be sent to Slack. All messages handled by this function
-// are sent to the #ops-builds (this could change at some point).
-//
-// CI Status message can be sent from several sources. The GitHub event handler
-// will send messages after a build has started, and includes data about the
-// GitHub event that triggered the build, and the build itself.
-// eg { event: {...}, build: {...} }
+/**
+ * Invoked by: SNS Subscription
+ * Returns: Error or status message
+ *
+ * Recieves notifications from the CI process, generally as a result of
+ * CodeBuild status changes. The messages are sent to the Slack Message Relay
+ * SNS topic in order to be sent to Slack. All messages handled by this function
+ * are sent to the #ops-builds (this could change at some point).
+ *
+ * CI Status message can be sent from several sources. The GitHub event handler
+ * will send messages after a build has started, and includes data about the
+ * GitHub event that triggered the build, and the build itself.
+ * eg { event: {...}, build: {...} }
+*/
 
 const AWS = require('aws-sdk');
 
 const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+/** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
 
 const SLACK_CHANNEL = '#ops-builds';
 const SLACK_ICON = ':ops-codebuild:';
@@ -121,7 +125,9 @@ function attachmentsForCiCallback(ciResult) {
     return [attachment];
 }
 
-// This event argument is the standard Lambda execution event data
+/**
+ * @param {SNSEvent} event
+ */
 function messageForEvent(event) {
     const noteJson = event.Records[0].Sns.Message;
     const note = JSON.parse(noteJson);
@@ -147,27 +153,15 @@ function messageForEvent(event) {
     };
 }
 
-function main(event, context, callback) {
+/**
+ * @param {SNSEvent} event
+ * @returns {Promise<void>}
+ */
+exports.handler = async (event) => {
     const message = messageForEvent(event);
 
-    const messageJson = JSON.stringify(message);
-
-    sns.publish({
+    await sns.publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-        Message: messageJson,
-    }, (err) => {
-        if (err) {
-            callback(err);
-        } else {
-            callback(null);
-        }
-    });
-}
-
-exports.handler = (event, context, callback) => {
-    try {
-        main(event, context, callback);
-    } catch (e) {
-        callback(e);
-    }
+        Message: JSON.stringify(message),
+    }).promise();
 };
