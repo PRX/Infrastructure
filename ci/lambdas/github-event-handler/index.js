@@ -456,12 +456,12 @@ async function handleCiEvent(event) {
  * https://docs.github.com/en/free-pro-team@latest/developers/webhooks-and-events/webhook-events-and-payloads#pull_request
  * @param {GitHubPullRequestWebhookPayload} event
  */
-function handlePullRequestEvent(event) {
+async function handlePullRequestEvent(event) {
     console.log('Handling pull_request event');
 
     if (PR_ACTION_TRIGGERS.includes(event.action)) {
         console.log(`With action: ${event.action}`);
-        handleCiEvent(event);
+        await handleCiEvent(event);
     }
 }
 
@@ -473,12 +473,12 @@ function handlePullRequestEvent(event) {
  * https://docs.github.com/en/free-pro-team@latest/developers/webhooks-and-events/webhook-events-and-payloads#push
  * @param {GitHubPushWebhookPayload} event
  */
-function handlePushEvent(event) {
+async function handlePushEvent(event) {
     console.log('Handling push event');
 
     if (event.ref === `refs/heads/${event.repository.default_branch}`) {
         console.log('Push event was for default branch');
-        handleCiEvent(event);
+        await handleCiEvent(event);
     }
 }
 
@@ -497,10 +497,10 @@ exports.handler = async (event) => {
 
     switch (githubEvent) {
         case 'push':
-            handlePushEvent(githubEventObj);
+            await handlePushEvent(githubEventObj);
             break;
         case 'pull_request':
-            handlePullRequestEvent(githubEventObj);
+            await handlePullRequestEvent(githubEventObj);
             break;
         default:
             console.log('Ignoring this event type!');
