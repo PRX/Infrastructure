@@ -86,6 +86,19 @@ Parameters:
       (.zip), inside the InfrastructureConfigBucket
     Type: String
 Resources:
+  # Common IAM policied
+  SlackRelaySnsPublishIamPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sns:Publish
+            Effect: Allow
+            Resource:
+              - Fn::ImportValue:
+                  !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
   # CodePipeline Failure Notifications
   # CodePipeline doesn't have very good native support for generating
   # notifications when a pipeline execution fails. A CloudWatch Event triggers
@@ -245,27 +258,10 @@ Resources:
   # facilitate the approval.
   CodePipelineApprovalsSnsTopic:
     Type: AWS::SNS::Topic
-  CodePipelineApprovalsTopicHandlerFunctionSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Endpoint: !GetAtt PipelineApprovalNotificationHandlerFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref CodePipelineApprovalsSnsTopic
-  CodePipelineApprovalsTopicInvokeHandlerFunctionPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref PipelineApprovalNotificationHandlerFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref CodePipelineApprovalsSnsTopic
   PipelineApprovalNotificationHandlerFunction:
-    Type: AWS::Lambda::Function
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: cd/pipeline-approval-notification-handler.zip
+      CodeUri: lambdas/pipeline-approval-notification-handler/
       Description: >-
         Receives notifications from CodePipeline when approval is required, and
         builds a messages to alert externally
@@ -273,21 +269,32 @@ Resources:
         Variables:
           IKE_DEPLOYS_SLACK_WEBHOOK_URL:
             Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl"
+              !Sub ${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
-              !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
+                !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref CodePipelineApprovalsSnsTopic
+          Type: SNS
       Handler: lambda_function.lambda_handler
       MemorySize: 256
+      Policies:
+        - !Ref SlackRelaySnsPublishIamPolicy
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - cloudformation:DescribeChangeSet
+                - cloudformation:DescribeStacks
+              Resource: "*"
       Role: !GetAtt LambdaExecutionIAMRole.Arn
       Runtime: python3.6
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 5
   PipelineApprovalNotificationHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
