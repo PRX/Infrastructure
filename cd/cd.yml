@@ -832,51 +832,6 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   # Pipeline Events
-  CdPipelineEventsRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: String
-      EventPattern:
-        source:
-          - aws.codepipeline
-        detail-type:
-          - CodePipeline Pipeline Execution State Change
-        resources:
-          - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-          Id: !Sub ${AWS::StackName}-pipeline-events
-  CdPipelineStageEventsRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: String
-      EventPattern:
-        source:
-          - aws.codepipeline
-        detail-type:
-          - CodePipeline Stage Execution State Change
-        resources:
-          - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-          Id: !Sub ${AWS::StackName}-pipeline-events
-  CdPipelineActionsEventsRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: String
-      EventPattern:
-        source:
-          - aws.codepipeline
-        detail-type:
-          - CodePipeline Action Execution State Change
-        resources:
-          - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-          Id: !Sub ${AWS::StackName}-pipeline-events
   CdPipelineEventsTargetLambdaIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -904,56 +859,60 @@ Resources:
                   - Fn::ImportValue:
                       !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
   CdPipelineEventsTargetLambdaFunction:
-    Type: "AWS::Lambda::Function"
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        ZipFile: |
-          def lambda_handler(event, context):
-            print(event)
+      CodeUri: lambdas/pipeline-events-handler/
       Description: Copies Infrastructure repo artifact to S3
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue:
               !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Events:
+        PipelineEventsRule:
+          Properties:
+            Pattern:
+              source:
+                - aws.codepipeline
+              detail-type:
+                - CodePipeline Pipeline Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+        StageEventsRule:
+          Properties:
+            Pattern:
+              source:
+                - aws.codepipeline
+              detail-type:
+                - CodePipeline Stage Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+        ActionsEventsRule:
+          Properties:
+            Pattern:
+              source:
+                - aws.codepipeline
+              detail-type:
+                - CodePipeline Action Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+
+          Type: EventBridgeRule
       Handler: index.lambda_handler
       MemorySize: 128
-      Role: !GetAtt CdPipelineEventsTargetLambdaIamRole.Arn
+      Policies:
+        - !Ref SlackRelaySnsPublishIamPolicy
       Runtime: python3.8
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 8
   CdPipelineEventsTargetLambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${CdPipelineEventsTargetLambdaFunction}
       RetentionInDays: 14
-  CdPipelineEventsTargetLambdaFunctionPipelineEventsRulePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt CdPipelineEventsRule.Arn
-  CdPipelineEventsTargetLambdaFunctionStageEventsRulePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt CdPipelineStageEventsRule.Arn
-  CdPipelineEventsTargetLambdaFunctionActionEventsRulePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt CdPipelineEventsTargetLambdaFunction.Arn
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt CdPipelineActionsEventsRule.Arn
   # Pipeline S3 Trigger
   CdPipelineS3TriggerTrailStore:
     Type: AWS::S3::Bucket
