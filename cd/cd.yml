@@ -221,8 +221,6 @@ Resources:
               - s3:PutObject
             Resource:
               - !Sub ${ArtifactStore.Arn}/*
-
-
   # CodePipeline Failure Notifications
   # CodePipeline doesn't have very good native support for generating
   # notifications when a pipeline execution fails. A CloudWatch Event triggers
@@ -1461,7 +1459,10 @@ Resources:
           CD_STACK_NAME: !Ref AWS::StackName
       Handler: lambda_function.lambda_handler
       MemorySize: 128
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Policies:
+        - !Ref CloudFormationReadOnlyAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
       Runtime: python3.8
       Tags:
         Project: Infrastructure
@@ -1515,7 +1516,12 @@ Resources:
           INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
       Handler: lambda_function.lambda_handler
       MemorySize: 128
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Policies:
+        - !Ref CloudWatchMetricWriteAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - !Ref StagingConfigObjectReadOnlyAccessPolicy
       Runtime: python3.8
       Tags:
         Project: Infrastructure
@@ -1567,7 +1573,10 @@ Resources:
               !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
       Handler: index.handler
       MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Policies:
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
+        - !Ref SnapshotsBucketWriteAccessPolicy
       Runtime: nodejs12.x
       Tags:
         Project: Infrastructure
@@ -1616,7 +1625,11 @@ Resources:
           INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
       Handler: lambda_function.lambda_handler
       MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Policies:
+        - !Ref ArtifactBucketReadWriteAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref ProductionConfigObjectReadWriteAccessPolicy
+        - !Ref StagingConfigObjectReadOnlyAccessPolicy
       Runtime: python3.8
       Tags:
         Project: Infrastructure
@@ -1663,7 +1676,10 @@ Resources:
               !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       Handler: lambda_function.lambda_handler
       MemorySize: 256
-      Role: !GetAtt LambdaExecutionIAMRole.Arn
+      Policies:
+        - !Ref ArtifactBucketReadOnlyAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref SourceBucketWriteAccessPolicy
       Runtime: python3.8
       Tags:
         Project: Infrastructure
