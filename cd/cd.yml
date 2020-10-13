@@ -857,6 +857,34 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${CdPipelineEventsTargetLambdaFunction}
       RetentionInDays: 14
+  CdPipelineEventsTargetLambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CD][Lambda][Error] Pipeline Events Handler"
+      AlarmActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >-
+        The error rate on the pipeline events handler lambda has exceeded
+        0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CdPipelineEventsTargetLambdaFunction
   # Pipeline S3 Trigger
   CdPipelineS3TriggerTrailStore:
     Type: AWS::S3::Bucket
