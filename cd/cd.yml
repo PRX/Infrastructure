@@ -752,7 +752,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   # Pipeline Events
-  CdPipelineEventsTargetLambdaFunction:
+  CdPipelineEventsTargetFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: lambdas/pipeline-events-handler/
@@ -763,7 +763,7 @@ Resources:
             Fn::ImportValue:
               !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
       Events:
-        PipelineEventsRule:
+        PipelineEvents:
           Properties:
             Pattern:
               source:
@@ -773,7 +773,7 @@ Resources:
               resources:
                 - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
           Type: EventBridgeRule
-        StageEventsRule:
+        StageEvents:
           Properties:
             Pattern:
               source:
@@ -783,7 +783,7 @@ Resources:
               resources:
                 - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
           Type: EventBridgeRule
-        ActionsEventsRule:
+        ActionsEvents:
           Properties:
             Pattern:
               source:
@@ -804,12 +804,12 @@ Resources:
         "prx:cloudformation:stack-name": !Ref AWS::StackName
         "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 8
-  CdPipelineEventsTargetLambdaLogGroup:
+  CdPipelineEventsTargetLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${CdPipelineEventsTargetLambdaFunction}
+      LogGroupName: !Sub /aws/lambda/${CdPipelineEventsTargetFunction}
       RetentionInDays: 14
-  CdPipelineEventsTargetLambdaErrorAlarm:
+  CdPipelineEventsTargetErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
@@ -836,7 +836,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref CdPipelineEventsTargetLambdaFunction
+          Value: !Ref CdPipelineEventsTargetFunction
   # Pipeline S3 Trigger
   CdPipelineS3TriggerTrailStore:
     Type: AWS::S3::Bucket
