@@ -36,14 +36,14 @@ def action_failed(event):
             'text': f'Stage: *{stage_name}* – Action: *{action_name}*\n>Reason: {summary}'
         }
 
-    failed_actions = filter(lambda d: d['status'] == 'Failed', action_execution_details)
+    failed_actions = filter(lambda d: d['status'] == 'Failed' and d['stageName'] == event['detail']['stage'] and d['actionName'] == event['detail']['action'], action_execution_details)
     attachments = list(map(attachment, failed_actions))
 
     message = {
         'channel': SLACK_CHANNEL,
         'username': SLACK_USERNAME,
         'icon_emoji': SLACK_ICON_EMOJI,
-        'text': 'A CD pipeline execution did not complete. The following actions failed:',
+        'text': 'A CD pipeline execution did not complete. The following action failed:',
         'attachments': attachments
     }
 
