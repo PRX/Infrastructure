@@ -19,6 +19,7 @@ send_sns_callback_message() {
     MSGATR+=",\"PRX_AWS_ACCOUNT_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_AWS_ACCOUNT_ID\"}"
     MSGATR+=",\"PRX_REPO\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_REPO\"}"
     MSGATR+=",\"PRX_COMMIT\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_COMMIT\"}"
+    MSGATR+=",\"PRX_BRANCH\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_BRANCH\"}"
 
     # Optional GitHub pull request number parameter (pass-through)
     [ -z "$PRX_GITHUB_PR" ] || MSGATR+=",\"PRX_GITHUB_PR\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_GITHUB_PR\"}"

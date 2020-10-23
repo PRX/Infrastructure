@@ -38,7 +38,7 @@ These triggers are defined as `source` actions in the first stage of the pipelin
 
 ##### GitHub triggers
 
-The GitHub-based source actions use webhooks that are created by CodePipeline, using the `AWS::CodePipeline::Webhook` resource. In order for CodePipeline to be able to create the webhooks in GitHub, a capable Oauth token must be provided. Additionally, a secret token is needed so CodePipeline can verify that requests it receives are valid. Those two values are passed in as stack parameters when launching a stack from `cd.yml`.
+The GitHub-based source actions use CodeStar connections. The connection should be set up before launching the CD stack, and the Arn of the connection is passed to the stack as a parameter. Ensure that the connection has access to any repositories that are used as source actions.
 
 #### Staging Deploy
 
