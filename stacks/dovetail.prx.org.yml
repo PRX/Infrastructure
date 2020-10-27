@@ -517,6 +517,62 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
+  DovetailRouterTaskIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        # Read+write access to Kinesis stream
+        - PolicyName: KinesisReadWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:Get*
+                  - kinesis:List*
+                  - kinesis:Describe*
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource:
+                  - '*'
+        # Limited read+write access to the Dovetail S3 bucket
+        - PolicyName: S3ReadWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:Get*
+                  - s3:List*
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:
+                  - arn:aws:s3:::prx-dovetail
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - arn:aws:s3:::prx-dovetail/stitch-production/*
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   DovetailRouterTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -556,6 +612,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt DovetailRouterTaskIamRole.Arn
   # Dovetail Elixir Alarms
   DovetailRouterLogDownloadsMetric:
     Type: "AWS::Logs::MetricFilter"
