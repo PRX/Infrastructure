@@ -8,6 +8,11 @@ Conditions:
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
+  IsStagingEnvironment: !Equals [!Ref EnvironmentType, Staging]
+  IsCourierStack: !Equals [!Ref AppName, courier]
+  IsStagingCourierStack: !And
+    - !Condition IsCourierStack
+    - !Condition IsStagingEnvironment
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -230,6 +235,76 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
+  CourierWebTaskIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyName: SesSend
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                Resource:
+                  - '*'
+        - PolicyName: S3LimitedUpload
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:List*
+                  - s3:Put*
+                  - s3:RestoreObject
+                  - s3:DeleteObject
+                Resource:
+                  - arn:aws:s3:::prx-up/*
+                  - arn:aws:s3:::prx-up
+                  - arn:aws:s3:::prx-feed/*
+                  - arn:aws:s3:::prx-feed
+        - PolicyName: SqsSns
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:*
+                  - sns:*
+                Resource:
+                  - '*'
+        - PolicyName: S3ReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListAllMyBuckets
+                Resource:
+                  - '*'
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
   WebTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
@@ -270,6 +345,11 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+      TaskRoleArn:
+        !If
+          - IsStagingCourierStack
+          - !GetAtt CourierWebTaskIamRole.Arn
+          - !Ref AWS::NoValue
   WebService:
     Type: "AWS::ECS::Service"
     Properties:
