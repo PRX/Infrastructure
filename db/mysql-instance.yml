@@ -144,6 +144,8 @@ Conditions:
 Resources:
   RDSSubnetGroup:
     Type: "AWS::RDS::DBSubnetGroup"
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       DBSubnetGroupName: !Sub Platform-${EnvironmentType}-${AWS::StackName}-db
       DBSubnetGroupDescription: !Ref EnvironmentType
@@ -153,7 +155,10 @@ Resources:
   MasterDB:
     Type: "AWS::RDS::DBInstance"
     DependsOn: RDSSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
+      DeletionProtection: true
       # CloudFormation cannot update a stack when a custom-named resource requires replacing,
       # so when replacement is required (such as when restoring from snapshot),
       # use a new instance name such as oldname-restoredYYYYMMDD
@@ -189,7 +194,6 @@ Resources:
     # But we have to set this manually because if flipped with a stack update, the RDS instance is rebuilt
     # It does not change with other stack updates if set manually
     #     PubliclyAccessible: true
-    DeletionPolicy: Snapshot
   DiskSpaceAlarm:
     Condition: CreateCloudWatchWarnDiskSpace
     Type: "AWS::CloudWatch::Alarm"
