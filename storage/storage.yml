@@ -6,8 +6,6 @@ Description: >-
 Parameters:
   BucketNamePrefix:
     Type: String
-Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
 Resources:
   # S3 Buckets
   InfrastructureSupportBucket:
@@ -97,18 +95,8 @@ Outputs:
   InfrastructureSourceBucketUrl:
     Description: >-
       The complete S3 URL for the Source bucket (e.g.,
-      https://s3.amazonaws.com/acme-us-west-2-source/)
-    Value:
-      Fn::Join:
-        - ""
-        - - "https://s3"
-          - !If
-            - IsUsEast1
-            - ""
-            - !Sub "-${AWS::Region}"
-          - ".amazonaws.com/"
-          - !Ref InfrastructureSourceBucket
-          - "/"
+      https://acme-us-west-2-source.s3.dualstack.us-west-2.amazonaws.com/)
+    Value: !Sub https://${InfrastructureSourceBucket.DualStackDomainName}/
     Export:
       Name: !Sub ${AWS::StackName}-SourceBucketUrl
   InfrastructureConfigBucket:
