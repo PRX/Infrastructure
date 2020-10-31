@@ -1,18 +1,17 @@
 # storage/storage.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Description: >-
   Creates the standard S3 buckets that are necessary for launching the rest of
   the infrastructure
 Parameters:
   BucketNamePrefix:
     Type: String
-Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
 Resources:
   # S3 Buckets
   InfrastructureSupportBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-support
       Tags:
@@ -25,8 +24,9 @@ Resources:
       VersioningConfiguration:
         Status: Suspended
   InfrastructureSourceBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-source
       Tags:
@@ -39,8 +39,9 @@ Resources:
       VersioningConfiguration:
         Status: Suspended
   InfrastructureConfigBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-config
       Tags:
@@ -53,8 +54,9 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
   InfrastructureSnapshotsBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-snapshots
       Tags:
@@ -67,8 +69,9 @@ Resources:
       VersioningConfiguration:
         Status: Suspended
   InfrastructureApplicationCodeBucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-application-code
       Tags:
@@ -90,20 +93,10 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-InfrastructureSourceBucket
   InfrastructureSourceBucketUrl:
-    Description: >
+    Description: >-
       The complete S3 URL for the Source bucket (e.g.,
-      https://s3.amazonaws.com/acme-us-west-2-source/)
-    Value:
-      Fn::Join:
-        - ""
-        - - "https://s3"
-          - !If
-            - IsUsEast1
-            - ""
-            - !Sub "-${AWS::Region}"
-          - ".amazonaws.com/"
-          - !Ref InfrastructureSourceBucket
-          - "/"
+      https://acme-us-west-2-source.s3.dualstack.us-west-2.amazonaws.com/)
+    Value: !Sub https://${InfrastructureSourceBucket.DualStackDomainName}/
     Export:
       Name: !Sub ${AWS::StackName}-SourceBucketUrl
   InfrastructureConfigBucket:
