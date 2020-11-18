@@ -212,6 +212,40 @@ Resources:
             DNSName: !GetAtt PlayCloudFrontDistribution.DomainName
             HostedZoneId: Z2FDTNDATAQYW2
   # CloudFront
+  PlayCloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - url
+  PlayCloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: whitelist
+          QueryStrings:
+            - url
   PlayCloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
     Properties:
@@ -220,11 +254,7 @@ Resources:
           - !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
           - !If [CreateProductionResources, "play.prx.tech", "play.staging.prx.tech"]
           - !If [CreateProductionResources, "play.prx.org", "play.staging.prx.org"]
-        # CacheBehaviors:
-          # CacheBehavior
-        # Comment: String
-        # CustomErrorResponses:
-        #   CustomErrorResponse
+        Comment: !Sub ${EnvironmentType} play.prx.org
         DefaultCacheBehavior:
           AllowedMethods:
             - HEAD
@@ -232,32 +262,16 @@ Resources:
           CachedMethods:
             - HEAD
             - GET
+          CachePolicyId: !Ref PlayCloudFrontCachePolicy
           Compress: true
-          # DefaultTTL: Number
-          ForwardedValues:
-            # Cookies:
-            #   Cookies
-            # Headers:
-            #   - String
-            QueryString: true
-            QueryStringCacheKeys:
-              - url
-          # MaxTTL: Number
-          # MinTTL: Number
-          # SmoothStreaming: Boolean
+          OriginRequestPolicyId: !Ref PlayCloudFrontOriginRequestPolicy
           TargetOriginId: !FindInMap [Shared, Project, name]
-          # TrustedSigners:
-          #   - String
           ViewerProtocolPolicy : redirect-to-https
-        # DefaultRootObject: "index.html"
         Enabled: true
         HttpVersion: http2
-        # IsIPV6Enabled: true TODO This is not supported yet
-        # Logging:
-        #   Logging
+        IPV6Enabled: true
         Origins:
           - CustomOriginConfig:
-              # HTTPPort: Integer
               HTTPSPort: 443
               OriginProtocolPolicy: https-only
               OriginSSLProtocols:
@@ -266,21 +280,11 @@ Resources:
                 - TLSv1
             DomainName: !Sub "play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
             Id: !FindInMap [Shared, Project, name]
-            # OriginCustomHeaders:
-            #   - OriginCustomHeader
-            # OriginPath: String
-            # S3OriginConfig:
-            #   S3 Origin
         PriceClass: PriceClass_All
-        # Restrictions:
-        #   Restriction
         ViewerCertificate:
           AcmCertificateArn: !Ref VPCCertificateArn
-          # CloudFrontDefaultCertificate: Boolean
-          # IamCertificateId: String
-          # MinimumProtocolVersion: String
+          MinimumProtocolVersion: TLSv1.2_2019
           SslSupportMethod: sni-only
-        # WebACLId: String
   # CloudWatch Alarms
   PlayALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
