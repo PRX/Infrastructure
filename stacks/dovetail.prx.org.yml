@@ -50,6 +50,8 @@ Parameters:
     Type: String
   DovetailSecretsVersion:
     Type: String
+  MetricsKinesisStream:
+    Type: AWS::SSM::Parameter::Value<String>
   DynamodbKinesisStream:
     Type: AWS::SSM::Parameter::Value<String>
   # Dovetail Elixir ############################################################
@@ -462,6 +464,54 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # connect dovetail impressions to kinesis
+  DovetailSubscriptionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - !Sub "logs.${AWS::Region}.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: DovetailSubscriptionKinesisPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref MetricsKinesisStream
+                  - !Ref DynamodbKinesisStream
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  DovetailMetricsKinesisSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref MetricsKinesisStream
+      FilterPattern: '{$.msg = impression}'
+      LogGroupName: !Ref DovetailLogGroup
+      RoleArn: !GetAtt DovetailSubscriptionRole.Arn
+  DovetailDynamodbKinesisSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref DynamodbKinesisStream
+      FilterPattern: '{$.msg = impressionbytes}'
+      LogGroupName: !Ref DovetailLogGroup
+      RoleArn: !GetAtt DovetailSubscriptionRole.Arn
   # Dovetail Elixir
   DovetailRouterALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
