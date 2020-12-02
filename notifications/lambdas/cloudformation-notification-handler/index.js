@@ -106,27 +106,10 @@ function messageForEvent(event) {
     };
 }
 
-function main(event, context, callback) {
+exports.handler = async (event) => {
     const message = messageForEvent(event);
-
-    const messageJson = JSON.stringify(message);
-
-    sns.publish({
+    await sns.publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-        Message: messageJson,
-    }, (err) => {
-        if (err) {
-            callback(err);
-        } else {
-            callback(null);
-        }
-    });
-}
-
-exports.handler = (event, context, callback) => {
-    try {
-        main(event, context, callback);
-    } catch (e) {
-        callback(e);
-    }
+        Message: JSON.stringify(message),
+    }).promise();
 };
