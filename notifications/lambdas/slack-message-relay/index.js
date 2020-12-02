@@ -9,14 +9,15 @@
 // to send messages. It is just a relay. The `Message` value of the Sns object
 // should not be parsed or processed.
 
-const url = require('url');
 const https = require('https');
 
 exports.handler = (event, context, callback) => {
     try {
         const sns = event.Records[0].Sns;
-        console.log(`SNS MessageId: ${sns.MessageId}`);
-        console.log(`Channel: ${JSON.parse(sns.Message).channel}`);
+        console.log(JSON.stringify({
+            "SNS MessageId": sns.MessageId,
+            "Slack channel": JSON.parse(sns.Message).channel
+        }));
 
         const attrs = sns.MessageAttributes;
 
@@ -25,13 +26,20 @@ exports.handler = (event, context, callback) => {
             webhookUrl = attrs.WebhookURL.Value;
         }
 
+        const q = new URL(webhookUrl);
+
         // Setup request options
-        const options = url.parse(webhookUrl);
-        options.method = 'POST';
-        options.headers = {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(sns.Message),
+        const options = {
+            host: q.host,
+            port: q.port,
+            path: `${q.pathname || ''}${q.search || ''}`,
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(sns.Message),
+            },
+            method: 'POST',
         };
+
 
         const req = https.request(options, (res) => {
             res.setEncoding('utf8');

@@ -25,8 +25,34 @@ def daily_savings_plan_coverage(service, start, end):
     )
 
 
+def daily_savings_plan_utilization(service, start, end):
+    return ce.get_savings_plans_utilization(
+        TimePeriod={
+            'Start': start.strftime('%Y-%m-%d'),
+            'End': end.strftime('%Y-%m-%d')
+        },
+        Granularity='DAILY'
+    )
+
+
 def daily_reservation_coverage(service, start, end):
     return ce.get_reservation_coverage(
+        TimePeriod={
+            'Start': start.strftime('%Y-%m-%d'),
+            'End': end.strftime('%Y-%m-%d')
+        },
+        Granularity='DAILY',
+        Filter={
+            'Dimensions': {
+                'Key': 'SERVICE',
+                'Values': [service]
+            }
+        }
+    )
+
+
+def daily_reservation_utilization(service, start, end):
+    return ce.get_reservation_utilization(
         TimePeriod={
             'Start': start.strftime('%Y-%m-%d'),
             'End': end.strftime('%Y-%m-%d')
@@ -51,14 +77,12 @@ def ec2_savings_chart_url(start, end):
     return f'https://image-charts.com/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}'
 
 
-def ec2_chart_url(start, end):
-    ri_coverage = daily_reservation_coverage('Amazon Elastic Compute Cloud - Compute', start, end)
+def ec2_savings_utilization_chart_url(start, end):
+    sp_util = daily_savings_plan_utilization('Amazon Elastic Compute Cloud - Compute', start, end)
 
-    t = map(lambda c: c['Total']['CoverageHours']['TotalRunningHours'], ri_coverage['CoveragesByTime'])
-
-    o = map(lambda c: c['Total']['CoverageHours']['OnDemandHours'], ri_coverage['CoveragesByTime'])
-    r = map(lambda c: c['Total']['CoverageHours']['ReservedHours'], ri_coverage['CoveragesByTime'])
-    d = '|'.join([','.join(r), ','.join(o)])
+    u = map(lambda c: c['Utilization']['UsedCommitment'], sp_util['SavingsPlansUtilizationsByTime'])
+    n = map(lambda c: c['Utilization']['UnusedCommitment'], sp_util['SavingsPlansUtilizationsByTime'])
+    d = '|'.join([','.join(u), ','.join(n)])
 
     return f'https://image-charts.com/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}'
 
@@ -117,7 +141,7 @@ def daily_usage_cost_chart_url(start, end):
         ],
         Filter={
             'Not': {
-                    'Dimensions': {
+                'Dimensions': {
                     'Key': 'RECORD_TYPE',
                     'Values': [
                         'Refund',
@@ -147,16 +171,32 @@ def daily_usage_cost_chart_url(start, end):
     return f'https://image-charts.com/chart?cht=bvs&chs=600x150&chds=a&chco=0089BD&chd=t:{d}'
 
 
+def utilization_chart_url(start, end):
+    ec2_util = daily_reservation_utilization('Amazon Elastic Compute Cloud - Compute', start, end)
+    ec2 = map(lambda c: c['Total']['UnusedHours'], ec2_util['UtilizationsByTime'])
+
+    rds_util = daily_reservation_utilization('Amazon Relational Database Service', start, end)
+    rds = map(lambda c: c['Total']['UnusedHours'], rds_util['UtilizationsByTime'])
+
+    ec_util = daily_reservation_utilization('Amazon ElastiCache', start, end)
+    ec = map(lambda c: c['Total']['UnusedHours'], ec_util['UtilizationsByTime'])
+
+    d = '|'.join([','.join(ec2), ','.join(rds), ','.join(ec)])
+
+    return f'https://image-charts.com/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600,1A1A1A&chd=t:{d}'
+
+
 def lambda_handler(event, context):
     date_start = datetime.today() - timedelta(days=14)
     # End date is exclusive
     date_end = datetime.today() - timedelta(days=0)
-    print(date_end)
 
-    ec2_url = ec2_chart_url(date_start, date_end)
     ec2_sp_url = ec2_savings_chart_url(date_start, date_end)
+    ec2_sp_util_url = ec2_savings_utilization_chart_url(date_start, date_end)
     rds_url = rds_chart_url(date_start, date_end)
     ec_url = ec_chart_url(date_start, date_end)
+
+    utilization_url = utilization_chart_url(date_start, date_end)
 
     date_start = datetime.today() - timedelta(days=21)
     daily_cost_url = daily_cost_chart_url(date_start, date_end)
@@ -175,20 +215,29 @@ def lambda_handler(event, context):
                     'type': 'image',
                     'title': {
                         'type': 'plain_text',
-                        'text': 'EC2 Total costs less on-demand (blue) & On-Demand costs (orange)',
+                        'text': 'EC2 – Unreserved costs: Savings Plan (blue) vs. On-Demand (orange)',
                         'emoji': True
                     },
                     'image_url': ec2_sp_url,
-                    'alt_text': 'EC2 savings plans comparison stacked bar chart'
+                    'alt_text': 'EC2 savings plans coverage stacked bar chart'
                 }, {
                     'type': 'image',
                     'title': {
                         'type': 'plain_text',
-                        'text': 'EC2 Reserved hours (blue) & On-Demand hours (orange)',
+                        'text': 'EC2 – Savings Plan utilization: Used (blue) vs. Unused (orange)',
                         'emoji': True
                     },
-                    'image_url': ec2_url,
-                    'alt_text': 'EC2 reserved and on-demand comparison stacked bar chart'
+                    'image_url': ec2_sp_util_url,
+                    'alt_text': 'EC2 savings plans utilization stacked bar chart'
+                }, {
+                    'type': 'image',
+                    'title': {
+                        'type': 'plain_text',
+                        'text': 'Unused reserved hours for EC2 (blue), RDS (orange) and ElastiCache (grey)',
+                        'emoji': True
+                    },
+                    'image_url': utilization_url,
+                    'alt_text': 'Unused reserved hours stacked bar chart'
                 }, {
                     'type': 'image',
                     'title': {
