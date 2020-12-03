@@ -1,8 +1,11 @@
 # notifications/notifications.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
   Creates foundational resources needed to handle infrastructure-related
   messaging and notifications
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -46,6 +49,7 @@ Metadata:
         default: "SNS:Publish Organization ID"
       InfrastructureCdPipelineName:
         default: CD pipeline name
+
 Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
@@ -53,7 +57,7 @@ Parameters:
     Type: String
   InfrastructureConfigStagingKey:
     Default: template-config-staging.zip
-    Description: >
+    Description: >-
       The S3 object key for the staging template configuration file archive
       (.zip), inside the InfrastructureConfigBucket
     Type: String
@@ -65,34 +69,483 @@ Parameters:
     Type: String
   IkeOauthAccessToken:
     Type: String
-    Description: >
+    Description: >-
       The OAuth access token generated when Ike was installed (e.g.,
       xoxp-123456789…)
   SnsTopicPolicyPublishAllowanceAccountIds:
     Type: CommaDelimitedList
-    Description: >
+    Description: >-
       Account IDs that will be given SNS:Publish access to notification SNS
       topics. This grants access to all resources/roles/etc in that account.
   SnsTopicPolicyPublishAllowanceOrganizationId:
     Type: String
-    Description: >
+    Description: >-
       Organization ID that will be given SNS:Publish access to notification SNS
       topics. This grants access to all resources/roles/etc in that
       organization.
   InfrastructureCdPipelineName:
     Type: String
-    Description: >
+    Description: >-
       The name of the main CD pipeline in CodePipeline
   FatalNotificationEmailAddress:
     Type: String
-    Description: >
+    Description: >-
       An email address to deliver fatal alarm notifications to
   CrossAccountCloudWatchAlarmReaderRoleName:
     Type: String
     Description: >-
       The name of an IAM role that exists in other AWS accounts that are
       generating CloudWatch Alarms that this stack will handle.
+
 Resources:
+  # Common IAM policies
+  SlackRelaySnsPublishOnlyAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sns:Publish
+            Effect: Allow
+            Resource:
+              - !Ref SlackMessageRelaySnsTopic
+  # Slack message relay
+  SlackMessageRelaySnsTopic:
+    Type: AWS::SNS::Topic
+  SlackMessageRelaySnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountPublish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - sns:Publish
+            Resource: !Ref SlackMessageRelaySnsTopic
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref SlackMessageRelaySnsTopic
+            Condition:
+              StringEquals:
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:AddPermission
+              - sns:RemovePermission
+              - sns:DeleteTopic
+              - sns:Subscribe
+              - sns:ListSubscriptionsByTopic
+              - sns:Publish
+              - sns:Receive
+            Resource: !Ref SlackMessageRelaySnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref SlackMessageRelaySnsTopic
+  SlackMessageRelayLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/slack-message-relay/
+      Description: >-
+        Receives preformed Slack message payloads and sends them to the
+        provided Incoming Webhook URL
+      Environment:
+        Variables:
+          DEFAULT_WEBHOOK_URL: !Ref GenericSlackWebhookUrl
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref SlackMessageRelaySnsTopic
+          Type: SNS
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs12.x
+      Tags:
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  SlackMessageRelayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Notif][Relay][Lambda] Elevated error volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        Slack relay function has encountered several invocation errors
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 120
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackMessageRelayLambdaFunction
+  SlackMessageRelayLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SlackMessageRelayLambdaFunction}
+      RetentionInDays: 5
+  # CloudFormation notifications
+  CloudFormationNotificationSnsTopic:
+    Type: AWS::SNS::Topic
+  CloudFormationNotificationSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountPublish
+            Effect: Allow
+            Principal:
+              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
+            Action:
+              - sns:Publish
+            Resource: !Ref CloudFormationNotificationSnsTopic
+          - Sid: OrganizationPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Condition:
+              StringEquals:
+                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
+          - Sid: OwnerAllAccess
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:AddPermission
+              - sns:RemovePermission
+              - sns:DeleteTopic
+              - sns:Subscribe
+              - sns:ListSubscriptionsByTopic
+              - sns:Publish
+              - sns:Receive
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Condition:
+              StringEquals:
+                "AWS:SourceOwner": !Ref AWS::AccountId
+      Topics:
+        - !Ref CloudFormationNotificationSnsTopic
+  CloudFormationNotificationHandlerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/cloudformation-notification-handler/
+      Description: >-
+        Handles notifications sent by CloudFormation about stack updates
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+      Runtime: nodejs12.x
+      Tags:
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  CloudFormationNotificationHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Notif][Cfn][Lambda] Elevated error volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        CloudFormation notifications function has encountered several
+        invocation errors
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 120
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudFormationNotificationHandlerLambdaFunction
+  CloudFormationNotificationHandlerLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudFormationNotificationHandlerLambdaFunction}
+      RetentionInDays: 5
+  # ASG Autoscaling Notifications
+  ASGNotificationSnsTopic:
+    Type: AWS::SNS::Topic
+  ASGNotificationHandlerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/autoscaling-notification-handler/
+      Description: >-
+        Handles autoscaling notifications from EC2 auto scaling groups
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref ASGNotificationSnsTopic
+          Type: SNS
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+      Runtime: nodejs12.x
+      Tags:
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  ASGNotificationHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Notif][ASG][Lambda] Elevated error volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        ASG notifications function has encountered several invocation errors
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 120
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ASGNotificationHandlerLambdaFunction
+  ASGNotificationHandlerLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ASGNotificationHandlerLambdaFunction}
+      RetentionInDays: 5
+  # CloudWatch Alarms Notifications
+  CloudWatchAlarmNotificationHandlerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/cloudwatch-alarm-notification-handler/
+      Description: >-
+        Handles notifications from CloudWatch Alarms
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
+          CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmReaderRoleName
+      Events:
+        DebugMessages:
+          Properties:
+            Topic: !Ref OpsDebugMessagesSnsTopic
+          Type: SNS
+        InfoMessages:
+          Properties:
+            Topic: !Ref OpsInfoMessagesSnsTopic
+          Type: SNS
+        WarnMessages:
+          Properties:
+            Topic: !Ref OpsWarnMessagesSnsTopic
+          Type: SNS
+        ErrorMessages:
+          Properties:
+            Topic: !Ref OpsErrorMessagesSnsTopic
+          Type: SNS
+        FatalMessages:
+          Properties:
+            Topic: !Ref OpsFatalMessagesSnsTopic
+          Type: SNS
+      Handler: lambda_function.lambda_handler
+      MemorySize: 192
+      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
+      Runtime: python3.6
+      Tags:
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  CloudWatchAlarmNotificationHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Notif][Alarms][Lambda] Elevated error volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        CloudWatch Alarms notifications function has encountered several
+        invocation errors
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 120
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
+  CloudWatchAlarmNotificationHandlerLambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmNotificationHandlerLambdaFunction}
+      RetentionInDays: 5
+  OpsDebugMessagesSnsTopic:
+    Type: AWS::SNS::Topic
+  OpsDebugMessagesSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudWatchAlarmsPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+      Topics:
+        - !Ref OpsDebugMessagesSnsTopic
+  OpsInfoMessagesSnsTopic:
+    Type: AWS::SNS::Topic
+  OpsInfoMessagesSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudWatchAlarmsPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref OpsInfoMessagesSnsTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+      Topics:
+        - !Ref OpsInfoMessagesSnsTopic
+  OpsWarnMessagesSnsTopic:
+    Type: AWS::SNS::Topic
+  OpsWarnMessagesSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudWatchAlarmsPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref OpsWarnMessagesSnsTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+      Topics:
+        - !Ref OpsWarnMessagesSnsTopic
+  OpsErrorMessagesSnsTopic:
+    Type: AWS::SNS::Topic
+  OpsErrorMessagesSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudWatchAlarmsPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref OpsErrorMessagesSnsTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+      Topics:
+        - !Ref OpsErrorMessagesSnsTopic
+  OpsFatalMessagesSnsTopic:
+    Type: AWS::SNS::Topic
+  OpsFatalMessagesSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Sid: CloudWatchAlarmsPublish
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - sns:Publish
+            Resource: !Ref OpsFatalMessagesSnsTopic
+            Condition:
+              ArnLike:
+                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+      Topics:
+        - !Ref OpsFatalMessagesSnsTopic
+
+  # Fatal email redundancy
+  OpsFatalMessagesSnsTopicEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !Ref FatalNotificationEmailAddress
+      Protocol: email
+      TopicArn: !Ref OpsFatalMessagesSnsTopic
+
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
     Type: "AWS::IAM::Role"
@@ -150,7 +603,7 @@ Resources:
     Type: "AWS::ApiGateway::RestApi"
     Properties:
       Name: !Sub ${AWS::StackName} API
-      Description: >
+      Description: >-
         Provides an API for inbound requests used by the notifications stack,
         such as Slack interactive messages
       Tags:
@@ -175,729 +628,7 @@ Resources:
       Description: "Production stage for notifications stack"
       RestApiId: !Ref RestApi
       DeploymentId: !Ref RestApiDeployment
-  # Slack message relay
-  SlackMessageRelaySnsTopic:
-    Type: "AWS::SNS::Topic"
-  SlackMessageRelaySnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - SNS:Publish
-            Resource: !Ref SlackMessageRelaySnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - SNS:Publish
-            Resource: !Ref SlackMessageRelaySnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - SNS:GetTopicAttributes
-              - SNS:SetTopicAttributes
-              - SNS:AddPermission
-              - SNS:RemovePermission
-              - SNS:DeleteTopic
-              - SNS:Subscribe
-              - SNS:ListSubscriptionsByTopic
-              - SNS:Publish
-              - SNS:Receive
-            Resource: !Ref SlackMessageRelaySnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref SlackMessageRelaySnsTopic
-  SlackMessageRelayLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/slack-message-relay.zip"
-      Description: >
-        Receives preformed Slack message payloads and sends them to the provided
-        Incoming Webhook URL
-      Environment:
-        Variables:
-          DEFAULT_WEBHOOK_URL: !Ref GenericSlackWebhookUrl
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs12.x
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 10
-  SlackMessageRelayPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref SlackMessageRelayLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref SlackMessageRelaySnsTopic
-  SlackMessageRelaySubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt SlackMessageRelayLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref SlackMessageRelaySnsTopic
-  SlackMessageRelayErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Relay][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        Slack relay function has encountered several invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SlackMessageRelayLambdaFunction
-  SlackMessageRelayLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${SlackMessageRelayLambdaFunction}
-      RetentionInDays: 5
-  # CloudFormation notifications
-  CloudFormationNotificationSnsTopic:
-    Type: "AWS::SNS::Topic"
-  CloudFormationNotificationSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - SNS:Publish
-            Resource: !Ref CloudFormationNotificationSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - SNS:Publish
-            Resource: !Ref CloudFormationNotificationSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - SNS:GetTopicAttributes
-              - SNS:SetTopicAttributes
-              - SNS:AddPermission
-              - SNS:RemovePermission
-              - SNS:DeleteTopic
-              - SNS:Subscribe
-              - SNS:ListSubscriptionsByTopic
-              - SNS:Publish
-              - SNS:Receive
-            Resource: !Ref CloudFormationNotificationSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref CloudFormationNotificationSnsTopic
-  CloudFormationNotificationHandlerLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/cloudformation-notification-handler.zip"
-      Description: >
-        Handles notifications sent by CloudFormation about stack updates
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs12.x
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 10
-  CloudFormationNotificationPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudFormationNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref CloudFormationNotificationSnsTopic
-  CloudFormationNotificationSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudFormationNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref CloudFormationNotificationSnsTopic
-  CloudFormationNotificationHandlerErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Cfn][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        CloudFormation notifications function has encountered several
-        invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CloudFormationNotificationHandlerLambdaFunction
-  CloudFormationNotificationHandlerLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${CloudFormationNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
-  # ASG Autoscaling Notifications
-  ASGNotificationSnsTopic:
-    Type: "AWS::SNS::Topic"
-  ASGNotificationHandlerLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/autoscaling-notification-handler.zip"
-      Description: >
-        Handles autoscaling notifications from EC2 auto scaling groups
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: nodejs12.x
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 10
-  ASGNotificationPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref ASGNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref ASGNotificationSnsTopic
-  ASGNotificationSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt ASGNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref ASGNotificationSnsTopic
-  ASGNotificationHandlerErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][ASG][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        ASG notifications function has encountered several invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ASGNotificationHandlerLambdaFunction
-  ASGNotificationHandlerLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${ASGNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
-  # CloudWatch Alarms Notifications
-  CloudWatchAlarmNotificationHandlerLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: "notifications/cloudwatch-alarm-notification-handler.zip"
-      Description: >
-        Handles notifications from CloudWatch Alarms
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-          CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmReaderRoleName
-      Handler: lambda_function.lambda_handler
-      MemorySize: 192
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 10
-  CloudWatchAlarmNotificationHandlerErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Alarms][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
-        CloudWatch Alarms notifications function has encountered several
-        invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-  CloudWatchAlarmNotificationHandlerLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
-  # ## SNS topics for CloudWatch Alarm Actions
-  OpsDebugMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsDebugMessagesSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsDebugMessagesSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: CloudWatchAlarmsPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Condition:
-              "ArnLike":
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
-              - sns:AddPermission
-              - sns:RemovePermission
-              - sns:DeleteTopic
-              - sns:Subscribe
-              - sns:ListSubscriptionsByTopic
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref OpsDebugMessagesSnsTopic
-  OpsInfoMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsInfoMessagesSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsInfoMessagesSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsInfoMessagesSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: CloudWatchAlarmsPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsInfoMessagesSnsTopic
-            Condition:
-              "ArnLike":
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
-              - sns:AddPermission
-              - sns:RemovePermission
-              - sns:DeleteTopic
-              - sns:Subscribe
-              - sns:ListSubscriptionsByTopic
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref OpsInfoMessagesSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref OpsInfoMessagesSnsTopic
-  OpsWarnMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsWarnMessagesSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AnonymousPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsWarnMessagesSnsTopic
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsWarnMessagesSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsWarnMessagesSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: CloudWatchAlarmsPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsWarnMessagesSnsTopic
-            Condition:
-              "ArnLike":
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
-              - sns:AddPermission
-              - sns:RemovePermission
-              - sns:DeleteTopic
-              - sns:Subscribe
-              - sns:ListSubscriptionsByTopic
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref OpsWarnMessagesSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref OpsWarnMessagesSnsTopic
-  OpsErrorMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsErrorMessagesSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsErrorMessagesSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsErrorMessagesSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: CloudWatchAlarmsPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsErrorMessagesSnsTopic
-            Condition:
-              "ArnLike":
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
-              - sns:AddPermission
-              - sns:RemovePermission
-              - sns:DeleteTopic
-              - sns:Subscribe
-              - sns:ListSubscriptionsByTopic
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref OpsErrorMessagesSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref OpsErrorMessagesSnsTopic
-  OpsFatalMessagesSnsTopic:
-    Type: "AWS::SNS::Topic"
-  OpsFatalMessagesSnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AccountPublish
-            Effect: Allow
-            Principal:
-              AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsFatalMessagesSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsFatalMessagesSnsTopic
-            Condition:
-              "StringEquals":
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: CloudWatchAlarmsPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsFatalMessagesSnsTopic
-            Condition:
-              "ArnLike":
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
-          - Sid: OwnerAllAccess
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
-              - sns:AddPermission
-              - sns:RemovePermission
-              - sns:DeleteTopic
-              - sns:Subscribe
-              - sns:ListSubscriptionsByTopic
-              - sns:Publish
-              - sns:Receive
-            Resource: !Ref OpsFatalMessagesSnsTopic
-            Condition:
-              StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
-      Topics:
-        - !Ref OpsFatalMessagesSnsTopic
-  # ## Fatal email redundancy
-  OpsFatalMessagesSnsTopicEmailSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      # DeliveryPolicy: Json
-      Endpoint: !Ref FatalNotificationEmailAddress
-      # FilterPolicy: Json
-      Protocol: email
-      # RawMessageDelivery: Boolean
-      # RedrivePolicy: Json
-      # Region: String
-      TopicArn: !Ref OpsFatalMessagesSnsTopic
-  # ## SNS Triggers for the Lambda function
-  CloudWatchAlarmNotificationHandlerDebugSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsDebugMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerDebugPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsDebugMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerInfoSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsInfoMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerInfoPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsInfoMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerWarnSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsWarnMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerWarnPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsWarnMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerErrorSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsErrorMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerErrorPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsErrorMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerFatalSubscription:
-    Type: "AWS::SNS::Subscription"
-    Properties:
-      Endpoint: !GetAtt CloudWatchAlarmNotificationHandlerLambdaFunction.Arn
-      Protocol: lambda
-      TopicArn: !Ref OpsFatalMessagesSnsTopic
-  CloudWatchAlarmNotificationHandlerFatalPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-      Principal: sns.amazonaws.com
-      SourceArn: !Ref OpsFatalMessagesSnsTopic
+
   # Ike
   IkeHandlerLambdaIamRole:
     Type: "AWS::IAM::Role"
@@ -986,7 +717,7 @@ Resources:
           Fn::ImportValue:
             !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: "notifications/ike-interactive-messages-callback-handler.zip"
-      Description: >
+      Description: >-
         Handles requests from Slack for interactive messages
       Environment:
         Variables:
@@ -1017,7 +748,7 @@ Resources:
           Fn::ImportValue:
             !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: "notifications/ike-slash-commands-handler.zip"
-      Description: >
+      Description: >-
         Handles requests from Slack for slash commands
       Environment:
         Variables:
@@ -1051,7 +782,7 @@ Resources:
         - !Ref OpsWarnMessagesSnsTopic
       OKActions:
         - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
+      AlarmDescription: >-
         Ike callback handler function has encountered several invocation errors
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: 1
@@ -1075,7 +806,7 @@ Resources:
         - !Ref OpsWarnMessagesSnsTopic
       OKActions:
         - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >
+      AlarmDescription: >-
         Ike slash command handler function has encountered several
         invocation errors
       ComparisonOperator: GreaterThanOrEqualToThreshold
@@ -1160,6 +891,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IkeCallbackHandlerLambdaFunction.Arn}/invocations
+
 Outputs:
   # Slack relay topic used by many other notification handlers
   SlackMessageRelaySnsTopicArn:

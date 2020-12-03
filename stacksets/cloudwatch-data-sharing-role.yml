@@ -1,9 +1,10 @@
-# stacksets/cloudwatch-alarm-reader-role.yml
+# stacksets/cloudwatch-data-sharing-role.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Creates a StackSet that adds an IAM role to each account in an AWS
-  Organization to provide access to CloudWatch Alarm history in those accounts
-  from any other account within the Organization.
+  Organization with the special name CloudWatch-CrossAccountSharingRole and has
+  read-only access to CloudWatch.
+
 Parameters:
   StackSetName:
     Type: String
@@ -20,13 +21,8 @@ Parameters:
     AllowedValues:
       - us-east-1
       - us-east-2
-    Default: us-east-1
-  RoleNamePrefix:
-    Type: String
-    Default: PRX
-  RoleNameBase:
-    Type: String
-    Default: CloudWatchAlarmsOrgReader
+    Default: us-east-2
+
 Resources:
   StackSet:
     Type: AWS::CloudFormation::StackSet
@@ -37,19 +33,15 @@ Resources:
       Capabilities:
         - CAPABILITY_NAMED_IAM
       Description: >-
-        Launches a root account activity monitor in one region in each account
-        in an AWS Organization. An activity monitor can monitor activity in all
-        regions in the account it belongs to.
+        Launches a stack in one region in each account in an AWS Organization
+        to add the CloudWatch-CrossAccountSharingRole IAM role to each account,
+        which provides read-only access to that account's CloudWatch data.
       OperationPreferences:
         FailureToleranceCount: 1
         MaxConcurrentCount: 1
       Parameters:
         - ParameterKey: OrganizationId
           ParameterValue: !Ref OrganizationId
-        - ParameterKey: RoleNamePrefix
-          ParameterValue: !Ref RoleNamePrefix
-        - ParameterKey: RoleNameBase
-          ParameterValue: !Ref RoleNameBase
       PermissionModel: SERVICE_MANAGED
       StackInstancesGroup:
         - DeploymentTargets:
@@ -63,4 +55,4 @@ Resources:
       #     Value: !Ref AWS::StackName
       #   - Key: "prx:cloudformation:stack-id"
       #     Value: !Ref AWS::StackId
-      TemplateURL: https://s3.us-east-2.amazonaws.com/cf-templates-1m3ojrwerxj2t-us-east-2/2020337tGw-cloudwatch-alarm-reader-role.yml
+      TemplateURL: https://s3.us-east-2.amazonaws.com/cf-templates-1m3ojrwerxj2t-us-east-2/2020338FN4-cloudwatch-data-sharing-role.yml
