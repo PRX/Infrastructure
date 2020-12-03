@@ -1,9 +1,13 @@
 import boto3
 import os
 import json
+import re
 from datetime import datetime, timedelta
 
-sns = boto3.client('sns')
+# Set the SNS client endpoint region based on the region of the destination topic
+sns_endpoint_region = re.search(r'arn:aws:sns:([a-z0-9-]+)', os.environ['SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN']).group(1)
+
+sns = boto3.client('sns', region_name=sns_endpoint_region)
 ce = boto3.client('ce')
 
 ri_amounts = {}
