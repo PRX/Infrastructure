@@ -48,6 +48,25 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  CrossAccountSharingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:PrincipalOrgID": !Ref OrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAutomaticDashboardsAccess
+        - arn:aws:iam::aws:policy/AWSXrayReadOnlyAccess
+      RoleName: CloudWatch-CrossAccountSharingRole
 Outputs:
   RoleNamePattern:
     Value: !Sub ${RoleNamePrefix}${RoleNameBase}-${AWS::Region}
