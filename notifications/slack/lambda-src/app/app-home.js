@@ -1,0 +1,96 @@
+const { WebClient } = require('@slack/web-api');
+
+async function publishOpsView(user_id, hash) {
+  const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
+  await web.views.publish({
+    user_id,
+    view: {
+      type: 'home',
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: `PRX DevOps Dashboard` },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'plain_text',
+            text: "Charts and graphs and stuff"
+          },
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: 'tktk',
+              text: {
+                type: 'plain_text',
+                text: 'Pipeline deploy',
+                emoji: true,
+              },
+              style: 'primary',
+            },
+          ],
+        },
+      ]
+    },
+    hash
+  });
+};
+
+async function publishReaderView(user_id, hash) {
+};
+
+async function publishDefaultView(user_id, hash) {
+  const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
+  await web.views.publish({
+    user_id,
+    view: {
+      type: 'home',
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: `PRX DevOps Dashboard` },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'plain_text',
+            text: "You don't have access to this app."
+          },
+        }
+      ]
+    },
+    hash
+  });
+}
+
+module.exports = {
+  handler: async function handler(payload) {
+    const userId = payload.event.user;
+    const { tab } = payload.event;
+
+    console.log('App Home opened');
+
+    // No-op on messages
+    if (tab === 'messages') {
+      console.log('Ignore messages tab');
+      return;
+    }
+
+    if (tab === 'home') {
+      let hash;
+      if (payload.event.view && payload.event.view.hash) {
+        hash = payload.event.view.hash;
+      }
+
+      if (['U0256R4CM'].includes(userId)) {
+        await publishOpsView(userId, hash);
+      } else {
+        await publishDefaultView(userId, hash);
+      }
+
+    }
+  },
+};

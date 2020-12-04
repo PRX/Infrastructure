@@ -1,0 +1,111 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Creates backend resources for the PRX DevOps Slack app
+Parameters:
+  SlackSigningSecet:
+    Type: String
+  SlackAccessToken:
+    Type: String
+  LegacySlackMessageRelayTopicArn:
+    Type: String
+    Default: "arn:aws:sns:us-east-1:561178107736:infrastructure-notifications-SlackMessageRelaySnsTopic-T55GFH6DAK8W"
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Domain:
+      #   CertificateArn: !Ref ApiCertificate
+      #   DomainName: !Ref ApiDomain
+      Tags:
+        Project: DevOps
+  SlackSdkLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Description: node-slack-sdk NPM module
+      ContentUri: lambda-layers/node-slack-sdk
+      CompatibleRuntimes:
+        - nodejs12.x
+  AppFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      # Policies:
+      #   # Allow GET-only access to any object in S3
+      #   - PolicyName: S3CopySourcePolicy
+      #     PolicyDocument:
+      #       Version: '2012-10-17'
+      #       Statement:
+      #         - Effect: Allow
+      #           Action:
+      #             - s3:GetObject*
+      #           Resource:
+      #             - '*'
+      Tags:
+        - Key: Project
+          Value: DevOps
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AppFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-src/app/
+      Description: Handles Slack api requests
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
+          SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
+          LEGACY_SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref LegacySlackMessageRelayTopicArn
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      Events:
+        # LegacyRelay:
+        #   Properties:
+        #     Topic: !Ref LegacySlackMessageRelayTopicArn
+        #   Type: SNS
+        SnsMessages:
+          Properties:
+            Topic: !Ref Topic
+          Type: SNS
+        EventRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /v1/slack/events
+          Type: HttpApi
+        InteractiveRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /v1/slack/interactive
+          Type: HttpApi
+      Handler: index.handler
+      Layers:
+        - !Ref SlackSdkLambdaLayer
+      MemorySize: 512
+      Role: !GetAtt AppFunctionIamRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        Project: DevOps
+      Timeout: 8
+  AppFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppFunction}
+      RetentionInDays: 14
+
+
+  Topic:
+    Type: AWS::SNS::Topic
