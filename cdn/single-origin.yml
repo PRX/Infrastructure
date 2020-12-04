@@ -25,7 +25,9 @@
 # }
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Creates a CloudFront distribution with a single origin (either web or S3)
+  Creates a CloudFront distribution with a single origin (either web or S3) and
+  an optional failover origin. The primary and failover origin share an
+  identical configuration, aside from the domain.
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
@@ -43,12 +45,21 @@ Conditions:
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
   HasCnames: !Not [!Equals [!Join ["", !Ref Cnames], ""]]
+  HasFailoverOriginDomain: !Not [!Equals [!Ref FailoverOriginDomain, ""]]
   CreateCertificate: !And
     - !Condition HasNoAcmCertificateArn
     - !Condition HasCnames
   UseCertificate: !Or
     - !Condition CreateCertificate
     - !Condition HasAcmCertificateArn
+Mappings:
+  FailoverCriteriaStatusCodesQuantity:
+    "403-404":
+      Quantity: 2
+    "500-502-503-504":
+      Quantity: 4
+    "403-404-500-502-503-504":
+      Quantity: 6
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -62,6 +73,11 @@ Metadata:
         Parameters:
           - OriginDomain
           - OriginPath
+      - Label:
+          default: Failover
+        Parameters:
+          - FailoverOriginDomain
+          - FailoverCriteriaStatusCodes
       - Label:
           default: CloudFront
         Parameters:
@@ -97,6 +113,10 @@ Metadata:
         default: Origin domain
       OriginPath:
         default: Origin path
+      FailoverOriginDomain:
+        default: Failover origin domain
+      FailoverCriteriaStatusCodes:
+        default: Failover status codes
       CloudFrontLoggingBucket:
         default: Log S3 bucket
       CloudFrontLoggingBucketPrefix:
@@ -153,11 +173,34 @@ Parameters:
     Type: String
     AllowedPattern: ^.+\.[a-zA-Z]+$
     ConstraintDescription: >-
-      must be a hostname or of the format mybucket.s3.amazonaws.com
+      must be a hostname or of the format mybucket.s3.region.amazonaws.com
     Description: >-
       The DNS name of the Amazon Simple Storage Service (S3) bucket or the HTTP
       server from which you want CloudFront to get objects for this origin.
-      (e.g. "example.com" or "mybucket.s3.amazonaws.com")
+      (e.g. "example.com" or "mybucket.s3.us-east-2.amazonaws.com")
+  FailoverOriginDomain:
+    Type: String
+    AllowedPattern: ^$|^.+\.[a-zA-Z]+$
+    ConstraintDescription: >-
+      must be a hostname or of the format mybucket.s3.region.amazonaws.com
+    Description: >-
+      (optional) The DNS name of the Amazon Simple Storage Service (S3) bucket
+      or the HTTP server from which you want CloudFront to get objects when the
+      primary origin is unavailable.
+      (e.g. "example.com" or "mybucket.s3.us-east-2.amazonaws.com")
+  FailoverCriteriaStatusCodes:
+    Type: String
+    Description: >-
+      The status codes that, when returned by the primary origin, trigger
+      CloudFront to attempt to use the failover origin.
+    Default: "403-404-500-502-503-504"
+    AllowedValues:
+      # When adding an additional value, a matching entry must be added to the
+      # FailoverCriteriaStatusCodesQuantity mapping which defines the number of
+      # codes present in the value.
+      - "403-404"
+      - "500-502-503-504"
+      - "403-404-500-502-503-504"
   OriginPath:
     Type: String
     AllowedPattern: ^$|^\/..+(?<!\/)$
@@ -172,10 +215,10 @@ Parameters:
     Type: String
     AllowedPattern: ^$|^.+\.s3\..+\.amazonaws\.com$
     ConstraintDescription: >-
-      must be of the format mybucket.s3.amazonaws.com
+      must be of the format mybucket.s3.region.amazonaws.com
     Description: >-
       (optional) The Amazon S3 bucket address where access logs are stored for
-      CloudFront. (e.g., mybucket.s3.amazonaws.com)
+      CloudFront. (e.g., mybucket.s3.region.amazonaws.com)
   CloudFrontLoggingBucketPrefix:
     Type: String
     Description: >-
@@ -408,7 +451,7 @@ Resources:
           # LambdaFunctionAssociations:
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           # SmoothStreaming: Boolean
-          TargetOriginId: web-origin
+          TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
           # TrustedSigners:
           #   - String
           ViewerProtocolPolicy : !Ref CloudFrontViewerProtocolPolicy
@@ -423,7 +466,27 @@ Resources:
               IncludeCookies: false
               Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
             - !Ref AWS::NoValue
+        # Conditional origin group for failover --------------------------------
+        OriginGroups:
+          !If
+            - HasFailoverOriginDomain
+            - Items:
+                - FailoverCriteria:
+                    StatusCodes:
+                      Items: !Split ["-", !Ref FailoverCriteriaStatusCodes]
+                      Quantity: !FindInMap [FailoverCriteriaStatusCodesQuantity, !Ref FailoverCriteriaStatusCodes, Quantity]
+                  Id: primary-origin-group
+                  Members:
+                    Items:
+                      - OriginId: primary-origin
+                      - OriginId: failover-origin
+                    Quantity: 2
+              Quantity: 1
+            - !Ref AWS::NoValue
         Origins:
+          # Primary origin -----------------------------------------------------
+          # The template definition of this origin should be kept in sync with
+          # the failover origin, except for the DomainName reference
           - CustomOriginConfig:
               !If
                 - HasCloudFrontOriginAccess
@@ -436,7 +499,7 @@ Resources:
                     - TLSv1.1
                     - TLSv1
             DomainName: !Ref OriginDomain
-            Id: web-origin
+            Id: primary-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
             OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
@@ -445,6 +508,33 @@ Resources:
                 - HasCloudFrontOriginAccess
                 - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
                 - !Ref AWS::NoValue
+          # Optional failover origin -------------------------------------------
+          # The template definition of this origin should be kept in sync with
+          # the primary origin, except for the DomainName reference
+          - !If
+              - HasFailoverOriginDomain
+              - CustomOriginConfig:
+                  !If
+                    - HasCloudFrontOriginAccess
+                    - !Ref AWS::NoValue
+                    - HTTPSPort: 443
+                      # HTTPPort: Integer
+                      OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
+                      OriginSSLProtocols:
+                        - TLSv1.2
+                        - TLSv1.1
+                        - TLSv1
+                DomainName: !Ref FailoverOriginDomain
+                Id: failover-origin
+                # OriginCustomHeaders:
+                #   - OriginCustomHeader
+                OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
+                S3OriginConfig:
+                  !If
+                    - HasCloudFrontOriginAccess
+                    - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+                    - !Ref AWS::NoValue
+              - !Ref AWS::NoValue
         PriceClass: !Ref CloudFrontPriceClass
         # Restrictions:
         #   Restriction
