@@ -213,7 +213,7 @@ def lambda_handler(event, context):
         Message=json.dumps({
             'channel': '#ops-billing',
             'username': 'AWS Cost Explorer',
-            'icon_emoji': ':aws:',
+            'icon_emoji': ':ops-costexplorer:',
             'blocks': [
                 {
                     'type': 'image',
