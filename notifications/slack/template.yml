@@ -8,7 +8,6 @@ Parameters:
     Type: String
   LegacySlackMessageRelayTopicArn:
     Type: String
-    Default: "arn:aws:sns:us-east-1:561178107736:infrastructure-notifications-SlackMessageRelaySnsTopic-T55GFH6DAK8W"
 Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -42,16 +41,15 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       # Policies:
-      #   # Allow GET-only access to any object in S3
-      #   - PolicyName: S3CopySourcePolicy
+      #   - PolicyName: Tktktktk
       #     PolicyDocument:
       #       Version: '2012-10-17'
       #       Statement:
       #         - Effect: Allow
       #           Action:
-      #             - s3:GetObject*
+      #             - foo:bar
       #           Resource:
-      #             - '*'
+      #             - !Ref tktk
       Tags:
         - Key: Project
           Value: DevOps
@@ -68,17 +66,8 @@ Resources:
         Variables:
           SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
           SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
-          LEGACY_SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref LegacySlackMessageRelayTopicArn
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
       Events:
-        # LegacyRelay:
-        #   Properties:
-        #     Topic: !Ref LegacySlackMessageRelayTopicArn
-        #   Type: SNS
-        SnsMessages:
-          Properties:
-            Topic: !Ref Topic
-          Type: SNS
         EventRequest:
           Properties:
             ApiId: !Ref HttpApi
@@ -99,6 +88,8 @@ Resources:
       Runtime: nodejs12.x
       Tags:
         Project: DevOps
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 8
   AppFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -106,6 +97,56 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${AppFunction}
       RetentionInDays: 14
 
+  RelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-src/relay/
+      Description: Relays messages to Slack
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
+          SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      Events:
+        Relay:
+          Properties:
+            Topic: !Ref SlackMessageRelaySnsTopic
+          Type: SNS
+        LegacyRelay:
+          Properties:
+            Region: us-east-1
+            Topic: !Ref LegacySlackMessageRelayTopicArn
+          Type: SNS
+      Handler: index.handler
+      Layers:
+        - !Ref SlackSdkLambdaLayer
+      MemorySize: 128
+      Runtime: nodejs12.x
+      Tags:
+        Project: DevOps
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 8
+  RelayFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RelayFunction}
+      RetentionInDays: 14
 
-  Topic:
+  # This SNS topic is retained to prevent clients that are configured to
+  # publish to it from breaking if the stack gets torn down. In cases where the
+  # stack is being moved or replaced, the retained topic should be imported
+  # into the new stack, or the new subscriber should continue to subscribe to
+  # this topic
+  SlackMessageRelaySnsTopic:
     Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - Key: Project
+          Value: DevOps
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId

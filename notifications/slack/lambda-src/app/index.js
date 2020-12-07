@@ -3,17 +3,12 @@ const SlackRequest = require('./slack_request');
 exports.handler = async (event) => {
   if (event.source === 'aws.events') {}
 
-  if (event.source === 'aws:sns') {
+  //
+  if (event.Records && event.Records[0] && event.Records[0].EventSource === 'aws:sns') {
     const { WebClient } = require('@slack/web-api');
     const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
-    await web.chat.postMessage({
-      channel: 'CHZTAGBM2',
-      username: 'Santa',
-      icon_emoji: ':santa:',
-      text: 'Ho ho ho'
-    });
-
+        await web.chat.postMessage(JSON.parse(event.Records[0].Sns.Message));
     return;
   }
 
