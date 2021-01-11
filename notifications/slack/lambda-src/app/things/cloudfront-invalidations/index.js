@@ -6,11 +6,10 @@ const cloudfront = new AWS.CloudFront({ apiVersion: '2019-03-26' });
 const sts = new AWS.STS({ apiVersion: '2011-06-15' });
 
 async function openModal(payload) {
-
-  // arn:aws:iam::{account_id}:role/{role_name}
-
   // Assume a role within the Organization's management account that has
   // permission to `listAccounts`
+  // This is NOT the DevOps shared access account, which exists in each account.
+  // It's a different role that only exists in the management account.
   const role = await sts.assumeRole({
     RoleArn: process.env.AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN,
     RoleSessionName: 'devops_slack_app',
@@ -76,12 +75,23 @@ async function selectAccount(payload) {
   const accountId = selected_option.value;
   const accountName = selected_option.text.text;
 
+  // Assume a role in the selected account that has permission to
+  // listDistributions
+  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`
   const role = await sts.assumeRole({
-    RoleArn: process.env.AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN,
+    RoleArn: roleArn,
     RoleSessionName: 'devops_slack_app',
   }).promise();
 
-  const cloudfront = new AWS.CloudFront({ apiVersion: '2019-03-26' });
+  const cloudfront = new AWS.CloudFront({
+    apiVersion: '2019-03-26',
+    region: 'us-east-1',
+    accessKeyId: role.Credentials.AccessKeyId,
+    secretAccessKey: role.Credentials.SecretAccessKey,
+    sessionToken: role.Credentials.SessionToken,
+  });
+
+  const distributions = await cloudfront.listDistributions({}).promise();
 
   await web.views.update({
     view_id: payload.view.id,
@@ -117,15 +127,15 @@ async function selectAccount(payload) {
                 text: 'Select CloudFront distribution'
               },
               action_id: 'cloudformation-invalidation_select-distribution',
-              options: [
-                {
-                  "text": {
-                      "type": "plain_text",
-                      "text": "EZR00adfasdfasdf"
+              options: distributions.DistributionList.Items.map(d => {
+                return {
+                  'text': {
+                      'type': 'plain_text',
+                      'text': `${d.Id} (${d.Aliases.Items.join(', ')})`,
                   },
-                  "value": "EZR00adfasdfasdf"
+                  'value': d.Id,
                 }
-              ]
+              }),
             }
           ]
         }
