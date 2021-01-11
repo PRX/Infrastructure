@@ -8,6 +8,8 @@ Parameters:
     Type: String
   LegacySlackMessageRelayTopicArn:
     Type: String
+  AwsOrganizationCrossAccountSharingRoleArn:
+    Type: String
 Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -40,16 +42,16 @@ Resources:
               - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      # Policies:
-      #   - PolicyName: Tktktktk
-      #     PolicyDocument:
-      #       Version: '2012-10-17'
-      #       Statement:
-      #         - Effect: Allow
-      #           Action:
-      #             - foo:bar
-      #           Resource:
-      #             - !Ref tktk
+      Policies:
+        - PolicyName: StsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - arn:aws:iam::*:role/*Oganization-CrossAccountSharingRole
       Tags:
         - Key: Project
           Value: DevOps
@@ -67,6 +69,7 @@ Resources:
           SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
           SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN: !Ref AwsOrganizationCrossAccountSharingRoleArn
       Events:
         EventRequest:
           Properties:

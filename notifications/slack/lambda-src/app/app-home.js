@@ -23,7 +23,7 @@ async function publishOpsView(user_id, hash) {
           elements: [
             {
               type: 'button',
-              action_id: 'tktk',
+              action_id: 'cloudformation-invalidation_open-model',
               text: {
                 type: 'plain_text',
                 text: 'Pipeline deploy',
