@@ -2,7 +2,6 @@ const { WebClient } = require('@slack/web-api');
 const AWS = require('aws-sdk');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
-const cloudfront = new AWS.CloudFront({ apiVersion: '2019-03-26' });
 const sts = new AWS.STS({ apiVersion: '2011-06-15' });
 
 async function openModal(payload) {
@@ -77,7 +76,7 @@ async function selectAccount(payload) {
 
   // Assume a role in the selected account that has permission to
   // listDistributions
-  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`
+  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`;
   const role = await sts.assumeRole({
     RoleArn: roleArn,
     RoleSessionName: 'devops_slack_app',
@@ -131,7 +130,7 @@ async function selectAccount(payload) {
                 return {
                   'text': {
                       'type': 'plain_text',
-                      'text': `${d.Id} (${d.Aliases.Items.join(', ')})`,
+                      'text': `${d.Id} (${d.Aliases.Items.join(', ')})`.substring(0, 75),
                   },
                   'value': d.Id,
                 }
@@ -145,6 +144,17 @@ async function selectAccount(payload) {
 }
 
 async function selectDistribution(payload) {
+  const { selected_option } = payload.actions[0];
+
+  const distributionId = selected_option.value;
+  const distributionSlug = selected_option.text.text;
+
+  const privateMetadata = JSON.parse(payload.view.private_metadata);
+  privateMetadata.distributionId = distributionId;
+  privateMetadata.distributionSlug = distributionSlug;
+
+  const { accountName } = privateMetadata;
+
   await web.views.update({
     view_id: payload.view.id,
     hash: payload.view.hash,
@@ -152,6 +162,7 @@ async function selectDistribution(payload) {
       type: 'modal',
       callback_id: 'cloudformation-invalidation_paths-to-invalidate',
       clear_on_close: true,
+      private_metadata: JSON.stringify(privateMetadata),
       title: {
         type: 'plain_text',
         text: 'CloudFront Invalidation',
@@ -171,13 +182,13 @@ async function selectDistribution(payload) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: 'THE SELECTED ACCOUNT',
+            text: `*Account:* ${accountName}`,
           },
         }, {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: 'THE SELECTED DISTRIBUTION',
+            text: `*Distributiion:* ${distributionSlug}`,
           },
         }, {
           type: 'input',
@@ -186,15 +197,18 @@ async function selectDistribution(payload) {
             type: 'plain_text',
             text: 'Paths'
           },
+          hint: {
+            type: 'plain_text',
+            text: 'Put each path on its own line. All paths must start with a slash. Paths may include wildcards (*), which must be the last character if included.',
+          },
           element: {
             type: 'plain_text_input',
             action_id: 'cloudformation-invalidation_paths-to-invalidate',
             placeholder: {
               type: 'plain_text',
-              text: '/images/image1.jpg'
+              text: '/images/image1.jpg\n/images/image2.*\n/audio/*'
             },
             multiline: true,
-
           }
         }
       ],
@@ -203,25 +217,53 @@ async function selectDistribution(payload) {
 }
 
 async function submitPaths(payload) {
-  console.log(JSON.stringify(payload));
-  console.log('PATHS SUBMITTED');
-
   const { values } = payload.view.state;
   const block = values['cloudformation-invalidation_paths-to-invalidate'];
   const action = block['cloudformation-invalidation_paths-to-invalidate'];
   const value = action.value;
 
+  const paths = value.split('\n');
 
+  const privateMetadata = JSON.parse(payload.view.private_metadata);
+  const { accountId, distributionId, distributionSlug } = privateMetadata;
 
-  await createInvalidation(distributionId, paths);
+  await createInvalidation(accountId, distributionId, paths);
+
+  await web.chat.postMessage({
+    icon_emoji: ':ops-cloudfront:',
+    username: 'Amazon CloudFront via DevOps',
+    channel: '#sandbox2',
+    text: [
+      `Invalidation created for \`${distributionId}\` with paths:`,
+      paths.map(p => `\`${p}\``).join('\n'),
+      `_${distributionSlug}_`,
+    ].join('\n'),
+  });
 }
 
 /**
  *
+ * @param {string} accountId
  * @param {string} distributionId
  * @param {string[]} paths
  */
-async function createInvalidation(distributionId, paths) {
+async function createInvalidation(accountId, distributionId, paths) {
+  // Assume a role in the selected account that has permission to
+  // createInvalidation
+  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`;
+  const role = await sts.assumeRole({
+    RoleArn: roleArn,
+    RoleSessionName: 'devops_slack_app',
+  }).promise();
+
+  const cloudfront = new AWS.CloudFront({
+    apiVersion: '2019-03-26',
+    region: 'us-east-1',
+    accessKeyId: role.Credentials.AccessKeyId,
+    secretAccessKey: role.Credentials.SecretAccessKey,
+    sessionToken: role.Credentials.SessionToken,
+  });
+
   await cloudfront.createInvalidation({
     DistributionId: distributionId,
     InvalidationBatch: {
@@ -232,8 +274,6 @@ async function createInvalidation(distributionId, paths) {
         },
     }
   }).promise();
-
-  // TODO send a message about the invalidation
 }
 
 module.exports = {
