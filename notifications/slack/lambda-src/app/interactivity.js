@@ -14,9 +14,9 @@ const SLACK_PAYLOAD_TYPE_VIEW_CLOSED = 'view_closed';
  * @param {*} payload
  */
 async function handleBlockActionPayload(payload) {
-  const { action_id } = payload.actions[0];
+  const actionId = payload.actions[0].action_id;
 
-  if (action_id.startsWith('cloudformation-invalidation_')) {
+  if (actionId.startsWith('cloudformation-invalidation_')) {
     await cfInvalidate.handleBlockActionPayload(payload);
   }
 }
@@ -30,9 +30,9 @@ async function handleBlockActionPayload(payload) {
  * @param {*} payload
  */
 async function handleViewSubmissionPayload(payload) {
-  const { callback_id } = payload.view;
+  const callbackId = payload.view.callback_id;
 
-  if (callback_id.startsWith('cloudformation-invalidation_')) {
+  if (callbackId.startsWith('cloudformation-invalidation_')) {
     await cfInvalidate.handleViewSubmissionPayload(payload);
   }
 }
@@ -53,7 +53,7 @@ module.exports = {
         return { statusCode: 200, headers: {}, body: '' };
       case SLACK_PAYLOAD_TYPE_VIEW_CLOSED:
         console.log('SLACK_PAYLOAD_TYPE_VIEW_CLOSED');
-        break;
+        return { statusCode: 200, headers: {}, body: '' };
       default:
         return { statusCode: 200, headers: {}, body: '' };
     }

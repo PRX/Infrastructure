@@ -1,9 +1,9 @@
 const { WebClient } = require('@slack/web-api');
 
-async function publishOpsView(user_id, hash) {
+async function publishOpsView(userId, hash) {
   const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
   await web.views.publish({
-    user_id,
+    user_id: userId,
     view: {
       type: 'home',
       blocks: [
@@ -15,7 +15,7 @@ async function publishOpsView(user_id, hash) {
           type: 'section',
           text: {
             type: 'plain_text',
-            text: "Charts and graphs and stuff"
+            text: 'Charts and graphs and stuff',
           },
         },
         {
@@ -33,19 +33,18 @@ async function publishOpsView(user_id, hash) {
             },
           ],
         },
-      ]
+      ],
     },
-    hash
+    hash,
   });
-};
+}
 
-async function publishReaderView(user_id, hash) {
-};
+// async function publishReaderView(userId, hash) {};
 
-async function publishDefaultView(user_id, hash) {
+async function publishDefaultView(userId, hash) {
   const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
   await web.views.publish({
-    user_id,
+    user_id: userId,
     view: {
       type: 'home',
       blocks: [
@@ -57,12 +56,12 @@ async function publishDefaultView(user_id, hash) {
           type: 'section',
           text: {
             type: 'plain_text',
-            text: "You don't have access to this app."
+            text: "You don't have access to this app.",
           },
-        }
-      ]
+        },
+      ],
     },
-    hash
+    hash,
   });
 }
 
@@ -90,7 +89,6 @@ module.exports = {
       } else {
         await publishDefaultView(userId, hash);
       }
-
     }
   },
 };
