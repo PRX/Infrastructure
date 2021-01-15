@@ -26,7 +26,7 @@ async function publishOpsView(userId, hash) {
               action_id: 'cloudformation-invalidation_open-model',
               text: {
                 type: 'plain_text',
-                text: 'Pipeline deploy',
+                text: 'CloudFront Invalidations',
                 emoji: true,
               },
               style: 'primary',
