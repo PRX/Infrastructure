@@ -8,8 +8,6 @@ Description: >
 Parameters:
   CodeStarConnectionArn:
     Type: String
-  OrgRootSingleRegionStackName:
-    Type: String
   OrganizationId:
     Type: String
     Description: e.g. o-a1s2d3f4f5g
@@ -23,12 +21,6 @@ Parameters:
       - us-east-1
       - us-east-2
     Default: us-east-2
-  PermissionModel:
-    AllowedValues:
-      - SELF_MANAGED
-      - SERVICE_MANAGED
-    Default: SERVICE_MANAGED
-    Type: String
   SlackMessageRelayTopicArn:
     Type: String
 
@@ -102,28 +94,20 @@ Resources:
             Version: "2012-10-17"
           PolicyName: CodeStarConnectionPolicy
         # Let CodePipeline describe CloudFormation stacks
-        # - PolicyName: CloudFormationAccess
-        #   PolicyDocument:
-        #     Version: "2012-10-17"
-        #     Statement:
-        #       - Effect: Allow
-        #         Action:
-        #           - cloudformation:*
-        #         Resource:
-        #           - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}
-        #           - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingCloudFormationStackName}/*
-        #       - Effect: Allow
-        #         Action:
-        #           - cloudformation:DescribeStacks
-        #           - cloudformation:CreateStack
-        #           - cloudformation:UpdateStack
-        #           - cloudformation:DescribeChangeSet
-        #           - cloudformation:CreateChangeSet
-        #           - cloudformation:ExecuteChangeSet
-        #           - cloudformation:DeleteChangeSet
-        #         Resource:
-        #           - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}
-        #           - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionCloudFormationStackName}/*
+        - PolicyName: CloudFormationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                Resource:
+                  - "*" # TODO
+                  # - arn:aws:cloudformation:*::type/resource/AWS-IAM-ManagedPolicy
+                  # # Add each StackSetName from the pipeline's actions. There
+                  # # will be both a root and wildcard resource for each.
+                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role
+                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role:*
         # Allow PassRole to the CloudFormation role
         # - PolicyDocument:
         #     Statement:
@@ -160,7 +144,7 @@ Resources:
               Configuration:
                 ConnectionArn: !Ref CodeStarConnectionArn
                 FullRepositoryId: PRX/Infrastructure
-                BranchName: master
+                BranchName: feat/devops_prep
                 OutputArtifactFormat: CODE_ZIP
               Namespace: infrastructure_repo
               OutputArtifacts:
@@ -168,9 +152,32 @@ Resources:
               RunOrder: 1
         - Name: Deploy
           Actions:
-            # CloudWatch data sharing role
-            # Deploys an organization-wide, service-managed StackSet in one
-            # region in each account
+            # DevOps cross-account access role
+            - Name: DevopsCrossAccountAccessRoleStackSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-devops-cross-account-access-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to add the CloudWatch-CrossAccountSharingRole IAM role to each account,
+                  which provides read-only access to that account's CloudWatch data.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cross-account-access-role.yml
+                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref Region
+                FailureTolerancePercentage: 0
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # CloudWatch cross-account data sharing role
             - Name: CloudWatchDataSharingRoleStackSet
               ActionTypeId:
                 Category: Deploy
@@ -178,7 +185,7 @@ Resources:
                 Provider: CloudFormationStackSet
                 Version: "1"
               Configuration:
-                StackSetName: org-cloudwatch-data-sharing-role2
+                StackSetName: org-cloudwatch-data-sharing-role
                 Capabilities: CAPABILITY_NAMED_IAM
                 Description: >-
                   Launches a stack in one region in each account in an AWS Organization
@@ -187,8 +194,8 @@ Resources:
                 TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
                 Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
                 PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledwithStackRetention
-                # DeploymentTargets:
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
                 Regions: !Ref Region
                 FailureTolerancePercentage: 0
                 MaxConcurrentPercentage: 100
@@ -196,31 +203,36 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
 
+
+
+
+
+
             # Root account activity monitor
-            - Name: RootAccountActivityMonitorStackSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-root-account-activity-monitor2
-                Capabilities: CAPABILITY_IAM
-                Description: >-
-                  Launches a root account activity monitor in one region in each account
-                  in an AWS Organization. An activity monitor can monitor activity in all
-                  regions in the account it belongs to.
-                TemplatePath: InfrastructureRepoSourceArtifact::etc/root-account-activity-monitor.yml
-                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledwithStackRetention
-                # DeploymentTargets:
-                Regions: !Ref Region
-                FailureTolerancePercentage: 0
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
+            # - Name: RootAccountActivityMonitorStackSet
+            #   ActionTypeId:
+            #     Category: Deploy
+            #     Owner: AWS
+            #     Provider: CloudFormationStackSet
+            #     Version: "1"
+            #   Configuration:
+            #     StackSetName: org-root-account-activity-monitor2
+            #     Capabilities: CAPABILITY_IAM
+            #     Description: >-
+            #       Launches a root account activity monitor in one region in each account
+            #       in an AWS Organization. An activity monitor can monitor activity in all
+            #       regions in the account it belongs to.
+            #     TemplatePath: InfrastructureRepoSourceArtifact::etc/root-account-activity-monitor.yml
+            #     Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
+            #     PermissionModel: SERVICE_MANAGED
+            #     OrganizationsAutoDeployment: EnabledWithStackRetention
+            #     # DeploymentTargets:
+            #     Regions: !Ref Region
+            #     FailureTolerancePercentage: 0
+            #     MaxConcurrentPercentage: 100
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #   RunOrder: 1
 
       Tags:
         - Key: Project
