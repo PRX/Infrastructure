@@ -1,5 +1,5 @@
 const querystring = require('querystring');
-const cfInvalidate = require('./things/cloudfront-invalidations')
+const cfInvalidate = require('./things/cloudfront-invalidations');
 
 const SLACK_PAYLOAD_TYPE_BLOCK_ACTIONS = 'block_actions';
 const SLACK_PAYLOAD_TYPE_VIEW_SUBMISSION = 'view_submission';
