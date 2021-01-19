@@ -205,7 +205,7 @@ async function selectDistribution(payload) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Distributiion:* ${distributionSlug}`,
+            text: `*Distribution:* ${distributionSlug}`,
           },
         },
         {
