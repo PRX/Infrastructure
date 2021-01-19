@@ -33,6 +33,21 @@ async function publishOpsView(userId, hash) {
             },
           ],
         },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              action_id: 'codepipeline-execution_open-model',
+              text: {
+                type: 'plain_text',
+                text: 'CodePipeline Executions',
+                emoji: true,
+              },
+              style: 'primary',
+            },
+          ],
+        },
       ],
     },
     hash,
