@@ -131,6 +131,10 @@ Resources:
               Value: !Ref PublishSecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: UPLOAD_S3_ENDPOINT_HOST
+              Value: !GetAtt PublishUploadsBucket.DualStackDomainName
+            - Name: UPLOAD_BUCKET_NAME
+              Value: !Ref PublishUploadsBucket
           Essential: true
           # TODO
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${PublishEcrImageTag}
@@ -220,6 +224,25 @@ Resources:
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
           Value: !GetAtt PublishALBTargetGroup.TargetGroupFullName
+  # Upload bucket
+  PublishUploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 3
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
