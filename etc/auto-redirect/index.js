@@ -18,9 +18,9 @@
  * Response: 301 https://www.new-domain.com/path/to/file
  */
 exports.handler = async (event, context) => ({
-    statusCode: event.rawPath.substring(1, 4),
-    headers: {
-        location: `https://${decodeURIComponent(event.pathParameters.proxy)}`,
-        'x-prx-id': context.awsRequestId,
-    },
+  statusCode: event.rawPath.substring(1, 4),
+  headers: {
+    location: `https://${decodeURIComponent(event.pathParameters.proxy)}`,
+    'x-prx-id': context.awsRequestId,
+  },
 });
