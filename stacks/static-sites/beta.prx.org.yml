@@ -1,28 +1,58 @@
 # stacks/static-sites/beta.prx.org.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Beta.prx.org listener site
+Description: >-
+  Beta.prx.org listener site. Intended to be hosted by a CloudFront
+  distribution that is managed separately.
 Parameters:
   CodeS3Bucket:
     Type: String
   StaticSiteArchiveS3ObjectVersion:
     Type: String
-  StaticSiteS3StagingDeployBucket:
-    Type: AWS::SSM::Parameter::Value<String>
-  StaticSiteS3ProductionDeployBucket:
-    Type: AWS::SSM::Parameter::Value<String>
   EnvironmentType:
     Type: String
   S3StaticSiteDeployFunctionArn:
     Type: String
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  StaticSiteCloudFrontOai:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   S3StaticDeploy:
-    Type: "Custom::S3StaticDeploy"
+    Type: Custom::S3StaticDeploy
     Properties:
       ServiceToken: !Ref S3StaticSiteDeployFunctionArn
       Region: !Ref AWS::Region
       StaticSiteArchiveS3Bucket: !Ref CodeS3Bucket
-      StaticSiteArchiveS3Object: 's3-static/PRX-beta.prx.org.zip'
+      StaticSiteArchiveS3Object: s3-static/PRX-beta.prx.org.zip
       StaticSiteArchiveS3ObjectVersion: !Ref StaticSiteArchiveS3ObjectVersion
-      StaticSiteS3DeployBucket: !If [IsProduction, !Ref StaticSiteS3ProductionDeployBucket, !Ref StaticSiteS3StagingDeployBucket]
+      StaticSiteS3DeployBucket: !Ref BetaBucket
+  BetaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: backsaw.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  DeployBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref BetaBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS: !Ref StaticSiteCloudFrontOai
+            Resource: !Sub arn:aws:s3:::${BetaBucket}/*
+            Sid: Grant read access to a CloudFront Origin Identity
