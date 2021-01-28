@@ -10,6 +10,8 @@ Parameters:
     Type: String
   S3StaticSiteDeployFunctionArn:
     Type: String
+  StaticSiteCloudFrontOai:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   S3StaticDeploy:
     Type: Custom::S3StaticDeploy
@@ -39,3 +41,17 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+  DeployBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket:
+        Ref: DeployBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS: !Ref StaticSiteCloudFrontOai
+            Resource: !Sub arn:aws:s3:::${DeployBucket}/*
+            Sid: Grant read access to a CloudFront Origin Identity
