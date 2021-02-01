@@ -100,6 +100,39 @@
         });
       }
 
+      function encodeS3Key(objectKey) {
+        let encodedKey = '';
+
+        // Iterate through each code point of the string
+        for (let pt of objectKey) {
+          // Preserve URI-safe characters
+          // => A-Z a-z 0-9 _ - ~ .
+          // And also forward slash
+          // => /
+          if (/[\w\-.~/]/.test(pt)) {
+            encodedKey = encodedKey.concat(pt);
+          }
+          // For the other characters that encodeURIComponent does not encode,
+          // but should be encoded to safely call from S3, do it manually
+          else if (pt === '!') {
+            encodedKey = encodedKey.concat('%21');
+          } else if (pt === '*') {
+            encodedKey = encodedKey.concat('%2a');
+          } else if (pt === "'") {
+            encodedKey = encodedKey.concat('%27');
+          } else if (pt === '(') {
+            encodedKey = encodedKey.concat('%28');
+          } else if (pt === ')') {
+            encodedKey = encodedKey.concat('%29');
+          } else {
+            // Encode all other characters, which encodeURIComponent will do
+            encodedKey = encodedKey.concat(encodeURIComponent(pt));
+          }
+        }
+
+        return encodedKey;
+      }
+
       function validate() {
         if (!document.getElementById('s3_upload').getAttribute('action')) { return; }
 
@@ -127,9 +160,15 @@
           if (window.location.href.includes('etag=')) {
             document.getElementById('upload_notification').style.visibility = 'visible';
 
+            // Given a file called: aZ1!-_*'()?&.mp3
+            // The object in S3 will be called: upload/1612214234712_aZ1!-_*'()?&.mp3
+            // The query param will look like: upload%2F1612214234712_aZ1!-_*'()%3F%26.mp3
+            // The value returned by params.get will be: upload/1612214234712_aZ1!-_*'()?&.mp3
+            // The value returned by encodeS3Key will be: upload/1612214234712_aZ1%21-_%2a%27%28%29%3F%26.mp3
+
             const params = new URLSearchParams(window.location.search);
             const u = document.getElementById('public_url');
-            u.innerText = `${u.innerText}${encodeURI(params.get('key'))}`;
+            u.innerText = `${u.innerText}${encodeS3Key(params.get('key'))}`;
           }
 
           const file_selector = document.getElementById('s3_file');
