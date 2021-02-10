@@ -33,6 +33,8 @@ Conditions:
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
   HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
   HasCloudFrontForwardedHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedHeaders], ""]]
+  HasCloudFrontForwardedQueryStrings: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedQueryStrings], ""]]
+  HasCloudFrontForwardedCookies: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedCookies], ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
@@ -89,6 +91,8 @@ Metadata:
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
           - CloudFrontForwardedHeaders
+          - CloudFrontForwardedQueryStrings
+          - CloudFrontForwardedCookies
           - CloudFrontCompress
           - CloudFrontDefaultTtl
           - CloudFrontMinTtl
@@ -139,6 +143,10 @@ Metadata:
         default: Cached methods
       CloudFrontForwardedHeaders:
         default: Forwarded Headers
+      CloudFrontForwardedQueryStrings:
+        default: Forwarded query strings
+      CloudFrontForwardedCookies:
+        default: Forwarded cookies
       CloudFrontCompress:
         default: Compress objects automatically
       CloudFrontOriginAccess:
@@ -251,6 +259,26 @@ Parameters:
       those headers' values in the viewer request. Provide a comma-delimited
       list (e.g. "Origin,Access-Control-Request-Headers,
       Access-Control-Request-Method")
+  CloudFrontForwardedQueryStrings:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The query strings, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those query strings' values in the viewer request. Provide a
+      comma-delimited list (e.g. "id,utm_content,q"). The list should include
+      only field names, but the full query string (e.g. "id=1234") will be sent
+      to the origin, and included in the cache key.
+  CloudFrontForwardedCookies:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The cookies, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those cookies' values in the viewer request. Provide a
+      comma-delimited list (e.g. "session_ID,user_ID"). The list should include
+      only cookie names, but the full cookie (e.g. "session_ID=1234") will be
+      sent to the origin, and included in the cache key.
   CloudFrontMinTtl:
     Type: String
     Description: >-
@@ -405,31 +433,31 @@ Resources:
         Name: !Sub ${AWS::StackName}-CachePolicy
         ParametersInCacheKeyAndForwardedToOrigin:
           CookiesConfig:
-            CookieBehavior: none
-            # Cookies:
+            CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
+            Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
           EnableAcceptEncodingBrotli: true
           EnableAcceptEncodingGzip: true
           HeadersConfig:
             HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
             Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
           QueryStringsConfig:
-            QueryStringBehavior: none
-            # QueryStrings:
+            QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
+            QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
   CloudFrontOriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
     Properties:
       OriginRequestPolicyConfig:
         Comment: !Sub Policy for ${AWS::StackName}
         CookiesConfig:
-          CookieBehavior: none
-          # Cookies:
+          CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
+          Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
         HeadersConfig:
           HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
           Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
         Name: !Sub ${AWS::StackName}-OriginRequestPolicy
         QueryStringsConfig:
-          QueryStringBehavior: none
-          # QueryStrings:
+          QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
+          QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
