@@ -180,7 +180,6 @@ Resources:
       TaskDefinition: !Ref PlayTaskDefinition
   # Route 53
   PlayWebRecordSetGroup:
-    Condition: CreateProductionResources
     Type: "AWS::Route53::RecordSetGroup"
     Properties:
       Comment: Record sets for dualstack web traffic to an play instance
@@ -196,99 +195,6 @@ Resources:
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
-  PlayCdnWebRecordSetGroup:
-    Condition: CreateProductionResources
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Record sets for CloudFront distribution
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: A
-          Name: !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
-          AliasTarget:
-            DNSName: !GetAtt PlayCloudFrontDistribution.DomainName
-            HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
-          Name: !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
-          AliasTarget:
-            DNSName: !GetAtt PlayCloudFrontDistribution.DomainName
-            HostedZoneId: Z2FDTNDATAQYW2
-  # CloudFront
-  PlayCloudFrontCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        DefaultTTL: 86400
-        MaxTTL: 31536000
-        MinTTL: 0
-        Name: !Sub ${AWS::StackName}-CachePolicy
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: none
-          QueryStringsConfig:
-            QueryStringBehavior: whitelist
-            QueryStrings:
-              - url
-  PlayCloudFrontOriginRequestPolicy:
-    Condition: CreateProductionResources
-    Type: AWS::CloudFront::OriginRequestPolicy
-    Properties:
-      OriginRequestPolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        CookiesConfig:
-          CookieBehavior: none
-        HeadersConfig:
-          HeaderBehavior: none
-        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
-        QueryStringsConfig:
-          QueryStringBehavior: whitelist
-          QueryStrings:
-            - url
-  PlayCloudFrontDistribution:
-    Condition: CreateProductionResources
-    Type: "AWS::CloudFront::Distribution"
-    Properties:
-      DistributionConfig:
-        Aliases:
-          - !Sub "play.cdn.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
-          - !If [CreateProductionResources, "play.prx.tech", "play.staging.prx.tech"]
-          - !If [CreateProductionResources, "play.prx.org", "play.staging.prx.org"]
-        Comment: !Sub ${EnvironmentType} play.prx.org
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - HEAD
-            - GET
-          CachedMethods:
-            - HEAD
-            - GET
-          CachePolicyId: !Ref PlayCloudFrontCachePolicy
-          Compress: true
-          OriginRequestPolicyId: !Ref PlayCloudFrontOriginRequestPolicy
-          TargetOriginId: !FindInMap [Shared, Project, name]
-          ViewerProtocolPolicy : redirect-to-https
-        Enabled: true
-        HttpVersion: http2
-        IPV6Enabled: true
-        Origins:
-          - CustomOriginConfig:
-              HTTPSPort: 443
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols:
-                - TLSv1.2
-                - TLSv1.1
-                - TLSv1
-            DomainName: !Sub "play.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech"
-            Id: !FindInMap [Shared, Project, name]
-        PriceClass: PriceClass_All
-        ViewerCertificate:
-          AcmCertificateArn: !Ref VPCCertificateArn
-          MinimumProtocolVersion: TLSv1.2_2019
-          SslSupportMethod: sni-only
   # CloudWatch Alarms
   PlayALBTargetGroup500Alarm:
     Type: "AWS::CloudWatch::Alarm"
