@@ -20,7 +20,7 @@ Parameters:
     Description: >
       The EC2 key pair used for instances in the Auto Scaling
       group (region-specific)
-    Type: "AWS::EC2::KeyPair::KeyName"
+    Type: AWS::EC2::KeyPair::KeyName
   EcrRegion:
     Type: String
   EnvironmentType:
@@ -213,11 +213,11 @@ Mappings:
 Resources:
   # Root stacks
   StaticSitesRootStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
@@ -227,18 +227,18 @@ Resources:
         BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
         BacksawArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/static-sites/root.yml"]]
       TimeoutInMinutes: 5
   ServerlessRootStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
@@ -259,18 +259,18 @@ Resources:
         RadiotopiaTowerLambdaCodeS3ObjectVersion: !Ref RadiotopiaTowerLambdaCodeS3ObjectVersion
         PixelPrxOrgCodeS3ObjectVersion: !Ref PixelPrxOrgCodeS3ObjectVersion
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/serverless/root.yml"]]
       TimeoutInMinutes: 5
   ContainerAppsRootStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         InfrastructureNotificationsStackName: !Ref NotificationsStackName
         TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/"]]
@@ -295,13 +295,13 @@ Resources:
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         SecretsInstanceDecryptPolicyArn:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsInstanceDecryptPolicyArn"
+            !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         SecretsInstanceAccessPolicyArn:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsInstanceAccessPolicyArn"
+            !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
         ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
@@ -342,48 +342,48 @@ Resources:
         IframelyEcrImageTag: !Ref IframelyEcrImageTag
         IframelySecretsVersion: !Ref IframelySecretsVersion
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/root.yml"]]
       TimeoutInMinutes: 5
   # App and shared resource stacks
   VPCStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         AwsOrganizationId: !Ref AwsOrganizationId
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/vpc.yml"]]
       TimeoutInMinutes: 5
   CertificateStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         VPC: !GetAtt VPCStack.Outputs.VPC
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/certificate.yml"]]
       TimeoutInMinutes: 5
   ECSClusterStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
@@ -403,35 +403,35 @@ Resources:
         VPCSubnet3AZ: !GetAtt VPCStack.Outputs.Subnet3AvailabilityZone
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         SlackMessageRelaySnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-SlackMessageRelaySnsTopicArn"
+            !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
         SecretsInstanceDecryptPolicyArn:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsInstanceDecryptPolicyArn"
+            !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         SecretsInstanceAccessPolicyArn:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsInstanceAccessPolicyArn"
+            !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/ecs.yml"]]
       TimeoutInMinutes: 5
   LoadBalancersStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
@@ -442,23 +442,23 @@ Resources:
         VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/load-balancers.yml"]]
       TimeoutInMinutes: 5
   PublishStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
@@ -472,33 +472,33 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         PublishEcrImageTag: !Ref PublishEcrImageTag
         PublishSecretsVersion: !Ref PublishSecretsVersion
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/publish.prx.org.yml"]]
       TimeoutInMinutes: 5
   CastleStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
@@ -512,34 +512,34 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         CastleEcrImageTag: !Ref CastleEcrImageTag
         CastleSecretsVersion: !Ref CastleSecretsVersion
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
         ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/castle.prx.org.yml"]]
       TimeoutInMinutes: 5
   PlayStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
@@ -554,33 +554,33 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         PlayEcrImageTag: !Ref PlayEcrImageTag
         PlaySecretsVersion: !Ref PlaySecretsVersion
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/play.prx.org.yml"]]
       TimeoutInMinutes: 5
   CrierStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
@@ -594,19 +594,19 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         EcrRegion: !Ref EcrRegion
         EcrImageTag: !Ref CrierEcrImageTag
         SecretsVersion: !Ref CrierSecretsVersion
-        AppName: "crier"
+        AppName: crier
         CreateWorker: "true"
         ContainerPort: "3000"
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
@@ -614,18 +614,18 @@ Resources:
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1"
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   FeederStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
@@ -637,22 +637,22 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         EcrRegion: !Ref EcrRegion
         EcrImageTag: !Ref FeederEcrImageTag
         SecretsVersion: !Ref FeederSecretsVersion
-        AppName: "feeder"
+        AppName: feeder
         CreateWorker: "true"
         DesiredWebsProduction: "6"
         DesiredWorkersProduction: "1"
@@ -662,18 +662,18 @@ Resources:
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/api/v1"
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/web-alb-application.yml"]]
       TimeoutInMinutes: 5
   DovetailStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
@@ -686,13 +686,13 @@ Resources:
         DynamodbKinesisStream: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"]]
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
@@ -700,7 +700,7 @@ Resources:
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         DovetailEcrImageTag: !Ref DovetailEcrImageTag
         DovetailSecretsVersion: !Ref DovetailSecretsVersion
         DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
@@ -708,18 +708,18 @@ Resources:
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailMemory]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailCpu]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/dovetail.prx.org.yml"]]
       TimeoutInMinutes: 5
   IdStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
@@ -733,19 +733,19 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         EcrRegion: !Ref EcrRegion
         EcrImageTag: !Ref IdEcrImageTag
         SecretsVersion: !Ref IdSecretsVersion
-        AppName: "id"
+        AppName: id
         CreateWorker: "false"
         ContainerPort: "3000"
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
@@ -753,18 +753,18 @@ Resources:
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
         HealthCheckPath: "/healthcheck"
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/web-application.yml"]]
       TimeoutInMinutes: 5
   MetricsStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         VPC: !GetAtt VPCStack.Outputs.VPC
         PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
@@ -778,77 +778,77 @@ Resources:
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsDebugMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsDebugMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         EcrRegion: !Ref EcrRegion
         SecretsBase:
           Fn::ImportValue:
-            !Sub "${SecretsStackName}-SecretsBaseRegion"
+            !Sub ${SecretsStackName}-SecretsBaseRegion
         MetricsEcrImageTag: !Ref MetricsEcrImageTag
         MetricsSecretsVersion: !Ref MetricsSecretsVersion
         ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
         ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/metrics.prx.org.yml"]]
       TimeoutInMinutes: 5
   DovetailStitchLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         CodeS3Bucket:
           Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+            !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
         CodeS3ObjectVersion: !Ref DovetailStitchLambdaCodeS3ObjectVersion
         PorterSnsArn: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/dovetail-stitch-lambda/PORTER_SNS_ARN"]]
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/dovetail-stitch-lambda.yml"]]
       TimeoutInMinutes: 5
   ProxyPrxOrgStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
-            !Sub "${NotificationsStackName}-CloudFormationNotificationSnsTopic"
+            !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
         OpsWarnMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue:
-            !Sub "${NotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+            !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         CodeS3Bucket:
           Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+            !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
         CodeS3ObjectVersion: !Ref ProxyPrxOrgCodeS3ObjectVersion
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/proxy.prx.org.yml"]]
       TimeoutInMinutes: 5
