@@ -130,6 +130,25 @@ Resources:
         - FixedResponseConfig:
             StatusCode: "404"
           Type: fixed-response
+  PlatformALBHTTPUpgradeRedirectListenerRule:
+    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+    Condition: CreateStagingResources
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: '#{host}'
+            Path: '#{path}'
+            Port: '#{port}'
+            Protocol: HTTPS
+            Query: '#{query}'
+            StatusCode: HTTP_301
+          Type: redirect
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - '*'
+      ListenerArn: !Ref PlatformALBHTTPListener
+      Priority: 1
   PlatformALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -146,6 +165,7 @@ Resources:
   PlatformALBLogsBucket:
     Type: "AWS::S3::Bucket"
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LifecycleConfiguration:
         Rules:
