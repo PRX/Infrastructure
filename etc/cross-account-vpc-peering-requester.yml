@@ -1,14 +1,17 @@
 # etc/cross-account-vpc-peering-requester.yml
-AWSTemplateFormatVersion: 2010-09-09
-Description: >
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
   Create a VPC Peering connection between two VPCs in different AWS accounts,
   using an existing trusted assumable role. It will optionally add a route to
   the peering connection to a given route table. This stack is for the requester
   side of the connection; the accepter side should approve the connection
   automatically since an appropriately-permissioned IAM user on that side is
   used to create the connection.
+
 Conditions:
   HasRouteTable: !Not [!Equals [!Ref RouteTable, ""]]
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -28,6 +31,10 @@ Metadata:
           - VpcId
           - RouteTable
           - DestinationCidrBlock
+      - Label:
+          default: Peering Connection Options
+        Parameters:
+          - AllowDnsResolutionFromRemoteVpc
     ParameterLabels:
       VpcPeeringConnectionName:
         default: Name
@@ -43,41 +50,53 @@ Metadata:
         default: Peering IAM role ARN
       DestinationCidrBlock:
         default: CIDR block
+      AllowDnsResolutionFromRemoteVpc:
+        default: DNS resolution from remote VPC
+
 Parameters:
   VpcPeeringConnectionName:
     Type: String
-    Description: >
+    Description: >-
       A name tag to give to the VPC peering connection
   VpcId:
     Type: AWS::EC2::VPC::Id
-    Description: >
+    Description: >-
       The ID of the VPC in the requester account (where this stack is being
       launched)
   RouteTable:
     Type: String
-    Description: >
+    Description: >-
       (Optional) If provided, a route will be added to the table for the
       VPR peering connection
   DestinationCidrBlock:
     Type: String
-    Description: >
+    Description: >-
       The IPv4 CIDR address block used for the destination match.
   PeerVpcAccountId:
     Type: String
-    Description: >
+    Description: >-
       The account ID where the peering VPC exists
   PeerVpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: >
+    Type: String
+    Description: >-
       The ID of the VPC to peer with
   PeerRoleArn:
     Type: String
-    Description: >
+    Description: >-
       The ARN for a IAM role in the peering account that allows VPC peering
       and trusts this account
+  AllowDnsResolutionFromRemoteVpc:
+    Type: String
+    Description: >-
+      Indicates whether DNS queries from the remote VPC for public hostnames
+      resolve to private IP addresses in the local VPC
+    AllowedValues:
+      - Enabled
+      - Disabled
+
 Resources:
   VpcPeeringConnection:
-    Type: "AWS::EC2::VPCPeeringConnection"
+    Type: AWS::EC2::VPCPeeringConnection
     Properties:
       VpcId: !Ref VpcId
       PeerVpcId: !Ref PeerVpcId
@@ -86,16 +105,92 @@ Resources:
       Tags:
         - Key: Name
           Value: !Ref VpcPeeringConnectionName
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   Route:
-    Type: "AWS::EC2::Route"
+    Type: AWS::EC2::Route
     Condition: HasRouteTable
-    DependsOn: VpcPeeringConnection
     Properties:
       RouteTableId: !Ref RouteTable
       VpcPeeringConnectionId: !Ref VpcPeeringConnection
       DestinationCidrBlock: !Ref DestinationCidrBlock
+  VpcPeeringConnectionOptionsCustomResource:
+    DependsOn:
+      - VpcPeeringConnection
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt ModifyVpcPeeringConnectionOptionsFunction.Arn
+      AllowDnsResolutionFromRemoteVpc: !Ref AllowDnsResolutionFromRemoteVpc
+  ModifyVpcPeeringConnectionOptionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        Handles CloudFormation custom resource requests for modifying VPC
+        peering connection options from the requester side
+      Environment:
+        Variables:
+          VPC_PEERING_CONNECTION_ID: !Ref VpcPeeringConnection
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require("aws-sdk");
+        const cfnResponse = require("cfn-response");
 
+        const ec2 = new AWS.EC2({ apiVersion: "2016-11-15" });
+
+        exports.handler = async (event, context) => {
+          try {
+            console.log(JSON.stringify(event));
+
+            let flag;
+
+            if (["Create", "Update"].includes(event.RequestType)) {
+              flag =
+                event.ResourceProperties.AllowDnsResolutionFromRemoteVpc === "Enabled"
+                  ? true
+                  : false;
+            } else if (["Delete"].includes(event.RequestType)) {
+              // If the custom resource is being deleted, reset the option to
+              // the default value of false
+              flag = false;
+            }
+
+            console.log(flag);
+            const res = await ec2
+              .modifyVpcPeeringConnectionOptions({
+                VpcPeeringConnectionId: process.env.VPC_PEERING_CONNECTION_ID,
+                RequesterPeeringConnectionOptions: {
+                  AllowDnsResolutionFromRemoteVpc: flag,
+                },
+              })
+              .promise();
+            console.log(res);
+
+            await cfnResponse.send(event, context, cfnResponse.SUCCESS, {});
+          } catch (error) {
+            console.log("Sending FAILED response");
+            console.log(error);
+            await cfnResponse.send(event, context, cfnResponse.FAILED, {});
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Action:
+                - ec2:ModifyVpcPeeringConnectionOptions
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        Project: Admin
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 30
+  ModifyVpcPeeringConnectionOptionsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ModifyVpcPeeringConnectionOptionsFunction}
+      RetentionInDays: 7

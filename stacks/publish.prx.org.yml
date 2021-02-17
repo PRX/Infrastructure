@@ -131,8 +131,13 @@ Resources:
               Value: !Ref PublishSecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: UPLOAD_S3_ENDPOINT_HOST
+              Value: !Sub ${PublishUploadsBucket}.s3-accelerate.dualstack.amazonaws.com
+            - Name: UPLOAD_BUCKET_NAME
+              Value: !Ref PublishUploadsBucket
+            - Name: UPLOAD_PUBLIC_ACCESS_HOST
+              Value: !GetAtt PublishUploadsCloudFrontDistribution.DomainName
           Essential: true
-          # TODO
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${PublishEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
@@ -220,6 +225,126 @@ Resources:
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
           Value: !GetAtt PublishALBTargetGroup.TargetGroupFullName
+  # Upload bucket
+  PublishUploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AccelerateConfiguration:
+        AccelerationStatus: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - POST
+              - PUT
+            AllowedOrigins:
+              - "*"
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+              - Date
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 3
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  PublishUploadsCloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  PublishUploadsCloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+  PublishUploadsCloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub Publish uploads ${AWS::StackName}
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - HEAD
+            - GET
+          CachedMethods:
+            - HEAD
+            - GET
+          CachePolicyId: !Ref PublishUploadsCloudFrontCachePolicy
+          Compress: true
+          OriginRequestPolicyId: !Ref PublishUploadsCloudFrontOriginRequestPolicy
+          TargetOriginId: !FindInMap [Shared, Project, name]
+          ViewerProtocolPolicy : redirect-to-https
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt PublishUploadsBucket.RegionalDomainName
+            Id: !FindInMap [Shared, Project, name]
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${PublishUploadsCloudFrontOriginAccessIdentity}
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+  PublishUploadsCloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub Publish uploads ${AWS::StackName}
+  DeployBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublishUploadsBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${PublishUploadsCloudFrontOriginAccessIdentity}
+            Resource: !Sub arn:aws:s3:::${PublishUploadsBucket}/*
+            Sid: Grant read access to a CloudFront Origin Identity
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone

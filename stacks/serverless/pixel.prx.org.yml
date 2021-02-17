@@ -1,5 +1,6 @@
 # stacks/serverless/pixel.prx.org.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 Description: API Gateway pixel tracker
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
@@ -113,7 +114,7 @@ Resources:
       Handler: index.handler
       MemorySize: 192
       Role: !GetAtt PixelLambdaIamRole.Arn
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Timeout: 30
       Tags:
         - Key: Project
@@ -273,6 +274,55 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
+
+  PixelHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Domain:
+      #   CertificateArn: !Ref ApiCertificate
+      #   DomainName: !Ref ApiDomain
+      Tags:
+        Environment: !Ref EnvironmentType
+        Project: pixel.prx.org
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+  PixelLambdaFunction2:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: lambda/PRX-pixel.prx.org.zip
+        Version: !Ref CodeS3ObjectVersion
+      Description: API Gateway pixel tracker
+      Environment:
+        Variables:
+          DESTINATIONS: !Ref Destinations
+          KINESIS_STREAM: !Ref KinesisStream
+          ID_HOST: !Ref IdHost
+          SIGNER_SECRET: !Ref SignerSecret
+      Events:
+        RootRequest:
+          Properties:
+            ApiId: !Ref PixelHttpApi
+            Method: ANY
+            Path: /
+          Type: HttpApi
+        PathRequest:
+          Properties:
+            ApiId: !Ref PixelHttpApi
+            Method: ANY
+            Path: /{proxy+}
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 192
+      Role: !GetAtt PixelLambdaIamRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        Environment: !Ref EnvironmentType
+        Project: pixel.prx.org
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 30
 Outputs:
   ApiDomainName:
     Description: The custom API domain name

@@ -4,8 +4,10 @@
 # Origin Access Identity. This template can create that identity, but it cannot
 # update the origin bucket's policy to grant the identity access permissions.
 # Once the stack has been created, add a policy like the following to the
-# bucket, substituting the bucket name and the S3 canonical user ID (whose
-# value is an output of the stack)
+# bucket. Be sure to replace the bucket name in the Resource, and change the
+# object prefix to match only what CloudFront needs access to. Also replace
+# the origin access identity, such as E15MNIMTCFKK4C, in the Principal. You can
+# find that value in the stack outputs under CloudFrontOriginAccessIdentityId.
 # {
 #     "Version": "2012-10-17",
 #     "Id": "CloudFrontOrigin",
@@ -14,7 +16,7 @@
 #             "Sid": "Grant read access to a CloudFront Origin Identity",
 #             "Effect": "Allow",
 #             "Principal": {
-#                 "CanonicalUser":"XXXXXXXXXXXXXX"
+#                 "AWS": "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity XXXXXXXXXXXXXX"
 #             },
 #             "Action": "s3:GetObject",
 #             "Resource": "arn:aws:s3:::XXXXXXX-bucketname/*"
@@ -23,12 +25,16 @@
 # }
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Creates a CloudFront distribution with a single origin (either web or S3)
+  Creates a CloudFront distribution with a single origin (either web or S3) and
+  an optional failover origin. The primary and failover origin share an
+  identical configuration, aside from the domain.
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
   HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
   HasCloudFrontForwardedHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedHeaders], ""]]
+  HasCloudFrontForwardedQueryStrings: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedQueryStrings], ""]]
+  HasCloudFrontForwardedCookies: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedCookies], ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
   HasCloudFrontOriginAccess: !Equals [!Ref CloudFrontOriginAccess, "Yes"]
@@ -41,12 +47,21 @@ Conditions:
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
   HasCnames: !Not [!Equals [!Join ["", !Ref Cnames], ""]]
+  HasFailoverOriginDomain: !Not [!Equals [!Ref FailoverOriginDomain, ""]]
   CreateCertificate: !And
     - !Condition HasNoAcmCertificateArn
     - !Condition HasCnames
   UseCertificate: !Or
     - !Condition CreateCertificate
     - !Condition HasAcmCertificateArn
+Mappings:
+  FailoverCriteriaStatusCodesQuantity:
+    "403-404":
+      Quantity: 2
+    "500-502-503-504":
+      Quantity: 4
+    "403-404-500-502-503-504":
+      Quantity: 6
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -61,6 +76,11 @@ Metadata:
           - OriginDomain
           - OriginPath
       - Label:
+          default: Failover
+        Parameters:
+          - FailoverOriginDomain
+          - FailoverCriteriaStatusCodes
+      - Label:
           default: CloudFront
         Parameters:
           - CloudFrontComment
@@ -71,6 +91,8 @@ Metadata:
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
           - CloudFrontForwardedHeaders
+          - CloudFrontForwardedQueryStrings
+          - CloudFrontForwardedCookies
           - CloudFrontCompress
           - CloudFrontDefaultTtl
           - CloudFrontMinTtl
@@ -95,6 +117,10 @@ Metadata:
         default: Origin domain
       OriginPath:
         default: Origin path
+      FailoverOriginDomain:
+        default: Failover origin domain
+      FailoverCriteriaStatusCodes:
+        default: Failover status codes
       CloudFrontLoggingBucket:
         default: Log S3 bucket
       CloudFrontLoggingBucketPrefix:
@@ -117,6 +143,10 @@ Metadata:
         default: Cached methods
       CloudFrontForwardedHeaders:
         default: Forwarded Headers
+      CloudFrontForwardedQueryStrings:
+        default: Forwarded query strings
+      CloudFrontForwardedCookies:
+        default: Forwarded cookies
       CloudFrontCompress:
         default: Compress objects automatically
       CloudFrontOriginAccess:
@@ -151,11 +181,34 @@ Parameters:
     Type: String
     AllowedPattern: ^.+\.[a-zA-Z]+$
     ConstraintDescription: >-
-      must be a hostname or of the format mybucket.s3.amazonaws.com
+      must be a hostname or of the format mybucket.s3.region.amazonaws.com
     Description: >-
       The DNS name of the Amazon Simple Storage Service (S3) bucket or the HTTP
       server from which you want CloudFront to get objects for this origin.
-      (e.g. "example.com" or "mybucket.s3.amazonaws.com")
+      (e.g. "example.com" or "mybucket.s3.us-east-2.amazonaws.com")
+  FailoverOriginDomain:
+    Type: String
+    AllowedPattern: ^$|^.+\.[a-zA-Z]+$
+    ConstraintDescription: >-
+      must be a hostname or of the format mybucket.s3.region.amazonaws.com
+    Description: >-
+      (optional) The DNS name of the Amazon Simple Storage Service (S3) bucket
+      or the HTTP server from which you want CloudFront to get objects when the
+      primary origin is unavailable.
+      (e.g. "example.com" or "mybucket.s3.us-east-2.amazonaws.com")
+  FailoverCriteriaStatusCodes:
+    Type: String
+    Description: >-
+      The status codes that, when returned by the primary origin, trigger
+      CloudFront to attempt to use the failover origin.
+    Default: "403-404-500-502-503-504"
+    AllowedValues:
+      # When adding an additional value, a matching entry must be added to the
+      # FailoverCriteriaStatusCodesQuantity mapping which defines the number of
+      # codes present in the value.
+      - "403-404"
+      - "500-502-503-504"
+      - "403-404-500-502-503-504"
   OriginPath:
     Type: String
     AllowedPattern: ^$|^\/..+(?<!\/)$
@@ -170,10 +223,10 @@ Parameters:
     Type: String
     AllowedPattern: ^$|^.+\.s3\..+\.amazonaws\.com$
     ConstraintDescription: >-
-      must be of the format mybucket.s3.amazonaws.com
+      must be of the format mybucket.s3.region.amazonaws.com
     Description: >-
       (optional) The Amazon S3 bucket address where access logs are stored for
-      CloudFront. (e.g., mybucket.s3.amazonaws.com)
+      CloudFront. (e.g., mybucket.s3.region.amazonaws.com)
   CloudFrontLoggingBucketPrefix:
     Type: String
     Description: >-
@@ -190,35 +243,59 @@ Parameters:
     Type: String
     Description: >-
       (optional) The default amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated. The
-      value that you specify applies only when your origin does not add HTTP
-      headers such as Cache-Control max-age, Cache-Control s-maxage, and
-      Expires to objects.
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. CloudFront uses this
+      value as the object’s time to live (TTL) only when the origin does not
+      send Cache-Control or Expires headers with the object. The default value
+      for this field is 86400 seconds (one day). If the value of MinTTL is more
+      than 86400 seconds, then the default value for this field is the same as
+      the value of MinTTL.
   CloudFrontForwardedHeaders:
     Type: CommaDelimitedList
     Description: >-
-      (optional) The headers, if any, that you want CloudFront to forward to
-      the origin (whitelisted headers). For the headers that you specify,
-      CloudFront also caches separate versions of a specified object that is
-      based on the header values in viewer requests. Provide a
-      comma-delimited list (e.g. "Origin,Access-Control-Request-Headers,
+      (optional) The HTTP headers, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those headers' values in the viewer request. Provide a comma-delimited
+      list (e.g. "Origin,Access-Control-Request-Headers,
       Access-Control-Request-Method")
+  CloudFrontForwardedQueryStrings:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The query strings, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those query strings' values in the viewer request. Provide a
+      comma-delimited list (e.g. "id,utm_content,q"). The list should include
+      only field names, but the full query string (e.g. "id=1234") will be sent
+      to the origin, and included in the cache key.
+  CloudFrontForwardedCookies:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) The cookies, if any, that you want included in requests
+      that CloudFront sends to the origin, and that are included in the cache
+      key used to cache separate versions of the specified object based on
+      those cookies' values in the viewer request. Provide a
+      comma-delimited list (e.g. "session_ID,user_ID"). The list should include
+      only cookie names, but the full cookie (e.g. "session_ID=1234") will be
+      sent to the origin, and included in the cache key.
   CloudFrontMinTtl:
     Type: String
     Description: >-
       (optional) The minimum amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated.
+      to stay in the CloudFront cache before CloudFront sends another request
+      to the origin to see if the object has been updated. The default value
+      for this field is 0 seconds.
   CloudFrontMaxTtl:
     Type: String
     Description: >-
-      (optional) The maximum amount of time, in seconds, that you want objects
-      to stay in CloudFront caches before CloudFront forwards another request
-      to your origin to determine whether the object has been updated. The
-      value that you specify applies only when your origin adds HTTP headers
-      such as Cache-Control max-age, Cache-Control s-maxage, and Expires to
-      objects.
+      (optional) The maximum amount of time, in seconds, that objects stay in
+      the CloudFront cache before CloudFront sends another request to the
+      origin to see if the object has been updated. CloudFront uses this value
+      only when the origin sends Cache-Control or Expires headers with the
+      object. The default value for this field is 31536000 seconds (one year).
+      If the value of MinTTL or DefaultTTL is more than 31536000 seconds, then
+      the default value for this field is the same as the value of DefaultTTL.
   CloudFrontPriceClass:
     Type: String
     Description: >-
@@ -345,6 +422,42 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+  CloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, 86400]
+        MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, 31536000]
+        MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, 0]
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
+            Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+          QueryStringsConfig:
+            QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
+            QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
+          Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
+        HeadersConfig:
+          HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
+          Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
+          QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -361,19 +474,12 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
+          CachePolicyId: !Ref CloudFrontCachePolicy
           Compress: !If [HasCloudFrontCompress, true, false]
-          DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, !Ref "AWS::NoValue"]
-          ForwardedValues:
-            # Cookies:
-            #   Cookies
-            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-            QueryString: false
-            # QueryStringCacheKeys:
           # LambdaFunctionAssociations:
-          MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
-          MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, !Ref "AWS::NoValue"]
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           # SmoothStreaming: Boolean
-          TargetOriginId: web-origin
+          TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
           # TrustedSigners:
           #   - String
           ViewerProtocolPolicy : !Ref CloudFrontViewerProtocolPolicy
@@ -388,7 +494,27 @@ Resources:
               IncludeCookies: false
               Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
             - !Ref AWS::NoValue
+        # Conditional origin group for failover --------------------------------
+        OriginGroups:
+          !If
+            - HasFailoverOriginDomain
+            - Items:
+                - FailoverCriteria:
+                    StatusCodes:
+                      Items: !Split ["-", !Ref FailoverCriteriaStatusCodes]
+                      Quantity: !FindInMap [FailoverCriteriaStatusCodesQuantity, !Ref FailoverCriteriaStatusCodes, Quantity]
+                  Id: primary-origin-group
+                  Members:
+                    Items:
+                      - OriginId: primary-origin
+                      - OriginId: failover-origin
+                    Quantity: 2
+              Quantity: 1
+            - !Ref AWS::NoValue
         Origins:
+          # Primary origin -----------------------------------------------------
+          # The template definition of this origin should be kept in sync with
+          # the failover origin, except for the DomainName reference
           - CustomOriginConfig:
               !If
                 - HasCloudFrontOriginAccess
@@ -401,7 +527,7 @@ Resources:
                     - TLSv1.1
                     - TLSv1
             DomainName: !Ref OriginDomain
-            Id: web-origin
+            Id: primary-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
             OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
@@ -410,6 +536,33 @@ Resources:
                 - HasCloudFrontOriginAccess
                 - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
                 - !Ref AWS::NoValue
+          # Optional failover origin -------------------------------------------
+          # The template definition of this origin should be kept in sync with
+          # the primary origin, except for the DomainName reference
+          - !If
+              - HasFailoverOriginDomain
+              - CustomOriginConfig:
+                  !If
+                    - HasCloudFrontOriginAccess
+                    - !Ref AWS::NoValue
+                    - HTTPSPort: 443
+                      # HTTPPort: Integer
+                      OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
+                      OriginSSLProtocols:
+                        - TLSv1.2
+                        - TLSv1.1
+                        - TLSv1
+                DomainName: !Ref FailoverOriginDomain
+                Id: failover-origin
+                # OriginCustomHeaders:
+                #   - OriginCustomHeader
+                OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
+                S3OriginConfig:
+                  !If
+                    - HasCloudFrontOriginAccess
+                    - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+                    - !Ref AWS::NoValue
+              - !Ref AWS::NoValue
         PriceClass: !Ref CloudFrontPriceClass
         # Restrictions:
         #   Restriction

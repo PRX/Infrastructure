@@ -2,10 +2,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Sites that are deployed through S3 as static websites
-Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   InfrastructureStorageStackName:
     Type: String
@@ -15,7 +11,7 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
-  RadiotopiaRadioArchiveS3ObjectVersion:
+  EnvironmentTypeAbbreviation:
     Type: String
   BetaPrxOrgArchiveS3ObjectVersion:
     Type: String
@@ -82,6 +78,11 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       Timeout: 60
+  S3StaticSiteDeployFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${S3StaticSiteDeployFunction}
+      RetentionInDays: 14
   # Static site stacks
   BacksawStack:
     Type: "AWS::CloudFormation::Stack"
@@ -94,38 +95,15 @@ Resources:
           Fn::ImportValue:
             !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
         StaticSiteArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
-        StaticSiteS3StagingDeployBucket: "/prx/stag/backsaw.prx.org/DEPLOY_S3_BUCKET"
-        StaticSiteS3ProductionDeployBucket: "/prx/prod/backsaw.prx.org/DEPLOY_S3_BUCKET"
         EnvironmentType: !Ref EnvironmentType
         S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/backsaw.prx.org/CLOUDFRONT_OAI
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "backsaw.prx.org.yml"]]
-      TimeoutInMinutes: 5
-  RadiotopiaRadioStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue:
-            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        CodeS3Bucket:
-          Fn::ImportValue:
-            !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        StaticSiteArchiveS3ObjectVersion: !Ref RadiotopiaRadioArchiveS3ObjectVersion
-        StaticSiteS3StagingDeployBucket: "/prx/stag/radio.radiotopia.fm/DEPLOY_S3_BUCKET"
-        StaticSiteS3ProductionDeployBucket: "/prx/prod/radio.radiotopia.fm/DEPLOY_S3_BUCKET"
-        EnvironmentType: !Ref EnvironmentType
-        S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "radio.radiotopia.fm.yml"]]
       TimeoutInMinutes: 5
   BetaPrxOrgStack:
     Type: "AWS::CloudFormation::Stack"
@@ -138,10 +116,9 @@ Resources:
           Fn::ImportValue:
             !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
         StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
-        StaticSiteS3StagingDeployBucket: "/prx/stag/beta.prx.org/DEPLOY_S3_BUCKET"
-        StaticSiteS3ProductionDeployBucket: "/prx/prod/beta.prx.org/DEPLOY_S3_BUCKET"
         EnvironmentType: !Ref EnvironmentType
         S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName

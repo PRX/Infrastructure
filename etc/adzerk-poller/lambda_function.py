@@ -119,7 +119,7 @@ def problem_flight_report():
             flights.append(flight_data)
 
             if 'EndDate' in flight_data and flight_data['EndDate']:
-                if not flight_data['EndDate'].endswith('59:00Z'):
+                if not flight_data['EndDate'].endswith('55:00Z') and not flight_data['EndDate'].endswith('59:00Z'):
                     problem_flights.append(flight_data)
 
     print(f"Found {len(flights)} active flights")
@@ -158,7 +158,7 @@ def lambda_handler(event, context):
     rule_arn = 'Hourly'
 
     if 'resources' in event:
-      rule_arn = event['resources'][0]
+        rule_arn = event['resources'][0]
 
     if re.search(r'Daily', rule_arn):
         upcoming_flight_report()

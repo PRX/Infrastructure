@@ -126,6 +126,8 @@ Parameters:
     Type: String
   IframelyEcrImageTag:
     Type: String
+  IframelySecretsVersion:
+    Type: String
 Resources:
   ExchangeStack:
     Type: "AWS::CloudFormation::Stack"
@@ -227,7 +229,6 @@ Resources:
       TimeoutInMinutes: 5
   NetworksStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
@@ -273,7 +274,6 @@ Resources:
       TimeoutInMinutes: 5
   SphinxStack:
     Type: "AWS::CloudFormation::Stack"
-    Condition: IsStaging
     Properties:
       NotificationARNs:
         - Fn::ImportValue:
@@ -356,13 +356,41 @@ Resources:
         ContainerPort: "3000"
         HealthCheckPath: "/health_check"
         DesiredWebs: "2"
-        DesiredWebsProduction: "1"
+        DesiredWebsProduction: "2"
+        DesiredWorkers: "2"
+        DesiredWorkersProduction: "2"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "web-application.yml"]]
+      TimeoutInMinutes: 5
+  AuguryAlarmsStack:
+    Type: "AWS::CloudFormation::Stack"
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+      Parameters:
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue:
+            !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AuguryWorkerLogGroupName: !GetAtt AuguryStack.Outputs.WorkerLogGroupName
+      Tags:
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "augury-alarms.yml"]]
       TimeoutInMinutes: 5
   AuguryForecastStack:
     Type: "AWS::CloudFormation::Stack"
@@ -691,11 +719,11 @@ Resources:
         ContainerMemory: !Ref ContainerMemory
         ContainerMemoryReservation: !Ref ContainerMemoryReservation
         ContainerCpu: !Ref ContainerCpu
-        WebContainerCommand: cluster.js
+        WebContainerCommand: serve
         PlatformALBListenerPriorityPrefix: !Ref IframelyPlatformALBListenerPriorityPrefix
         EcrImageTag: !Ref IframelyEcrImageTag
         ExplicitHostHeader: embed.pri.org
-        SecretsVersion: none
+        SecretsVersion: !Ref IframelySecretsVersion
         AppName: "iframely"
         CreateWorker: "false"
         ContainerPort: "8061"

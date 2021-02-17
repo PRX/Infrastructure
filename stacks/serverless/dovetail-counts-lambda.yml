@@ -72,6 +72,7 @@ Resources:
         - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+        - "arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy"
       Tags:
         - Key: Project
           Value: Dovetail
@@ -98,7 +99,12 @@ Resources:
           S3_BUCKET: !Ref S3Bucket
           S3_PREFIX: !Ref S3Prefix
       Handler: index.handler
-      MemorySize: 2048
+      Layers:
+        !If
+          - IsProduction
+          - - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:12
+          - !Ref AWS::NoValue
+      MemorySize: 1792
       Role: !GetAtt DovetailCountsLambdaExecutionIAMRole.Arn
       Runtime: nodejs10.x
       Timeout: 20

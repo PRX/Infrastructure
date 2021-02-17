@@ -1,6 +1,6 @@
 # etc/squarespace-commerce-webhooks.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Description: >-
   Wires up Stripe payments webhooks and the Squarespace Commerce API to allow
   sales notifications to Slack
 Parameters:
@@ -10,11 +10,6 @@ Parameters:
     Type: String
   SlackMessageRelayTopicArn:
     Type: String
-  LogGroupRetentionPolicyFunctionArn:
-    Type: AWS::SSM::Parameter::Value<String>
-    Description: >
-      The Parameter Store key for the log group retention policy function's
-      ARN (not the ARN itself)
   OpsErrorMessagesSnsTopicArn:
     Type: String
 Resources:
@@ -109,21 +104,6 @@ Resources:
           const SLACK_USERNAME = 'Squarespace';
           const SLACK_ICON = ':squarespace:';
 
-          function snsSlackRelay(slackMessage) {
-              return new Promise((resolve, reject) => {
-                  sns.publish({
-                      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-                      Message: JSON.stringify(slackMessage),
-                  }, (err, data) => {
-                      if (err) {
-                          reject(err);
-                      } else {
-                          resolve();
-                      }
-                  });
-              });
-          }
-
           function httpGet(reqUrl) {
               return new Promise((resolve, reject) => {
                   // Setup request options
@@ -201,14 +181,17 @@ Resources:
                       const variant = allInventory.inventory.find(i => i.sku === lineItem.sku);
                       const inventory = await getInventory(variant.variantId);
 
-                      await snsSlackRelay({
-                          channel: SLACK_CHANNEL,
-                          username: SLACK_USERNAME,
-                          icon_emoji: SLACK_ICON,
-                          text: [
-                              `<mailto:${order.customerEmail}|${order.billingAddress.firstName} ${order.billingAddress.lastName}> ordered ${lineItem.quantity} ticket${lineItem.quantity === 1 ? '' : 's' } for *${inventory.descriptor}*`,
-                          ].join('\n')
-                      });
+                      await sns.publish({
+                          TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+                          Message: JSON.stringify({
+                              channel: SLACK_CHANNEL,
+                              username: SLACK_USERNAME,
+                              icon_emoji: SLACK_ICON,
+                              text: [
+                                  `<mailto:${order.customerEmail}|${order.billingAddress.firstName} ${order.billingAddress.lastName}> ordered ${lineItem.quantity} ticket${lineItem.quantity === 1 ? '' : 's' } for *${inventory.descriptor}*`,
+                              ].join('\n')
+                          }),
+                      }).promise();
                   }
 
                   return { statusCode: 200, headers: {}, body: '' };
@@ -226,7 +209,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaIamRole.Arn
-      Runtime: nodejs10.x
+      Runtime: nodejs12.x
       Tags:
         - Key: Project
           Value: Misc
@@ -266,9 +249,8 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref LambdaFunction
-  LambdaFunctionLogRetentionPolicy:
-    Type: Custom::LogGroupRetentionPolicy
+  LambdaFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      ServiceToken: !Ref LogGroupRetentionPolicyFunctionArn
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
+      LogGroupName: !Sub /aws/lambda/${LambdaFunction}
       RetentionInDays: 5

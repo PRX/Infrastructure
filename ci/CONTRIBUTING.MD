@@ -14,7 +14,7 @@
 
 ## Deployment
 
-The continuous integration platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/), so any AWS resources that are necessary for the system to operate should be added to the `ci.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
+The continuous integration platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/) via [AWS SAM](https://aws.amazon.com/serverless/sam/), so any AWS resources that are necessary for the system to operate should be added to the `ci.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
 
 **Never make changes to AWS resources that were created through CloudFormation other than through CloudFormation, and do not create any resources outside of the CloudFormation template**. The CI system is entirely self-contained and should remain that way.
 
@@ -22,9 +22,9 @@ Sensitive information, such as API keys, should be managed through [Parameter St
 
 When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/master/ci/README.md) should include information to help with getting those dependencies set up.
 
-There is no automated process for deploying changes to the CI stack. If the CloudFormation template changes, the stack must be updated manually (through the AWS Console or command line). You should always be sure to carefully review the resources that are changing before executing the stack update (The CloudFormation console will enumerate any resources that will change as a result of the update).
+There is no automated process for deploying changes to the CI stack. If the CloudFormation template changes, the stack must be updated manually. You should always be sure to carefully review the resources that are changing before executing the stack update.
 
-The code for AWS Lambda functions likewise will not deploy automatically, even if you deploy stack changes manually. If you push updated Lambda code to S3 prior to executing a stack update, CloudFormation likely will not notice the change and won't update the deployed function code. For now, the easiest and most reliable way to deploy Lambda code changes is copy-and-paste through the console. (This is not true of other properties of Lambda functions defined in the template, such as the timeout; those will update as expected during a stack update.) Other than when launching a new CI stack, pushing Lambda function code to S3 has no real purpose at the moment.
+Use the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli) to deploy updates. A `samconfig.toml` file can be found in LastPass. Once that file is copied to the `ci/` directory, run `sam deploy` to deploy your local branch.
 
 ## Code Review
 

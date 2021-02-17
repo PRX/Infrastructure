@@ -31,18 +31,32 @@
 # }
 
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Transform: AWS::Serverless-2016-10-31
+Description: >-
   Creates a CloudWatch Events rule that triggers a Lambda function whenever
   there is root account API or Console activity in CloudTrail. A global,
   multi-region CloudTrail trail is also created to log those activities.
+
 Parameters:
   SlackMessageRelayTopicArn:
     Type: String
+  OrganizationId:
+    Type: String
+    Description: >-
+      optional. An AWS Organization ID in the format: o-a1s2d3f4f5g. If
+      included, the CloudTrail that is created will be a organization trail,
+      and log activity from all accounts in the given organization.
+    AllowedPattern: ^$|^(o-[a-z0-9]{4,32})$
+
+Conditions:
+  IsCloudTrailOrganizationTrail: !Not [!Equals [!Ref OrganizationId, ""]]
+
 Resources:
   # CloudTrail
   CloudTrailS3Bucket:
-    Type: "AWS::S3::Bucket"
+    Type: AWS::S3::Bucket
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       LifecycleConfiguration:
         Rules:
@@ -51,15 +65,14 @@ Resources:
       Tags:
         - Key: Project
           Value: Admin
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   CloudTrailS3BucketPolicy:
-    Type: "AWS::S3::BucketPolicy"
+    Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket:
-        Ref: CloudTrailS3Bucket
+      Bucket: !Ref CloudTrailS3Bucket
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -68,20 +81,29 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:GetBucketAcl
-            Resource: !Sub "arn:aws:s3:::${CloudTrailS3Bucket}"
+            Resource: !GetAtt CloudTrailS3Bucket.Arn
           - Sid: AWSCloudTrailWrite
             Effect: Allow
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub "arn:aws:s3:::${CloudTrailS3Bucket}/AWSLogs/${AWS::AccountId}/*"
+            Resource: !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/*
             Condition:
               StringEquals:
-                s3:x-amz-acl: "bucket-owner-full-control"
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AWSOrgCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${OrganizationId}/*
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
   CloudTrail:
-    Type: "AWS::CloudTrail::Trail"
+    Type: AWS::CloudTrail::Trail
     DependsOn:
-        - CloudTrailS3BucketPolicy
+      - CloudTrailS3BucketPolicy
     Properties:
       IncludeGlobalServiceEvents: true
       IsLogging: true
@@ -90,146 +112,150 @@ Resources:
       Tags:
         - Key: Project
           Value: Admin
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-  # Lambda Function
-  LambdaFunctionIamRole:
-    Type: "AWS::IAM::Role"
+  CloudTrailIsOrganizationTrailCustomResource:
+    DependsOn:
+      - CloudTrail
+      - CloudTrailS3BucketPolicy
+    Type: AWS::CloudFormation::CustomResource
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "sns:Publish"
-                Resource:
-                  - "*"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-      Tags:
-        - Key: Project
-          Value: Admin
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  LambdaFunction:
-    Type: "AWS::Lambda::Function"
+      ServiceToken: !GetAtt OrganizationTrailCustomResourceFunction.Arn
+      # This property is always sent to the Lambda event as a string, even
+      # if it's a true YAML boolean value
+      IsOrganizationTrail: !If [IsCloudTrailOrganizationTrail, true, false]
+  # Monitor Function
+  MonitorFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        ZipFile: |
-          import os
-          import json
-          import boto3
-
-          sns = boto3.client('sns')
-
-          SLACK_ICON = ':ops-cloudtrail:'
-          SLACK_USERNAME = 'AWS CloudTrail'
-          SLACK_CHANNEL = '#ops-fatal'
-
-          def lambda_handler(event, context):
-              print(event)
-
-              sns.publish(
-                  TopicArn=os.environ['SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN'],
-                  Message=json.dumps({
-                      'channel': SLACK_CHANNEL,
-                      'username': SLACK_USERNAME,
-                      'icon_emoji': SLACK_ICON,
-                      'text': f"Root account event detected - {event['account']} {event['detail-type']} {event['region']} {event['detail']['eventName']}"
-                  })
-              )
-      Description: >
+      Description: >-
         Receives CloudWatch Events rule events related to root account activity
         and sends a message to the Slack relay
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
-      Handler: index.lambda_handler
+      Events:
+        CloudTrailEventsRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              detail-type:
+                - AWS API Call via CloudTrail
+                - AWS Console Sign In via CloudTrail
+              detail:
+                userIdentity:
+                  type:
+                    - Root
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+        const SLACK_ICON = ':ops-cloudtrail:';
+        const SLACK_USERNAME = 'AWS CloudTrail';
+        const SLACK_CHANNEL = '#ops-fatal';
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          await sns.publish({
+            TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+            Message: JSON.stringify({
+              channel: SLACK_CHANNEL,
+              username: SLACK_USERNAME,
+              icon_emoji: SLACK_ICON,
+              text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
+            }),
+          }).promise();
+        };
       MemorySize: 128
-      Role: !GetAtt LambdaFunctionIamRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Admin
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 10
-  LambdaPermissionForEventsRule:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref LambdaFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt EventsRule.Arn
-  # Events Rule
-  EventsRuleLambdaTargetIamRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "events.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
       Policies:
-        - PolicyName: LambdaPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "lambda:InvokeFunction"
-                Resource:
-                  - !GetAtt LambdaFunction.Arn
+        - AWSLambdaBasicExecutionRole
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref SlackMessageRelayTopicArn
+      Runtime: nodejs12.x
       Tags:
-        - Key: Project
-          Value: Admin
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  EventsRule:
-    Type: "AWS::Events::Rule"
+        Project: Admin
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  MonitorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      Description: >
-        Monitors root account activity by watching for any API and Console
-        access via CloudTrail
-      EventPattern: |
-        {
-          "detail-type": [
-            "AWS API Call via CloudTrail",
-            "AWS Console Sign In via CloudTrail"
-          ],
-          "detail": {
-            "userIdentity": {
-              "type": ["Root"]
+      LogGroupName: !Sub /aws/lambda/${MonitorFunction}
+      RetentionInDays: 30
+  # CloudTrail IsOrganizationTrail custom resource function
+  OrganizationTrailCustomResourceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        A CloudFormation custom resource function that provides support for
+        the IsOrganizationTrail property of trails in AWS CloudTrail.
+      Environment:
+        Variables:
+          TRAIL_ARN: !GetAtt CloudTrail.Arn
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const cfnResponse = require('cfn-response');
+
+        const cloudtrail = new AWS.CloudTrail({ apiVersion: '2013-11-01' });
+
+        exports.handler = async (event, context) => {
+          try {
+            console.log(JSON.stringify(event));
+
+            // No need to update the trail when the custom resource is being
+            // deleted.
+            if (['Create', 'Update'].includes(event.RequestType)) {
+              // The custom Properties of a custom resource always come in
+              // to the event as strings
+              const flag = event.ResourceProperties.IsOrganizationTrail === 'true' ? true : false;
+
+              console.log(`Setting IsOrganizationTrail to ${flag}`);
+
+              const res = await cloudtrail.updateTrail({
+                Name: process.env.TRAIL_ARN,
+                IsOrganizationTrail: flag,
+              }).promise();
+
+              console.log(res);
             }
+
+            await cfnResponse.send(event, context, cfnResponse.SUCCESS, {});
+          } catch (error) {
+            console.log('Sending FAILED response');
+            console.log(error);
+            await cfnResponse.send(event, context, cfnResponse.FAILED, {});
           }
-        }
-      RoleArn: !GetAtt EventsRuleLambdaTargetIamRole.Arn
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt LambdaFunction.Arn
-          Id: !Sub "${AWS::AccountId}.${AWS::Region}.RootMonLambdaTarget"
+        };
+      MemorySize: 128
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSCloudTrail_FullAccess
+        - Statement:
+            - Action:
+                - iam:GetRole
+                - organizations:EnableAWSServiceAccess
+                - organizations:ListAccounts
+                - iam:CreateServiceLinkedRole
+                - organizations:DisableAWSServiceAccess
+                - organizations:DescribeOrganization
+                - organizations:ListAWSServiceAccessForOrganization
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs12.x
+      Tags:
+        Project: Admin
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 30
+  OrganizationTrailCustomFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${OrganizationTrailCustomResourceFunction}
+      RetentionInDays: 7

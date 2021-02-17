@@ -1,0 +1,51 @@
+# etc/cloudwatch-data-sharing-org-list-role.yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Creates a IAM role with the special name
+  CloudWatch-CrossAccountSharing-ListAccountsRole, which CloudWatch uses for
+  cross-account console functionality. This stack should launched only in the
+  Organization's management account.
+
+Parameters:
+  MonitoringAccountIds:
+    Description: >-
+      Allows one or more monitoring accounts to view AWS Organization account
+      list. Enter AWS account ids, 12 numeric digits in comma-separated list
+    Type: CommaDelimitedList
+
+Resources:
+  CWCrossAccountListAccountsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Split
+                - ','
+                - !Sub
+                  - 'arn:aws:iam::${inner}:root'
+                  - inner: !Join
+                    - ':root,arn:aws:iam::'
+                    - Ref: MonitoringAccountIds
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - organizations:ListAccounts
+                  - organizations:ListAccountsForParent
+                Effect: Allow
+                Resource: "*"
+          PolicyName: CloudWatch-CrossAccountSharing-ListAccounts-Policy
+      RoleName: CloudWatch-CrossAccountSharing-ListAccountsRole
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId

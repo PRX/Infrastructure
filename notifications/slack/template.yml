@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Creates backend resources for the PRX DevOps Slack app
+Parameters:
+  SlackSigningSecet:
+    Type: String
+  SlackAccessToken:
+    Type: String
+  LegacySlackMessageRelayTopicArn:
+    Type: String
+  AwsOrganizationCrossAccountSharingRoleArn:
+    Type: String
+  DevOpsCrossAccountAccessRoleName:
+    Type: String
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      # Domain:
+      #   CertificateArn: !Ref ApiCertificate
+      #   DomainName: !Ref ApiDomain
+      Tags:
+        Project: DevOps
+  SlackSdkLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Description: node-slack-sdk NPM module
+      ContentUri: lambda-layers/node-slack-sdk
+      CompatibleRuntimes:
+        - nodejs12.x
+  AppFunctionIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: StsPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "sts:AssumeRole"
+                Resource:
+                  - arn:aws:iam::*:role/*Oganization-CrossAccountSharingRole
+                  - !Sub arn:aws:iam::*:role/*${DevOpsCrossAccountAccessRoleName}
+      Tags:
+        - Key: Project
+          Value: DevOps
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AppFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-src/app/
+      Description: Handles Slack api requests
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
+          SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN: !Ref AwsOrganizationCrossAccountSharingRoleArn
+          DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME: !Ref DevOpsCrossAccountAccessRoleName
+      Events:
+        EventRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /v1/slack/events
+          Type: HttpApi
+        InteractiveRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /v1/slack/interactive
+          Type: HttpApi
+      Handler: index.handler
+      Layers:
+        - !Ref SlackSdkLambdaLayer
+      MemorySize: 512
+      Role: !GetAtt AppFunctionIamRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        Project: DevOps
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 8
+  AppFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppFunction}
+      RetentionInDays: 14
+
+  RelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-src/relay/
+      Description: Relays messages to Slack
+      Environment:
+        Variables:
+          SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
+          SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      Events:
+        Relay:
+          Properties:
+            Topic: !Ref SlackMessageRelaySnsTopic
+          Type: SNS
+        LegacyRelay:
+          Properties:
+            Region: us-east-1
+            Topic: !Ref LegacySlackMessageRelayTopicArn
+          Type: SNS
+      Handler: index.handler
+      Layers:
+        - !Ref SlackSdkLambdaLayer
+      MemorySize: 128
+      Runtime: nodejs12.x
+      Tags:
+        Project: DevOps
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 8
+  RelayFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RelayFunction}
+      RetentionInDays: 14
+
+  # This SNS topic is retained to prevent clients that are configured to
+  # publish to it from breaking if the stack gets torn down. In cases where the
+  # stack is being moved or replaced, the retained topic should be imported
+  # into the new stack, or the new subscriber should continue to subscribe to
+  # this topic
+  SlackMessageRelaySnsTopic:
+    Type: AWS::SNS::Topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - Key: Project
+          Value: DevOps
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId

@@ -36,9 +36,11 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - ce:GetReservationCoverage
                   - ce:GetCostAndUsage
+                  - ce:GetReservationCoverage
+                  - ce:GetReservationUtilization
                   - ce:GetSavingsPlansCoverage
+                  - ce:GetSavingsPlansUtilization
                 Resource:
                   - "*"
       ManagedPolicyArns:
@@ -59,14 +61,19 @@ Resources:
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        GameReminders:
+          Properties:
+            Description: Triggers the Cost Explorer report once a day
+            Enabled: true
+            Schedule: cron(0 14 * * ? *)
+          Type: Schedule
       Handler: lambda_function.lambda_handler
       MemorySize: 512
       Role: !GetAtt ReportFunctionIamRole.Arn
       Runtime: python3.6
       Tags:
         Project: Admin
-        # - Key: prx:cloudformation:stack-name
-        #   Value: !Ref AWS::StackName
-        # - Key: prx:cloudformation:stack-id
-        #   Value: !Ref AWS::StackId
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
       Timeout: 16
