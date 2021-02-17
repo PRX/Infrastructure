@@ -120,6 +120,9 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  # The HTTP listener handles all HTTP traffic with the default action, which
+  # upgrades requests to HTTPS. There are not additional listener rules on the
+  # HTTP listener.
   PlatformALBHTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -127,14 +130,6 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - FixedResponseConfig:
-            StatusCode: "404"
-          Type: fixed-response
-  PlatformALBHTTPUpgradeRedirectListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateStagingResources
-    Properties:
-      Actions:
         - RedirectConfig:
             Host: '#{host}'
             Path: '/#{path}'
@@ -143,12 +138,9 @@ Resources:
             Query: '#{query}'
             StatusCode: HTTP_301
           Type: redirect
-      Conditions:
-        - Field: path-pattern
-          Values:
-            - '*'
-      ListenerArn: !Ref PlatformALBHTTPListener
-      Priority: 1
+  # The HTTPS listener has additional rules for handling app-specific traffic.
+  # The default action is a 404 fixed response for when traffic doesn't match
+  # any of the app-specific rules.
   PlatformALBHTTPSListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
