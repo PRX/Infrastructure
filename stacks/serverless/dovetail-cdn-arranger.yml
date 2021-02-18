@@ -14,7 +14,7 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   DovetailToken:
     Type: AWS::SSM::Parameter::Value<String>
-  DynamodbTableArn:
+  ArrangementsDynamodbTable:
     Type: AWS::SSM::Parameter::Value<String>
 Resources:
   DtCdnArrangerWorkspaceBucket:
@@ -69,7 +69,7 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                 Resource:
-                  - !Ref DynamodbTableArn
+                  - !Sub arn:aws:dynamodb:*:*:table/${ArrangementsDynamodbTable}
         - PolicyName: S3WritePolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -107,14 +107,14 @@ Resources:
       Description: Dovetail CDN Arranger
       Environment:
         Variables:
-          DDB_TABLE: !Ref DynamodbTableArn
+          DDB_TABLE: !Ref ArrangementsDynamodbTable
           DOVETAIL_HOST: !Ref DovetailHost
           DOVETAIL_TOKEN: !Ref DovetailToken
           S3_BUCKET: !Ref DtCdnArrangerWorkspaceBucket
       Handler: index.handler
       Layers: !If
         - IsProduction
-        - - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:12
+        - - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14
         - !Ref AWS::NoValue
       MemorySize: 8000
       Role: !GetAtt DovetailCdnArrangerExecutionIAMRole.Arn
