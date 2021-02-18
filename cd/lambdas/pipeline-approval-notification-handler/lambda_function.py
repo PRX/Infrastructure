@@ -17,68 +17,69 @@ import os
 import re
 import time
 
-cloudformation = boto3.client('cloudformation')
-sns = boto3.client('sns')
+cloudformation = boto3.client("cloudformation")
+sns = boto3.client("sns")
 
-CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = 'codepipeline-approval-action'
-APPROVED = 'Approved'
-REJECTED = 'Rejected'
+CODEPIPELINE_MANUAL_APPROVAL_CALLBACK = "codepipeline-approval-action"
+APPROVED = "Approved"
+REJECTED = "Rejected"
 
 
 def parameters_delta_attachment(notification):
-    custom_data = json.loads(notification['approval']['customData'])
-    stack_name = custom_data['StackName']
-    change_set_name = custom_data['ChangeSetName']
+    custom_data = json.loads(notification["approval"]["customData"])
+    stack_name = custom_data["StackName"]
+    change_set_name = custom_data["ChangeSetName"]
 
     # Get current stack parameter values
-    stack = cloudformation.describe_stacks(StackName=stack_name)['Stacks'][0]
-    stack_parameters = stack['Parameters']
+    stack = cloudformation.describe_stacks(StackName=stack_name)["Stacks"][0]
+    stack_parameters = stack["Parameters"]
 
     # Get new parameter values from change set
     change_set = cloudformation.describe_change_set(
-        ChangeSetName=change_set_name,
-        StackName=stack_name
+        ChangeSetName=change_set_name, StackName=stack_name
     )
-    change_set_parameters = change_set['Parameters']
+    change_set_parameters = change_set["Parameters"]
 
     # Combine parameters from stack and change set
     parameters = {}
 
     for p in stack_parameters:
-        if not p['ParameterKey'] in parameters:
-            parameters[p['ParameterKey']] = {}
+        if not p["ParameterKey"] in parameters:
+            parameters[p["ParameterKey"]] = {}
 
-        parameters[p['ParameterKey']]['StackValue'] = p['ParameterValue']
+        parameters[p["ParameterKey"]]["StackValue"] = p["ParameterValue"]
 
     for p in change_set_parameters:
-        if not p['ParameterKey'] in parameters:
-            parameters[p['ParameterKey']] = {}
+        if not p["ParameterKey"] in parameters:
+            parameters[p["ParameterKey"]] = {}
 
-        parameters[p['ParameterKey']]['ChangeSetValue'] = p['ParameterValue']
+        parameters[p["ParameterKey"]]["ChangeSetValue"] = p["ParameterValue"]
 
     # Find values that have changed, and build strings that will be included in
     # the Slack message describing the changes
     deltas = []
 
     for k, v in parameters.items():
-        if k == 'PipelineExecutionNonce':
+        if k == "PipelineExecutionNonce":
             continue
 
-        elif 'StackValue' not in v:
+        elif "StackValue" not in v:
             deltas.append(f"*{k}*: ❔ ➡ `{v['ChangeSetValue']}`")
 
-        elif 'ChangeSetValue' not in v:
+        elif "ChangeSetValue" not in v:
             deltas.append(f"*{k}*: `{v['StackValue']}` ➡ ❌")
 
-        elif v['StackValue'] != v['ChangeSetValue']:
-            before = v['StackValue']
-            after = v['ChangeSetValue']
+        elif v["StackValue"] != v["ChangeSetValue"]:
+            before = v["StackValue"]
+            after = v["ChangeSetValue"]
 
-            if re.search(r'EcrImageTag', k) or re.search(r'GitCommit', k):
-                base = 'https://github.com/PRX'
-                slug = k.replace('EcrImageTag', '').replace('GitCommit', '')
-                repo = f'{slug}.prx.org'.replace('Infrastructure.prx.org', 'Infrastructure')
-                url = f'{base}/{repo}/compare/{before}...{after}'
+            if re.search(r"EcrImageTag", k) or re.search(r"GitCommit", k):
+                base = "https://github.com/PRX"
+                slug = k.replace("EcrImageTag", "").replace("GitCommit", "")
+                repo = f"{slug}.prx.org".replace(
+                    "Infrastructure.prx.org", "Infrastructure"
+                )
+                url = f"{base}/{repo}/compare/{before}...{after}"
                 deltas.append(f"*{k}*: `{before}` ➡ `<{url}|{after}>`")
             else:
                 deltas.append(f"*{k}*: `{before}` ➡ `{after}`")
@@ -86,10 +87,10 @@ def parameters_delta_attachment(notification):
     unchanged_count = len(parameters) - len(deltas)
 
     return {
-        'title': 'Stack Parameters Delta',
-        'footer': f'Excludes {unchanged_count} unchanged parameters',
-        'mrkdwn_in': ['text'],
-        'text': '\n'.join(deltas)
+        "title": "Stack Parameters Delta",
+        "footer": f"Excludes {unchanged_count} unchanged parameters",
+        "mrkdwn_in": ["text"],
+        "text": "\n".join(deltas),
     }
 
 
@@ -101,19 +102,19 @@ def approval_action_attachment(notification):
     # actionName
     # token
     approved_params = {
-        'pipelineName': notification['approval']['pipelineName'],
-        'stageName': notification['approval']['stageName'],
-        'actionName': notification['approval']['actionName'],
-        'token': notification['approval']['token'],
-        'value': APPROVED
+        "pipelineName": notification["approval"]["pipelineName"],
+        "stageName": notification["approval"]["stageName"],
+        "actionName": notification["approval"]["actionName"],
+        "token": notification["approval"]["token"],
+        "value": APPROVED,
     }
 
     rejected_params = {
-        'pipelineName': notification['approval']['pipelineName'],
-        'stageName': notification['approval']['stageName'],
-        'actionName': notification['approval']['actionName'],
-        'token': notification['approval']['token'],
-        'value': REJECTED
+        "pipelineName": notification["approval"]["pipelineName"],
+        "stageName": notification["approval"]["stageName"],
+        "actionName": notification["approval"]["actionName"],
+        "token": notification["approval"]["token"],
+        "value": REJECTED,
     }
 
     release_admonition = """Release Procedure:
@@ -123,56 +124,74 @@ def approval_action_attachment(notification):
     """
 
     return {
-        'fallback': f"{notification['approval']['pipelineName']} {notification['approval']['stageName']}: {notification['approval']['actionName']}",
-        'color': '#FF8400',
-        'author_name': notification['approval']['pipelineName'],
-        'author_link': notification['consoleLink'],
-        'title': f"{notification['approval']['stageName']}: {notification['approval']['actionName']}",
-        'title_link': notification['approval']['approvalReviewLink'],
-        'text': release_admonition,
-        'footer': notification['region'],
-        'ts': int(time.time()),
-        'mrkdwn_in': ['text'],
-        'callback_id': CODEPIPELINE_MANUAL_APPROVAL_CALLBACK,
-        'actions': [
+        "fallback": (
+            f"{notification['approval']['pipelineName']} "
+            f"{notification['approval']['stageName']}: "
+            f"{notification['approval']['actionName']}"
+        ),
+        "color": "#FF8400",
+        "author_name": notification["approval"]["pipelineName"],
+        "author_link": notification["consoleLink"],
+        "title": (
+            f"{notification['approval']['stageName']}: "
+            f"{notification['approval']['actionName']}"
+        ),
+        "title_link": notification["approval"]["approvalReviewLink"],
+        "text": release_admonition,
+        "footer": notification["region"],
+        "ts": int(time.time()),
+        "mrkdwn_in": ["text"],
+        "callback_id": CODEPIPELINE_MANUAL_APPROVAL_CALLBACK,
+        "actions": [
             {
-                'type': 'button',
-                'style': 'primary',
-                'name': 'decision',
-                'text': 'Approve',
-                'value': json.dumps(approved_params),
-                'confirm': {
-                    'title': 'Production Deploy Approval',
-                    'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
-                    'ok_text': 'Deploy',
-                    'dismiss_text': 'Cancel'
-                }
-            }, {
-                'type': 'button',
-                'name': 'notes',
-                'text': 'Approve with notes',
-                'value': json.dumps(approved_params),
-                'confirm': {
-                    'title': 'Production Deploy Approval',
-                    'text': 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack, even if you choose not to enter release notes!',
-                    'ok_text': 'Deploy',
-                    'dismiss_text': 'Cancel'
-                }
-            }, {
-                'type': 'button',
-                'name': 'decision',
-                'text': 'Reject',
-                'value': json.dumps(rejected_params)
-            }
-        ]
+                "type": "button",
+                "style": "primary",
+                "name": "decision",
+                "text": "Approve",
+                "value": json.dumps(approved_params),
+                "confirm": {
+                    "title": "Production Deploy Approval",
+                    "text": (
+                        "Are you sure you want to approve this CloudFormation change "
+                        "set for the production stack? Approval will trigger an "
+                        "immediate update to the production stack!"
+                    ),
+                    "ok_text": "Deploy",
+                    "dismiss_text": "Cancel",
+                },
+            },
+            {
+                "type": "button",
+                "name": "notes",
+                "text": "Approve with notes",
+                "value": json.dumps(approved_params),
+                "confirm": {
+                    "title": "Production Deploy Approval",
+                    "text": (
+                        "Are you sure you want to approve this CloudFormation change "
+                        "set for the production stack? Approval will trigger an "
+                        "immediate update to the production stack, even if you choose "
+                        "not to enter release notes!"
+                    ),
+                    "ok_text": "Deploy",
+                    "dismiss_text": "Cancel",
+                },
+            },
+            {
+                "type": "button",
+                "name": "decision",
+                "text": "Reject",
+                "value": json.dumps(rejected_params),
+            },
+        ],
     }
 
 
 def slack_message(notification):
     return {
-        'attachments': [
+        "attachments": [
             parameters_delta_attachment(notification),
-            approval_action_attachment(notification)
+            approval_action_attachment(notification),
         ]
     }
 
@@ -183,22 +202,20 @@ def sns_message(notification):
 
 def sns_message_attributes():
     return {
-        'WebhookURL': {
-            'DataType': 'String',
-            'StringValue': os.environ['IKE_DEPLOYS_SLACK_WEBHOOK_URL']
+        "WebhookURL": {
+            "DataType": "String",
+            "StringValue": os.environ["IKE_DEPLOYS_SLACK_WEBHOOK_URL"],
         }
     }
 
 
 def lambda_handler(event, context):
-    notification = json.loads(event['Records'][0]['Sns']['Message'])
+    notification = json.loads(event["Records"][0]["Sns"]["Message"])
 
-    topic_arn = os.environ['SLACK_MESSAGE_RELAY_TOPIC_ARN']
+    topic_arn = os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"]
     message = sns_message(notification)
     message_attributes = sns_message_attributes()
 
     sns.publish(
-        TopicArn=topic_arn,
-        Message=message,
-        MessageAttributes=message_attributes
+        TopicArn=topic_arn, Message=message, MessageAttributes=message_attributes
     )
