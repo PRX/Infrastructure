@@ -17,7 +17,7 @@ Parameters:
   DynamodbTableArn:
     Type: AWS::SSM::Parameter::Value<String>
 Resources:
-  DovetailCdnArrangerWorkspaceBucket:
+  DtCdnArrangerWorkspaceBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -40,7 +40,6 @@ Resources:
     Properties:
       CompatibleRuntimes:
         - nodejs14.x
-        - nodejs12.x
       Content:
         S3Bucket: prx-tech
         S3Key: archives/ffmpeg-4.3.1-lambda-layer.zip
@@ -79,14 +78,14 @@ Resources:
                 Action:
                   - s3:ListBucket
                 Resource:
-                  - !GetAtt DovetailCdnArrangerWorkspaceBucket.Arn
+                  - !GetAtt DtCdnArrangerWorkspaceBucket.Arn
               - Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:PutObjectTagging
                 Resource:
-                  - !Sub ${DovetailCdnArrangerWorkspaceBucket.Arn}/*
+                  - !Sub ${DtCdnArrangerWorkspaceBucket.Arn}/*
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
       Tags:
@@ -111,7 +110,7 @@ Resources:
           DDB_TABLE: !Ref DynamodbTableArn
           DOVETAIL_HOST: !Ref DovetailHost
           DOVETAIL_TOKEN: !Ref DovetailToken
-          S3_BUCKET: !Ref DovetailCdnArrangerWorkspaceBucket
+          S3_BUCKET: !Ref DtCdnArrangerWorkspaceBucket
       Handler: index.handler
       Layers: !If
         - IsProduction
