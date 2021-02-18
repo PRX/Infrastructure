@@ -46,16 +46,16 @@ const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
  */
 
 const PR_ACTION_TRIGGERS = [
-    'opened',
-    'reopened',
-    'synchronize',
-    'ready_for_review',
+  'opened',
+  'reopened',
+  'synchronize',
+  'ready_for_review',
 ];
 const USER_AGENT = 'PRX/Infrastructure (github-event-handler)';
 const GITHUB_HEADERS = {
-    Authorization: `token ${process.env.GITHUB_ACCESS_TOKEN}`,
-    Accept: 'application/vnd.github.v3+json',
-    'User-Agent': USER_AGENT,
+  Authorization: `token ${process.env.GITHUB_ACCESS_TOKEN}`,
+  Accept: 'application/vnd.github.v3+json',
+  'User-Agent': USER_AGENT,
 };
 
 /**
@@ -63,11 +63,11 @@ const GITHUB_HEADERS = {
  * @returns {event is GitHubPullRequestWebhookPayload}
  */
 function eventIsPullRequest(event) {
-    if (Object.prototype.hasOwnProperty.call(event, 'pull_request')) {
-        return true;
-    }
+  if (Object.prototype.hasOwnProperty.call(event, 'pull_request')) {
+    return true;
+  }
 
-    return false;
+  return false;
 }
 
 /**
@@ -75,69 +75,71 @@ function eventIsPullRequest(event) {
  * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#statuses
  * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  * @param {object} build
- * @returns {Promise<undefined>}
+ * @returns {Promise<void>}
  */
 function updateGitHubStatus(event, build) {
-    return new Promise((resolve, reject) => {
-        console.log('Updating GitHub status');
+  return new Promise((resolve, reject) => {
+    console.log('Updating GitHub status');
 
-        // Get request properties
-        const repo = event.repository.full_name;
-        const sha = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
+    // Get request properties
+    const repo = event.repository.full_name;
+    const sha = eventIsPullRequest(event)
+      ? event.pull_request.head.sha
+      : event.after;
 
-        const { arn } = build;
-        const region = arn.split(':')[3];
-        const buildId = arn.split('/')[1];
-        const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
+    const { arn } = build;
+    const region = arn.split(':')[3];
+    const buildId = arn.split('/')[1];
+    const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
 
-        const payload = {
-            state: 'pending',
-            target_url: buildUrl,
-            description: 'Build has started running in CodeBuild',
-            context: 'continuous-integration/prxci',
-        };
-        const json = JSON.stringify(payload);
+    const payload = {
+      state: 'pending',
+      target_url: buildUrl,
+      description: 'Build has started running in CodeBuild',
+      context: 'continuous-integration/prxci',
+    };
+    const json = JSON.stringify(payload);
 
-        // Setup request options
-        const options = {
-            host: 'api.github.com',
-            path: `/repos/${repo}/statuses/${sha}`,
-            method: 'POST',
-            headers: GITHUB_HEADERS,
-        };
+    // Setup request options
+    const options = {
+      host: 'api.github.com',
+      path: `/repos/${repo}/statuses/${sha}`,
+      method: 'POST',
+      headers: GITHUB_HEADERS,
+    };
 
-        options.headers['Content-Length'] = Buffer.byteLength(json);
+    options.headers['Content-Length'] = Buffer.byteLength(json);
 
-        // Request with response handler
-        console.log(`Calling statuses API: ${options.path}`);
-        const req = https.request(options, (res) => {
-            res.setEncoding('utf8');
+    // Request with response handler
+    console.log(`Calling statuses API: ${options.path}`);
+    const req = https.request(options, (res) => {
+      res.setEncoding('utf8');
 
-            let json2 = '';
-            res.on('data', (chunk) => {
-                json2 += chunk;
-            });
-            res.on('end', () => {
-                switch (res.statusCode) {
-                    case 201:
-                        console.log('GitHub status updated');
-                        resolve();
-                        break;
-                    default:
-                        console.error('GitHub status update failed');
-                        console.error(`HTTP ${res.statusCode}`);
-                        console.error(json2);
-                        reject(new Error('GitHub status update failed!'));
-                }
-            });
-        });
-
-        // Generic request error handling
-        req.on('error', e => reject(e));
-
-        req.write(json);
-        req.end();
+      let json2 = '';
+      res.on('data', (chunk) => {
+        json2 += chunk;
+      });
+      res.on('end', () => {
+        switch (res.statusCode) {
+          case 201:
+            console.log('GitHub status updated');
+            resolve();
+            break;
+          default:
+            console.error('GitHub status update failed');
+            console.error(`HTTP ${res.statusCode}`);
+            console.error(json2);
+            reject(new Error('GitHub status update failed!'));
+        }
+      });
     });
+
+    // Generic request error handling
+    req.on('error', (e) => reject(e));
+
+    req.write(json);
+    req.end();
+  });
 }
 
 /**
@@ -146,13 +148,13 @@ function updateGitHubStatus(event, build) {
  * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
  */
 function postNotification(event, build) {
-    console.log('Sending Slack notification message')
-    return sns
-        .publish({
-            TopicArn: process.env.CI_STATUS_TOPIC_ARN,
-            Message: JSON.stringify({ event, build }),
-        })
-        .promise();
+  console.log('Sending Slack notification message');
+  return sns
+    .publish({
+      TopicArn: process.env.CI_STATUS_TOPIC_ARN,
+      Message: JSON.stringify({ event, build }),
+    })
+    .promise();
 }
 
 /**
@@ -163,73 +165,75 @@ function postNotification(event, build) {
  * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  */
 async function triggerBuild(versionId, ciContentsResponse, event) {
-    console.log('Starting CodeBuild run');
+  console.log('Starting CodeBuild run');
 
-    // ciContentsResponse is the JSON body response from a Contents API request
-    // to GitHub for a buildspec.yml file in the project that triggered the
-    // webhook event. It contains a base 64 encoded string which is the contents
-    // of that file.
-    /** @type {ReposGetContentResponseData} */
-    const ghData = JSON.parse(ciContentsResponse);
-    const buildspec = Buffer.from(ghData.content, 'base64').toString('utf8');
+  // ciContentsResponse is the JSON body response from a Contents API request
+  // to GitHub for a buildspec.yml file in the project that triggered the
+  // webhook event. It contains a base 64 encoded string which is the contents
+  // of that file.
+  /** @type {ReposGetContentResponseData} */
+  const ghData = JSON.parse(ciContentsResponse);
+  const buildspec = Buffer.from(ghData.content, 'base64').toString('utf8');
 
-    // Only trigger builds for repositories where the buildspec appears to be
-    // be designed for use with CI. Look for an `PRX_` string as a test.
-    if (!buildspec.includes('PRX_')) {
-        console.log('Skipping unsupported buildspec.yml');
-        return;
-    }
+  // Only trigger builds for repositories where the buildspec appears to be
+  // be designed for use with CI. Look for an `PRX_` string as a test.
+  if (!buildspec.includes('PRX_')) {
+    console.log('Skipping unsupported buildspec.yml');
+    return;
+  }
 
-    const commitRef = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
+  const commitRef = eventIsPullRequest(event)
+    ? event.pull_request.head.sha
+    : event.after;
 
-    const environmentVariables = [
-        {
-            name: 'PRX_REPO',
-            value: event.repository.full_name,
-        },
-        {
-            name: 'PRX_COMMIT',
-            value: commitRef,
-        },
-    ];
+  const environmentVariables = [
+    {
+      name: 'PRX_REPO',
+      value: event.repository.full_name,
+    },
+    {
+      name: 'PRX_COMMIT',
+      value: commitRef,
+    },
+  ];
 
-    if (eventIsPullRequest(event)) {
-        // Pull requests are test-only builds. The pull request number is not
-        // used by the build process, but needs to be passed along to the
-        // callback for setting the GitHub status.
+  if (eventIsPullRequest(event)) {
+    // Pull requests are test-only builds. The pull request number is not
+    // used by the build process, but needs to be passed along to the
+    // callback for setting the GitHub status.
 
-        const num = event.pull_request.number;
-        const branch = event.pull_request.head.ref;
-        environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
-        environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
-        environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
-    } else {
-        // All other events should be code pushes to the default branch. These
-        // should get tested and published. The buildspec.yml file will contain
-        // environment variables that allow the post_build.sh script to
-        // determine where and how to handle successful builds (e.g. where to
-        // push the code, etc).
+    const num = event.pull_request.number;
+    const branch = event.pull_request.head.ref;
+    environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+    environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
+    environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
+  } else {
+    // All other events should be code pushes to the default branch. These
+    // should get tested and published. The buildspec.yml file will contain
+    // environment variables that allow the post_build.sh script to
+    // determine where and how to handle successful builds (e.g. where to
+    // push the code, etc).
 
-        const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
-        environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
-        environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
-    }
+    const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
+    environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
+    environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
+  }
 
-    const data = await codebuild
-        .startBuild({
-            projectName: process.env.CODEBUILD_PROJECT_NAME,
-            sourceVersion: versionId,
-            buildspecOverride: buildspec,
-            environmentVariablesOverride: environmentVariables,
-        })
-        .promise();
+  const data = await codebuild
+    .startBuild({
+      projectName: process.env.CODEBUILD_PROJECT_NAME,
+      sourceVersion: versionId,
+      buildspecOverride: buildspec,
+      environmentVariablesOverride: environmentVariables,
+    })
+    .promise();
 
-    console.log('CodeBuild started');
+  console.log('CodeBuild started');
 
-    const status = updateGitHubStatus(event, data.build);
-    const notification = postNotification(event, data.build);
+  const status = updateGitHubStatus(event, data.build);
+  const notification = postNotification(event, data.build);
 
-    await Promise.all([status, notification]);
+  await Promise.all([status, notification]);
 }
 
 /**
@@ -238,16 +242,16 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
  * @returns {Promise<string>} The S3 version ID of the resulting object
  */
 async function copyToS3(path) {
-    console.log('Copying archive to S3');
+  console.log('Copying archive to S3');
 
-    const params = {
-        Bucket: process.env.CODEBUILD_SOURCE_ARCHIVE_BUCKET,
-        Key: process.env.CODEBUILD_SOURCE_ARCHIVE_KEY,
-        Body: fs.createReadStream(path),
-    };
+  const params = {
+    Bucket: process.env.CODEBUILD_SOURCE_ARCHIVE_BUCKET,
+    Key: process.env.CODEBUILD_SOURCE_ARCHIVE_KEY,
+    Body: fs.createReadStream(path),
+  };
 
-    const data = await s3.putObject(params).promise();
-    return data.VersionId;
+  const data = await s3.putObject(params).promise();
+  return data.VersionId;
 }
 
 /**
@@ -257,57 +261,55 @@ async function copyToS3(path) {
  * @returns {Promise<string>} The URL of the zip archive
  */
 function getSourceArchiveLink(event) {
-    return new Promise((resolve, reject) => {
-        console.log('Getting source code archive URL');
+  return new Promise((resolve, reject) => {
+    console.log('Getting source code archive URL');
 
-        // Get request properties
-        const repo = event.repository.full_name;
-        const sha = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
+    // Get request properties
+    const repo = event.repository.full_name;
+    const sha = eventIsPullRequest(event)
+      ? event.pull_request.head.sha
+      : event.after;
 
-        // Setup request options
-        const options = {
-            host: 'api.github.com',
-            path: `/repos/${repo}/zipball/${sha}`,
-            method: 'GET',
-            headers: GITHUB_HEADERS,
-        };
+    // Setup request options
+    const options = {
+      host: 'api.github.com',
+      path: `/repos/${repo}/zipball/${sha}`,
+      method: 'GET',
+      headers: GITHUB_HEADERS,
+    };
 
-        options.headers['Content-Length'] = Buffer.byteLength('');
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
-        // Request with response handler
-        console.log(`Calling archive link API: ${options.path}`);
-        const req = https.request(options, (res) => {
-            res.setEncoding('utf8');
+    // Request with response handler
+    console.log(`Calling archive link API: ${options.path}`);
+    const req = https.request(options, (res) => {
+      res.setEncoding('utf8');
 
-            let json = '';
-            res.on('data', (chunk) => {
-                json += chunk;
-            });
-            res.on('end', () => {
-                switch (res.statusCode) {
-                    case 302:
-                        console.log('GitHub archive URL found');
-                        resolve(res.headers.location);
-                        break;
-                    default:
-                        console.error(
-                            'GitHub archive link request failed',
-                        );
-                        console.error(`HTTP ${res.statusCode}`);
-                        console.error(json);
-                        reject(
-                            new Error('GitHub archive link request failed!'),
-                        );
-                }
-            });
-        });
-
-        // Generic request error handling
-        req.on('error', e => reject(e));
-
-        req.write('');
-        req.end();
+      let json = '';
+      res.on('data', (chunk) => {
+        json += chunk;
+      });
+      res.on('end', () => {
+        switch (res.statusCode) {
+          case 302:
+            console.log('GitHub archive URL found');
+            resolve(res.headers.location);
+            break;
+          default:
+            console.error('GitHub archive link request failed');
+            console.error(`HTTP ${res.statusCode}`);
+            console.error(json);
+            reject(new Error('GitHub archive link request failed!'));
+        }
+      });
     });
+
+    // Generic request error handling
+    req.on('error', (e) => reject(e));
+
+    req.write('');
+    req.end();
+  });
 }
 
 /**
@@ -317,57 +319,61 @@ function getSourceArchiveLink(event) {
  * @returns {Promise<string>} The local file path
  */
 async function getSourceArchive(event) {
-    const location = await getSourceArchiveLink(event);
-    const q = new URL(location);
+  const location = await getSourceArchiveLink(event);
+  const q = new URL(location);
 
-    return new Promise((resolve, reject) => {
-        console.log('Fetching source archive');
+  return new Promise((resolve, reject) => {
+    console.log('Fetching source archive');
 
-        // Setup request options
-        const options = {
-            host: q.host,
-            port: q.port,
-            path: `${q.pathname || ''}${q.search || ''}`,
-            method: 'GET',
-            headers: GITHUB_HEADERS,
-        };
+    // Setup request options
+    const options = {
+      host: q.host,
+      port: q.port,
+      path: `${q.pathname || ''}${q.search || ''}`,
+      method: 'GET',
+      headers: GITHUB_HEADERS,
+    };
 
-        options.headers['Content-Length'] = Buffer.byteLength('');
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
-        // Setup write stream
-        const dest = `/tmp/${Date.now()}`;
-        const file = fs.createWriteStream(dest);
+    // Setup write stream
+    const dest = `/tmp/${Date.now()}`;
+    const file = fs.createWriteStream(dest);
 
-        // Request with response handler
-        const req = https.request(options, (res) => {
-            if (res.statusCode !== 200) {
-                console.error('Source archive request failed!');
-                reject(new Error('Could not get source archive'));
-            } else {
-                res.pipe(file);
+    // Request with response handler
+    const req = https.request(options, (res) => {
+      if (res.statusCode !== 200) {
+        console.error('Source archive request failed!');
+        reject(new Error('Could not get source archive'));
+      } else {
+        res.pipe(file);
 
-                file.on('finish', () => {
-                    file.close(() => {
-                        console.log('Finished downloading archive');
-                        resolve(dest);
-                    });
-                });
-            }
+        file.on('finish', () => {
+          file.close(() => {
+            console.log('Finished downloading archive');
+            resolve(dest);
+          });
         });
-
-        // Generic request error handling
-        req.on('error', e => reject(e));
-
-        // Generic file error handling
-        file.on('error', (e) => {
-            // Handle errors
-            fs.unlink(dest, er => { if (er) { throw er; }});
-            reject(e);
-        });
-
-        req.write('');
-        req.end();
+      }
     });
+
+    // Generic request error handling
+    req.on('error', (e) => reject(e));
+
+    // Generic file error handling
+    file.on('error', (e) => {
+      // Handle errors
+      fs.unlink(dest, (er) => {
+        if (er) {
+          throw er;
+        }
+      });
+      reject(e);
+    });
+
+    req.write('');
+    req.end();
+  });
 }
 
 /**
@@ -378,62 +384,64 @@ async function getSourceArchive(event) {
  * @returns {Promise<string|false>} The JSON response
  */
 function getBuildspecContentJson(event) {
-    return new Promise((resolve, reject) => {
-        console.log('Getting buildspec contents');
+  return new Promise((resolve, reject) => {
+    console.log('Getting buildspec contents');
 
-        // Get request properties
-        const repo = event.repository.full_name;
-        const path = 'buildspec.yml';
-        const ref = eventIsPullRequest(event) ? event.pull_request.head.sha : event.after;
+    // Get request properties
+    const repo = event.repository.full_name;
+    const path = 'buildspec.yml';
+    const ref = eventIsPullRequest(event)
+      ? event.pull_request.head.sha
+      : event.after;
 
-        // Setup request options
-        const options = {
-            host: 'api.github.com',
-            path: `/repos/${repo}/contents/${path}?ref=${ref}`,
-            method: 'GET',
-            headers: GITHUB_HEADERS,
-        };
+    // Setup request options
+    const options = {
+      host: 'api.github.com',
+      path: `/repos/${repo}/contents/${path}?ref=${ref}`,
+      method: 'GET',
+      headers: GITHUB_HEADERS,
+    };
 
-        options.headers['Content-Length'] = Buffer.byteLength('');
+    options.headers['Content-Length'] = Buffer.byteLength('');
 
-        // Request with response handler
-        console.log(`Calling contents API: ${options.path}`);
-        const req = https.request(options, (res) => {
-            res.setEncoding('utf8');
+    // Request with response handler
+    console.log(`Calling contents API: ${options.path}`);
+    const req = https.request(options, (res) => {
+      res.setEncoding('utf8');
 
-            let json = '';
-            res.on('data', (chunk) => {
-                console.log(chunk);
-                json += chunk;
-            });
-            res.on('end', () => {
-                switch (res.statusCode) {
-                    case 200:
-                        console.log('Found CodeBuild support');
-                        resolve(json);
-                        break;
-                    case 404:
-                        console.log('No CodeBuild support!');
-                        resolve(false);
-                        break;
-                    default:
-                        console.error(`Request failed ${res.statusCode}!`);
-                        console.error(json);
-                        reject(new Error('Contents request failed!'));
-                }
-            });
-        });
-
-        req.setTimeout(1000, () => {
-            console.log('========= request timed out');
-        });
-
-        // Generic request error handling
-        req.on('error', e => reject(e));
-
-        req.write('');
-        req.end();
+      let json = '';
+      res.on('data', (chunk) => {
+        console.log(chunk);
+        json += chunk;
+      });
+      res.on('end', () => {
+        switch (res.statusCode) {
+          case 200:
+            console.log('Found CodeBuild support');
+            resolve(json);
+            break;
+          case 404:
+            console.log('No CodeBuild support!');
+            resolve(false);
+            break;
+          default:
+            console.error(`Request failed ${res.statusCode}!`);
+            console.error(json);
+            reject(new Error('Contents request failed!'));
+        }
+      });
     });
+
+    req.setTimeout(1000, () => {
+      console.log('========= request timed out');
+    });
+
+    // Generic request error handling
+    req.on('error', (e) => reject(e));
+
+    req.write('');
+    req.end();
+  });
 }
 
 /**
@@ -441,15 +449,15 @@ function getBuildspecContentJson(event) {
  * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  */
 async function handleCiEvent(event) {
-    const buildspecContentJson = await getBuildspecContentJson(event);
+  const buildspecContentJson = await getBuildspecContentJson(event);
 
-    if (buildspecContentJson) {
-        const filePath = await getSourceArchive(event);
-        const versionId = await copyToS3(filePath);
-        await triggerBuild(versionId, buildspecContentJson, event);
+  if (buildspecContentJson) {
+    const filePath = await getSourceArchive(event);
+    const versionId = await copyToS3(filePath);
+    await triggerBuild(versionId, buildspecContentJson, event);
 
-        console.log('Done');
-    }
+    console.log('Done');
+  }
 }
 
 /**
@@ -460,12 +468,12 @@ async function handleCiEvent(event) {
  * @param {GitHubPullRequestWebhookPayload} event
  */
 async function handlePullRequestEvent(event) {
-    console.log('Handling pull_request event');
+  console.log('Handling pull_request event');
 
-    if (PR_ACTION_TRIGGERS.includes(event.action)) {
-        console.log(`With action: ${event.action}`);
-        await handleCiEvent(event);
-    }
+  if (PR_ACTION_TRIGGERS.includes(event.action)) {
+    console.log(`With action: ${event.action}`);
+    await handleCiEvent(event);
+  }
 }
 
 /**
@@ -477,12 +485,12 @@ async function handlePullRequestEvent(event) {
  * @param {GitHubPushWebhookPayload} event
  */
 async function handlePushEvent(event) {
-    console.log('Handling push event');
+  console.log('Handling push event');
 
-    if (event.ref === `refs/heads/${event.repository.default_branch}`) {
-        console.log('Push event was for default branch');
-        await handleCiEvent(event);
-    }
+  if (event.ref === `refs/heads/${event.repository.default_branch}`) {
+    console.log('Push event was for default branch');
+    await handleCiEvent(event);
+  }
 }
 
 /**
@@ -490,22 +498,22 @@ async function handlePushEvent(event) {
  * @returns {Promise<void>}
  */
 exports.handler = async (event) => {
-    const snsMsg = event.Records[0].Sns;
+  const snsMsg = event.Records[0].Sns;
 
-    const githubEvent = snsMsg.MessageAttributes.githubEvent.Value;
-    const githubEventObj = JSON.parse(snsMsg.Message);
+  const githubEvent = snsMsg.MessageAttributes.githubEvent.Value;
+  const githubEventObj = JSON.parse(snsMsg.Message);
 
-    console.log(`Received message for event: ${githubEvent}`);
-    console.log(snsMsg.Message);
+  console.log(`Received message for event: ${githubEvent}`);
+  console.log(snsMsg.Message);
 
-    switch (githubEvent) {
-        case 'push':
-            await handlePushEvent(githubEventObj);
-            break;
-        case 'pull_request':
-            await handlePullRequestEvent(githubEventObj);
-            break;
-        default:
-            console.log('Ignoring this event type!');
-    }
+  switch (githubEvent) {
+    case 'push':
+      await handlePushEvent(githubEventObj);
+      break;
+    case 'pull_request':
+      await handlePullRequestEvent(githubEventObj);
+      break;
+    default:
+      console.log('Ignoring this event type!');
+  }
 };

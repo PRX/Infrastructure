@@ -25,28 +25,30 @@ const OK_RESPONSE = { statusCode: 200 };
  * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
  */
 function publishEvent(event) {
-    console.log('Publishing event to SNS');
+  console.log('Publishing event to SNS');
 
-    const msg = event.isBase64Encoded
-        ? Buffer.from(event.body, 'base64').toString('utf-8')
-        : event.body;
+  const msg = event.isBase64Encoded
+    ? Buffer.from(event.body, 'base64').toString('utf-8')
+    : event.body;
 
-    console.log(msg);
+  console.log(msg);
 
-    return sns.publish({
-        TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
-        Message: msg,
-        MessageAttributes: {
-            githubEvent: {
-                DataType: 'String',
-                StringValue: event.headers['x-github-event'],
-            },
-            githubDeliveryId: {
-                DataType: 'String',
-                StringValue: event.headers['x-github-delivery'],
-            },
+  return sns
+    .publish({
+      TopicArn: process.env.GITHUB_EVENT_HANDLER_TOPIC_ARN,
+      Message: msg,
+      MessageAttributes: {
+        githubEvent: {
+          DataType: 'String',
+          StringValue: event.headers['x-github-event'],
         },
-    }).promise();
+        githubDeliveryId: {
+          DataType: 'String',
+          StringValue: event.headers['x-github-delivery'],
+        },
+      },
+    })
+    .promise();
 }
 
 /**
@@ -56,27 +58,27 @@ function publishEvent(event) {
  * @throws GitHub webhook validation error
  */
 exports.handler = async (event) => {
-    const githubSignature = event.headers['x-hub-signature'].split('=')[1];
+  const githubSignature = event.headers['x-hub-signature'].split('=')[1];
 
-    console.log(`Checking event signature: ${githubSignature}`);
+  console.log(`Checking event signature: ${githubSignature}`);
 
-    const key = process.env.GITHUB_WEBHOOK_SECRET;
-    const data = event.body;
-    const check = crypto.createHmac('sha1', key).update(data).digest('hex');
+  const key = process.env.GITHUB_WEBHOOK_SECRET;
+  const data = event.body;
+  const check = crypto.createHmac('sha1', key).update(data).digest('hex');
 
-    if (githubSignature !== check) {
-        throw new Error('Invalid signature!');
-    }
+  if (githubSignature !== check) {
+    throw new Error('Invalid signature!');
+  }
 
-    console.log(`Handling event: ${event.headers['x-github-event']}`);
+  console.log(`Handling event: ${event.headers['x-github-event']}`);
 
-    switch (event.headers['x-github-event']) {
-        case 'ping':
-            // Blackhole `ping` events
-            break;
-        default:
-            await publishEvent(event);
-    }
+  switch (event.headers['x-github-event']) {
+    case 'ping':
+      // Blackhole `ping` events
+      break;
+    default:
+      await publishEvent(event);
+  }
 
-    return OK_RESPONSE;
+  return OK_RESPONSE;
 };

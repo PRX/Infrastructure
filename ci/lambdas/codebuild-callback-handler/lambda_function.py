@@ -253,9 +253,10 @@ def post_notification_status(sns_message):
     else:
         attachment["color"] = "danger"
         attachment["fallback"] = f"Failed to build {repo}{extra} with commit {sha7}"
-        attachment[
-            "title"
-        ] = f"Failed to <{build_url}|build> {repo}{extra} with commit <{commit_url}|{sha7}>"
+        attachment["title"] = (
+            f"Failed to <{build_url}|build> {repo}{extra} "
+            f"with commit <{commit_url}|{sha7}>"
+        )
         attachment["text"] = f"> _{message}_"
 
     slack_message = json.dumps(
