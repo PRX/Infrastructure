@@ -5,7 +5,7 @@
 import boto3
 import re
 
-cloudformation = boto3.client('cloudformation')
+cloudformation = boto3.client("cloudformation")
 
 stacks = cloudformation.describe_stacks()
 
@@ -13,12 +13,15 @@ stacks = cloudformation.describe_stacks()
 # Examines all stacks to ensure they have the shared CloudFormation
 # notification SNS topic configured as a notification ARN
 
-cfn_topic = 'arn:aws:sns:us-east-1:561178107736:infrastructure-notifications-CloudFormationNotificationSnsTopic-2OCAWQM7S7BP'
+cfn_topic = (
+    "arn:aws:sns:us-east-1:561178107736:infrastructure-"
+    "notifications-CloudFormationNotificationSnsTopic-2OCAWQM7S7BP"
+)
 
 print("======================================================================")
-print(f"These stacks do NOT include the notification ARN:")
-for stack in stacks['Stacks']:
-    if cfn_topic not in stack['NotificationARNs']:
+print("These stacks do NOT include the notification ARN:")
+for stack in stacks["Stacks"]:
+    if cfn_topic not in stack["NotificationARNs"]:
         print(f"{stack['StackName']}")
 
 
@@ -30,15 +33,15 @@ for stack in stacks['Stacks']:
 # this will report a warning
 
 print("======================================================================")
-for stack in stacks['Stacks']:
-    cfn_template = cloudformation.get_template(StackName=stack['StackName'])
-    cfn_body = cfn_template['TemplateBody']
+for stack in stacks["Stacks"]:
+    cfn_template = cloudformation.get_template(StackName=stack["StackName"])
+    cfn_body = cfn_template["TemplateBody"]
 
-    cfn_first_line = cfn_body.split('\n', 1)[0]
+    cfn_first_line = cfn_body.split("\n", 1)[0]
     if re.match(r"\# ([a-zA-Z/_\-\.]+yml)", cfn_first_line) is None:
         print(f"Missing template path: {stack['StackName']}")
     else:
-        template_path = re.findall(r'\# ([a-zA-Z/_\-\.]+yml)', cfn_first_line)[0]
+        template_path = re.findall(r"\# ([a-zA-Z/_\-\.]+yml)", cfn_first_line)[0]
 
         local_path = f"../{template_path}"
 
