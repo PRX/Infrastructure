@@ -6,11 +6,7 @@ Follow these rules for Git commits: https://chris.beams.io/posts/git-commit/
 
 ### Python
 
-Python code shoud be follow the default Flake8 settings.
-
-Ensure that Flake8 is installed and your editor is configured to check for problems.
-
-`pip install flake8`
+Python code should be automatically formatted using [Black](https://black.readthedocs.io/en/stable/#), and statically checked using Pylance (or similar).
 
 ### JavaScript
 
@@ -25,7 +21,11 @@ Ensure that Airbnb config is available, as the included `.eslintrc` inherits fro
 )
 ```
 
+JavaScript files should be automatically formatted using Prettier.
+
 ### YAML
+
+YAML files should be automatically formatted using Prettier. It may be helpful to only format modifications, since many YAML files are not formatted, and would result in large deltas.
 
 ### CloudFormation Templates
 
