@@ -36,6 +36,8 @@ Parameters:
     Type: String
   DovetailTrafficLambdaCodeS3ObjectVersion:
     Type: String
+  DovetailCdnArrangerCodeS3ObjectVersion:
+    Type: String
   AnalyticsIngestLambdaCodeS3ObjectVersion:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
@@ -181,6 +183,27 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-traffic-lambda.yml"]]
+      TimeoutInMinutes: 5
+  DovetailCdnArrangerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        CodeS3Bucket:
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
+        CodeS3ObjectVersion: !Ref DovetailCdnArrangerCodeS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        ArrangementsDynamodbTable: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_TABLE
+        ArrangementsDynamodbRegion: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_REGION
+        DovetailHost: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/DOVETAIL_HOST
+        DovetailToken: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/DOVETAIL_TOKEN
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}dovetail-cdn-arranger.yml
       TimeoutInMinutes: 5
   AnalyticsIngestLambdasStack:
     Type: "AWS::CloudFormation::Stack"
