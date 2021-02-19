@@ -5,14 +5,19 @@ env:
 phases:
   install:
     runtime-versions:
-      python: 3.7
+      python: 3.9
+      node: 14
     commands:
-      - 'echo "Installing CloudFormation Linter"'
-      - 'pip install cfn-lint --upgrade'
+      - 'npm install'
+      - 'pip3 install -r requirements.txt'
   build:
     commands:
       - 'cd $(ls -d */|head -n 1)'
       - 'find . -name "*.yml" -type f ! -path "./node_modules/*" -mindepth 2 -print0 | xargs -0 -n1 cfn-lint --ignore-checks W --template'
+      - 'python3.9 -m black --check ./'
+      - 'python3.9 -m flake8'
+      - 'npm run tsc'
+      - 'npm run eslint -- "**/*.js"'
   post_build:
       commands:
         - 'curl -sO "https://raw.githubusercontent.com/PRX/Infrastructure/master/ci/utility/post_build.sh" && chmod +x post_build.sh && bash ./post_build.sh'
