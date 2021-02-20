@@ -162,7 +162,10 @@ def log_usages(usages):
         if usage["disconnected"]:
             seconds = usage["disconnectseconds"]
             log_debug(
-                f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}] - DISCONNECTED {seconds}"
+                (
+                    f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]"
+                    f" - DISCONNECTED {seconds}"
+                )
             )
         else:
             log_debug(f"    {usage['id']} - [{usage['cpu']} / {usage['mem']}]")
@@ -246,7 +249,7 @@ def get_usage(details):
     reg = details["registeredResources"]
     return {
         "id": details["ec2InstanceId"],
-        "disconnected": details["agentConnected"] == False,
+        "disconnected": details["agentConnected"] is False,
         "disconnectseconds": -1,
         "cpu": next(r["integerValue"] for r in rem if r["name"] == "CPU"),
         "mem": next(r["integerValue"] for r in rem if r["name"] == "MEMORY"),

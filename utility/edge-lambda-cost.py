@@ -1,6 +1,4 @@
 import boto3
-import os
-import json
 import pprint
 from datetime import datetime, timedelta
 
@@ -126,7 +124,10 @@ for function in functions:
             global_duration_costs += duration_cost
 
         print(
-            f"{region} – Req: {requests} (${requests_cost}); Duration: {duration}ms (${duration_cost})"
+            (
+                f"{region} – Req: {requests} (${requests_cost}); "
+                f"Duration: {duration}ms (${duration_cost})"
+            )
         )
 
     print(f"======== Function total ($) {fn_requests_cost + fn_duration_costs}")
