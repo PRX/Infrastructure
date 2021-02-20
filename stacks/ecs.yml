@@ -131,8 +131,7 @@ Resources:
     Properties:
       Code:
         S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: utility/ecs-ami-lookup.zip
       Description: Finds AMI ID for ECS optimized images in a given region
       Handler: index.handler
@@ -417,7 +416,7 @@ Resources:
                 [main]
                 stack=${AWS::StackId}
                 region=${AWS::Region}
-              mode: '000400'
+              mode: "000400"
               owner: root
               group: root
             "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
@@ -463,7 +462,7 @@ Resources:
               command: "(crontab -uroot -l 2> /dev/null; echo '* * * * * /root/cwdiskusage.sh') | crontab -u root -"
             03_fstrim_reclaim_disk:
               # http://docs.aws.amazon.com/AmazonECS/latest/developerguide/CannotCreateContainerError.html
-              command: "(crontab -uroot -l 2> /dev/null; echo '*/5 * * * * docker ps -qa | xargs docker inspect --format=\"{{ .State.Pid }}\" | xargs -IZ /sbin/fstrim /proc/Z/root/') | crontab -u root -"
+              command: '(crontab -uroot -l 2> /dev/null; echo ''*/5 * * * * docker ps -qa | xargs docker inspect --format="{{ .State.Pid }}" | xargs -IZ /sbin/fstrim /proc/Z/root/'') | crontab -u root -'
             04_set_t2_unlimited:
               command: |
                 #!/bin/bash
@@ -477,11 +476,11 @@ Resources:
           services:
             sysvinit:
               cfn-hup:
-                enabled: 'true'
-                ensureRunning: 'true'
+                enabled: "true"
+                ensureRunning: "true"
                 files:
-                - "/etc/cfn/cfn-hup.conf"
-                - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
+                  - "/etc/cfn/cfn-hup.conf"
+                  - "/etc/cfn/hooks.d/cfn-auto-reloader.conf"
     Properties:
       AssociatePublicIpAddress: true
       ImageId: !GetAtt ECSAmiInfo.Id
@@ -539,8 +538,7 @@ Resources:
       MinSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, MinSize]
       NotificationConfigurations:
         - TopicARN:
-            Fn::ImportValue:
-                !Sub ${NotificationsStackName}-ASGNotificationSnsTopic
+            Fn::ImportValue: !Sub ${NotificationsStackName}-ASGNotificationSnsTopic
           NotificationTypes:
             # TODO The error notifications should be handled differently by the
             # lambda
@@ -572,7 +570,7 @@ Resources:
           Value: !Ref AWS::StackId
           PropagateAtLaunch: true
       #  TerminationPolicies:
-        # - String
+      # - String
       VPCZoneIdentifier:
         - !Ref VPCSubnet1
         - !Ref VPCSubnet2
@@ -741,8 +739,7 @@ Resources:
     Properties:
       Code:
         S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: utility/ecs-drain-tasks.zip
       Description: Drain tasks off ECS instances before allowing them to terminate
       Environment:
@@ -820,8 +817,7 @@ Resources:
     Properties:
       Code:
         S3Bucket:
-          Fn::ImportValue:
-            !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
         S3Key: utility/ecs-asg-sizer.zip
       Description: Make an ASG the perfect size for an ECS cluster
       Environment:

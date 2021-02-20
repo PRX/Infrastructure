@@ -48,12 +48,12 @@ Resources:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
-            - Effect: "Allow"
-              Principal:
-                Service:
-                  - "lambda.amazonaws.com"
-              Action:
-                - "sts:AssumeRole"
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
       Path: "/"
       Policies:
         - PolicyName: KinesisWritePolicy
@@ -99,11 +99,10 @@ Resources:
           S3_BUCKET: !Ref S3Bucket
           S3_PREFIX: !Ref S3Prefix
       Handler: index.handler
-      Layers:
-        !If
-          - IsProduction
-          - - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:12
-          - !Ref AWS::NoValue
+      Layers: !If
+        - IsProduction
+        - - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:12
+        - !Ref AWS::NoValue
       MemorySize: 1792
       Role: !GetAtt DovetailCountsLambdaExecutionIAMRole.Arn
       Runtime: nodejs10.x
@@ -243,8 +242,7 @@ Resources:
         - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
       OKActions:
         - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription:
-        Too many dovetail counts lambda errors
+      AlarmDescription: Too many dovetail counts lambda errors
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 3
       MetricName: Errors
@@ -267,8 +265,7 @@ Resources:
         - !Ref OpsWarnMessagesSnsTopicArn
       OKActions:
         - !Ref OpsWarnMessagesSnsTopicArn
-      AlarmDescription:
-        Dovetail Counts Lambda processing is slightly behind
+      AlarmDescription: Dovetail Counts Lambda processing is slightly behind
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: IteratorAge
@@ -291,8 +288,7 @@ Resources:
         - !If [IsProduction, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
       OKActions:
         - !If [IsProduction, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription:
-        Dovetail Counts Lambda processing is very behind
+      AlarmDescription: Dovetail Counts Lambda processing is very behind
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: IteratorAge

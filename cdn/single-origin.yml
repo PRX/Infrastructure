@@ -347,10 +347,10 @@ Parameters:
       when the origin is an S3 bucket. Turning this on will not update any S3
       bucket policies, but such a policy is required to allow the origin access
       identity to function properly.
-    Default: 'No'
+    Default: "No"
     AllowedValues:
-      - 'Yes'
-      - 'No'
+      - "Yes"
+      - "No"
   CloudFrontOriginProtocolPolicy:
     Type: String
     Description: >-
@@ -464,7 +464,7 @@ Resources:
       DistributionConfig:
         Aliases: !If [HasCnames, !Ref Cnames, !Ref "AWS::NoValue"]
         # CacheBehaviors:
-          # CacheBehavior
+        # CacheBehavior
         Comment: !Ref CloudFrontComment
         CustomErrorResponses:
           - ErrorCachingMinTTL: 300
@@ -482,99 +482,92 @@ Resources:
           TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
           # TrustedSigners:
           #   - String
-          ViewerProtocolPolicy : !Ref CloudFrontViewerProtocolPolicy
+          ViewerProtocolPolicy: !Ref CloudFrontViewerProtocolPolicy
         DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref CloudFrontDefaultRootObject, !Ref "AWS::NoValue"]
         Enabled: true
         HttpVersion: http2
         IPV6Enabled: true
-        Logging:
-          !If
-            - HasCloudFrontLoggingBucket
-            - Bucket: !Ref CloudFrontLoggingBucket
-              IncludeCookies: false
-              Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
-            - !Ref AWS::NoValue
+        Logging: !If
+          - HasCloudFrontLoggingBucket
+          - Bucket: !Ref CloudFrontLoggingBucket
+            IncludeCookies: false
+            Prefix: !If [HasCloudFrontLoggingBucketPrefix, !Ref CloudFrontLoggingBucketPrefix, !Ref "AWS::NoValue"]
+          - !Ref AWS::NoValue
         # Conditional origin group for failover --------------------------------
-        OriginGroups:
-          !If
-            - HasFailoverOriginDomain
-            - Items:
-                - FailoverCriteria:
-                    StatusCodes:
-                      Items: !Split ["-", !Ref FailoverCriteriaStatusCodes]
-                      Quantity: !FindInMap [FailoverCriteriaStatusCodesQuantity, !Ref FailoverCriteriaStatusCodes, Quantity]
-                  Id: primary-origin-group
-                  Members:
-                    Items:
-                      - OriginId: primary-origin
-                      - OriginId: failover-origin
-                    Quantity: 2
-              Quantity: 1
-            - !Ref AWS::NoValue
+        OriginGroups: !If
+          - HasFailoverOriginDomain
+          - Items:
+              - FailoverCriteria:
+                  StatusCodes:
+                    Items: !Split ["-", !Ref FailoverCriteriaStatusCodes]
+                    Quantity: !FindInMap [FailoverCriteriaStatusCodesQuantity, !Ref FailoverCriteriaStatusCodes, Quantity]
+                Id: primary-origin-group
+                Members:
+                  Items:
+                    - OriginId: primary-origin
+                    - OriginId: failover-origin
+                  Quantity: 2
+            Quantity: 1
+          - !Ref AWS::NoValue
         Origins:
           # Primary origin -----------------------------------------------------
           # The template definition of this origin should be kept in sync with
           # the failover origin, except for the DomainName reference
-          - CustomOriginConfig:
-              !If
-                - HasCloudFrontOriginAccess
-                - !Ref AWS::NoValue
-                - HTTPSPort: 443
-                  # HTTPPort: Integer
-                  OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
-                  OriginSSLProtocols:
-                    - TLSv1.2
-                    - TLSv1.1
-                    - TLSv1
+          - CustomOriginConfig: !If
+              - HasCloudFrontOriginAccess
+              - !Ref AWS::NoValue
+              - HTTPSPort: 443
+                # HTTPPort: Integer
+                OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
+                OriginSSLProtocols:
+                  - TLSv1.2
+                  - TLSv1.1
+                  - TLSv1
             DomainName: !Ref OriginDomain
             Id: primary-origin
             # OriginCustomHeaders:
             #   - OriginCustomHeader
             OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
-            S3OriginConfig:
-              !If
-                - HasCloudFrontOriginAccess
-                - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
-                - !Ref AWS::NoValue
+            S3OriginConfig: !If
+              - HasCloudFrontOriginAccess
+              - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+              - !Ref AWS::NoValue
           # Optional failover origin -------------------------------------------
           # The template definition of this origin should be kept in sync with
           # the primary origin, except for the DomainName reference
-          - !If
+          - Fn::If:
               - HasFailoverOriginDomain
-              - CustomOriginConfig:
-                  !If
-                    - HasCloudFrontOriginAccess
-                    - !Ref AWS::NoValue
-                    - HTTPSPort: 443
-                      # HTTPPort: Integer
-                      OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
-                      OriginSSLProtocols:
-                        - TLSv1.2
-                        - TLSv1.1
-                        - TLSv1
+              - CustomOriginConfig: !If
+                  - HasCloudFrontOriginAccess
+                  - !Ref AWS::NoValue
+                  - HTTPSPort: 443
+                    # HTTPPort: Integer
+                    OriginProtocolPolicy: !Ref CloudFrontOriginProtocolPolicy
+                    OriginSSLProtocols:
+                      - TLSv1.2
+                      - TLSv1.1
+                      - TLSv1
                 DomainName: !Ref FailoverOriginDomain
                 Id: failover-origin
                 # OriginCustomHeaders:
                 #   - OriginCustomHeader
                 OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
-                S3OriginConfig:
-                  !If
-                    - HasCloudFrontOriginAccess
-                    - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
-                    - !Ref AWS::NoValue
+                S3OriginConfig: !If
+                  - HasCloudFrontOriginAccess
+                  - OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
+                  - !Ref AWS::NoValue
               - !Ref AWS::NoValue
         PriceClass: !Ref CloudFrontPriceClass
         # Restrictions:
         #   Restriction
-        ViewerCertificate:
-          !If
-            - UseCertificate
-            - AcmCertificateArn: !If [CreateCertificate, !Ref Certificate, !Ref AcmCertificateArn]
-              # CloudFrontDefaultCertificate: true
-              # IamCertificateId: String
-              MinimumProtocolVersion: !Ref CloudFrontViewerCertificateMinimumProtocolVersion
-              SslSupportMethod: sni-only
-            - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - UseCertificate
+          - AcmCertificateArn: !If [CreateCertificate, !Ref Certificate, !Ref AcmCertificateArn]
+            # CloudFrontDefaultCertificate: true
+            # IamCertificateId: String
+            MinimumProtocolVersion: !Ref CloudFrontViewerCertificateMinimumProtocolVersion
+            SslSupportMethod: sni-only
+          - !Ref AWS::NoValue
         WebACLId: !If [HasCloudFrontWebACLId, !Ref CloudFrontWebACLId, !Ref "AWS::NoValue"]
       Tags:
         - Key: Project

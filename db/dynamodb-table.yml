@@ -187,12 +187,11 @@ Resources:
         - AttributeName: !Ref PrimaryKey
           KeyType: HASH
       TableName: !Ref TableName
-      ProvisionedThroughput:
-        !If
-          - HasProvisionedBilling
-          - ReadCapacityUnits: !Ref ProvisionedReadCapacityUnits
-            WriteCapacityUnits: !Ref ProvisionedWriteCapacityUnits
-          - !Ref "AWS::NoValue"
+      ProvisionedThroughput: !If
+        - HasProvisionedBilling
+        - ReadCapacityUnits: !Ref ProvisionedReadCapacityUnits
+          WriteCapacityUnits: !Ref ProvisionedWriteCapacityUnits
+        - !Ref "AWS::NoValue"
       Tags:
         - Key: Project
           Value: !Ref ProjectTag
@@ -214,11 +213,10 @@ Resources:
         Statement:
           - Effect: "Allow"
             Action: "sts:AssumeRole"
-            Principal:
-              !If
-                - HasForeignRole
-                - AWS: !Sub "arn:aws:iam::${ForeignAccountId}:role/${ForeignRoleName}"
-                - AWS: !Ref ForeignAccountId
+            Principal: !If
+              - HasForeignRole
+              - AWS: !Sub "arn:aws:iam::${ForeignAccountId}:role/${ForeignRoleName}"
+              - AWS: !Ref ForeignAccountId
       Path: "/"
       Policies:
         - PolicyName: DynamoDBWritePolicy
@@ -307,8 +305,7 @@ Resources:
         - !Ref WarnMessagesSnsTopicArn
       OKActions:
         - !Ref WarnMessagesSnsTopicArn
-      AlarmDescription:
-        Scan operations are being throttled
+      AlarmDescription: Scan operations are being throttled
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: ThrottledRequests
@@ -333,8 +330,7 @@ Resources:
         - !Ref WarnMessagesSnsTopicArn
       OKActions:
         - !Ref WarnMessagesSnsTopicArn
-      AlarmDescription:
-        BatchGetItem operations are being throttled
+      AlarmDescription: BatchGetItem operations are being throttled
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: ThrottledRequests
@@ -359,8 +355,7 @@ Resources:
         - !Ref WarnMessagesSnsTopicArn
       OKActions:
         - !Ref WarnMessagesSnsTopicArn
-      AlarmDescription:
-        BatchWriteItem operations are being throttled
+      AlarmDescription: BatchWriteItem operations are being throttled
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: ThrottledRequests
