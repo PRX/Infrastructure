@@ -47,11 +47,17 @@ function colorForResourceStatus(status) {
 
   if (green.includes(status)) {
     return 'good';
-  } else if (yellow.includes(status)) {
+  }
+
+  if (yellow.includes(status)) {
     return 'warning';
-  } else if (red.includes(status)) {
+  }
+
+  if (red.includes(status)) {
     return 'danger';
-  } else if (grey.includes(status)) {
+  }
+
+  if (grey.includes(status)) {
     return '#AAAAAA';
   }
 

@@ -10,7 +10,6 @@
 
 const querystring = require('querystring');
 const crypto = require('crypto');
-const url = require('url');
 const https = require('https');
 
 const aws = require('aws-sdk');
@@ -40,12 +39,18 @@ function slackWebMethod(uri, responseProperty, payload) {
   return new Promise((resolve, reject) => {
     const urlencodedBody = querystring.stringify(payload);
 
+    const q = new URL(uri);
+
     // Setup request options
-    const options = url.parse(uri);
-    options.method = 'POST';
-    options.headers = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Content-Length': Buffer.byteLength(urlencodedBody),
+    const options = {
+      host: q.host,
+      port: q.port,
+      path: `${q.pathname || ''}${q.search || ''}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(urlencodedBody),
+      },
     };
 
     const method = uri.split('/').pop();
@@ -85,58 +90,6 @@ function slackWebMethod(uri, responseProperty, payload) {
   });
 }
 
-exports.handler = (event, context, callback) => {
-  try {
-    processEvent(event, context, callback);
-  } catch (e) {
-    callback(e);
-  }
-};
-
-function processEvent(event, context, callback) {
-  const body = querystring.parse(event.body);
-
-  // The JSON object response from Slack
-  const payload = JSON.parse(body.payload);
-
-  // Top-level properties of the message action response object
-  const callbackId = payload.callback_id;
-
-  // Slack signing secret
-  const slackRequestTimestamp = event.headers['X-Slack-Request-Timestamp'];
-  const basestring = ['v0', slackRequestTimestamp, event.body].join(':');
-  const signingSecret = process.env.SLACK_SIGNING_SECRET;
-  const slackSignature = event.headers['X-Slack-Signature'];
-  const requestSignature = `v0=${crypto
-    .createHmac('sha256', signingSecret)
-    .update(basestring)
-    .digest('hex')}`;
-
-  if (requestSignature !== slackSignature) {
-    // Bad request; bogus token
-    callback(null, { statusCode: 400, headers: {}, body: null });
-  } else {
-    // Handle each callback ID appropriately
-    switch (callbackId) {
-      case CODEPIPELINE_MANUAL_APPROVAL_CALLBACK:
-        handleReleaseButtons(payload, callback);
-        break;
-      case ROLLBACK_VERSION_SELECTION_CALLBACK:
-        handleRollbackCallback(payload, callback);
-        break;
-      case RELEASE_NOTES_DIALOG_CALLBACK:
-        handleReleaseNotesDialog(payload, callback);
-        break;
-      case CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK:
-        handleCloudFrontInvalidationDialog(payload, callback);
-        break;
-      default:
-        // Unknown message callback
-        callback(null, { statusCode: 400, headers: {}, body: null });
-    }
-  }
-}
-
 function handleReleaseNotesDialog(payload, callback) {
   console.log(JSON.stringify(payload));
 
@@ -156,18 +109,6 @@ function handleReleaseNotesDialog(payload, callback) {
   );
 }
 
-function handleRollbackCallback(payload, callback) {
-  const action = payload.actions[0];
-
-  switch (action.name) {
-    case 'selection':
-      triggerRollback(payload, callback);
-      break;
-    default:
-      cancelRollback(payload, callback);
-  }
-}
-
 function triggerRollback(payload, callback) {
   const action = payload.actions[0];
   const versionId = action.selected_options[0].value;
@@ -182,7 +123,7 @@ function triggerRollback(payload, callback) {
       CopySource: encodeURI(sourceUrl),
       Key: configKey,
     },
-    (e, data) => {
+    (e) => {
       if (e) {
         console.error(e);
         callback(null, { statusCode: 400, headers: {}, body: null });
@@ -192,7 +133,7 @@ function triggerRollback(payload, callback) {
         };
 
         const body = JSON.stringify(msg);
-        callback(null, { statusCode: 200, headers: {}, body: body });
+        callback(null, { statusCode: 200, headers: {}, body });
       }
     },
   );
@@ -204,7 +145,19 @@ function cancelRollback(payload, callback) {
   };
 
   const body = JSON.stringify(msg);
-  callback(null, { statusCode: 200, headers: {}, body: body });
+  callback(null, { statusCode: 200, headers: {}, body });
+}
+
+function handleRollbackCallback(payload, callback) {
+  const action = payload.actions[0];
+
+  switch (action.name) {
+    case 'selection':
+      triggerRollback(payload, callback);
+      break;
+    default:
+      cancelRollback(payload, callback);
+  }
 }
 
 // This will get called for both the Approve and Approve With Notes buttons.
@@ -243,13 +196,13 @@ function handleReleaseButtons(payload, callback) {
     },
   };
 
-  codepipeline.putApprovalResult(approvalParams, (err, data) => {
+  codepipeline.putApprovalResult(approvalParams, (err) => {
     if (err) {
       // There was an error making the putApprovalResult request to
       // CodePipeline, so the user should be notified that their
       // action was not successful
       const body = JSON.stringify({ test: `Error: ${err}` });
-      callback(null, { statusCode: 200, headers: {}, body: body });
+      callback(null, { statusCode: 200, headers: {}, body });
     } else {
       // The putApprovalResult request was successful, so the message
       // in Slack should be updated to remove the buttons
@@ -258,19 +211,15 @@ function handleReleaseButtons(payload, callback) {
 
       switch (extractedParams.value) {
         case REJECTED:
-          attachment.text =
-            attachment.text + `\n*<@${payload.user.id}> rejected this deploy*`;
+          attachment.text += `\n*<@${payload.user.id}> rejected this deploy*`;
           attachment.color = '#de0e0e';
           break;
         case APPROVED:
-          attachment.text =
-            attachment.text +
-            `\n:white_check_mark: *<@${payload.user.id}> approved this deploy*`;
+          attachment.text += `\n:white_check_mark: *<@${payload.user.id}> approved this deploy*`;
           attachment.color = '#15da34';
           break;
         default:
-          attachment.text =
-            attachment.text + `\nUnknown action by <@${payload.user.id}>`;
+          attachment.text += `\nUnknown action by <@${payload.user.id}>`;
           attachment.color = '#cd0ede';
       }
 
@@ -280,7 +229,7 @@ function handleReleaseButtons(payload, callback) {
       // If the Approve With Notes button was pressed open a dialog,
       // otherwise we're done
       if (action.name !== 'notes') {
-        callback(null, { statusCode: 200, headers: {}, body: body });
+        callback(null, { statusCode: 200, headers: {}, body });
       } else {
         slackWebMethod(SLACK_API_DIALOG_OPEN, null, {
           trigger_id: payload.trigger_id,
@@ -299,8 +248,8 @@ function handleReleaseButtons(payload, callback) {
               },
             ],
           }),
-        }).then((res) => {
-          callback(null, { statusCode: 200, headers: {}, body: body });
+        }).then(() => {
+          callback(null, { statusCode: 200, headers: {}, body });
         });
       }
     }
@@ -347,3 +296,57 @@ async function handleCloudFrontInvalidationDialog(payload, callback) {
 
   callback(null, { statusCode: 200, headers: {}, body: null });
 }
+
+function processEvent(event, context, callback) {
+  const body = querystring.parse(event.body);
+
+  // The JSON object response from Slack
+  // TODO
+  // @ts-ignore
+  const payload = JSON.parse(body.payload);
+
+  // Top-level properties of the message action response object
+  const callbackId = payload.callback_id;
+
+  // Slack signing secret
+  const slackRequestTimestamp = event.headers['X-Slack-Request-Timestamp'];
+  const basestring = ['v0', slackRequestTimestamp, event.body].join(':');
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  const slackSignature = event.headers['X-Slack-Signature'];
+  const requestSignature = `v0=${crypto
+    .createHmac('sha256', signingSecret)
+    .update(basestring)
+    .digest('hex')}`;
+
+  if (requestSignature !== slackSignature) {
+    // Bad request; bogus token
+    callback(null, { statusCode: 400, headers: {}, body: null });
+  } else {
+    // Handle each callback ID appropriately
+    switch (callbackId) {
+      case CODEPIPELINE_MANUAL_APPROVAL_CALLBACK:
+        handleReleaseButtons(payload, callback);
+        break;
+      case ROLLBACK_VERSION_SELECTION_CALLBACK:
+        handleRollbackCallback(payload, callback);
+        break;
+      case RELEASE_NOTES_DIALOG_CALLBACK:
+        handleReleaseNotesDialog(payload, callback);
+        break;
+      case CLOUDFRONT_INVALIDATION_DIALOG_CALLBACK:
+        handleCloudFrontInvalidationDialog(payload, callback);
+        break;
+      default:
+        // Unknown message callback
+        callback(null, { statusCode: 400, headers: {}, body: null });
+    }
+  }
+}
+
+exports.handler = (event, context, callback) => {
+  try {
+    processEvent(event, context, callback);
+  } catch (e) {
+    callback(e);
+  }
+};

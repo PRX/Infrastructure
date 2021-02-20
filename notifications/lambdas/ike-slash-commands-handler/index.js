@@ -7,7 +7,6 @@
 const querystring = require('querystring');
 const AWS = require('aws-sdk');
 const crypto = require('crypto');
-const url = require('url');
 const https = require('https');
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
@@ -28,12 +27,18 @@ function slackWebMethod(uri, responseProperty, payload) {
   return new Promise((resolve, reject) => {
     const urlencodedBody = querystring.stringify(payload);
 
+    const q = new URL(uri);
+
     // Setup request options
-    const options = url.parse(uri);
-    options.method = 'POST';
-    options.headers = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Content-Length': Buffer.byteLength(urlencodedBody),
+    const options = {
+      host: q.host,
+      port: q.port,
+      path: `${q.pathname || ''}${q.search || ''}`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(urlencodedBody),
+      },
     };
 
     const method = uri.split('/').pop();
@@ -105,7 +110,7 @@ function handleRollbackRequest(payload, callback) {
         const range = 60 * 60 * 24 * 14 * 1000;
         const threshold = now - range;
         const options = data.Versions.filter((v) => {
-          return v.LastModified > threshold;
+          return +v.LastModified > threshold;
         }).map((v) => {
           const d = new Date(v.LastModified);
           const yy = d.getUTCFullYear();

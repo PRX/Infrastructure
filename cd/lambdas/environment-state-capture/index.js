@@ -39,6 +39,7 @@ function failPipelineAction(job, context, callback, err) {
       },
     },
     (e) => {
+      // eslint-disable-next-line no-unused-expressions
       e ? callback(e) : callback(null, err);
     },
   );

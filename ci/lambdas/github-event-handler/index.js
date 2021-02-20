@@ -349,6 +349,8 @@ async function getSourceArchive(event) {
         res.pipe(file);
 
         file.on('finish', () => {
+          // TODO
+          // @ts-ignore
           file.close(() => {
             console.log('Finished downloading archive');
             resolve(dest);

@@ -54,7 +54,7 @@ exports.handler = async (event) => {
 
   let name = 'Anonymous';
   if (subject.match(/receipt for (.*)/)) {
-    name = subject.match(/receipt for (.*)/)[1];
+    [name] = subject.match(/receipt for (.*)/);
   }
 
   const amount = content.match(/\$([0-9,]+([0-9.]+)?)/)[1];

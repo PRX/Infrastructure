@@ -7,9 +7,9 @@
  * 1. https://api.slack.com/methods/chat.postMessage
  */
 
-const { WebClient } = require('@slack/web-api');
+// const { WebClient } = require('@slack/web-api');
 
-const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
+// const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
 exports.handler = async (event) => {
   if (
