@@ -25,9 +25,9 @@ const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 /** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
-/** @typedef { import('@octokit/types').ReposGetResponseData } ReposGetResponseData */
-/** @typedef { import('@octokit/types').ReposGetContentResponseData } ReposGetContentResponseData */
-/** @typedef { import('@octokit/types').PullsGetResponseData } PullsGetResponseData */
+/** @typedef { import('@octokit/types').Endpoints["GET /repos/{owner}/{repo}"]["response"]["data"] } ReposGetResponseData } */
+/** @typedef { import('@octokit/types').Endpoints["GET /repos/{owner}/{repo}/contents/{path}"]["response"]["data"] } ReposGetContentResponseData } */
+/** @typedef { import('@octokit/types').Endpoints["GET /repos/{owner}/{repo}/pulls/{pull_number}"]["response"]["data"] } PullsGetResponseData } */
 
 /**
  * @typedef {object} GitHubPushWebhookPayload
@@ -173,6 +173,8 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
   // of that file.
   /** @type {ReposGetContentResponseData} */
   const ghData = JSON.parse(ciContentsResponse);
+  // TODO Not sure why it thinks ghData.content doesn't exist
+  // @ts-ignore
   const buildspec = Buffer.from(ghData.content, 'base64').toString('utf8');
 
   // Only trigger builds for repositories where the buildspec appears to be
