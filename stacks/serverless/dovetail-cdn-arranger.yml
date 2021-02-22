@@ -10,9 +10,13 @@ Parameters:
     Type: String
   EnvironmentType:
     Type: String
+  ArrangementsDynamodbAccessRole:
+    Type: AWS::SSM::Parameter::Value<String>
   ArrangementsDynamodbRegion:
     Type: AWS::SSM::Parameter::Value<String>
   ArrangementsDynamodbTable:
+    Type: AWS::SSM::Parameter::Value<String>
+  ArrangementsDynamodbTTL:
     Type: AWS::SSM::Parameter::Value<String>
   DovetailHost:
     Type: AWS::SSM::Parameter::Value<String>
@@ -61,6 +65,13 @@ Resources:
               - sts:AssumeRole
       Path: /
       Policies:
+        - PolicyName: DynamodbAssumeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Ref ArrangementsDynamodbAccessRole
         - PolicyName: DynamoDBWritePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -109,8 +120,10 @@ Resources:
       Description: Dovetail CDN Arranger
       Environment:
         Variables:
+          ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRole
           ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTable
+          ARRANGEMENTS_DDB_TTL: !Ref ArrangementsDynamodbTTL
           DOVETAIL_HOST: !Ref DovetailHost
           DOVETAIL_TOKEN: !Ref DovetailToken
           WORKSPACE_S3_BUCKET: !Ref DtCdnArrangerWorkspaceBucket
