@@ -100,9 +100,7 @@ exports.handler = (event, context) => {
     } else {
       const images = results.Images;
       // Sort images by name in decscending order. The names contain the AMI version, formatted as YYYY.MM.Ver.
-      images.sort((x, y) => {
-        return y.Name.localeCompare(x.Name);
-      });
+      images.sort((x, y) => y.Name.localeCompare(x.Name));
 
       for (let j = 0; j < images.length; j += 1) {
         // eslint-disable-next-line no-continue

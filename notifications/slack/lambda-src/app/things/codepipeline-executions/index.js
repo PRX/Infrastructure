@@ -56,15 +56,13 @@ async function openModal(payload) {
               action_id: 'codepipeline-execution_select-account',
               options: accounts.Accounts.sort((a, b) =>
                 a.Name.localeCompare(b.Name),
-              ).map((a) => {
-                return {
-                  text: {
-                    type: 'plain_text',
-                    text: a.Name,
-                  },
-                  value: `${a.Id}`,
-                };
-              }),
+              ).map((a) => ({
+                text: {
+                  type: 'plain_text',
+                  text: a.Name,
+                },
+                value: `${a.Id}`,
+              })),
             },
           ],
         },
@@ -135,15 +133,13 @@ async function selectAccount(payload) {
                 text: 'Select CodePipeline distribution',
               },
               action_id: 'codepipeline-execution_select-pipeline',
-              options: pipelines.pipelines.map((p) => {
-                return {
-                  text: {
-                    type: 'plain_text',
-                    text: `${p.name}`.substring(0, 75),
-                  },
-                  value: p.name,
-                };
-              }),
+              options: pipelines.pipelines.map((p) => ({
+                text: {
+                  type: 'plain_text',
+                  text: `${p.name}`.substring(0, 75),
+                },
+                value: p.name,
+              })),
             },
           ],
         },

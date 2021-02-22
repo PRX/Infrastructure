@@ -109,9 +109,9 @@ function handleRollbackRequest(payload, callback) {
         const now = Date.now();
         const range = 60 * 60 * 24 * 14 * 1000;
         const threshold = now - range;
-        const options = data.Versions.filter((v) => {
-          return +v.LastModified > threshold;
-        }).map((v) => {
+        const options = data.Versions.filter(
+          (v) => +v.LastModified > threshold,
+        ).map((v) => {
           const d = new Date(v.LastModified);
           const yy = d.getUTCFullYear();
           const mm = `0${d.getUTCMonth() + 1}`.substr(-2);
