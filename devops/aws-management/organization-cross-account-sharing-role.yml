@@ -1,0 +1,52 @@
+# devops/organization-cross-account-sharing-role.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates the specially named PRX-Oganization-CrossAccountSharingRole, which
+  has read-only access to inforation about an AWS Organization. It is intended
+  to be launched only in an Organization's management account, but can be
+  assumed by any other account within the Organization.
+
+Parameters:
+  OrganizationId:
+    Type: String
+
+Resources:
+  CrossAccountSharingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:PrincipalOrgID": !Ref OrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - organizations:Describe*
+                  - organizations:List*
+                Effect: Allow
+                Resource:
+                  - "*"
+            Version: "2012-10-17"
+          PolicyName: OrganizationReadOnlyAccess
+      RoleName: PRX-Oganization-CrossAccountSharingRole
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+
+Outputs:
+  RoleName:
+    Value: !Ref CrossAccountSharingRole
+  RoleArn:
+    Value: !GetAtt CrossAccountSharingRole.Arn
