@@ -14,35 +14,37 @@ const SLACK_ICON = ':ops-autoscaling:';
 const SLACK_USERNAME = 'AWS Auto Scaling';
 
 function color(scaling) {
-    if (/EC2_INSTANCE_TERMINATE/.test(scaling.Event)) {
-        return '#FF8400';
-    }
+  if (/EC2_INSTANCE_TERMINATE/.test(scaling.Event)) {
+    return '#FF8400';
+  }
 
-    return '#0099FF';
+  return '#0099FF';
 }
 
 exports.handler = async (event) => {
-    const scaling = JSON.parse(event.Records[0].Sns.Message);
+  const scaling = JSON.parse(event.Records[0].Sns.Message);
 
-    if (scaling.Event !== 'autoscaling:TEST_NOTIFICATION') {
-        await sns.publish({
-            TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-            Message: JSON.stringify({
-                channel: SLACK_CHANNEL,
-                username: SLACK_USERNAME,
-                icon_emoji: SLACK_ICON,
-                attachments: [
-                    {
-                        fallback: scaling.Cause,
-                        color: color(scaling),
-                        author_name: scaling.AutoScalingGroupName,
-                        title: scaling.Event,
-                        text: scaling.Cause,
-                        footer: scaling.Details['Availability Zone'],
-                        ts: Math.floor(Date.now() / 1000),
-                    },
-                ],
-            }),
-        }).promise();
-    }
+  if (scaling.Event !== 'autoscaling:TEST_NOTIFICATION') {
+    await sns
+      .publish({
+        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+        Message: JSON.stringify({
+          channel: SLACK_CHANNEL,
+          username: SLACK_USERNAME,
+          icon_emoji: SLACK_ICON,
+          attachments: [
+            {
+              fallback: scaling.Cause,
+              color: color(scaling),
+              author_name: scaling.AutoScalingGroupName,
+              title: scaling.Event,
+              text: scaling.Cause,
+              footer: scaling.Details['Availability Zone'],
+              ts: Math.floor(Date.now() / 1000),
+            },
+          ],
+        }),
+      })
+      .promise();
+  }
 };

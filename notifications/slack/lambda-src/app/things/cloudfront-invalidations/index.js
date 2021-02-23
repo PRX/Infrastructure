@@ -57,15 +57,13 @@ async function openModal(payload) {
               action_id: 'cloudformation-invalidation_select-account',
               options: accounts.Accounts.sort((a, b) =>
                 a.Name.localeCompare(b.Name),
-              ).map((a) => {
-                return {
-                  text: {
-                    type: 'plain_text',
-                    text: a.Name,
-                  },
-                  value: `${a.Id}`,
-                };
-              }),
+              ).map((a) => ({
+                text: {
+                  type: 'plain_text',
+                  text: a.Name,
+                },
+                value: `${a.Id}`,
+              })),
             },
           ],
         },
@@ -137,18 +135,16 @@ async function selectAccount(payload) {
                 text: 'Select CloudFront distribution',
               },
               action_id: 'cloudformation-invalidation_select-distribution',
-              options: distributions.DistributionList.Items.map((d) => {
-                return {
-                  text: {
-                    type: 'plain_text',
-                    text: `${d.Id} (${d.Aliases.Items.join(', ')})`.substring(
-                      0,
-                      75,
-                    ),
-                  },
-                  value: d.Id,
-                };
-              }),
+              options: distributions.DistributionList.Items.map((d) => ({
+                text: {
+                  type: 'plain_text',
+                  text: `${d.Id} (${d.Aliases.Items.join(', ')})`.substring(
+                    0,
+                    75,
+                  ),
+                },
+                value: d.Id,
+              })),
             },
           ],
         },

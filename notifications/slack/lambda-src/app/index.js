@@ -2,6 +2,7 @@
 
 const SlackRequest = require('./slack_request');
 
+// eslint-disable-next-line arrow-body-style
 exports.handler = async (event) => {
   // if (event.source === 'aws.events') {
   //   return;

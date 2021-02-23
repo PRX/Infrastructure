@@ -47,6 +47,8 @@ module.exports = {
   // https://api.slack.com/reference/interaction-payloads/block-actions
   handler: async function handler(event, body) {
     const formdata = querystring.parse(body);
+    // TODO
+    // @ts-ignore
     const payload = JSON.parse(formdata.payload);
 
     switch (payload.type) {
