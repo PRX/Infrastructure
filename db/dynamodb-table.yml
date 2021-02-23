@@ -113,9 +113,11 @@ Parameters:
     Default: PAY_PER_REQUEST
   ProvisionedReadCapacityUnits:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing
   ProvisionedWriteCapacityUnits:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing
   EnableAutoScaling:
     Type: String
@@ -126,15 +128,19 @@ Parameters:
     Description: Only used under provisioned billing
   WriteCapacityMin:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing with auto scaling
   WriteCapacityMax:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing with auto scaling
   ReadCapacityMin:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing with auto scaling
   ReadCapacityMax:
     Type: Number
+    Default: 0
     Description: Only used under provisioned billing with auto scaling
   AutoScalingCooldown:
     Type: Number
@@ -166,6 +172,7 @@ Conditions:
   CreateAutoScaling: !And
     - !Condition AutoScalingRequested
     - !Condition HasProvisionedBilling
+  CreateAlarms: !Not [!Equals [!Ref WarnMessagesSnsTopicArn, ""]]
 Mappings:
   DataTypesMap:
     String:
@@ -202,7 +209,8 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TimeToLiveSpecification:
-        AttributeName: !If [HasExpirationField, !Ref "ExpirationField", !Ref "AWS::NoValue"]
+        AttributeName:
+          !If [HasExpirationField, !Ref "ExpirationField", !Ref "AWS::NoValue"]
         Enabled: !If [HasExpirationField, true, false]
   CrossAccountAccessRole:
     Type: "AWS::IAM::Role"
@@ -296,6 +304,7 @@ Resources:
   # Alarms
   ScanThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub ${AWS::StackName} Scan throttling
@@ -321,6 +330,7 @@ Resources:
           Value: Scan
   BatchGetItemThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub ${AWS::StackName} BatchGetItem throttling
@@ -346,6 +356,7 @@ Resources:
           Value: BatchGetItem
   BatchWriteItemThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub ${AWS::StackName} BatchWriteItem throttling
@@ -370,6 +381,10 @@ Resources:
         - Name: Operation
           Value: BatchWriteItem
 Outputs:
+  RoleArn:
+    Condition: HasForeignAccount
+    Description: The created DynamoDB table ARN
+    Value: !GetAtt CrossAccountAccessRole.Arn
   TableArn:
     Description: The created DynamoDB table ARN
     Value: !GetAtt DynamoDBTable.Arn
