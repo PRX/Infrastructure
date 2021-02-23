@@ -23,6 +23,11 @@ Parameters:
     Default: us-east-2
   SlackMessageRelayTopicArn:
     Type: String
+  CloudWatchMonitoringAccountIds:
+    Description: >-
+      Allows one or more monitoring accounts to view AWS Organization account
+      list. Enter AWS account ids, 12 numeric digits in comma-separated list
+    Type: String
 
 Resources:
   PipelineArtifactStore:
@@ -117,6 +122,8 @@ Resources:
                 Resource:
                   - !GetAtt DevopsCrossAccountAccessRoleStackCloudFormationRole.Arn
                   - !GetAtt CloudWatchDataSharingRoleStackCloudFormationRole.Arn
+                  - !GetAtt CloudWatchSharingListAccountsRoleStackCloudFormationRole.Arn
+                  - !GetAtt OrganizationDataSharingRoleStackCloudFormationRole.Arn
             Version: "2012-10-17"
           PolicyName: IamPassRole
       Tags:
@@ -188,7 +195,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}RootProductionChangeSet
+                ChangeSetName: !Sub ${AWS::StackName}DevopsCrossAccountAccessRoleStack
                 ParameterOverrides: !Sub |
                   {
                     "OrganizationId": "${OrganizationId}"
@@ -224,7 +231,7 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-              # CloudWatch cross-account data sharing role stack for management account
+            # CloudWatch cross-account data sharing role stack for management account
             - Name: CloudWatchDataSharingRoleStack
               ActionTypeId:
                 Category: Deploy
@@ -234,7 +241,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}RootProductionChangeSet
+                ChangeSetName: !Sub ${AWS::StackName}CloudWatchDataSharingRoleStack
                 ParameterOverrides: !Sub |
                   {
                     "OrganizationId": "${OrganizationId}"
@@ -242,6 +249,48 @@ Resources:
                 RoleArn: !GetAtt CloudWatchDataSharingRoleStackCloudFormationRole.Arn
                 StackName: !Sub ${AWS::StackName}-cloudwatch-data-sharing-role
                 TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # CloudWatch cross-account sharing list accounts role stack for management account
+            - Name: CloudWatchSharingListAccountsRoleStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+                ChangeSetName: !Sub ${AWS::StackName}CloudWatchSharingListAccountsRoleStack
+                ParameterOverrides: !Sub |
+                  {
+                    "MonitoringAccountIds": "${CloudWatchMonitoringAccountIds}"
+                  }
+                RoleArn: !GetAtt CloudWatchSharingListAccountsRoleStackCloudFormationRole.Arn
+                StackName: cloudwatch-sharing-list-accounts-role
+                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-org-list-role.yml
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # Organization data sharing role for management account
+            - Name: OrganizationDataSharingRoleStack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
+                ChangeSetName: !Sub ${AWS::StackName}OrganizationDataSharingRoleStack
+                ParameterOverrides: !Sub |
+                  {
+                    "OrganizationId": "${OrganizationId}"
+                  }
+                RoleArn: !GetAtt OrganizationDataSharingRoleStackCloudFormationRole.Arn
+                StackName: organization-data-sharing-role
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-cross-account-sharing-role.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -324,6 +373,88 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   CloudWatchDataSharingRoleStackCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ResourceManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:Get*
+                  - iam:List*
+                  - iam:PutRolePolicy
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CloudWatchSharingListAccountsRoleStackCloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ResourceManipulationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:Get*
+                  - iam:List*
+                  - iam:PutRolePolicy
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  OrganizationDataSharingRoleStackCloudFormationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
