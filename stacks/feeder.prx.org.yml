@@ -54,6 +54,10 @@ Parameters:
   DesiredWorkersProduction:
     Type: String
     Default: 1
+  SecretsInstanceDecryptPolicyArn:
+    Type: String
+  SecretsInstanceAccessPolicyArn:
+    Type: String
   # App ENV #################################################################
   AppName:
     Type: String # castle, crier, cms, feeder
@@ -276,6 +280,9 @@ Resources:
             Principal:
               Service:
                 - ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+        - !Ref SecretsInstanceDecryptPolicyArn
+        - !Ref SecretsInstanceAccessPolicyArn
       Policies:
         - PolicyName: SqsFullApplicationAccess
           PolicyDocument:
@@ -295,14 +302,6 @@ Resources:
                   - sns:*
                 Resource:
                   - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*_announce_feed_*
-        - PolicyName: S3GenericObjectAccess
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:Get*
-                Resource: "*"
         - PolicyName: S3FeedBucketAccess
           PolicyDocument:
             Version: "2012-10-17"
