@@ -1,33 +1,31 @@
 # stacks/web-alb-application.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Description: >-
   Docker web application with optional worker, with its own ALB
+
 Conditions:
   CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
+
 Parameters:
   # VPC ########################################################################
   VPC:
-    Type: "AWS::EC2::VPC::Id"
+    Type: AWS::EC2::VPC::Id
   VPCSubnet1:
-    Type: "AWS::EC2::Subnet::Id"
+    Type: AWS::EC2::Subnet::Id
   VPCSubnet2:
-    Type: "AWS::EC2::Subnet::Id"
+    Type: AWS::EC2::Subnet::Id
   VPCSubnet3:
-    Type: "AWS::EC2::Subnet::Id"
+    Type: AWS::EC2::Subnet::Id
   VPCCertificateArn:
     Type: String
   # ECS Cluster ################################################################
   ECSCluster:
     Type: String
-  ECSServiceAutoscaleIAMRoleArn:
-    Type: String
   ECSServiceIAMRole:
     Type: String
   # Misc #######################################################################
-  OpsDebugMessagesSnsTopicArn:
-    Type: String
   OpsWarnMessagesSnsTopicArn:
     Type: String
   OpsErrorMessagesSnsTopicArn:
@@ -78,7 +76,7 @@ Parameters:
     Default: /api/v1
 Resources:
   ALBSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+    Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref VPC
       GroupDescription: Allow web and SSH traffic to the ALB
@@ -114,12 +112,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub ${AppName}-${EnvironmentType}-LB-web_ssh
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   ALB:
-    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       IpAddressType: dualstack
       Scheme: internet-facing
@@ -136,12 +134,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub ${AppName}-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   ALBHTTPListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ALB
       Port: 80
@@ -150,7 +148,7 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
   ALBHTTPSListener:
-    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       Certificates:
         - CertificateArn: !Ref VPCCertificateArn
@@ -161,7 +159,7 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref ALBTargetGroup
   ALBTargetGroup:
-    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
     DependsOn: ALB
     Properties:
       HealthCheckIntervalSeconds: 15
@@ -182,14 +180,15 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub ${AppName}-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       VpcId: !Ref VPC
+
   # CloudWatch Alarms
   ALBTarget500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
@@ -214,7 +213,7 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ALB.LoadBalancerFullName
   ALB500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
@@ -239,7 +238,7 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ALB.LoadBalancerFullName
   ALBResponseTimeP95Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
@@ -264,13 +263,85 @@ Resources:
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt ALB.LoadBalancerFullName
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+      Policies:
+        - PolicyName: SqsFullApplicationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:*
+                Resource:
+                  - "*_feeder_*"
+        - PolicyName: SnsFullApplicationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:*
+                Resource:
+                  - "*_announce_feed_*"
+        - PolicyName: S3FeedBucketAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  # - s3:CreateBucket
+                  - s3:Get*
+                  - s3:ListAllMyBuckets
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListBucketVersions
+                  - s3:ListMultipartUploadParts
+                  # - s3:PutBucketAcl
+                  # - s3:PutBucketCORS
+                  # - s3:PutBucketLogging
+                  # - s3:PutBucketNotification
+                  # - s3:PutBucketPolicy
+                  # - s3:PutBucketRequestPayment
+                  # - s3:PutBucketTagging
+                  # - s3:PutBucketVersioning
+                  # - s3:PutBucketWebsite
+                  # - s3:PutLifecycleConfiguration
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:PutObjectVersionAcl
+                  # - s3:RestoreObject
+                Resource:
+                  - prx-feed
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+
   # ECS Service - Web
   WebLogGroup:
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 14
   WebTaskDefinition:
-    Type: "AWS::ECS::TaskDefinition"
+    Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
         - Cpu: !Ref ContainerCpu
@@ -285,6 +356,10 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_ACCOUNT_ID
+              Value: !Ref AWS::AccountId
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -305,12 +380,16 @@ Resources:
           Value: !Ref AppName
         - Key: Environment
           Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+      TaskRoleArn: !If
+        - CreateProductionResources
+        - !Ref AWS::NoValue
+        - !GetAtt TaskRole.Arn
   WebService:
-    Type: "AWS::ECS::Service"
+    Type: AWS::ECS::Service
     DependsOn:
       - ALBHTTPListener
       - ALBHTTPSListener
@@ -330,37 +409,21 @@ Resources:
           Value: !Ref AppName
         - Key: Environment
           Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WebTaskDefinition
-  # Route 53
-  WebRecordSetGroup:
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Record sets for dualstack web traffic to a web app instance
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: A
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
-          AliasTarget:
-            DNSName: !Sub dualstack.${ALB.DNSName}
-            HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
-        - Type: AAAA
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
-          AliasTarget:
-            DNSName: !Sub dualstack.${ALB.DNSName}
-            HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+
   # ECS Service - Worker
   WorkerLogGroup:
     Condition: CreateWorkerResources
-    Type: "AWS::Logs::LogGroup"
+    Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 14
   WorkerTaskDefinition:
     Condition: CreateWorkerResources
-    Type: "AWS::ECS::TaskDefinition"
+    Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
         - Cpu: !Ref ContainerCpu
@@ -375,6 +438,10 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_ACCOUNT_ID
+              Value: !Ref AWS::AccountId
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -392,13 +459,17 @@ Resources:
           Value: !Ref AppName
         - Key: Environment
           Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+      TaskRoleArn: !If
+        - CreateProductionResources
+        - !Ref AWS::NoValue
+        - !GetAtt TaskRole.Arn
   WorkerService:
     Condition: CreateWorkerResources
-    Type: "AWS::ECS::Service"
+    Type: AWS::ECS::Service
     Properties:
       Cluster: !Ref ECSCluster
       DeploymentConfiguration:
@@ -410,11 +481,30 @@ Resources:
           Value: !Ref AppName
         - Key: Environment
           Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
+
+  # Route 53
+  WebRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for dualstack web traffic to a web app instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: A
+          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Sub dualstack.${ALB.DNSName}
+            HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+        - Type: AAAA
+          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          AliasTarget:
+            DNSName: !Sub dualstack.${ALB.DNSName}
+            HostedZoneId: !GetAtt ALB.CanonicalHostedZoneID
+
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
