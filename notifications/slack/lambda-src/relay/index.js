@@ -22,6 +22,7 @@ exports.handler = async (event) => {
   if (event?.Records?.[0]?.EventSource === 'aws:sns') {
     /** @type {ChatPostMessageArguments} */
     const msg = JSON.parse(event.Records[0].Sns.Message);
+    console.log(event.Records[0].Sns.Message);
     await web.chat.postMessage(msg);
   }
 };
