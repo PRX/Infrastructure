@@ -7,18 +7,21 @@
  * 1. https://api.slack.com/methods/chat.postMessage
  */
 
-// const { WebClient } = require('@slack/web-api');
+/** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
+/** @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments */
 
-// const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
+const { WebClient } = require('@slack/web-api');
 
+const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
+
+/**
+ * @param {SNSEvent} event
+ * @returns {Promise<void>}
+ */
 exports.handler = async (event) => {
-  if (
-    event.Records &&
-    event.Records[0] &&
-    event.Records[0].EventSource === 'aws:sns'
-  ) {
+  if (event?.Records?.[0]?.EventSource === 'aws:sns') {
+    /** @type {ChatPostMessageArguments} */
     const msg = JSON.parse(event.Records[0].Sns.Message);
-    msg.channel = '#sandbox2';
-    // await web.chat.postMessage(msg);
+    await web.chat.postMessage(msg);
   }
 };
