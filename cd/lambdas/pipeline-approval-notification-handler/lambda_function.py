@@ -192,7 +192,8 @@ def slack_message(notification):
         "attachments": [
             parameters_delta_attachment(notification),
             approval_action_attachment(notification),
-        ]
+        ],
+        "channel": "#ops-deploys",
     }
 
 
@@ -200,22 +201,10 @@ def sns_message(notification):
     return json.dumps(slack_message(notification))
 
 
-def sns_message_attributes():
-    return {
-        "WebhookURL": {
-            "DataType": "String",
-            "StringValue": os.environ["IKE_DEPLOYS_SLACK_WEBHOOK_URL"],
-        }
-    }
-
-
 def lambda_handler(event, context):
     notification = json.loads(event["Records"][0]["Sns"]["Message"])
 
     topic_arn = os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"]
     message = sns_message(notification)
-    message_attributes = sns_message_attributes()
 
-    sns.publish(
-        TopicArn=topic_arn, Message=message, MessageAttributes=message_attributes
-    )
+    sns.publish(TopicArn=topic_arn, Message=message)
