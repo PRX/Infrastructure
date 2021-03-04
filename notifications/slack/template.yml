@@ -122,6 +122,12 @@ Resources:
           SLACK_SIGNING_SECRET: !Ref SlackSigningSecet
           SLACK_ACCESS_TOKEN: !Ref SlackAccessToken
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      EventInvokeConfig:
+        DestinationConfig:
+          OnFailure:
+            Destination: !Ref RelayFunctionFailureSnsTopic
+            Type: SNS
+        MaximumRetryAttempts: 5
       Events:
         Relay:
           Properties:
@@ -147,21 +153,79 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${RelayFunction}
       RetentionInDays: 14
-
-  # This SNS topic is retained to prevent clients that are configured to
-  # publish to it from breaking if the stack gets torn down. In cases where the
-  # stack is being moved or replaced, the retained topic should be imported
-  # into the new stack, or the new subscriber should continue to subscribe to
-  # this topic
+  RelayFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[DevOps][Slack Relay] Elevated error volume"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        Slack relay function has encountered several invocation errors
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 120
+      Statistic: Sum
+      Threshold: 5
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RelayFunction
+  RelayFunctionFailureSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - Key: Project
+          Value: DevOps
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  RelayFunctionFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[DevOps][Slack Relay] Experiencing failures"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopic
+      AlarmDescription: >-
+        Slack relay function has failed to send some messages, even after
+        retrying several times
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: TopicName
+          Value: !GetAtt RelayFunctionFailureSnsTopic.TopicName
+      EvaluationPeriods: 1
+      MetricName: NumberOfMessagesPublished
+      Namespace: AWS/SNS
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
   SlackMessageRelaySnsTopic:
     Type: AWS::SNS::Topic
+    # This SNS topic is retained to prevent clients that are configured to
+    # publish to it from breaking if the stack gets torn down. In cases where
+    # the stack is being moved or replaced, the retained topic should be
+    # imported into the new stack, or the new subscriber should continue to
+    # subscribe to this topic
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       Tags:
         - Key: Project
           Value: DevOps
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
