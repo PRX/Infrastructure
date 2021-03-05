@@ -1,8 +1,8 @@
 const { WebClient } = require('@slack/web-api');
 const AWS = require('aws-sdk');
+const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
 module.exports = {
   /**
@@ -72,6 +72,10 @@ module.exports = {
     const { value } = action;
 
     const approvalParams = JSON.parse(payload.view.private_metadata);
+
+    const pipelineRegion = approvalParams.result.summary.split(',')[0];
+    const pipelineAccountId = approvalParams.result.summary.split(',')[1];
+
     approvalParams.result.summary = value;
 
     const channelId = approvalParams.channelId;
@@ -79,14 +83,27 @@ module.exports = {
     delete approvalParams.channelId;
     delete approvalParams.messageTs;
 
+    // Assume a role in the selected account that has permission to
+    // putApprovalResult
+    const role = await Access.devopsRole(pipelineAccountId);
+
+    const codepipeline = new AWS.CodePipeline({
+      apiVersion: '2019-03-26',
+      region: pipelineRegion,
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    });
+
+    await codepipeline.putApprovalResult(approvalParams).promise();
+
+    // Get the message that included the approval notification/button
     const history = await web.conversations.history({
       limit: 1,
       inclusive: true,
       channel: channelId,
       latest: messageTs,
     });
-
-    await codepipeline.putApprovalResult(approvalParams).promise();
 
     // Update approval notification message in Slack
     const msg = history.messages[0];
