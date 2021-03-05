@@ -227,8 +227,6 @@ Resources:
         builds a messages to alert externally
       Environment:
         Variables:
-          IKE_DEPLOYS_SLACK_WEBHOOK_URL:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-IkeDeploysSlackSlackWebhookUrl
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
       Events:
@@ -236,7 +234,7 @@ Resources:
           Properties:
             Topic: !Ref CodePipelineApprovalsSnsTopic
           Type: SNS
-      Handler: lambda_function.lambda_handler
+      Handler: index.handler
       MemorySize: 256
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
@@ -247,7 +245,7 @@ Resources:
                 - cloudformation:DescribeChangeSet
                 - cloudformation:DescribeStacks
               Resource: "*"
-      Runtime: python3.8
+      Runtime: nodejs14.x
       Tags:
         Project: Infrastructure
         "prx:cloudformation:stack-name": !Ref AWS::StackName
@@ -706,7 +704,8 @@ Resources:
                 CustomData: !Sub |
                   {
                     "StackName": "${AWS::StackName}-root-production",
-                    "ChangeSetName": "${AWS::StackName}RootProductionChangeSet"
+                    "ChangeSetName": "${AWS::StackName}RootProductionChangeSet",
+                    "AccountId": "${AWS::AccountId}"
                   }
               RunOrder: 3
             - Name: ExecuteChangeSet

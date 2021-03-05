@@ -1,5 +1,6 @@
 const { WebClient } = require('@slack/web-api');
 const AWS = require('aws-sdk');
+const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 const sts = new AWS.STS({ apiVersion: '2011-06-15' });
@@ -9,12 +10,7 @@ async function openModal(payload) {
   // permission to `listAccounts`
   // This is NOT the DevOps shared access account, which exists in each account.
   // It's a different role that only exists in the management account.
-  const role = await sts
-    .assumeRole({
-      RoleArn: process.env.AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN,
-      RoleSessionName: 'devops_slack_app',
-    })
-    .promise();
+  const role = await Access.orgSharingRole();
 
   // The organizations endpoint only exists in us-east-1
   const organizations = new AWS.Organizations({
@@ -80,13 +76,7 @@ async function selectAccount(payload) {
 
   // Assume a role in the selected account that has permission to
   // listDistributions
-  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`;
-  const role = await sts
-    .assumeRole({
-      RoleArn: roleArn,
-      RoleSessionName: 'devops_slack_app',
-    })
-    .promise();
+  const role = await Access.devopsRole(accountId);
 
   const cloudfront = new AWS.CloudFront({
     apiVersion: '2019-03-26',
@@ -240,13 +230,7 @@ async function selectDistribution(payload) {
 async function createInvalidation(accountId, distributionId, paths) {
   // Assume a role in the selected account that has permission to
   // createInvalidation
-  const roleArn = `arn:aws:iam::${accountId}:role/${process.env.DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME}`;
-  const role = await sts
-    .assumeRole({
-      RoleArn: roleArn,
-      RoleSessionName: 'devops_slack_app',
-    })
-    .promise();
+  const role = await Access.devopsRole(accountId);
 
   const cloudfront = new AWS.CloudFront({
     apiVersion: '2019-03-26',

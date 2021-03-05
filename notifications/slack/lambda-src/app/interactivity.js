@@ -1,6 +1,7 @@
 const querystring = require('querystring');
 const cfInvalidate = require('./things/cloudfront-invalidations');
 const pipelineExec = require('./things/codepipeline-executions');
+const pipelineApproval = require('./things/codepipeline-approval');
 
 const SLACK_PAYLOAD_TYPE_BLOCK_ACTIONS = 'block_actions';
 const SLACK_PAYLOAD_TYPE_VIEW_SUBMISSION = 'view_submission';
@@ -21,6 +22,8 @@ async function handleBlockActionPayload(payload) {
     await cfInvalidate.handleBlockActionPayload(payload);
   } else if (actionId.startsWith('codepipeline-execution_')) {
     await pipelineExec.handleBlockActionPayload(payload);
+  } else if (actionId.startsWith('codepipeline-approval_')) {
+    await pipelineApproval.handleBlockActionPayload(payload);
   }
 }
 
@@ -39,6 +42,8 @@ async function handleViewSubmissionPayload(payload) {
     await cfInvalidate.handleViewSubmissionPayload(payload);
   } else if (callbackId.startsWith('codepipeline-execution_')) {
     await pipelineExec.handleViewSubmissionPayload(payload);
+  } else if (callbackId.startsWith('codepipeline-approval_')) {
+    await pipelineApproval.handleViewSubmissionPayload(payload);
   }
 }
 
