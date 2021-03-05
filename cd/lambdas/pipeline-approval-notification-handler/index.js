@@ -198,8 +198,7 @@ async function buildMessage(approvalNotification) {
 
   // A bunch of values that will be required to fulfill the action are stuffed
   // into the actions' values as JSON. This object should match the parameters
-  // for codepipeline.putApprovalResult(). The result.summary defined here
-  // is being used to pass the account ID and region along
+  // for codepipeline.putApprovalResult().
   /** @type {AWS.CodePipeline.PutApprovalResultInput} */
   const approvalParams = {
     pipelineName: approval.pipelineName,
@@ -208,9 +207,20 @@ async function buildMessage(approvalNotification) {
     token: approval.token,
     result: {
       status: '',
-      summary: `${approvalNotification.region},${AccountId}`,
+      summary: '',
     },
   };
+
+  // The summary gets overridden before the approval result is sent, so this
+  // is just a convenient place to pass some extra values, albeit a bit
+  // hacky
+  const summaryData = `${approvalNotification.region},${AccountId}`;
+
+  // These get Object.assigned below to the approvalParams
+  /** @type {AWS.CodePipeline.ApprovalResult} */
+  const approvedResult = { status: 'Approved', summary: summaryData };
+  /** @type {AWS.CodePipeline.ApprovalResult} */
+  const rejectedResult = { status: 'Rejected', summary: summaryData };
 
   const pipelineUrl = `https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${approval.pipelineName}/view?region=${approvalNotification.region}`;
 
@@ -274,7 +284,7 @@ async function buildMessage(approvalNotification) {
             },
             style: 'primary',
             value: JSON.stringify(
-              Object.assign(approvalParams, { result: { status: 'Approved' } }),
+              Object.assign(approvalParams, { result: approvedResult }),
             ),
             action_id: 'codepipeline-approval_approve-deploy',
             confirm: {
@@ -305,7 +315,7 @@ async function buildMessage(approvalNotification) {
               emoji: true,
             },
             value: JSON.stringify(
-              Object.assign(approvalParams, { result: { status: 'Approved' } }),
+              Object.assign(approvalParams, { result: approvedResult }),
             ),
             action_id: 'codepipeline-approval_annotate-deploy',
           },
@@ -318,7 +328,7 @@ async function buildMessage(approvalNotification) {
             },
             style: 'danger',
             value: JSON.stringify(
-              Object.assign(approvalParams, { result: { status: 'Rejected' } }),
+              Object.assign(approvalParams, { result: rejectedResult }),
             ),
             action_id: 'codepipeline-approval_reject-deploy',
           },
