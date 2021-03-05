@@ -18,35 +18,63 @@ async function publishOpsView(userId, hash) {
             text: 'Charts and graphs and stuff',
           },
         },
+
+        // CloudFormation
+        { type: 'divider' },
         {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              action_id: 'cloudformation-invalidation_open-model',
-              text: {
-                type: 'plain_text',
-                text: 'CloudFront Invalidations',
-                emoji: true,
-              },
-              style: 'primary',
-            },
-          ],
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: 'AWS CloudFormation',
+            emoji: true,
+          },
         },
         {
-          type: 'actions',
-          elements: [
-            {
-              type: 'button',
-              action_id: 'codepipeline-execution_open-model',
-              text: {
-                type: 'plain_text',
-                text: 'CodePipeline Executions',
-                emoji: true,
-              },
-              style: 'primary',
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              'If you need to remove a file from CloudFront edge caches before it expires, you can manually <https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Invalidation.html|invalidate> the file from edge caches.',
+          },
+          accessory: {
+            type: 'button',
+            style: 'primary',
+            text: {
+              type: 'plain_text',
+              text: 'Create invalidation',
+              emoji: true,
             },
-          ],
+            action_id: 'cloudformation-invalidation_open-model',
+          },
+        },
+
+        // CodePipeline
+        { type: 'divider' },
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: 'AWS CodePipeline',
+            emoji: true,
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              'When a pipeline execution starts, it runs a revision through every stage and action in the pipeline. You can manually rerun the most recent revision through the pipeline.',
+          },
+          accessory: {
+            type: 'button',
+            style: 'primary',
+            text: {
+              type: 'plain_text',
+              text: 'Start pipeline execution',
+              emoji: true,
+            },
+            action_id: 'codepipeline-execution_open-model',
+          },
         },
       ],
     },
@@ -71,7 +99,7 @@ async function publishDefaultView(userId, hash) {
           type: 'section',
           text: {
             type: 'plain_text',
-            text: "You don't have access to this app.",
+            text: ":lock: You don't have access to this app.",
           },
         },
       ],
