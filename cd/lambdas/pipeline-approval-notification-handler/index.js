@@ -15,6 +15,7 @@
  * @typedef {Object} CodePipelineApprovalCustomData
  * @property {String} StackName
  * @property {String} ChangeSetName
+ * @property {String} AccountId
  */
 
 /**
@@ -186,7 +187,7 @@ async function buildMessage(approvalNotification) {
 
   /** @type {CodePipelineApprovalCustomData} */
   const customData = JSON.parse(approval.customData);
-  const { StackName, ChangeSetName } = customData;
+  const { StackName, ChangeSetName, AccountId } = customData;
 
   const stacks = await cloudformation.describeStacks({ StackName }).promise();
   const stack = stacks.Stacks[0];
@@ -198,7 +199,7 @@ async function buildMessage(approvalNotification) {
   // A bunch of values that will be required to fulfill the action are stuffed
   // into the actions' values as JSON. This object should match the parameters
   // for codepipeline.putApprovalResult(). The result.summary defined here
-  // may be overridden prior to submission
+  // is being used to pass the account ID and region along
   /** @type {AWS.CodePipeline.PutApprovalResultInput} */
   const approvalParams = {
     pipelineName: approval.pipelineName,
@@ -207,7 +208,7 @@ async function buildMessage(approvalNotification) {
     token: approval.token,
     result: {
       status: '',
-      summary: '',
+      summary: `${approvalNotification.region},${AccountId}`,
     },
   };
 
