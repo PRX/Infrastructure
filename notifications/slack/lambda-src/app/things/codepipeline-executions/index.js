@@ -120,7 +120,7 @@ async function selectAccount(payload) {
               type: 'static_select',
               placeholder: {
                 type: 'plain_text',
-                text: 'Select CodePipeline distribution',
+                text: 'Select CodePipeline pipeline',
               },
               action_id: 'codepipeline-execution_select-pipeline',
               options: pipelines.pipelines.map((p) => ({
