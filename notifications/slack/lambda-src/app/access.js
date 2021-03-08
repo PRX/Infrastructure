@@ -31,4 +31,28 @@ module.exports = {
       })
       .promise();
   },
+  /**
+   * Returns a list of all AWS accounts that exist in an organization
+   * @returns {Promise<AWS.Organizations.ListAccountsResponse>}
+   */
+  async orgAccounts() {
+    // Assume a role within the Organization's management account that has
+    // permission to `listAccounts`
+    // This is NOT the DevOps shared access account, which exists in each account.
+    // It's a different role that only exists in the management account.
+    const role = await this.orgSharingRole();
+
+    // The organizations endpoint only exists in us-east-1
+    const organizations = new AWS.Organizations({
+      apiVersion: '2016-11-28',
+      region: 'us-east-1',
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    });
+
+    const accounts = await organizations.listAccounts({}).promise();
+
+    return accounts;
+  },
 };
