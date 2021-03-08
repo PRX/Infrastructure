@@ -76,6 +76,24 @@ async function publishOpsView(userId, hash) {
             action_id: 'codepipeline-execution_open-model',
           },
         },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text:
+              'Transitions are links between pipeline stages that can be disabled or enabled. They are enabled by default. When you re-enable a disabled transition, the latest revision runs through the remaining stages of the pipeline unless more than 30 days have passed. Pipeline execution won’t resume for a transition that has been disabled more than 30 days unless a new change is detected or you manually rerun the pipeline. ',
+          },
+          accessory: {
+            type: 'button',
+            style: 'primary',
+            text: {
+              type: 'plain_text',
+              text: 'Toggle pipeline transitions',
+              emoji: true,
+            },
+            action_id: 'codepipeline-transitions_open-model',
+          },
+        },
       ],
     },
     hash,

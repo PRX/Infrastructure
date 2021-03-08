@@ -3,6 +3,9 @@ const AWS = require('aws-sdk');
 const sts = new AWS.STS({ apiVersion: '2011-06-15' });
 
 module.exports = {
+  regions() {
+    return ['us-east-1', 'us-east-2', 'us-west-2'];
+  },
   /**
    * Returns an assumed DevOps role from the given account
    * @param {string} awsAccountId
