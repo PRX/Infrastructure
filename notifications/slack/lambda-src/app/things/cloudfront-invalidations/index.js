@@ -254,7 +254,7 @@ async function submitPaths(payload) {
   await web.chat.postMessage({
     icon_emoji: ':ops-cloudfront:',
     username: 'Amazon CloudFront via DevOps',
-    channel: '#sandbox2',
+    channel: '#tech-devops',
     text: [
       `Invalidation created for \`${distributionId}\` with paths:`,
       paths.map((p) => `\`${p}\``).join('\n'),

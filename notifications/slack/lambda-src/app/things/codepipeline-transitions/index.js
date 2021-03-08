@@ -408,8 +408,8 @@ async function setTransitionState(payload) {
 
   const msg = {
     icon_emoji: ':ops-codepipeline:',
-    username: 'AWS CopePipelines via DevOps',
-    channel: '#sandbox2',
+    username: 'AWS CopePipeline via DevOps',
+    channel: '#tech-devops',
     text: '',
   };
 

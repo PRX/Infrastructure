@@ -282,8 +282,8 @@ async function startPipeline(payload) {
 
   await web.chat.postMessage({
     icon_emoji: ':ops-codepipeline:',
-    username: 'AWS CopePipelines via DevOps',
-    channel: '#sandbox2',
+    username: 'AWS CopePipeline via DevOps',
+    channel: '#tech-devops',
     text: [`Pipeline execution started for: \`${pipelineName}\``].join('\n'),
   });
 }
