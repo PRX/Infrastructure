@@ -145,7 +145,7 @@ module.exports = {
         hash = payload.event.view.hash;
       }
 
-      if (['U0256R4CM'].includes(userId)) {
+      if (process.env.DEVOPS_SLACK_USER_IDS.split(',').includes(userId)) {
         await publishOpsView(userId, hash);
       } else {
         await publishDefaultView(userId, hash);
