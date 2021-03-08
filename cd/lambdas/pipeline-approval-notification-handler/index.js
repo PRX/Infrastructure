@@ -124,7 +124,7 @@ function parameterDeltasListValue(key, value) {
 
   if (key === 'InfrastructureGitCommit') {
     const url = `https://github.com/PRX/Infrastructure/commit/${value}`;
-    return `\`<${url}|${value.slice(-6)}>\``;
+    return `\`<${url}|${value.slice(0, 6)}>\``;
   }
 
   if (/EcrImageTag/.test(key)) {
