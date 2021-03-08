@@ -62,12 +62,18 @@ Mappings:
     Testing:
       DovetailMinCount: 1
       DovetailMaxCount: 1
+      DovetailRouterMinCount: 1
+      DovetailRouterMaxCount: 1
     Staging:
       DovetailMinCount: 2
       DovetailMaxCount: 4
+      DovetailRouterMinCount: 2
+      DovetailRouterMaxCount: 4
     Production:
       DovetailMinCount: 8
       DovetailMaxCount: 30
+      DovetailRouterMinCount: 3
+      DovetailRouterMaxCount: 10
 Resources:
   DovetailSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -660,7 +666,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
-          Value: !Ref DovetailALB
+          Value: !GetAtt DovetailALB.LoadBalancerFullName
         - Name: TargetGroup
           Value: !GetAtt DovetailRouterALBTargetGroup.TargetGroupFullName
   # connect dovetail-router impressions to ddb kinesis
@@ -808,6 +814,29 @@ Resources:
           Value: !Sub ${AWS::StackName}-DovetailApp
         - Name: ClusterName
           Value: !Ref ECSCluster
+  # Dovetail Elixir Autoscaling
+  DovetailRouterScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailRouterMinCount]
+      MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailRouterMaxCount]
+      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt DovetailRouterService.Name]]
+      RoleARN: !GetAtt DovetailAutoScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  DovetailRouterScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref DovetailRouterScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Join ["/", [!GetAtt DovetailALB.LoadBalancerFullName, !GetAtt DovetailRouterALBTargetGroup.TargetGroupFullName]]
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 1000
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
