@@ -219,7 +219,6 @@ Resources:
         const listParams = {
           cluster: process.env.ECS_CLUSTER,
           desiredStatus: 'RUNNING',
-          launchType: 'FARGATE',
           maxResults: MAX_FARGATES,
           startedBy: STARTED_BY,
         };
@@ -248,7 +247,7 @@ Resources:
           const listRes = await ecs.listTasks(listParams).promise();
           const running = listRes.taskArns.length;
           if (running < MAX_FARGATES) {
-            log('info', 'launching 1 fargate forecast worker');
+            log('info', `launching 1 more fargate forecast worker (${running} running)`);
             try {
               const runRes = await ecs.runTask(runParams).promise();
               log('debug', 'ran task', runRes);
@@ -256,6 +255,8 @@ Resources:
               log('error', 'error running task', err);
               throw err;
             }
+          } else {
+            log('info', `already running ${running} fargate workers`);
           }
         };
       MemorySize: 128
