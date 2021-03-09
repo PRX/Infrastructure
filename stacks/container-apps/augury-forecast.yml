@@ -206,9 +206,27 @@ Resources:
         const AWS = require('aws-sdk');
         const ecs = new AWS.ECS();
 
-        // default ECS runTask parameters
-        const params = {
+        const MAX_FARGATES = 10;
+        const STARTED_BY = 'augury-forecast-relay-lambda';
+
+        // ECS listTask parameters
+        const listParams = {
           cluster: process.env.ECS_CLUSTER,
+          desiredStatus: 'RUNNING',
+          launchType: 'FARGATE',
+          maxResults: MAX_FARGATES,
+          startedBy: STARTED_BY,
+        };
+
+        // ECS runTask parameters
+        const runParams = {
+          cluster: process.env.ECS_CLUSTER,
+          containerOverrides: [
+            {
+              name: 'augury-forecast',
+              command: 'forecast',
+            }
+          ],
           launchType: 'FARGATE',
           networkConfiguration: {
             awsvpcConfiguration: {
@@ -217,6 +235,7 @@ Resources:
             },
           },
           platformVersion: '1.4.0',
+          startedBy: STARTED_BY,
           taskDefinition: process.env.ECS_TASK_DEFINITION,
         };
 
@@ -243,17 +262,18 @@ Resources:
         exports.handler = async (event) => {
           const goodRecords = (event.Records || []).map(r => decode(r)).filter(r => r);
           const badRecords = (event.Records || []).filter(r => !decode(r));
-          for (const rec of goodRecords) {
-            log('info', 'running forecast', rec);
-            const command = ['forecast', `${rec.forecast_id}`];
-            if (rec.options) {
-              command.push('--');
-              command.push(rec.options);
-            }
-            const overrides = {containerOverrides: [{name: 'augury-forecast', command}]};
+
+          // check how many fargates are already running
+          const listRes = await ecs.listTasks(listParams).promise();
+          const maxRunTasks = MAX_FARGATES - listRes.taskArns.length;
+          const numToRun = Math.min(goodRecords.length, maxRunTasks);
+
+          // launch new fargates to process the forecast queue
+          log('info', `launching ${numToRun} forecasts`);
+          for (let i = 0; i < numToRun; i++) {
             try {
-              const res = await ecs.runTask({...params, overrides}).promise();
-              log('debug', 'ran task', res);
+              const runRes = await ecs.runTask(params).promise();
+              log('debug', 'ran task', runRes);
             } catch (err) {
               log('error', 'error running task', err);
               throw err;
