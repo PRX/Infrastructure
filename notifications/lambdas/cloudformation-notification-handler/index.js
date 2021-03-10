@@ -82,9 +82,6 @@ function messageForEvent(event) {
   const region = stackId.split(':')[3];
   const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home#/stack/detail?stackId=${stackId}`;
 
-  const channel =
-    stackName === resourceId ? SLACK_INFO_CHANNEL : SLACK_DEBUG_CHANNEL;
-
   const msg = {
     username: SLACK_USERNAME,
     icon_emoji: SLACK_ICON,
@@ -129,14 +126,20 @@ function messageForEvent(event) {
       return msg;
     }
 
-    // Send OKAY stack resource notifications to DEBUG and others to INFO
+
+    // Send bad stack resource notifications to INFO
     if (concerning.includes(resourceStatus)) {
       msg.channel = SLACK_INFO_CHANNEL;
       return msg;
-    } else {
-      msg.channel = SLACK_DEBUG_CHANNEL;
-      return msg;
     }
+
+    // Don't send okay notifications for a stack updating a nested stack
+    if (stackName !== resourceId) {
+      return;
+    }
+
+    msg.channel = SLACK_DEBUG_CHANNEL;
+    return msg;
   }
 
   // Send only bad non-stack resource notifications to debug
