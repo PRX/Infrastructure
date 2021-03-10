@@ -149,7 +149,8 @@ function parameterDeltasListArrow(parameterDelta) {
   }
 
   if (/EcrImageTag/.test(parameterDelta[0])) {
-    const url = `https://github.com/PRX/Infrastructure/compare/${parameterDelta[1]}...${parameterDelta[2]}`;
+    const slug = parameterDelta[0].replace('EcrImageTag', '');
+    const url = `https://github.com/PRX/${slug}.prx.org/compare/${parameterDelta[1]}...${parameterDelta[2]}`;
     return `<${url}|➡>`;
   }
 
