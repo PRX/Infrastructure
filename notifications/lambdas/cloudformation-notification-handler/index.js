@@ -85,8 +85,7 @@ function messageForEvent(event) {
   const channel =
     stackName === resourceId ? SLACK_INFO_CHANNEL : SLACK_DEBUG_CHANNEL;
 
-  return {
-    channel,
+  const msg = {
     username: SLACK_USERNAME,
     icon_emoji: SLACK_ICON,
     attachments: [
@@ -109,10 +108,52 @@ function messageForEvent(event) {
       },
     ],
   };
+
+  const concerning = [
+    'ROLLBACK_COMPLETE',
+    'UPDATE_ROLLBACK_COMPLETE',
+    'DELETE_IN_PROGRESS',
+    'ROLLBACK_IN_PROGRESS',
+    'CREATE_FAILED',
+    'DELETE_FAILED',
+    'ROLLBACK_FAILED',
+    'UPDATE_ROLLBACK_FAILED',
+    'UPDATE_ROLLBACK_IN_PROGRESS',
+    'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS',
+  ];
+
+  if (resourceType === 'AWS::CloudFormation::Stack') {
+    // Send all root stack resource notifications to INFO
+    if (resourceId.endsWith('-staging') || resourceId.endsWith('-production')) {
+      msg.channel = SLACK_INFO_CHANNEL;
+      return msg;
+    }
+
+    // Send OKAY stack resource notifications to DEBUG and others to INFO
+    if (concerning.includes(resourceStatus)) {
+      msg.channel = SLACK_INFO_CHANNEL;
+      return msg;
+    } else {
+      msg.channel = SLACK_DEBUG_CHANNEL;
+      return msg;
+    }
+  }
+
+  // Send only bad non-stack resource notifications to debug
+  if (concerning.includes(resourceStatus)) {
+    msg.channel = SLACK_DEBUG_CHANNEL;
+    return msg;
+  }
 }
 
 exports.handler = async (event) => {
+  console.log(JSON.stringify(event));
   const message = messageForEvent(event);
+
+  if (!message) {
+    return;
+  }
+
   await sns
     .publish({
       TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
