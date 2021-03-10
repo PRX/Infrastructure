@@ -91,7 +91,8 @@ Resources:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
-        - Environment:
+        - Command: [forecast]
+          Environment:
             - Name: APP_NAME
               Value: augury
             - Name: APP_ENV
@@ -127,25 +128,25 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt AuguryForecastTaskRole.Arn
-  # SNS relay for launching Fargate tasks
-  AuguryForecastRelaySnsTopic:
-    Type: "AWS::SNS::Topic"
-  AuguryForecastRelaySnsTopicPolicy:
-    Type: "AWS::SNS::TopicPolicy"
+  # SQS relay for launching Fargate tasks
+  AuguryForecastRelaySqsQueue:
+    Type: "AWS::SQS::Queue"
+  AuguryForecastRelaySqsQueuePolicy:
+    Type: "AWS::SQS::QueuePolicy"
     Properties:
+      Queues:
+        - !Ref AuguryForecastRelaySqsQueue
       PolicyDocument:
         Id: AuguryForecastRelayPolicy
         Version: "2012-10-17"
         Statement:
-          - Sid: ECSInstancePublish
+          - Sid: ECSInstanceSendMessage
             Effect: Allow
             Principal:
               AWS: !Ref ECSInstanceIAMRoleArn
             Action:
-              - sns:Publish
-            Resource: !Ref AuguryForecastRelaySnsTopic
-      Topics:
-        - !Ref AuguryForecastRelaySnsTopic
+              - sqs:SendMessage
+            Resource: !GetAtt AuguryForecastRelaySqsQueue.Arn
   AuguryForecastRelayLambdaRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -159,13 +160,17 @@ Resources:
             Action:
               - "sts:AssumeRole"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
       Path: "/"
       Policies:
         - PolicyName: FargateLauncher
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              - Effect: "Allow"
+                Resource: "*"
+                Action:
+                  - ecs:ListTasks
               - Effect: "Allow"
                 Resource: !Ref AuguryForecastTaskDefinition
                 Action:
@@ -188,7 +193,7 @@ Resources:
   AuguryForecastRelayLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Launches fargate forecast executions from SNS
+      Description: Launches fargate forecast executions from SQS
       Environment:
         Variables:
           ECS_CLUSTER: !Ref ECSCluster
@@ -197,17 +202,29 @@ Resources:
           VPC_SUBNET_2: !Ref VPCSubnet2
           VPC_SUBNET_3: !Ref VPCSubnet3
       Events:
-        SnsMessages:
+        SqsMessages:
+          Type: SQS
           Properties:
-            Topic: !Ref AuguryForecastRelaySnsTopic
-          Type: SNS
+            BatchSize: 1
+            Queue: !GetAtt AuguryForecastRelaySqsQueue.Arn
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
         const ecs = new AWS.ECS();
 
-        // default ECS runTask parameters
-        const params = {
+        const MAX_FARGATES = 10;
+        const STARTED_BY = 'augury-forecast-relay-lambda';
+
+        // ECS listTask parameters
+        const listParams = {
+          cluster: process.env.ECS_CLUSTER,
+          desiredStatus: 'RUNNING',
+          maxResults: MAX_FARGATES,
+          startedBy: STARTED_BY,
+        };
+
+        // ECS runTask parameters
+        const runParams = {
           cluster: process.env.ECS_CLUSTER,
           launchType: 'FARGATE',
           networkConfiguration: {
@@ -217,6 +234,7 @@ Resources:
             },
           },
           platformVersion: '1.4.0',
+          startedBy: STARTED_BY,
           taskDefinition: process.env.ECS_TASK_DEFINITION,
         };
 
@@ -225,46 +243,24 @@ Resources:
           console[level](JSON.stringify({level, msg, ...extra}));
         }
 
-        // look for well formatted SNS forecast requests
-        function decode(record) {
-          if (record && record.Sns && record.Sns.Message) {
-            try {
-              const json = JSON.parse(record.Sns.Message);
-              if (json && json.forecast_id) {
-                return json;
-              }
-            } catch (err) {
-              return null;
-            }
-          }
-          return null;
-        }
-
         exports.handler = async (event) => {
-          const goodRecords = (event.Records || []).map(r => decode(r)).filter(r => r);
-          const badRecords = (event.Records || []).filter(r => !decode(r));
-          for (const rec of goodRecords) {
-            log('info', 'running forecast', rec);
-            const command = ['forecast', `${rec.forecast_id}`];
-            if (rec.options) {
-              command.push('--');
-              command.push(rec.options);
-            }
-            const overrides = {containerOverrides: [{name: 'augury-forecast', command}]};
+          const listRes = await ecs.listTasks(listParams).promise();
+          const running = listRes.taskArns.length;
+          if (running < MAX_FARGATES) {
+            log('info', `launching 1 more fargate forecast worker (${running} running)`);
             try {
-              const res = await ecs.runTask({...params, overrides}).promise();
-              log('debug', 'ran task', res);
+              const runRes = await ecs.runTask(runParams).promise();
+              log('debug', 'ran task', runRes);
             } catch (err) {
               log('error', 'error running task', err);
               throw err;
             }
-          }
-          if (badRecords.length) {
-            log('error', 'bad input records', {badRecords});
-            throw new Error('Bad input records');
+          } else {
+            log('info', `already running ${running} fargate workers`);
           }
         };
       MemorySize: 128
+      ReservedConcurrentExecutions: 1
       Role: !GetAtt AuguryForecastRelayLambdaRole.Arn
       Runtime: nodejs12.x
       Tags:
@@ -297,6 +293,9 @@ Resources:
         - Name: FunctionName
           Value: !Ref AuguryForecastRelayLambdaFunction
 Outputs:
-  SnsTopicArn:
-    Description: Arn for the worker task definition
-    Value: !Ref AuguryForecastRelaySnsTopic
+  LogGroupName:
+    Description: Name of the forecast log group
+    Value: !Ref AuguryForecastLogGroup
+  SqsQueueUrl:
+    Description: Url for the forecast relay SQS queue
+    Value: !Ref AuguryForecastRelaySqsQueue
