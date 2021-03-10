@@ -126,7 +126,6 @@ function messageForEvent(event) {
       return msg;
     }
 
-
     // Send bad stack resource notifications to INFO
     if (concerning.includes(resourceStatus)) {
       msg.channel = SLACK_INFO_CHANNEL;
@@ -153,14 +152,12 @@ exports.handler = async (event) => {
   console.log(JSON.stringify(event));
   const message = messageForEvent(event);
 
-  if (!message) {
-    return;
+  if (message) {
+    await sns
+      .publish({
+        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+        Message: JSON.stringify(message),
+      })
+      .promise();
   }
-
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify(message),
-    })
-    .promise();
 };
