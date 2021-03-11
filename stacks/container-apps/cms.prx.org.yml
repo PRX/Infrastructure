@@ -1,4 +1,4 @@
-# stacks/container-apps/web-application.yml
+# stacks/container-apps/cms.prx.org.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Docker web application with optional worker, using the shared platform ALB
@@ -252,6 +252,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - CreateProductionResources
+                - !Ref AWS::NoValue
+                - Name: MEMCACHE_SERVERS
+                  Value: !GetAtt CmsMemcacheCluster.ConfigurationEndpoint.Address
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -379,6 +384,58 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
+
+  # memcached
+  CmsMemcacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub CMS ${EnvironmentType} memcache subnet group
+      SubnetIds:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet2
+  CmsMemcacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: !Sub CMS ${EnvironmentType} memcached security group
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 11211
+          ToPort: 11211
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 11211
+          ToPort: 11211
+  CmsMemcacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      AZMode: !If
+        - CreateProductionResources
+        - cross-az
+        - single-az
+      Engine: memcached
+      CacheNodeType: !If
+        - CreateProductionResources
+        - cache.t3.micro
+        - cache.t3.micro
+      NumCacheNodes: !If
+        - CreateProductionResources
+        - 2
+        - 1
+      CacheSubnetGroupName: !Ref CmsMemcacheSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt CmsMemcacheSecurityGroup.GroupId
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
 Outputs:
   WorkerTaskDefinitionArn:
     Description: Arn for the worker task definition
