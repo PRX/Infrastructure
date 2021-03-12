@@ -92,6 +92,42 @@ Resources:
     Type: AWS::IAM::AccessKey
     Properties:
       UserName: !Ref UploadHttpSigningUser
+  UploadHttpSigningS3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        # TODO Need to be updated for multi-region replication
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:* # TODO Can this be the same as the others?
+            Resource:
+              - arn:aws:s3:::test.mediajoint.prx.org/public/uploads/*
+              - arn:aws:s3:::development.mediajoint.prx.org/public/uploads/*
+              - arn:aws:s3:::staging.mediajoint.prx.org/public/uploads/*
+              - arn:aws:s3:::production.mediajoint.prx.org/public/uploads/*
+          - Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Resource:
+              - arn:aws:s3:::test.networks.prx.org/public/item_attachments/*
+              - arn:aws:s3:::development.networks.prx.org/public/item_attachments/*
+              - arn:aws:s3:::staging.networks.prx.org/public/item_attachments/*
+              - arn:aws:s3:::production.networks.prx.org/public/item_attachments/*
+          - Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Resource:
+              - arn:aws:s3:::wfmt-services*
+              - arn:aws:s3:::wfmt-services/*
+      PolicyName: ExternalS3BucketAccess
+      Users:
+        - !Ref UploadHttpSigningUser
 
   #
   #
