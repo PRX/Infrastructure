@@ -11,6 +11,8 @@ Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
+  UploadSigningUserName:
+    Type: String
   # VPC ########################################################################
   VPC:
     Type: "AWS::EC2::VPC::Id"
@@ -345,6 +347,20 @@ Resources:
               AWS: !Sub arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${PublishUploadsCloudFrontOriginAccessIdentity}
             Resource: !Sub arn:aws:s3:::${PublishUploadsBucket}/*
             Sid: Grant read access to a CloudFront Origin Identity
+  PublishUploadsBucketUploadSignerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:* # TODO Can this be reduced?
+            Resource:
+              - !Sub ${PublishUploadsBucket.Arn}/*
+      PolicyName: PublishUploadsBucketAccess
+      Users:
+        - !Ref UploadSigningUserName
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
