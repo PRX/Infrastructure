@@ -22,6 +22,78 @@ Parameters:
   WildcardCertificateArn:
     Type: String
 Resources:
+  UploadHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+          - X-Amz-Security-Token
+        AllowMethods:
+          - GET
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+      Tags:
+        Project: tower.radiotopia.fm
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+  UploadHttpLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: lambda/PRX-upload.prx.org.zip
+        Version: !Ref CodeS3ObjectVersion
+      Description: File upload Lambda function
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref UploadHttpApi
+            Method: get
+            Path: /signature
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs14.x
+      Tags:
+        Project: upload.prx.org
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 5
+  UploadHttpLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UploadHttpLambdaFunction}
+      RetentionInDays: 60
+  UploadHttpSigningUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - Key: Project
+          Value: upload.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  #
+  #
+  #
+  #
+  #
+  #
+  #
+  #
+  #
+
   # API Gateway
   UploadRestApi:
     Type: "AWS::ApiGateway::RestApi"
