@@ -167,58 +167,6 @@ Resources:
                 "AWS:SourceOwner": !Ref AWS::AccountId
       Topics:
         - !Ref SlackMessageRelaySnsTopic
-  SlackMessageRelayLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: lambdas/slack-message-relay/
-      Description: >-
-        Receives preformed Slack message payloads and sends them to the
-        provided Incoming Webhook URL
-      Environment:
-        Variables:
-          DEFAULT_WEBHOOK_URL: !Ref GenericSlackWebhookUrl
-      Events:
-        SnsMessages:
-          Properties:
-            Topic: !Ref SlackMessageRelaySnsTopic
-          Type: SNS
-      Handler: index.handler
-      MemorySize: 128
-      Runtime: nodejs12.x
-      Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-      Timeout: 10
-  SlackMessageRelayErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Relay][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >-
-        Slack relay function has encountered several invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref SlackMessageRelayLambdaFunction
-  SlackMessageRelayLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${SlackMessageRelayLambdaFunction}
-      RetentionInDays: 5
   # CloudFormation notifications
   CloudFormationNotificationSnsTopic:
     Type: AWS::SNS::Topic
