@@ -143,8 +143,17 @@ Resources:
               Value: !Ref CastleSecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - CreateProductionResources
+                - !Ref AWS::NoValue
+                - Name: REDIS_HOST
+                  Value: !GetAtt CastleRedisReplicationGroup.PrimaryEndPoint.Address
+            - Fn::If:
+                - CreateProductionResources
+                - !Ref AWS::NoValue
+                - Name: REDIS_PORT
+                  Value: !GetAtt CastleRedisReplicationGroup.PrimaryEndPoint.Port
           Essential: true
-          # TODO
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/castle.prx.org:${CastleEcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
