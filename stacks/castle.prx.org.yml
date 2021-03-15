@@ -15,6 +15,14 @@ Parameters:
   # VPC ########################################################################
   VPC:
     Type: "AWS::EC2::VPC::Id"
+  VPCSubnet1:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet2:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSubnet3:
+    Type: "AWS::EC2::Subnet::Id"
+  VPCSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
   # Load Balancer ##############################################################
   PlatformALBDNSName:
     Type: String
@@ -225,6 +233,59 @@ Resources:
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
           Value: !GetAtt CastleALBTargetGroup.TargetGroupFullName
+
+  # Redis
+  CastleRedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub Castle ${EnvironmentType} Redis subnet group
+      SubnetIds:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet2
+        - !Ref VPCSubnet3
+  CastleRedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: !Sub Castle ${EnvironmentType} Redis security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          SourceSecurityGroupId: !Ref VPCSecurityGroup
+          ToPort: 6379
+        - IpProtocol: tcp
+          FromPort: 6379
+          SourceSecurityGroupId: !Ref VPCSecurityGroup
+          ToPort: 6379
+  CastleRedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      AtRestEncryptionEnabled: false
+      AutomaticFailoverEnabled: true
+      AutoMinorVersionUpgrade: false
+      CacheNodeType: !If
+        - CreateProductionResources
+        - cache.t3.medium
+        - cache.t3.micro
+      CacheSubnetGroupName: !Ref CastleRedisSubnetGroup
+      EngineVersion: 6.x
+      MultiAZEnabled: true
+      NumNodeGroups: 1 # 1 = cluster mode disabled, NodeGroups are Shards
+      ReplicasPerNodeGroup: 1 # Replicas are nodes. N replicas will result in N+1 Nodes Per Shard
+      ReplicationGroupDescription: !Sub Castle ${EnvironmentType} Redis
+      SecurityGroupIds:
+        - !GetAtt CastleRedisSecurityGroup.GroupId
+      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
+      Tags:
+        - Key: Project
+          Value: !FindInMap [Shared, Project, name]
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
