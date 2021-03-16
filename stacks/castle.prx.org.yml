@@ -46,7 +46,7 @@ Parameters:
   # Misc #######################################################################
   RedisSecurityGroupSourceSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
-  OpsDebugMessagesSnsTopicArn:
+  OpsWarnMessagesSnsTopicArn:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
@@ -291,6 +291,56 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+  CastleRedisMemoryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 85%"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >-
+        Max Redis database memory usage exceeded 85% for two consecutive periods
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: DatabaseMemoryUsagePercentage
+      Namespace: AWS/ElastiCache
+      Period: 120
+      Statistic: Maximum
+      Threshold: 0.85
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref CastleRedisReplicationGroup
+  CastleRedisMemoryVeryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 93%"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >-
+        Max Redis database memory usage exceeded 93% for two consecutive periods
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: DatabaseMemoryUsagePercentage
+      Namespace: AWS/ElastiCache
+      Period: 120
+      Statistic: Maximum
+      Threshold: 0.93
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref CastleRedisReplicationGroup
 
 Outputs:
   HostedZoneDNSName:
