@@ -255,7 +255,7 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
-              Value: !GetAtt CmsMemcacheCluster.ConfigurationEndpoint.Address
+              Value: !Ref SharedMemcachedEndpointAddress
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -344,7 +344,7 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
-              Value: !GetAtt CmsMemcacheCluster.ConfigurationEndpoint.Address
+              Value: !Ref SharedMemcachedEndpointAddress
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -385,106 +385,6 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
-  # memcached
-  CmsMemcacheSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: !Sub CMS ${EnvironmentType} memcache subnet group
-      SubnetIds:
-        - !Ref VPCSubnet1
-        - !Ref VPCSubnet2
-        - !Ref VPCSubnet3
-  CmsMemcacheSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VPC
-      GroupDescription: !Sub CMS ${EnvironmentType} memcached security group
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 11211
-          ToPort: 11211
-        - CidrIpv6: ::/0
-          IpProtocol: tcp
-          FromPort: 11211
-          ToPort: 11211
-  CmsMemcacheCluster:
-    Type: AWS::ElastiCache::CacheCluster
-    Properties:
-      AutoMinorVersionUpgrade: true
-      AZMode: !If
-        - CreateProductionResources
-        - cross-az
-        - single-az
-      Engine: memcached
-      CacheNodeType: !If
-        - CreateProductionResources
-        - cache.t3.micro
-        - cache.t3.micro
-      NumCacheNodes: !If
-        - CreateProductionResources
-        - 2
-        - 1
-      CacheSubnetGroupName: !Ref CmsMemcacheSubnetGroup
-      VpcSecurityGroupIds:
-        - !GetAtt CmsMemcacheSecurityGroup.GroupId
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-  CmsMemcacheSwapUsageAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[CMS][Memcache][Swap] Swap exceeded 8 MB"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      AlarmDescription: Memcache swap usage exceeded 8 MB
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: SwapUsage
-      Namespace: AWS/ElastiCache
-      Period: 60
-      Statistic: Maximum
-      Threshold: 8000000
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref CmsMemcacheCluster
-  CmsMemcacheHighSwapUsageAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: CreateProductionResources
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[CMS][Memcache][Swap] Swap exceeded 32 MB"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: Memcache swap usage exceeded 32 MB
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: SwapUsage
-      Namespace: AWS/ElastiCache
-      Period: 60
-      Statistic: Maximum
-      Threshold: 32000000
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref CmsMemcacheCluster
 
 Outputs:
   WorkerTaskDefinitionArn:
