@@ -1,0 +1,141 @@
+# stacks/shared-memcached.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Launches stacks for a number of applications and services that are maintained
+  in separate templates.
+
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+  VPCSubnet1:
+    Type: AWS::EC2::Subnet::Id
+  VPCSubnet2:
+    Type: AWS::EC2::Subnet::Id
+  VPCSubnet3:
+    Type: AWS::EC2::Subnet::Id
+  EnvironmentType:
+    Type: String
+  OpsWarnMessagesSnsTopicArn:
+    Type: String
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
+  SourceSecurityGroupId1:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Conditions:
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  SharedMemcachedSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub Shared ${EnvironmentType} memcached subnet group
+      SubnetIds:
+        - !Ref VPCSubnet1
+        - !Ref VPCSubnet2
+        - !Ref VPCSubnet3
+  SharedMemcachedSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Shared ${EnvironmentType} memcached security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 11211
+          SourceSecurityGroupId: !Ref SourceSecurityGroupId1
+          ToPort: 11211
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VPC
+  SharedMemcachedCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AutoMinorVersionUpgrade: true
+      AZMode: !If
+        - CreateProductionResources
+        - cross-az
+        - single-az
+      Engine: memcached
+      CacheNodeType: !If
+        - CreateProductionResources
+        - cache.t3.micro
+        - cache.t3.micro
+      NumCacheNodes: !If
+        - CreateProductionResources
+        - 2
+        - 1
+      CacheSubnetGroupName: !Ref SharedMemcachedSubnetGroup
+      VpcSecurityGroupIds:
+        - !GetAtt SharedMemcachedSecurityGroup.GroupId
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SharedMemcachedSwapUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Platform][Memcached][Swap] Swap exceeded 8 MB"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: Memcached swap usage exceeded 8 MB
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: SwapUsage
+      Namespace: AWS/ElastiCache
+      Period: 60
+      Statistic: Maximum
+      Threshold: 8000000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref SharedMemcachedCluster
+  SharedMemcachedHighSwapUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Platform][Memcached][Swap] Swap exceeded 32 MB"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Memcached swap usage exceeded 32 MB
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: SwapUsage
+      Namespace: AWS/ElastiCache
+      Period: 60
+      Statistic: Maximum
+      Threshold: 32000000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref SharedMemcachedCluster
+
+Outputs:
+  CacheEndpointAddress:
+    Description: Cache endpoint hostname
+    Value: !GetAtt SharedMemcachedCluster.ConfigurationEndpoint.Address
+  CacheEndpointPort:
+    Description: Cache endpoint port
+    Value: !GetAtt SharedMemcachedCluster.ConfigurationEndpoint.Port
