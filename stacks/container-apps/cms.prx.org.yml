@@ -39,7 +39,7 @@ Parameters:
   ECSServiceIAMRole:
     Type: String
   # Misc #######################################################################
-  OpsDebugMessagesSnsTopicArn:
+  OpsWarnMessagesSnsTopicArn:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
@@ -435,6 +435,55 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+  CmsMemcacheSwapUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[CMS][Memcache][Swap] Swap exceeded 8 MB"
+      AlarmActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: Memcache swap usage exceeded 8 MB
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: SwapUsage
+      Namespace: AWS/ElastiCache
+      Period: 60
+      Statistic: Maximum
+      Threshold: 8000000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref CmsMemcacheCluster
+  CmsMemcacheHighSwapUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProductionResources
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[CMS][Memcache][Swap] Swap exceeded 32 MB"
+      AlarmActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Memcache swap usage exceeded 32 MB
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: SwapUsage
+      Namespace: AWS/ElastiCache
+      Period: 60
+      Statistic: Maximum
+      Threshold: 32000000
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref CmsMemcacheCluster
+
 Outputs:
   WorkerTaskDefinitionArn:
     Description: Arn for the worker task definition
