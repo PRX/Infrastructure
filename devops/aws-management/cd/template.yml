@@ -532,6 +532,17 @@ Resources:
             Effect: Allow
             Resource:
               - !Ref SlackMessageRelayTopicArn
+  CodePipelineJobResultWriteAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - codepipeline:PutJobSuccessResult
+              - codepipeline:PutJobFailureResult
+            Resource: "*"
   DeploymentNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -543,6 +554,7 @@ Resources:
       InlineCode: |
         const AWS = require('aws-sdk');
 
+        const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
         const sns = new AWS.SNS({
           apiVersion: '2010-03-31',
           region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
@@ -550,6 +562,9 @@ Resources:
 
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
+
+          const job = event['CodePipeline.job'];
+
           await sns
             .publish({
               TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
@@ -561,10 +576,13 @@ Resources:
               }),
             })
             .promise();
+
+          await codepipeline.putJobSuccessResult({ jobId: job.id }).promise();
         };
       MemorySize: 128
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
       Runtime: nodejs12.x
       Tags:
         Project: Infrastructure
