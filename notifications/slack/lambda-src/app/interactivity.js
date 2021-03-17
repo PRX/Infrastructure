@@ -3,7 +3,7 @@ const cfInvalidate = require('./things/cloudfront-invalidations');
 const pipelineExec = require('./things/codepipeline-executions');
 const pipelineTransitions = require('./things/codepipeline-transitions');
 const pipelineApproval = require('./things/codepipeline-approval');
-const stackRollback = require('./things/stack-rollback');
+const stackReplay = require('./things/stack-replay');
 
 const SLACK_PAYLOAD_TYPE_BLOCK_ACTIONS = 'block_actions';
 const SLACK_PAYLOAD_TYPE_VIEW_SUBMISSION = 'view_submission';
@@ -28,8 +28,8 @@ async function handleBlockActionPayload(payload) {
     await pipelineTransitions.handleBlockActionPayload(payload);
   } else if (actionId.startsWith('codepipeline-approval_')) {
     await pipelineApproval.handleBlockActionPayload(payload);
-  } else if (actionId.startsWith('stack-rollback_')) {
-    await pipelineApproval.handleBlockActionPayload(payload);
+  } else if (actionId.startsWith('stack-replay_')) {
+    await stackReplay.handleBlockActionPayload(payload);
   }
 }
 
@@ -52,8 +52,8 @@ async function handleViewSubmissionPayload(payload) {
     await pipelineTransitions.handleViewSubmissionPayload(payload);
   } else if (callbackId.startsWith('codepipeline-approval_')) {
     await pipelineApproval.handleViewSubmissionPayload(payload);
-  } else if (callbackId.startsWith('stack-rollback_')) {
-    await pipelineApproval.handleViewSubmissionPayload(payload);
+  } else if (callbackId.startsWith('stack-replay_')) {
+    await stackReplay.handleViewSubmissionPayload(payload);
   }
 }
 

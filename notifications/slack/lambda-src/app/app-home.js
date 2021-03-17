@@ -95,13 +95,13 @@ async function publishOpsView(userId, hash) {
           },
         },
 
-        // Rollbacks
+        // Replays
         { type: 'divider' },
         {
           type: 'header',
           text: {
             type: 'plain_text',
-            text: 'Stack Rollbacks',
+            text: 'Stack Replays',
             emoji: true,
           },
         },
@@ -110,17 +110,17 @@ async function publishOpsView(userId, hash) {
           text: {
             type: 'mrkdwn',
             text:
-              'Rollback the stack parameters of the staging stack back to a previous version. This will redeploy apps and services using previous code artifacts and secrets to staging, which can then be deployed to production. The only change this makes is to take a previous S3 object version of the staging stack parameters JSON file and recreate it as the current version.',
+              'Replay the stack parameters of the staging stack from a previous version. This will redeploy apps and services using previous code artifacts and secrets to staging, which can then be deployed to production. The only change this makes is to take a previous S3 object version of the staging stack parameters JSON file and recreate it as the current version.',
           },
           accessory: {
             type: 'button',
             style: 'primary',
             text: {
               type: 'plain_text',
-              text: 'Start rollback',
+              text: 'Start replay',
               emoji: true,
             },
-            action_id: 'stack-rollback_open-model',
+            action_id: 'stack-replay_open-model',
           },
         },
       ],
