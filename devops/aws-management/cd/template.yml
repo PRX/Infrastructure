@@ -1,3 +1,4 @@
+# devops/aws-management/cd/template.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
@@ -126,6 +127,20 @@ Resources:
                   - !GetAtt OrganizationDataSharingRoleStackCloudFormationRole.Arn
             Version: "2012-10-17"
           PolicyName: IamPassRole
+        # Allows the pipeline to invoke custom actions
+        - PolicyName: LambdaPipelineActionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - lambda:ListFunctions
+                Effect: Allow
+                Resource: "*"
+              - Action:
+                  - lambda:InvokeFunction
+                Effect: Allow
+                Resource:
+                  - !GetAtt DeploymentNotificationFunction.Arn
       Tags:
         - Key: Project
           Value: Infrastructure
@@ -319,6 +334,17 @@ Resources:
             #   InputArtifacts:
             #     - Name: InfrastructureRepoSourceArtifact
             #   RunOrder: 1
+        - Name: Notify
+          Actions:
+            - Name: DeploymentNotification
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref DeploymentNotificationFunction
+              RunOrder: 1
       Tags:
         - Key: Project
           Value: Infrastructure
@@ -495,3 +521,55 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+  SlackRelaySnsPublishOnlyAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sns:Publish
+            Effect: Allow
+            Resource:
+              - !Ref SlackMessageRelayTopicArn
+  DeploymentNotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Sends a message when DevOps pipeline completes
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+          await sns
+            .publish({
+              TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+              Message: JSON.stringify({
+                channel: '#ops-deploys',
+                username: 'AWS CodePipeline',
+                icon_emoji: ':ops-codepipeline:',
+                text: 'DevOps pipeline deploy complete'
+              }),
+            })
+            .promise();
+        };
+      MemorySize: 128
+      Policies:
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+      Runtime: nodejs12.x
+      Tags:
+        Project: Infrastructure
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 3
+  DeploymentNotificationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DeploymentNotificationFunction}
+      RetentionInDays: 14
