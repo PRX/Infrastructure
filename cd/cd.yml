@@ -939,22 +939,32 @@ Resources:
         Triggers CD CodePipeline when CloudTrail sees changes in S3 on the
         staging template config
       EventPattern:
-        Fn::Sub:
-          - |
-            {
-              "source": ["aws.s3"],
-              "detail-type": ["AWS API Call via CloudTrail"],
-              "detail": {
-                "eventSource": ["s3.amazonaws.com"],
-                "eventName": ["PutObject"],
-                "resources": {
-                  "ARN": ["arn:aws:s3:::${BucketName}/${ObjectId}"]
-                }
-              }
-            }
-          - BucketName:
-              Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-            ObjectId: !Ref InfrastructureConfigStagingKey
+        source:
+          - aws.s3
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutObject
+            - CopyObject
+          userIdentity:
+            sessionContext:
+              sessionIssuer:
+                arn:
+                  # CodePipeline does a CopyObject when it pulls in an S3
+                  # object as part of a Source action, using the pipeline's
+                  # role. To prevent an infinite loop, those events need to be
+                  # filtered out
+                  - anything-but: !GetAtt CdPipelineIamRole.Arn
+          resources:
+            ARN:
+              - Fn::Sub:
+                  - arn:aws:s3:::${BucketName}/${ObjectId}
+                  - ObjectId: !Ref InfrastructureConfigStagingKey
+                    BucketName:
+                      Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
       State: ENABLED
       Targets:
         - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
