@@ -152,17 +152,18 @@ Resources:
         PlatformALBHTTPListenerArn: !Ref PlatformALBHTTPListenerArn
         PlatformALBHTTPSListenerArn: !Ref PlatformALBHTTPSListenerArn
         ECSCluster: !Ref ECSCluster
-        ECSServiceAutoscaleIAMRoleArn: !Ref ECSServiceAutoscaleIAMRoleArn
         ECSServiceIAMRole: !Ref ECSServiceIAMRole
         UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
         UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
         SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
         SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
         AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
-        OpsDebugMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsDebugMessagesSnsTopicArn"
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
         OpsErrorMessagesSnsTopicArn:
           Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
+        OpsFatalMessagesSnsTopicArn:
+          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EcrRegion: !Ref EcrRegion
@@ -173,68 +174,12 @@ Resources:
         PlatformALBListenerPriorityPrefix: !Ref ExchangePlatformALBListenerPriorityPrefix
         EcrImageTag: !Ref ExchangeEcrImageTag
         SecretsVersion: !Ref ExchangeSecretsVersion
-        AppName: "exchange"
-        AltName: "api"
-        CreateWorker: "true"
-        DesiredWebsProduction: "5"
-        DesiredWorkersProduction: "6"
-        ErrorAlarmThreshold: "5"
-        ContainerPort: "3000"
-        HealthCheckPath: "/ping"
       Tags:
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange.prx.org.yml"]]
-      TimeoutInMinutes: 5
-  ExchangeSayWhenStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        ECSCluster: !Ref ECSCluster
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        SecretsBase: !Ref SecretsBase
-        EcrRegion: !Ref EcrRegion
-        EcrImageTag: !Ref ExchangeEcrImageTag
-        AppName: "exchange"
-        SecretsVersion: !Ref ExchangeSecretsVersion
-        ContainerMemory: !Ref ContainerMemory
-        ContainerMemoryReservation: !Ref ContainerMemoryReservation
-        ContainerCpu: !Ref ContainerCpu
-        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
-        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-say-when.yml"]]
-      TimeoutInMinutes: 5
-  ExchangeAlarmsStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        OpsFatalMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        ECSCluster: !Ref ECSCluster
-        WorkerServiceName: !GetAtt ExchangeStack.Outputs.WorkerServiceName
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "exchange-alarms.yml"]]
       TimeoutInMinutes: 5
   NetworksStack:
     Type: "AWS::CloudFormation::Stack"
