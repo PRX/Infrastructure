@@ -4,10 +4,8 @@ Description: >-
   Docker web application with optional worker, using the shared platform ALB
 
 Conditions:
-  CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
-  HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
 
 Parameters:
@@ -59,31 +57,7 @@ Parameters:
     Type: String
   EcrImageTag:
     Type: String
-  CreateWorker:
-    Type: String
-    Default: "true"
-  DesiredWebs:
-    Type: String
-    Default: 2
-  DesiredWorkers:
-    Type: String
-    Default: 1
-  DesiredWebsProduction:
-    Type: String
-    Default: "5"
-  DesiredWorkersProduction:
-    Type: String
-    Default: "6"
-  ErrorAlarmThreshold:
-    Type: String
-    Default: "5"
   # App ENV #################################################################
-  AppName:
-    Type: String # castle, crier, cms, feeder
-    Default: exchange
-  AltName:
-    Type: String
-    Default: "api"
   ExplicitHostHeader:
     Type: String
     Default: ""
@@ -101,12 +75,6 @@ Parameters:
   ContainerCpu:
     Type: String
     Default: 128
-  WebContainerCommand:
-    Type: String
-    Default: web
-  HealthCheckPath:
-    Type: String
-    Default: /ping
 
 Mappings:
   EnvironmentTypeMap:
@@ -125,8 +93,8 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
-      HealthCheckPath: !Ref HealthCheckPath
-      Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}
+      HealthCheckPath: /ping
+      Name: !Sub exchange-${EnvironmentTypeAbbreviation}
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -134,11 +102,11 @@ Resources:
           Value: "30"
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub ${AppName}-${EnvironmentType}
+          Value: !Sub exchange-${EnvironmentType}
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
@@ -154,7 +122,7 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AppName}.*
+            - exchange.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   ALBHTTPHostWildcardListenerRule:
@@ -166,12 +134,11 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AppName}.*
+            - exchange.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   ALBHTTPSAlternateWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: HasAltName
     Properties:
       Actions:
         - TargetGroupArn: !Ref ALBTargetGroup
@@ -179,12 +146,11 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AltName}.*
+            - api.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "01"]]
   ALBHTTPAlternateWildcardListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: HasAltName
     Properties:
       Actions:
         - TargetGroupArn: !Ref ALBTargetGroup
@@ -192,7 +158,7 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AltName}.*
+            - api.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "01"]]
   ALBHTTPSExplicitListenerRule:
@@ -227,22 +193,22 @@ Resources:
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[${AppName}][ALB][Error] Target 5XX"
+      AlarmName: "[Exchange][ALB][Error] Target 5XX"
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: !Sub |
-        5XX server errors originating from the ${AppName} target group exceeded 0
+      AlarmDescription: |
+        5XX server errors originating from the exchange target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
       Period: 60
       Statistic: Sum
-      Threshold: !Ref ErrorAlarmThreshold
+      Threshold: 5
       TreatMissingData: notBreaching
       Dimensions:
         - Name: LoadBalancer
@@ -261,7 +227,7 @@ Resources:
         - Cpu: !Ref ContainerCpu
           Environment:
             - Name: APP_NAME
-              Value: !Ref AppName
+              Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -291,7 +257,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/exchange.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -299,15 +265,15 @@ Resources:
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
           MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-web
+          Name: exchange-web
           PortMappings:
             - HostPort: 0
               ContainerPort: !Ref ContainerPort
           Command:
-            - !Ref WebContainerCommand
+            - web
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -321,15 +287,15 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
+      DesiredCount: !If [CreateProductionResources, 5, 2]
       LoadBalancers:
-        - ContainerName: !Sub ${AppName}-web
+        - ContainerName: exchange-web
           ContainerPort: !Ref ContainerPort
           TargetGroupArn: !Ref ALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -345,30 +311,28 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: AAAA
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub exchange.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
         - Type: A
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub exchange.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
   # ECS Service - Worker
   WorkerLogGroup:
-    Condition: CreateWorkerResources
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
   WorkerTaskDefinition:
-    Condition: CreateWorkerResources
     Type: "AWS::ECS::TaskDefinition"
     Properties:
       ContainerDefinitions:
         - Cpu: !Ref ContainerCpu
           Environment:
             - Name: APP_NAME
-              Value: !Ref AppName
+              Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -398,7 +362,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/exchange.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -406,12 +370,12 @@ Resources:
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
           MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-worker
+          Name: exchange-worker
           Command:
             - worker
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -419,17 +383,16 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
   WorkerService:
-    Condition: CreateWorkerResources
     Type: "AWS::ECS::Service"
     Properties:
       Cluster: !Ref ECSCluster
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [CreateProductionResources, !Ref DesiredWorkersProduction, !Ref DesiredWorkers]
+      DesiredCount: !If [CreateProductionResources, 6, 1]
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -442,7 +405,7 @@ Resources:
     Properties:
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -477,7 +440,6 @@ Resources:
   # exchange worker autoscaling
   ExchangeAutoScalingIamRole:
     Type: AWS::IAM::Role
-    Condition: CreateWorkerResources
     Properties:
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -492,7 +454,6 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
   ExchangeWorkerAutoScaling:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: CreateWorkerResources
     Properties:
       MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMinCount]
       MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMaxCount]
@@ -502,7 +463,6 @@ Resources:
       ServiceNamespace: ecs
   ExchangeWorkerAutoScalingInPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: CreateWorkerResources
     Properties:
       PolicyName: ScaleIn
       PolicyType: StepScaling
@@ -519,7 +479,6 @@ Resources:
             ScalingAdjustment: -2
   ExchangeWorkerAutoScalingScaleInAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateWorkerResources
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[Exchange][Worker][AS:In] - ${EnvironmentType} Scale In"
@@ -539,7 +498,6 @@ Resources:
           Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
   ExchangeWorkerAutoScalingOutPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: CreateWorkerResources
     Properties:
       PolicyName: ScaleOut
       PolicyType: StepScaling
@@ -559,7 +517,6 @@ Resources:
             ScalingAdjustment: 6
   ExchangeWorkerAutoScalingScaleOutAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateWorkerResources
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[Exchange][Worker][AS:Out] - ${EnvironmentType} Scale Out"
@@ -580,7 +537,6 @@ Resources:
   # exchange/fixer queue depth alarms
   ExchangeDeliveryUpdateAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateWorkerResources
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} Deliveries Not Processing"
@@ -604,7 +560,6 @@ Resources:
           Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
   ExchangeSayWhenAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: CreateWorkerResources
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} SayWhen Not Processing"
@@ -637,7 +592,7 @@ Resources:
         - Cpu: !Ref ContainerCpu
           Environment:
             - Name: APP_NAME
-              Value: !Ref AppName
+              Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -653,7 +608,7 @@ Resources:
             - Name: MEMCACHED_PORT_11211_TCP_PORT
               Value: !Ref SharedMemcachedEndpointPort
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/exchange.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -661,12 +616,12 @@ Resources:
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
           MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-saywhen-worker
+          Name: exchange-saywhen-worker
           Command:
             - worker
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -683,7 +638,7 @@ Resources:
       DesiredCount: 1
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: exchange
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -695,17 +650,16 @@ Resources:
 Outputs:
   WorkerTaskDefinitionArn:
     Description: Arn for the worker task definition
-    Value: !If [CreateWorkerResources, !Ref WorkerTaskDefinition, ""]
+    Value: !Ref WorkerTaskDefinition
   WorkerTaskDefinitionName:
     Description: Name of the worker task definition
-    Value: !Sub ${AppName}-worker
+    Value: exchange-worker
   WorkerServiceName:
     Description: Name of the worker service
-    Value: !If [CreateWorkerResources, !GetAtt WorkerService.Name, ""]
+    Value: !GetAtt WorkerService.Name
   WorkerLogGroupName:
     Description: Name of the worker log group
-    Value: !If [CreateWorkerResources, !Ref WorkerLogGroup, ""]
+    Value: !Ref WorkerLogGroup
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
-    Value: !Sub |
-      ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+    Value: !Sub exchange.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
