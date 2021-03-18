@@ -30,26 +30,26 @@ Resources:
 
 
         def sign(key, msg):
-            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+            return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
 
 
         def calculate_key(secret_access_key, region):
-            signature = sign(("AWS4" + secret_access_key).encode('utf-8'), DATE)
+            signature = sign(("AWS4" + secret_access_key).encode("utf-8"), DATE)
             signature = sign(signature, region)
             signature = sign(signature, SERVICE)
             signature = sign(signature, TERMINAL)
             signature = sign(signature, MESSAGE)
             signature_and_version = bytes([VERSION]) + signature
             smtp_password = base64.b64encode(signature_and_version)
-            return smtp_password.decode('utf-8')
+            return smtp_password.decode("utf-8")
 
         # Ref: https://docs.aws.amazon.com/ses/latest/DeveloperGuide/smtp-credentials.html
         def lambda_handler(event, context):
-            props = event['ResourceProperties']
+            props = event["ResourceProperties"]
 
             cfnresponse.send(event, context, cfnresponse.SUCCESS, {
-              UserName: props['AccessKeyId'],
-              Password: calculate_key(props['SecretAccessKey'], props['Region'])
+              "UserName": props["AccessKeyId"],
+              "Password": calculate_key(props["SecretAccessKey"], props["Region"])
             })
       MemorySize: 128
       Runtime: python3.8
