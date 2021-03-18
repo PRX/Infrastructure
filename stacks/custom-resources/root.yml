@@ -1,0 +1,71 @@
+# stacks/custom-resources/root.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Provides services to be used as CloudFormation custom resources
+
+Parameters:
+  EnvironmentType:
+    Type: String
+  InfrastructureNotificationsStackName:
+    Type: String
+
+Resources:
+  AmazonSesSmtpCredentialsGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: tktktk
+      Handler: index.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import hmac
+        import hashlib
+        import base64
+
+        # These values are required to calculate the signature. Do not change them.
+        DATE = "11111111"
+        SERVICE = "ses"
+        MESSAGE = "SendRawEmail"
+        TERMINAL = "aws4_request"
+        VERSION = 0x04
+
+
+        def sign(key, msg):
+            return hmac.new(key, msg.encode('utf-8'), hashlib.sha256).digest()
+
+
+        def calculate_key(secret_access_key, region):
+            signature = sign(("AWS4" + secret_access_key).encode('utf-8'), DATE)
+            signature = sign(signature, region)
+            signature = sign(signature, SERVICE)
+            signature = sign(signature, TERMINAL)
+            signature = sign(signature, MESSAGE)
+            signature_and_version = bytes([VERSION]) + signature
+            smtp_password = base64.b64encode(signature_and_version)
+            return smtp_password.decode('utf-8')
+
+        # Ref: https://docs.aws.amazon.com/ses/latest/DeveloperGuide/smtp-credentials.html
+        def lambda_handler(event, context):
+            props = event['ResourceProperties']
+
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+              UserName: props['AccessKeyId'],
+              Password: calculate_key(props['SecretAccessKey'], props['Region'])
+            })
+      MemorySize: 128
+      Runtime: python3.8
+      Tags:
+        Project: Infrastructure
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 4
+  AmazonSesSmtpCredentialsGeneratorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AmazonSesSmtpCredentialsGeneratorFunction}
+      RetentionInDays: 14
+
+Outputs:
+  AmazonSesSmtpCredentialsGeneratorServiceToken:
+    Description: Service token for the SES SMTP credentials generator
+    Value: !GetAtt AmazonSesSmtpCredentialsGeneratorFunction.Arn
