@@ -43,6 +43,8 @@ Parameters:
     Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
+  OpsFatalMessagesSnsTopicArn:
+    Type: String
   EnvironmentType:
     Type: String
   EnvironmentTypeAbbreviation:
@@ -101,6 +103,10 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
+  AudioSqsCallbackName:
+    Type: AWS::SSM::Parameter::Value<String>
+  ImageSqsCallbackName:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -385,6 +391,101 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
+
+  # callback queues are being slow
+  CmsAudioCallbackSlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Slow"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Audio callbacks are behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 60
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref AudioSqsCallbackName
+  CmsImageCallbackSlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Image Callbacks Slow"
+      AlarmActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      InsufficientDataActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      OKActions:
+        - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+      AlarmDescription: Image callbacks are behind
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 60
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ImageSqsCallbackName
+  # callback queues likely aren't processing
+  CmsAudioCallbackFatalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Not Processing"
+      AlarmActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      AlarmDescription: Audio callbacks are maybe not processing
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 300
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref AudioSqsCallbackName
+  CmsImageCallbackFatalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[CMS][Worker][SQS] ${EnvironmentType} Image Callbacks Not Processing"
+      AlarmActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      OKActions:
+        - !Ref OpsFatalMessagesSnsTopicArn
+      AlarmDescription: Image callbacks are maybe not processing
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 300
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ImageSqsCallbackName
 
 Outputs:
   WorkerTaskDefinitionArn:
