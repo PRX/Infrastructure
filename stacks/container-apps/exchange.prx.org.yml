@@ -435,149 +435,149 @@ Resources:
       SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
       Region: !Ref AWS::Region
   # exchange worker autoscaling
-  ExchangeAutoScalingIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - application-autoscaling.amazonaws.com
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
-  ExchangeWorkerAutoScaling:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMinCount]
-      MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMaxCount]
-      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt WorkerService.Name]]
-      RoleARN: !GetAtt ExchangeAutoScalingIamRole.Arn
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-  ExchangeWorkerAutoScalingInPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: ScaleIn
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref ExchangeWorkerAutoScaling
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: -9
-            MetricIntervalUpperBound: 0
-            ScalingAdjustment: -1
-          - MetricIntervalUpperBound: -9
-            ScalingAdjustment: -2
-  ExchangeWorkerAutoScalingScaleInAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Exchange][Worker][AS:In] - ${EnvironmentType} Scale In"
-      AlarmActions:
-        - !Ref ExchangeWorkerAutoScalingInPolicy
-      AlarmDescription: Scale in exchange workers
-      ComparisonOperator: LessThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 60
-      Statistic: Average
-      Threshold: 10
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
-  ExchangeWorkerAutoScalingOutPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: ScaleOut
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref ExchangeWorkerAutoScaling
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 120
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: 0
-            MetricIntervalUpperBound: 80
-            ScalingAdjustment: 2
-          - MetricIntervalLowerBound: 80
-            MetricIntervalUpperBound: 380
-            ScalingAdjustment: 4
-          - MetricIntervalLowerBound: 380
-            ScalingAdjustment: 6
-  ExchangeWorkerAutoScalingScaleOutAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Exchange][Worker][AS:Out] - ${EnvironmentType} Scale Out"
-      AlarmActions:
-        - !Ref ExchangeWorkerAutoScalingOutPolicy
-      AlarmDescription: Scale out exchange workers
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 60
-      Statistic: Average
-      Threshold: 20
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
-  # exchange/fixer queue depth alarms
-  ExchangeDeliveryUpdateAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} Deliveries Not Processing"
-      AlarmActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      InsufficientDataActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      OKActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription: Deliveries are very behind
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 12
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 300
-      Statistic: Average
-      Threshold: 100
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
-  ExchangeSayWhenAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} SayWhen Not Processing"
-      AlarmActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      InsufficientDataActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      OKActions:
-        - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription: SayWhen is very behind
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 12
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 300
-      Statistic: Average
-      Threshold: 50
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}SayWhen
+  # ExchangeAutoScalingIamRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Action:
+  #             - sts:AssumeRole
+  #           Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - application-autoscaling.amazonaws.com
+  #     ManagedPolicyArns:
+  #       - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+  # ExchangeWorkerAutoScaling:
+  #   Type: AWS::ApplicationAutoScaling::ScalableTarget
+  #   Properties:
+  #     MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMinCount]
+  #     MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, WorkerMaxCount]
+  #     ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt WorkerService.Name]]
+  #     RoleARN: !GetAtt ExchangeAutoScalingIamRole.Arn
+  #     ScalableDimension: ecs:service:DesiredCount
+  #     ServiceNamespace: ecs
+  # ExchangeWorkerAutoScalingInPolicy:
+  #   Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  #   Properties:
+  #     PolicyName: ScaleIn
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref ExchangeWorkerAutoScaling
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 60
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalLowerBound: -9
+  #           MetricIntervalUpperBound: 0
+  #           ScalingAdjustment: -1
+  #         - MetricIntervalUpperBound: -9
+  #           ScalingAdjustment: -2
+  # ExchangeWorkerAutoScalingScaleInAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[Exchange][Worker][AS:In] - ${EnvironmentType} Scale In"
+  #     AlarmActions:
+  #       - !Ref ExchangeWorkerAutoScalingInPolicy
+  #     AlarmDescription: Scale in exchange workers
+  #     ComparisonOperator: LessThanOrEqualToThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 60
+  #     Statistic: Average
+  #     Threshold: 10
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  # ExchangeWorkerAutoScalingOutPolicy:
+  #   Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  #   Properties:
+  #     PolicyName: ScaleOut
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref ExchangeWorkerAutoScaling
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 120
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalLowerBound: 0
+  #           MetricIntervalUpperBound: 80
+  #           ScalingAdjustment: 2
+  #         - MetricIntervalLowerBound: 80
+  #           MetricIntervalUpperBound: 380
+  #           ScalingAdjustment: 4
+  #         - MetricIntervalLowerBound: 380
+  #           ScalingAdjustment: 6
+  # ExchangeWorkerAutoScalingScaleOutAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[Exchange][Worker][AS:Out] - ${EnvironmentType} Scale Out"
+  #     AlarmActions:
+  #       - !Ref ExchangeWorkerAutoScalingOutPolicy
+  #     AlarmDescription: Scale out exchange workers
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 60
+  #     Statistic: Average
+  #     Threshold: 20
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  # # exchange/fixer queue depth alarms
+  # ExchangeDeliveryUpdateAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} Deliveries Not Processing"
+  #     AlarmActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     InsufficientDataActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     OKActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     AlarmDescription: Deliveries are very behind
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 12
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 300
+  #     Statistic: Average
+  #     Threshold: 100
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  # ExchangeSayWhenAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub "[Exchange][Worker][SQS] - ${EnvironmentType} SayWhen Not Processing"
+  #     AlarmActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     InsufficientDataActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     OKActions:
+  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
+  #     AlarmDescription: SayWhen is very behind
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 12
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 300
+  #     Statistic: Average
+  #     Threshold: 50
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}SayWhen
   SayWhenWorkerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
