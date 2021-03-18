@@ -3,10 +3,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Docker web application with optional worker, using the shared platform ALB
 Conditions:
-  CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
-  HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
 Parameters:
   # VPC ########################################################################
@@ -28,13 +26,9 @@ Parameters:
   # ECS Cluster ################################################################
   ECSCluster:
     Type: String
-  ECSServiceAutoscaleIAMRoleArn:
-    Type: String
   ECSServiceIAMRole:
     Type: String
   # Misc #######################################################################
-  OpsDebugMessagesSnsTopicArn:
-    Type: String
   OpsErrorMessagesSnsTopicArn:
     Type: String
   EnvironmentType:
@@ -47,37 +41,21 @@ Parameters:
     Type: String
   EcrImageTag:
     Type: String
-  CreateWorker:
-    Type: String
   DesiredWebs:
     Type: String
     Default: 2
-  DesiredWorkers:
-    Type: String
-    Default: 1
   DesiredWebsProduction:
     Type: String
     Default: 2
-  DesiredWorkersProduction:
-    Type: String
-    Default: 1
   ErrorAlarmThreshold:
     Type: String
     Default: 0
   # App ENV #################################################################
-  AppName:
-    Type: String # castle, crier, cms, feeder
-  AltName:
-    Type: String
-    Default: ""
   ExplicitHostHeader:
     Type: String
     Default: ""
   SecretsVersion:
     Type: String
-  ContainerPort:
-    Type: String
-    Default: 3000
   ContainerMemory:
     Type: String
     Default: 500
@@ -87,12 +65,6 @@ Parameters:
   ContainerCpu:
     Type: String
     Default: 128
-  WebContainerCommand:
-    Type: String
-    Default: web
-  HealthCheckPath:
-    Type: String
-    Default: /api/v1
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -101,8 +73,8 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
-      HealthCheckPath: !Ref HealthCheckPath
-      Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}
+      HealthCheckPath: /healthcheck
+      Name: !Sub id-${EnvironmentTypeAbbreviation}
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -110,11 +82,11 @@ Resources:
           Value: "30"
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: id
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub ${AppName}-${EnvironmentType}
+          Value: !Sub id-${EnvironmentType}
         - Key: "prx:cloudformation:stack-name"
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
@@ -130,7 +102,7 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AppName}.*
+            - id.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   ALBHTTPHostWildcardListenerRule:
@@ -142,35 +114,9 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - !Sub ${AppName}.*
+            - id.*
       ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
-  ALBHTTPSAlternateWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: HasAltName
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Sub ${AltName}.*
-      ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "01"]]
-  ALBHTTPAlternateWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: HasAltName
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Sub ${AltName}.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "01"]]
   ALBHTTPSExplicitListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Condition: HasExplicitHostHeader
@@ -203,15 +149,15 @@ Resources:
     Condition: CreateProductionResources
     Properties:
       ActionsEnabled: true
-      AlarmName: !Sub "[${AppName}][ALB][Error] Target 5XX"
+      AlarmName: "[id][ALB][Error] Target 5XX"
       AlarmActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
         - !Ref OpsErrorMessagesSnsTopicArn
       OKActions:
         - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: !Sub |
-        5XX server errors originating from the ${AppName} target group exceeded 0
+      AlarmDescription: |
+        5XX server errors originating from the id target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
@@ -237,7 +183,7 @@ Resources:
         - Cpu: !Ref ContainerCpu
           Environment:
             - Name: APP_NAME
-              Value: !Ref AppName
+              Value: id
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -247,7 +193,7 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/id.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -255,15 +201,15 @@ Resources:
               awslogs-region: !Ref AWS::Region
           Memory: !Ref ContainerMemory
           MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-web
+          Name: id-web
           PortMappings:
             - HostPort: 0
-              ContainerPort: !Ref ContainerPort
+              ContainerPort: 3000
           Command:
-            - !Ref WebContainerCommand
+            - web
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: id
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -279,13 +225,13 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
       LoadBalancers:
-        - ContainerName: !Sub ${AppName}-web
-          ContainerPort: !Ref ContainerPort
+        - ContainerName: id-web
+          ContainerPort: 3000
           TargetGroupArn: !Ref ALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       Tags:
         - Key: Project
-          Value: !Ref AppName
+          Value: id
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: "prx:cloudformation:stack-name"
@@ -301,92 +247,17 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: AAAA
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub id.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
         - Type: A
-          Name: !Sub ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+          Name: !Sub id.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
   # ECS Service - Worker
-  WorkerLogGroup:
-    Condition: CreateWorkerResources
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
-  WorkerTaskDefinition:
-    Condition: CreateWorkerResources
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: !Ref ContainerCpu
-          Environment:
-            - Name: APP_NAME
-              Value: !Ref AppName
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
-            - Name: AWS_DEFAULT_REGION
-              Value: !Ref AWS::Region
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref WorkerLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: !Ref ContainerMemory
-          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-worker
-          Command:
-            - worker
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  WorkerService:
-    Condition: CreateWorkerResources
-    Type: "AWS::ECS::Service"
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: !If [CreateProductionResources, !Ref DesiredWorkersProduction, !Ref DesiredWorkers]
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TaskDefinition: !Ref WorkerTaskDefinition
 Outputs:
-  WorkerTaskDefinitionArn:
-    Description: Arn for the worker task definition
-    Value: !If [CreateWorkerResources, !Ref WorkerTaskDefinition, ""]
-  WorkerTaskDefinitionName:
-    Description: Name of the worker task definition
-    Value: !Sub ${AppName}-worker
-  WorkerServiceName:
-    Description: Name of the worker service
-    Value: !If [CreateWorkerResources, !GetAtt WorkerService.Name, ""]
-  WorkerLogGroupName:
-    Description: Name of the worker log group
-    Value: !If [CreateWorkerResources, !Ref WorkerLogGroup, ""]
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
-    Value: !Sub |
-      ${AppName}.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
+    Value: !Sub id.${EnvironmentTypeAbbreviation}-${VPC}.prx.tech.
