@@ -65,6 +65,8 @@ Parameters:
   ContainerCpu:
     Type: String
     Default: 128
+  AmazonSesSmtpCredentialsGeneratorServiceToken:
+    Type: String
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -192,6 +194,18 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: SMTP_ADDRESS
+              Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
+            - Name: SMTP_AUTHENTICATION
+              Value: login
+            - Name: SMTP_PORT
+              Value: "587"
+            - Name: SMTP_DOMAIN
+              Value: prx.org
+            - Name: SMTP_USER_NAME
+              Value: !GetAtt SesSendingSmtpCredentials.UserName
+            - Name: SMTP_PASSWORD
+              Value: !GetAtt SesSendingSmtpCredentials.Password
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/id.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -256,7 +270,44 @@ Resources:
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
-  # ECS Service - Worker
+  # SES
+  SesSendingUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - Key: Project
+          Value: id
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SesSendingAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref SesSendingUser
+  SesSendingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ses:SendRawEmail
+            Effect: Allow
+            Resource:
+              - "*"
+        Version: "2012-10-17"
+      PolicyName: SesSendingPolicy
+      Users:
+        - !Ref SesSendingUser
+  SesSendingSmtpCredentials:
+    Type: Custom::AmazonSesSmtpPasswordGenerator
+    Properties:
+      ServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+      AccessKeyId: !Ref SesSendingAccessKey
+      SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
+      Region: !Ref AWS::Region
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
