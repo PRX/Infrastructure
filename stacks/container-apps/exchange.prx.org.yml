@@ -399,6 +399,45 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
+
+  SesSendingUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - Key: Project
+          Value: !Ref AppName
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SesSendingAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref SesSendingUser
+  SesSendingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - "*"
+            Effect: Allow
+            Resource:
+              - ses:SendRawEmail
+        Version: "2012-10-17"
+      PolicyName: SesSendingPolicy
+      Users:
+        - !Ref SesSendingUser
+  SesSendingSmtpCredentials:
+    Type: Custom::AmazonSesSmtpPasswordGenerator
+    Properties:
+      ServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+      AccessKeyId: !Ref SesSendingAccessKey
+      SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
+      Region: !Ref AWS::Region
+
 Outputs:
   WorkerTaskDefinitionArn:
     Description: Arn for the worker task definition
