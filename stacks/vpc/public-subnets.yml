@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Public subnets for the VPC
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  VpcCidrBlock:
+    Type: String
+  VpcIpv6CidrBlocks:
+    Type: CommaDelimitedList
+
+Resources:
+  # Internet gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-IG #TODO Better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VpcId
+
+  # Routing for public subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicRouteTable #TODO Better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  IPv4Route:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  IPv6Route:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  # Public subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 1, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet1 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 6, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet2 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 6, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet3 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+
+Outputs:
+  Subnet1Id:
+    Description: ID of public subnet 1
+    Value: !Ref PublicSubnet1
+  Subnet1AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet1.AvailabilityZone
+  Subnet2Id:
+    Description: ID of public subnet 2
+    Value: !Ref PublicSubnet2
+  Subnet2AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet2.AvailabilityZone
+  Subnet3Id:
+    Description: ID of public subnet 3
+    Value: !Ref PublicSubnet3
+  Subnet3AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet3.AvailabilityZone
