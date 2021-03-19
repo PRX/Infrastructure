@@ -1,8 +1,11 @@
 # stacks/static-sites/root.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
-  Sites that are deployed through S3 as static websites
+
+Description: Sites that are deployed through S3 as static websites
+
 Parameters:
+  S3StaticSiteDeployServiceToken:
+    Type: String
   InfrastructureStorageStackName:
     Type: String
   InfrastructureNotificationsStackName:
@@ -17,107 +20,44 @@ Parameters:
     Type: String
   BacksawArchiveS3ObjectVersion:
     Type: String
+
 Resources:
-  # ## S3 static site deploy
-  S3StaticSiteDeployIamRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        - PolicyName: S3SyncPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "s3:PutObject"
-                Resource:
-                  - "*"
-              - Effect: Allow
-                Action:
-                  - "s3:GetObject"
-                  - "s3:GetObjectVersion"
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  S3StaticSiteDeployFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket:
-          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-        S3Key: utility/s3-static-site-deploy.zip
-      Description: Deploys the contents of a zip archive to an S3 bucket
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Role: !GetAtt S3StaticSiteDeployIamRole.Arn
-      Runtime: python3.6
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 60
-  S3StaticSiteDeployFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${S3StaticSiteDeployFunction}
-      RetentionInDays: 14
   # Static site stacks
   BacksawStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
+        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
         CodeS3Bucket:
-          Fn::ImportValue: !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
         StaticSiteArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
         EnvironmentType: !Ref EnvironmentType
-        S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
-        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/backsaw.prx.org/CLOUDFRONT_OAI
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/backsaw.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "backsaw.prx.org.yml"]]
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, backsaw.prx.org.yml]]
       TimeoutInMinutes: 5
   BetaPrxOrgStack:
-    Type: "AWS::CloudFormation::Stack"
+    Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
+        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
         CodeS3Bucket:
-          Fn::ImportValue: !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
         StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
         EnvironmentType: !Ref EnvironmentType
-        S3StaticSiteDeployFunctionArn: !GetAtt S3StaticSiteDeployFunction.Arn
-        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
       Tags:
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "beta.prx.org.yml"]]
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, beta.prx.org.yml]]
       TimeoutInMinutes: 5
