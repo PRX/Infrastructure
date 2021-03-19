@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Brand new VPC
+
+Parameters:
+  EnvironmentType:
+    Type: String
+  AwsOrganizationId:
+    Type: String
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    # Deletion and UpdateReplace policies
+    Properties:
+      # Needs to be more dynamic or a parameter
+      CidrBlock: !If
+        - IsProduction
+        - 172.30.0.0/16
+        - 172.20.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC # TODO Needs a better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  IPv6VpcCidrBlock:
+    Type: AWS::EC2::VPCCidrBlock
+    Properties:
+      AmazonProvidedIpv6CidrBlock: true
+      VpcId: !Ref VPC
