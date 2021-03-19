@@ -14,9 +14,9 @@ Conditions:
 Resources:
   VPC:
     Type: AWS::EC2::VPC
-    # Deletion and UpdateReplace policies
+    # TODO Deletion and UpdateReplace policies
     Properties:
-      # Needs to be more dynamic or a parameter
+      # TODO Needs to be more dynamic or a parameter
       CidrBlock: !If
         - IsProduction
         - 172.30.0.0/16
@@ -109,6 +109,78 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
 
   # Public subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6VpcCidrBlock
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Cidr [!GetAtt VPC.CidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 1, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet1 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VPC
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6VpcCidrBlock
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [1, !Cidr [!GetAtt VPC.CidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet2 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VPC
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    DependsOn: IPv6VpcCidrBlock
+    # TODO DeletionPolicy: Retain
+    # TODO UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [2, !Cidr [!GetAtt VPC.CidrBlock, 6, 12]]
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt VPC.Ipv6CidrBlocks], 6, 64]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PublicSubnet3 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VPC
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
 
   # Routing for private subnets
   PrivateRouteTable:
@@ -126,3 +198,29 @@ Resources:
           Value: !Ref AWS::StackId
 
   # Private subnets
+
+Outputs:
+  VpcId:
+    Description: Resource ID for the VPC
+    Value: !Ref VPC
+  VpcCidrBlock:
+    Description: Resource ID for the VPC
+    Value: !GetAtt VPC.CidrBlock
+  PublicSubnet1Id:
+    Description: ID of public subnet 1
+    Value: !Ref PublicSubnet1
+  PublicSubnet1AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet1.AvailabilityZone
+  PublicSubnet2Id:
+    Description: ID of public subnet 2
+    Value: !Ref PublicSubnet2
+  PublicSubnet2AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet2.AvailabilityZone
+  PublicSubnet3Id:
+    Description: ID of public subnet 3
+    Value: !Ref PublicSubnet3
+  PublicSubnet3AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet3.AvailabilityZone
