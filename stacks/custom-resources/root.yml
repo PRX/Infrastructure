@@ -6,7 +6,7 @@ Description: Provides services to be used as CloudFormation custom resources
 Parameters:
   EnvironmentType:
     Type: String
-  InfrastructureNotificationsStackName:
+  StorageStackName:
     Type: String
 
 Resources:
@@ -65,7 +65,45 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${AmazonSesSmtpCredentialsGeneratorFunction}
       RetentionInDays: 14
 
+  S3StaticSiteDeployFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket:
+          Fn::ImportValue: !Sub ${StorageStackName}-InfrastructureSupportBucket
+        Key: utility/s3-static-site-deploy.zip
+      Description: Deploys the contents of a zip archive to an S3 bucket
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Action: s3:PutObject
+              Effect: Allow
+              Resource: "*"
+            - Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Effect: Allow
+              Resource:
+                - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${StorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
+      Runtime: python3.6
+      Tags:
+        Project: Infrastructure
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 60
+  S3StaticSiteDeployFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${S3StaticSiteDeployFunction}
+      RetentionInDays: 14
+
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
     Description: Service token for the SES SMTP credentials generator
     Value: !GetAtt AmazonSesSmtpCredentialsGeneratorFunction.Arn
+  S3StaticSiteDeployServiceToken:
+    Description: Service token for the S3 static site deployer
+    Value: !GetAtt S3StaticSiteDeployFunction.Arn
