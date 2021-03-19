@@ -83,6 +83,24 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/public-subnets.yml
       TimeoutInMinutes: 5
 
+  PrivateSubnetsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/private-subnets.yml
+      TimeoutInMinutes: 5
+
 Outputs:
   VpcId:
     Description: Resource ID for the VPC
