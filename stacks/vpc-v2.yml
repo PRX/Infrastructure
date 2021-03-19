@@ -43,6 +43,38 @@ Resources:
       AmazonProvidedIpv6CidrBlock: true
       VpcId: !Ref Vpc
 
+  # VPC Peering
+  VpcPeeringOrgTrustingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Condition:
+              StringEquals:
+                "aws:PrincipalOrgID": !Ref AwsOrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+      Policies:
+        - PolicyName: PeeringConnectionPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - ec2:AcceptVpcPeeringConnection
+                Effect: Allow
+                Resource:
+                  - "*"
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
   # DHCP
   DhcpOptions:
     Type: AWS::EC2::DHCPOptions
