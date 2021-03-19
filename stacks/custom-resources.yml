@@ -68,12 +68,76 @@ Resources:
   S3StaticSiteDeployFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri:
-        Bucket:
-          Fn::ImportValue: !Sub ${StorageStackName}-InfrastructureSupportBucket
-        Key: utility/s3-static-site-deploy.zip
       Description: Deploys the contents of a zip archive to an S3 bucket
       Handler: lambda_function.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import boto3
+        from botocore.client import Config
+        import io
+        import zipfile
+        import os
+        import traceback
+        import mimetypes
+        import re
+
+        s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
+
+        mimetypes.init()
+        mimetypes.add_type("application/json", "json")
+        mimetypes.add_type("application/ttf", "ttf")
+        mimetypes.add_type("application/eot", "eot")
+        mimetypes.add_type("application/otf", "otf")
+        mimetypes.add_type("application/woff", "woff")
+
+
+        def lambda_handler(event, context):
+            try:
+                print(event)
+
+                if event["RequestType"] == "Create" or event["RequestType"] == "Update":
+                    props = event["ResourceProperties"]
+
+                    # The location of the built static site archive file in S3
+                    bucket = props["StaticSiteArchiveS3Bucket"]
+                    key = props["StaticSiteArchiveS3Object"]
+                    version = props["StaticSiteArchiveS3ObjectVersion"]
+
+                    # Get the archive object
+                    s3_obj = s3.get_object(Bucket=bucket, Key=key, VersionId=version)
+
+                    unzip_dir = f"/tmp/unzip-{event['RequestId']}"
+
+                    # Unzip the archive, to disk
+                    with zipfile.ZipFile(io.BytesIO(s3_obj["Body"].read()), "r") as zip:
+                        zip.extractall(unzip_dir)
+
+                    # The bucket to deploy the static to
+                    deploy_bucket = props["StaticSiteS3DeployBucket"]
+
+                    # Upload everything from the unzipped archive
+                    for root, dirs, files in os.walk(unzip_dir):
+                        for filename in files:
+
+                            local_path = os.path.join(root, filename)
+                            s3_key = os.path.relpath(local_path, unzip_dir)
+
+                            print(f"Uploading {s3_key} to {deploy_bucket}")
+                            mime_type = (
+                                mimetypes.guess_type(filename)[0] or "application/octet-stream"
+                            )
+                            extras = {"ContentType": mime_type}
+                            if re.search(r"\.html$", filename):
+                                extras["CacheControl"] = "max-age=300"
+                            s3.upload_file(local_path, deploy_bucket, s3_key, ExtraArgs=extras)
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+            except Exception as e:
+                print("Function failed due to exception.")
+                print(e)
+                traceback.print_exc()
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
       MemorySize: 256
       Policies:
         - Version: "2012-10-17"
