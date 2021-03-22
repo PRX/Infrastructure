@@ -3,7 +3,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: File upload Lambda function
 Conditions:
-  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   OpsErrorMessagesSnsTopicArn:
@@ -16,11 +15,7 @@ Parameters:
     Type: String
   CodeS3ObjectVersion:
     Type: String
-  PRXUploadAccessKey:
-    Type: String
   EnvironmentType:
-    Type: String
-  WildcardCertificateArn:
     Type: String
 Resources:
   UploadHttpApi:
@@ -129,215 +124,6 @@ Resources:
       Users:
         - !Ref UploadHttpSigningUser
 
-  #
-  #
-  #
-  #
-  #
-  #
-  #
-  #
-  #
-
-  # API Gateway
-  UploadRestApi:
-    Type: "AWS::ApiGateway::RestApi"
-    Properties:
-      Name: !Ref AWS::StackName
-      Description: !Sub "${EnvironmentType} API used by PRX Upload Lambda"
-      Tags:
-        - Key: Project
-          Value: upload.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  UploadRestApiSignatureResource:
-    Type: "AWS::ApiGateway::Resource"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ParentId: !GetAtt UploadRestApi.RootResourceId
-      PathPart: "signature"
-  UploadRestApiSignatureMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ResourceId: !Ref UploadRestApiSignatureResource
-      HttpMethod: GET
-      AuthorizationType: NONE
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UploadLambdaFunction.Arn}/invocations
-        IntegrationResponses:
-          - ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ""
-            StatusCode: "200"
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - ResponseModels:
-            application/json: Empty
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-          StatusCode: "200"
-  UploadRestApiOptionsMethod:
-    Type: "AWS::ApiGateway::Method"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-      ResourceId: !Ref UploadRestApiSignatureResource
-      HttpMethod: OPTIONS
-      AuthorizationType: NONE
-      Integration:
-        Type: MOCK
-        IntegrationResponses:
-          - ResponseParameters:
-              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,OPTIONS'"
-              method.response.header.Access-Control-Allow-Origin: "'*'"
-            ResponseTemplates:
-              application/json: ""
-            StatusCode: "200"
-        PassthroughBehavior: NEVER
-        RequestTemplates:
-          application/json: '{"statusCode": 200}'
-      MethodResponses:
-        - ResponseModels:
-            application/json: Empty
-          ResponseParameters:
-            method.response.header.Access-Control-Allow-Headers: true
-            method.response.header.Access-Control-Allow-Methods: true
-            method.response.header.Access-Control-Allow-Origin: true
-          StatusCode: "200"
-  UploadRestApiDeployment02:
-    DependsOn:
-      - UploadRestApiSignatureMethod
-      - UploadRestApiOptionsMethod
-    Type: "AWS::ApiGateway::Deployment"
-    Properties:
-      RestApiId: !Ref UploadRestApi
-  UploadRestApiStage:
-    Type: "AWS::ApiGateway::Stage"
-    Properties:
-      StageName: !If [CreateProductionResources, prod, stag]
-      Description: !Sub "${EnvironmentType} stage for upload lambda gateway integration"
-      RestApiId: !Ref UploadRestApi
-      DeploymentId: !Ref UploadRestApiDeployment02
-      MethodSettings:
-        - DataTraceEnabled: true
-          HttpMethod: "*"
-          LoggingLevel: "INFO"
-          MetricsEnabled: true
-          ResourcePath: "/*"
-      TracingEnabled: true
-  # Custom Domain
-  UploadRestApiDomainName:
-    Type: "AWS::ApiGateway::DomainName"
-    Properties:
-      CertificateArn: !Ref WildcardCertificateArn
-      DomainName: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref "AWS::Region", !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
-      Tags:
-        - Key: Project
-          Value: upload.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  UploadRestApiBasePathMapping:
-    Type: "AWS::ApiGateway::BasePathMapping"
-    Properties:
-      DomainName: !Ref UploadRestApiDomainName
-      RestApiId: !Ref UploadRestApi
-      Stage: !If [CreateProductionResources, prod, stag]
-  UploadRestApiDomainNameRecordSetGroup:
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Record sets for upload signing API
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: AAAA
-          Name: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref "AWS::Region", !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
-          AliasTarget:
-            DNSName: !GetAtt UploadRestApiDomainName.DistributionDomainName
-            HostedZoneId: Z2FDTNDATAQYW2
-        - Type: A
-          Name: !Join ["", ["upload-", !Ref UploadRestApi, "-", !Ref "AWS::Region", !If [CreateStagingResources, ".staging", ""], ".prx.tech"]]
-          AliasTarget:
-            DNSName: !GetAtt UploadRestApiDomainName.DistributionDomainName
-            HostedZoneId: Z2FDTNDATAQYW2
-  # Upload signing
-  UploadLambdaIamRole:
-    Type: "AWS::IAM::Role"
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service:
-                - "lambda.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        - "arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess"
-      Tags:
-        - Key: Project
-          Value: upload.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  UploadLambdaFunction:
-    Type: "AWS::Lambda::Function"
-    Properties:
-      Code:
-        S3Bucket: !Ref CodeS3Bucket
-        S3Key: lambda/PRX-upload.prx.org.zip
-        S3ObjectVersion: !Ref CodeS3ObjectVersion
-      Description: File upload Lambda function
-      Environment:
-        Variables:
-          ACCESS_KEY: !Ref PRXUploadAccessKey
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt UploadLambdaIamRole.Arn
-      Runtime: nodejs12.x
-      Tags:
-        - Key: Project
-          Value: upload.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      Timeout: 5
-  UploadRestApiLambdaPermission:
-    Type: "AWS::Lambda::Permission"
-    Properties:
-      Action: "lambda:InvokeFunction"
-      FunctionName: !Ref UploadLambdaFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${UploadRestApi}/${UploadRestApiStage}/*"
-  UploadLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${UploadLambdaFunction}
-      RetentionInDays: 60
   # Lambda Alarms
   UploadLambdaElevatedErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
@@ -362,7 +148,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref UploadLambdaFunction
+          Value: !Ref UploadHttpLambdaFunction
   UploadLambdaDangerousErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -387,7 +173,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref UploadLambdaFunction
+          Value: !Ref UploadHttpLambdaFunction
   UploadLambdaElevatedThrottleAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -411,7 +197,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref UploadLambdaFunction
+          Value: !Ref UploadHttpLambdaFunction
   UploadLambdaElevatedMaxDurationAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -436,7 +222,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref UploadLambdaFunction
+          Value: !Ref UploadHttpLambdaFunction
   UploadLambdaElevatedVolumeAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -462,7 +248,7 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref UploadLambdaFunction
+          Value: !Ref UploadHttpLambdaFunction
   UploadLambdaDangerousErrorRateAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Condition: CreateProductionResources
@@ -485,7 +271,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: FunctionName
-                  Value: !Ref UploadLambdaFunction
+                  Value: !Ref UploadHttpLambdaFunction
               MetricName: Errors
               Namespace: AWS/Lambda
             Period: 120
@@ -496,7 +282,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: FunctionName
-                  Value: !Ref UploadLambdaFunction
+                  Value: !Ref UploadHttpLambdaFunction
               MetricName: Invocations
               Namespace: AWS/Lambda
             Period: 120
@@ -528,7 +314,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: FunctionName
-                  Value: !Ref UploadLambdaFunction
+                  Value: !Ref UploadHttpLambdaFunction
               MetricName: Errors
               Namespace: AWS/Lambda
             Period: 60
@@ -539,7 +325,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: FunctionName
-                  Value: !Ref UploadLambdaFunction
+                  Value: !Ref UploadHttpLambdaFunction
               MetricName: Invocations
               Namespace: AWS/Lambda
             Period: 60
@@ -551,14 +337,6 @@ Resources:
       Threshold: 0.6
       TreatMissingData: notBreaching
 Outputs:
-  ApiDomainName:
-    Description: The custom API domain name
-    Value: !Ref UploadRestApiDomainName
-  DistributionDomainName:
-    Description: >
-      The Amazon CloudFront distribution domain name that's mapped to the
-      custom domain name
-    Value: !GetAtt UploadRestApiDomainName.DistributionDomainName
   SigningAccessKeyId:
     Description: >-
       The IAM access key ID for the access key used to generate S3 API
