@@ -3,7 +3,6 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   Docker web application with optional worker, using the shared platform ALB
 Conditions:
-  CreateWorkerResources: !Equals [!Ref CreateWorker, true]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
@@ -307,82 +306,8 @@ Resources:
           AliasTarget:
             DNSName: !Ref PlatformALBDNSName
             HostedZoneId: !Ref PlatformALBCanonicalHostedZoneID
-  # ECS Service - Worker
-  WorkerLogGroup:
-    Condition: CreateWorkerResources
-    Type: "AWS::Logs::LogGroup"
-    Properties:
-      RetentionInDays: 14
-  WorkerTaskDefinition:
-    Condition: CreateWorkerResources
-    Type: "AWS::ECS::TaskDefinition"
-    Properties:
-      ContainerDefinitions:
-        - Cpu: !Ref ContainerCpu
-          Environment:
-            - Name: APP_NAME
-              Value: !Ref AppName
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
-            - Name: AWS_DEFAULT_REGION
-              Value: !Ref AWS::Region
-          Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/${AppName}.prx.org:${EcrImageTag}
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref WorkerLogGroup
-              awslogs-region: !Ref AWS::Region
-          Memory: !Ref ContainerMemory
-          MemoryReservation: !If [HasMemoryReservation, !Ref ContainerMemoryReservation, !Ref "AWS::NoValue"]
-          Name: !Sub ${AppName}-worker
-          Command:
-            - worker
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-  WorkerService:
-    Condition: CreateWorkerResources
-    Type: "AWS::ECS::Service"
-    Properties:
-      Cluster: !Ref ECSCluster
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: !If [CreateProductionResources, !Ref DesiredWorkersProduction, !Ref DesiredWorkers]
-      Tags:
-        - Key: Project
-          Value: !Ref AppName
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TaskDefinition: !Ref WorkerTaskDefinition
+
 Outputs:
-  WorkerTaskDefinitionArn:
-    Description: Arn for the worker task definition
-    Value: !If [CreateWorkerResources, !Ref WorkerTaskDefinition, ""]
-  WorkerTaskDefinitionName:
-    Description: Name of the worker task definition
-    Value: !Sub ${AppName}-worker
-  WorkerServiceName:
-    Description: Name of the worker service
-    Value: !If [CreateWorkerResources, !GetAtt WorkerService.Name, ""]
-  WorkerLogGroupName:
-    Description: Name of the worker log group
-    Value: !If [CreateWorkerResources, !Ref WorkerLogGroup, ""]
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
     Value: !Sub |
