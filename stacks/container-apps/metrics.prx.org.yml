@@ -1,14 +1,18 @@
 # stacks/metrics.prx.org.yml
 AWSTemplateFormatVersion: "2010-09-09"
+
 Description: metrics.prx.org application running in Docker
+
 Mappings:
   Shared:
     Project:
       name: metrics.prx.org
     Container:
       name: metrics-express
+
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -51,6 +55,7 @@ Parameters:
   # Metrics ENV ################################################################
   MetricsSecretsVersion:
     Type: String
+
 Resources:
   MetricsLogGroup:
     Type: "AWS::Logs::LogGroup"
@@ -95,18 +100,18 @@ Resources:
             - metrics.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
-  MetricsALBHTTPHostWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref MetricsALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - metrics.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
+  # MetricsALBHTTPHostWildcardListenerRule:
+  #   Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
+  #   Properties:
+  #     Actions:
+  #       - TargetGroupArn: !Ref MetricsALBTargetGroup
+  #         Type: forward
+  #     Conditions:
+  #       - Field: host-header
+  #         Values:
+  #           - metrics.*
+  #     ListenerArn: !Ref PlatformALBHTTPListenerArn
+  #     Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   # ECS Service
   MetricsTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
@@ -212,6 +217,7 @@ Resources:
           Value: !Ref PlatformALBFullName
         - Name: TargetGroup
           Value: !GetAtt MetricsALBTargetGroup.TargetGroupFullName
+
 Outputs:
   HostedZoneDNSName:
     Description: Convenience domain name for the ALB in a hosted zone
