@@ -18,8 +18,6 @@ Parameters:
     Type: String
   PlatformALBCanonicalHostedZoneID:
     Type: String
-  PlatformALBHTTPListenerArn:
-    Type: String
   PlatformALBHTTPSListenerArn:
     Type: String
   PlatformALBListenerPriorityPrefix:
@@ -62,9 +60,6 @@ Parameters:
     Default: ""
   SecretsVersion:
     Type: String
-  ContainerPort:
-    Type: String
-    Default: 3000
   ContainerMemory:
     Type: String
     Default: 500
@@ -77,9 +72,6 @@ Parameters:
   WebContainerCommand:
     Type: String
     Default: web
-  HealthCheckPath:
-    Type: String
-    Default: /api/v1
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -88,7 +80,7 @@ Resources:
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       UnhealthyThresholdCount: 3
-      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckPath: /s/css/bootstrap.css
       Name: !Sub ${AppName}-${EnvironmentTypeAbbreviation}
       Port: 80
       Protocol: HTTP
@@ -207,7 +199,7 @@ Resources:
           Name: !Sub ${AppName}-web
           PortMappings:
             - HostPort: 0
-              ContainerPort: !Ref ContainerPort
+              ContainerPort: 8061
           Command:
             - !Ref WebContainerCommand
       Tags:
@@ -229,7 +221,7 @@ Resources:
       DesiredCount: !If [CreateProductionResources, !Ref DesiredWebsProduction, !Ref DesiredWebs]
       LoadBalancers:
         - ContainerName: !Sub ${AppName}-web
-          ContainerPort: !Ref ContainerPort
+          ContainerPort: 8061
           TargetGroupArn: !Ref ALBTargetGroup
       Role: !Ref ECSServiceIAMRole
       Tags:
