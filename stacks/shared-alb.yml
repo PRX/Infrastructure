@@ -1,0 +1,288 @@
+# stacks/load-balancers.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates application load balancers that can be reused for multiple
+  applications, using host- and path-based routing rules.
+
+Mappings:
+  ElbService:
+    us-east-1:
+      AccountId: "127311923021"
+    us-east-2:
+      AccountId: "033677994240"
+    us-west-1:
+      AccountId: "027434742980"
+    us-west-2:
+      AccountId: "797873946194"
+    af-south-1:
+      AccountId: "098369216593"
+    ca-central-1:
+      AccountId: "985666609251"
+    eu-central-1:
+      AccountId: "054676820928"
+    eu-west-1:
+      AccountId: "156460612806"
+    eu-west-2:
+      AccountId: "652711504416"
+    eu-south-1:
+      AccountId: "635631232127"
+    eu-west-3:
+      AccountId: "009996457667"
+    eu-north-1:
+      AccountId: "897822967062"
+    ap-east-1:
+      AccountId: "754344448648"
+    ap-northeast-1:
+      AccountId: "582318560864"
+    ap-northeast-2:
+      AccountId: "600734575887"
+    ap-northeast-3:
+      AccountId: "383597477331"
+    ap-southeast-1:
+      AccountId: "114774131450"
+    ap-southeast-2:
+      AccountId: "783225319266"
+    ap-south-1:
+      AccountId: "718504428378"
+    me-south-1:
+      AccountId: "076674570225"
+    sa-east-1:
+      AccountId: "507241528517"
+
+Parameters:
+  EnvironmentType:
+    Type: String
+  EnvironmentTypeAbbreviation:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  VpcPublicSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet3Id:
+    Type: AWS::EC2::Subnet::Id
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: "*.prx.org"
+      SubjectAlternativeNames:
+        - "*.prxu.org"
+        - "*.staging.prxu.org"
+        - "*.prx.tech"
+        - "*.staging.prx.tech"
+        - "*.prx.mx"
+        - "*.pri.org"
+        - !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
+        - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${EnvironmentType} ${VpcId} wildcard # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
+
+  SshSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH traffic from everywhere
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-LB-web_ssh # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP and HTTPS web traffic from everywhere
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIpv6: ::/0
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-LB-web_ssh # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+
+  AlbLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: !If
+              - IsProduction
+              - 14
+              - 3
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AlbLogsBucketPolicy:
+    # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AlbLogsBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Resource: !GetAtt AlbLogsBucket.Arn
+          - Action: s3:PutObject
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Resource: !Sub ${AlbLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+          - Action: s3:PutObject
+            Effect: Allow
+            Principal:
+              AWS: !Sub
+                - arn:aws:iam::${ElbAccountId}:root
+                - ElbAccountId: !FindInMap [ElbService, !Ref "AWS::Region", AccountId]
+            Resource: !Sub ${AlbLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+        Version: "2012-10-17"
+
+  Alb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn:
+      - AlbLogsBucketPolicy # Don't try to create the ALB until the bucket grants logging permissions
+    Properties:
+      IpAddressType: dualstack
+      LoadBalancerAttributes:
+        # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#load-balancer-attributes
+        - Key: idle_timeout.timeout_seconds
+          Value: "150"
+        - Key: access_logs.s3.enabled
+          Value: "true"
+        - Key: access_logs.s3.bucket
+          Value: !Ref AlbLogsBucket
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref SshSecurityGroup
+        - !Ref WebSecurityGroup
+      Subnets:
+        - !Ref VpcPublicSubnet1Id
+        - !Ref VpcPublicSubnet2Id
+        - !Ref VpcPublicSubnet3Id
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  AlbHttpListener:
+    # Generally all HTTP traffic is redirected to HTTPS
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - RedirectConfig:
+            Host: "#{host}"
+            Path: "/#{path}"
+            Port: "443"
+            Protocol: HTTPS
+            Query: "#{query}"
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+  AlbHttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref Certificate
+      DefaultActions:
+        - FixedResponseConfig:
+            StatusCode: "404"
+          Type: fixed-response
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
+
+  DefaultTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthyThresholdCount: 3
+      HealthCheckPath: /ecs-health-check
+      Port: 80
+      Protocol: HTTP
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId

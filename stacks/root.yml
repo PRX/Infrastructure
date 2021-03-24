@@ -144,6 +144,9 @@ Parameters:
   PipelineExecutionNonce:
     Type: String
 
+Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
+
 Mappings:
   EnvironmentTypeMap:
     Testing:
@@ -573,7 +576,7 @@ Resources:
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
         VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
         VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn # TODO Give it a separate cert
         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         OpsWarnMessagesSnsTopicArn:
@@ -617,7 +620,7 @@ Resources:
         VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
         VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
         VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
+        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn # TODO Give it a separate cert
         ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
         ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
         DynamodbKinesisStream: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"]]
@@ -773,7 +776,7 @@ Resources:
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-memcached.yml"]]
       TimeoutInMinutes: 40
 
-  VpcV2Stack:
+  SharedVpcStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
@@ -789,7 +792,28 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/vpc-v2.yml"]]
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-vpc.yml"]]
+      TimeoutInMinutes: 5
+
+  SharedAlbStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-alb.yml"]]
       TimeoutInMinutes: 5
 
 Outputs:
