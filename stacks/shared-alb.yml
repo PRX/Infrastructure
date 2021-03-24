@@ -1,12 +1,18 @@
 # stacks/load-balancers.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
+# TODO Launching this is blocked by needing to manually add DNS records for
+# - !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
+# - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
+# in the certificate. See if there's a way to eliminate that
+
 Description: >-
   Creates application load balancers that can be reused for multiple
   applications, using host- and path-based routing rules.
 
 Mappings:
   ElbService:
+    # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
     us-east-1:
       AccountId: "127311923021"
     us-east-2:
@@ -153,7 +159,7 @@ Resources:
           Value: !Ref AWS::StackId
       VpcId: !Ref VpcId
 
-  AlbLogsBucket:
+  AccessLogsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -174,18 +180,18 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-  AlbLogsBucketPolicy:
+  AccessLogsBucketPolicy:
     # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
     Type: AWS::S3::BucketPolicy
     Properties:
-      Bucket: !Ref AlbLogsBucket
+      Bucket: !Ref AccessLogsBucket
       PolicyDocument:
         Statement:
           - Action: s3:GetBucketAcl
             Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
-            Resource: !GetAtt AlbLogsBucket.Arn
+            Resource: !GetAtt AccessLogsBucket.Arn
           - Action: s3:PutObject
             Condition:
               StringEquals:
@@ -193,20 +199,20 @@ Resources:
             Effect: Allow
             Principal:
               Service: delivery.logs.amazonaws.com
-            Resource: !Sub ${AlbLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
           - Action: s3:PutObject
             Effect: Allow
             Principal:
               AWS: !Sub
                 - arn:aws:iam::${ElbAccountId}:root
                 - ElbAccountId: !FindInMap [ElbService, !Ref "AWS::Region", AccountId]
-            Resource: !Sub ${AlbLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+            Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
         Version: "2012-10-17"
 
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     DependsOn:
-      - AlbLogsBucketPolicy # Don't try to create the ALB until the bucket grants logging permissions
+      - AccessLogsBucketPolicy # Don't try to create the ALB until the bucket grants logging permissions
     Properties:
       IpAddressType: dualstack
       LoadBalancerAttributes:
@@ -216,7 +222,7 @@ Resources:
         - Key: access_logs.s3.enabled
           Value: "true"
         - Key: access_logs.s3.bucket
-          Value: !Ref AlbLogsBucket
+          Value: !Ref AccessLogsBucket
       Scheme: internet-facing
       SecurityGroups:
         - !Ref SshSecurityGroup
@@ -237,7 +243,7 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
-  AlbHttpListener:
+  HttpListener:
     # Generally all HTTP traffic is redirected to HTTPS
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -253,7 +259,7 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 80
       Protocol: HTTP
-  AlbHttpsListener:
+  HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       Certificates:
@@ -286,3 +292,38 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       VpcId: !Ref VpcId
+
+  # TODO Create a HTTPCode_ELB_5XX_Count alarm
+  # TODO Maybe create a response time alarm
+
+Outputs:
+  AlbArn:
+    Description: The Amazon Resource Name (ARN) of the load balancer
+    Value: !Ref Alb
+  AlbName:
+    Description: >-
+      The full name of the load balancer. For example, my-load-balancer
+    Value: !GetAtt Alb.LoadBalancerName
+  AlbFullName:
+    Description: >-
+      The full name of the load balancer. For example,
+      app/my-load-balancer/50dc6c495c0c9188
+    Value: !GetAtt Alb.LoadBalancerFullName
+  AlbDnsName:
+    Description: >-
+      The DNS name for the load balancer. For example,
+      my-load-balancer-424835706.us-west-2.elb.amazonaws.com
+    Value: !GetAtt Alb.DNSName
+  AlbDualstackDnsName:
+    Description: >-
+      The dualstack DNS name for the load balancer. For example,
+      dualstack.my-load-balancer-424835706.us-west-2.elb.amazonaws.com
+    Value: !Sub dualstack.${Alb.DNSName}
+  AlbCanonicalHostedZoneID:
+    Description: >-
+      The ID of the Amazon Route 53 hosted zone associated with the load
+      balancer. For example, Z2P70J7EXAMPLE
+    Value: !GetAtt Alb.CanonicalHostedZoneID
+  HttpsListenerArn:
+    Description: The Amazon Resource Name (ARN) of the listener
+    Value: !Ref HttpsListener
