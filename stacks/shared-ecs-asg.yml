@@ -16,12 +16,14 @@ Parameters:
   #   Type: String
   VpcId:
     Type: AWS::EC2::VPC::Id
-  # VpcPublicSubnet1Id:
-  #   Type: AWS::EC2::Subnet::Id
-  # VpcPublicSubnet2Id:
-  #   Type: AWS::EC2::Subnet::Id
-  # VpcPublicSubnet3Id:
-  #   Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet3Id:
+    Type: AWS::EC2::Subnet::Id
+  EcsClusterName:
+    Type: String
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -121,34 +123,117 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
-  # Ec2LaunchTemplate:
-  #   Type: AWS::EC2::LaunchTemplate
+  Ec2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: 8
+              VolumeType: gp3
+          - DeviceName: /dev/xvdcz
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: !If
+                - IsProduction
+                - 72
+                - 22
+              VolumeType: gp3
+        IamInstanceProfile:
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: ami-09a3cad575b7eabaa # TODO Make multi-region aware
+        InstanceType: !If
+          - IsProduction
+          - t3a.medium
+          - t3a.small
+        KeyName: !Ref KeyPairName
+        Monitoring:
+          Enabled: false # Specifies whether detailed monitoring is enabled
+        SecurityGroupIds:
+          - !Ref OutboundTrafficSecurityGroup
+          - !Ref InboundNtpTrafficSecurityGroup
+        # TagSpecifications:
+        # UserData:
+      # TagSpecifications:
+      #   - TagSpecification
+
+  Asg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    # TODO  UpdatePolicy attribute
+    Properties:
+      Cooldown: "240"
+      HealthCheckGracePeriod: 512
+      HealthCheckType: EC2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref Ec2LaunchTemplate
+        Version: !GetAtt Ec2LaunchTemplate.LatestVersionNumber
+      # LifecycleHookSpecificationList
+      # MaxInstanceLifetime
+      MaxSize: !If
+        - IsProduction
+        - "40"
+        - "20"
+      MetricsCollection:
+        - Granularity: 1Minute
+      MinSize: !If
+        - IsProduction
+        - "4"
+        - "2"
+      # NotificationConfigurations
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+          PropagateAtLaunch: true
+        - Key: Environment
+          Value: !Ref EnvironmentType
+          PropagateAtLaunch: true
+        - Key: Name
+          Value: tktktk # TODO
+          PropagateAtLaunch: true
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+          PropagateAtLaunch: true
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+          PropagateAtLaunch: true
+      # TerminationPolicies
+      VPCZoneIdentifier:
+        - !Ref VpcPublicSubnet1Id
+        - !Ref VpcPublicSubnet2Id
+        - !Ref VpcPublicSubnet3Id
+
+  DefaultCapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref Asg
+        ManagedScaling:
+          MaximumScalingStepSize: 10
+          MinimumScalingStepSize: 1
+          Status: ENABLED
+          TargetCapacity: 72
+        ManagedTerminationProtection: ENABLED
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  # ClusterCapacityProviderAssociation:
+  #   Type: AWS::ECS::ClusterCapacityProviderAssociations
   #   Properties:
-  #     LaunchTemplateData:
-  #       BlockDeviceMappings:
-  #         - DeviceName: /dev/xvda
-  #           Ebs:
-  #             DeleteOnTermination: true
-  #             VolumeSize: 8
-  #             VolumeType: gp3
-  #         - DeviceName: /dev/xvdcz
-  #           Ebs:
-  #             DeleteOnTermination: true
-  #             VolumeSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage]
-  #             VolumeType: gp3
-  #       IamInstanceProfile: !Ref InstanceProfile
-  #       ImageId: ami-09a3cad575b7eabaa # TODO Make multi-region aware
-  #       InstanceType: !If
-  #         - IsProduction
-  #         - t3a.medium
-  #         - t3a.small
-  #       KeyName: !Ref KeyPairName
-  #       Monitoring:
-  #         Enabled: false # Specifies whether detailed monitoring is enabled
-  #       SecurityGroupIds:
-  #         - !Ref OutboundTrafficSecurityGroup
-  #         - !Ref InboundNtpTrafficSecurityGroup
-  #       TagSpecifications:
-  #       UserData:
-  #     # TagSpecifications:
-  #     #   - TagSpecification
+  #     Cluster: !Ref EcsClusterName
+  #     CapacityProviders:
+  #       - !Ref DefaultCapacityProvider
+  #     DefaultCapacityProviderStrategy:
+  #       # With only one default capacity provider, the base and weight won't
+  #       # factor into scheduling; everything will be even within the ASG
+  #       - Base: 0
+  #         Weight: 0
+  #         CapacityProvider: !Ref DefaultCapacityProvider
