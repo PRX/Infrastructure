@@ -1,0 +1,154 @@
+# stacks/shared-ecs-asg.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >- # TODO
+  tktktk
+
+Parameters:
+  EnvironmentType:
+    Type: String
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: >-
+      The EC2 key pair used for instances in the Auto Scaling
+      group (region-specific)
+  # EnvironmentTypeAbbreviation:
+  #   Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  # VpcPublicSubnet1Id:
+  #   Type: AWS::EC2::Subnet::Id
+  # VpcPublicSubnet2Id:
+  #   Type: AWS::EC2::Subnet::Id
+  # VpcPublicSubnet3Id:
+  #   Type: AWS::EC2::Subnet::Id
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyName: DockerDiskUsagePolicy
+          PolicyDocument:
+            Statement:
+              - Action: cloudwatch:PutMetricData
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+        - PolicyName: ModifyCreditSpecificationPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - ec2:ModifyInstanceCreditSpecification
+                  - ec2:DescribeInstanceCreditSpecifications
+                Effect: Allow
+                Resource: "*"
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  InboundNtpTrafficSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub >-
+        Allows inbound NTP traffic to ${EnvironmentType} ECS ASG instances
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: udp
+          FromPort: 123
+          ToPort: 123
+        - CidrIpv6: ::/0
+          IpProtocol: udp
+          FromPort: 123
+          ToPort: 123
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-ECS-instances-inbound # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  OutboundTrafficSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+        - CidrIpv6: ::/0
+          IpProtocol: "-1"
+      Tags:
+        - Key: Project
+          Value: platform.prx.org
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-ECS-instances-outbound # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  # Ec2LaunchTemplate:
+  #   Type: AWS::EC2::LaunchTemplate
+  #   Properties:
+  #     LaunchTemplateData:
+  #       BlockDeviceMappings:
+  #         - DeviceName: /dev/xvda
+  #           Ebs:
+  #             DeleteOnTermination: true
+  #             VolumeSize: 8
+  #             VolumeType: gp3
+  #         - DeviceName: /dev/xvdcz
+  #           Ebs:
+  #             DeleteOnTermination: true
+  #             VolumeSize: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, InstanceStorage]
+  #             VolumeType: gp3
+  #       IamInstanceProfile: !Ref InstanceProfile
+  #       ImageId: ami-09a3cad575b7eabaa # TODO Make multi-region aware
+  #       InstanceType: !If
+  #         - IsProduction
+  #         - t3a.medium
+  #         - t3a.small
+  #       KeyName: !Ref KeyPairName
+  #       Monitoring:
+  #         Enabled: false # Specifies whether detailed monitoring is enabled
+  #       SecurityGroupIds:
+  #         - !Ref OutboundTrafficSecurityGroup
+  #         - !Ref InboundNtpTrafficSecurityGroup
+  #       TagSpecifications:
+  #       UserData:
+  #     # TagSpecifications:
+  #     #   - TagSpecification
