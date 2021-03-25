@@ -86,7 +86,7 @@ Resources:
         - "*.prx.mx"
         - "*.pri.org"
         - !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
-        - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
+        - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech" # TODO Remove
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -274,6 +274,23 @@ Resources:
 
   # TODO Create a HTTPCode_ELB_5XX_Count alarm
   # TODO Maybe create a response time alarm
+
+  WildcardUtilityRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for dualstack web traffic to a metrics instance
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech."
+          AliasTarget:
+            DNSName: !Ref Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        - Type: A
+          Name: !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech."
+          AliasTarget:
+            DNSName: !Ref Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
 
 Outputs:
   AlbArn:
