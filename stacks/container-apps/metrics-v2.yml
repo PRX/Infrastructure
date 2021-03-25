@@ -7,6 +7,9 @@ Parameters:
   kContainerName:
     Type: String
     Default: metrics-express
+  kApplicationPort:
+    Type: Number
+    Default: 4202
   #######
   AlbHttpsListenerArn:
     Type: String
@@ -28,12 +31,6 @@ Parameters:
     Type: String
   SecretsStackName:
     Type: String
-  VpcPublicSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPublicSubnet2Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPublicSubnet3Id:
-    Type: AWS::EC2::Subnet::Id
 
 Resources:
   TargetGroup:
@@ -76,29 +73,6 @@ Resources:
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: 100 # TODO
 
-  InboundWebTrafficSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: !Sub >-
-        Allows inbound web traffic to the ${EnvironmentType} Metrics service
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 4202
-          ToPort: 4202
-      Tags:
-        - Key: Project
-          Value: platform.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub Platform-${EnvironmentType}-ECS-instances-inbound # TODO
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-
   EcsService:
     Type: AWS::ECS::Service
     Properties:
@@ -107,19 +81,11 @@ Resources:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
       DesiredCount: 2
-      LaunchType: FARGATE
+      LaunchType: EC2
       LoadBalancers:
         - ContainerName: !Ref kContainerName
-          ContainerPort: 4202
+          ContainerPort: !Ref kApplicationPort
           TargetGroupArn: !Ref TargetGroup
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          SecurityGroups:
-            - !Ref InboundWebTrafficSecurityGroup
-          Subnets:
-            - !Ref VpcPublicSubnet1Id
-            - !Ref VpcPublicSubnet2Id
       Tags:
         - Key: Project
           Value: Metrics # TODO
@@ -183,7 +149,8 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
-        - Environment:
+        - Cpu: 100 # TODO
+          Environment:
             - Name: APP_NAME
               Value: metrics
             - Name: APP_ENV
@@ -202,15 +169,13 @@ Resources:
               awslogs-group: !Ref TaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
           Name: !Ref kContainerName
           PortMappings:
-            - ContainerPort: 4202
-      Cpu: "256"
+            - ContainerPort: !Ref kApplicationPort
+            - HostPort: 0
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
-      Memory: "512"
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
+      NetworkMode: bridge
       Tags:
         - Key: Project
           Value: Metrics # TODO
