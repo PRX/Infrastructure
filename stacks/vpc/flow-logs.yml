@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: tktktk # TODO
+
+Parameters:
+  EnvironmentType:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+Conditions:
+  IsEnabled: !Equals [Enabled, Enabled] # TODO
+
+Resources:
+  FlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsEnabled
+    Properties:
+      RetentionInDays: 14
+
+  DeliverLogsRole:
+    Type: AWS::IAM::Role
+    Condition: IsEnabled
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+        Version: "2012-10-17"
+      Description: String # TODO
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: DovetailRouterSubscriptionKinesisPolicy
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  FlowLog:
+    Type: AWS::EC2::FlowLog
+    Condition: IsEnabled
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt DeliverLogsRole.Arn
+      LogGroupName: !Ref FlowLogGroup
+      ResourceId: !Ref VpcId
+      ResourceType: VPC
+      # TODO Tag
+      TrafficType: ALL
