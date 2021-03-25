@@ -8,6 +8,8 @@ Parameters:
     Type: String
     Default: metrics-express
   #######
+  AlbHttpsListenerArn:
+    Type: String
   EcsClusterArn:
     Type: String
   EnvironmentType:
@@ -54,6 +56,19 @@ Resources:
       TargetType: ip
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
+
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - metrics.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: 100 # TODO
 
   InboundWebTrafficSecurityGroup:
     Type: AWS::EC2::SecurityGroup
