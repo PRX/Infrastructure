@@ -157,7 +157,41 @@ Resources:
           - !Ref OutboundTrafficSecurityGroup
           - !Ref InboundNtpTrafficSecurityGroup
         # TagSpecifications:
-        # UserData:
+        UserData:
+          Fn::Base64:
+            Fn::Sub: |
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
+              Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+              MIME-Version: 1.0
+
+              --==BOUNDARY==
+              Content-Type: text/cloud-boothook; charset="us-ascii"
+
+              # Set Docker daemon options
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#cloud-init-per
+              # At this time, only ECS Containers based on Amazon Linux AMIs (not Amazon Linux 2 AMIs) support cloud-init-per.
+              # cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS}"' >> /etc/sysconfig/docker
+
+              --==BOUNDARY==
+              Content-Type: text/x-shellscript; charset="us-ascii"
+
+              #!/bin/bash
+              yum install -y aws-cfn-bootstrap
+
+              # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
+              # this template) that includes AWS::CloudFormation::Init metadata. That resource is likely the same
+              # resource where this user data script is defined.
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+              /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
+
+              # Use to the return status of calling cfn-init to signal if there's an issue with initialization
+              # --resource is the logical ID of the resource that contains the creation policy to signal
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-signal.html
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
+              /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource Asg
+              --==BOUNDARY==--
+
       # TagSpecifications:
       #   - TagSpecification
 
