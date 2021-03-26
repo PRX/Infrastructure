@@ -10,6 +10,17 @@ The `AWS::EC2::Subnet` resources use CloudFormation functions to determine their
 - The 12 and 16 should not change unless the sizing of the entire network needs to change.
 - For convenience, the selection index and the list size used for the IPv6 CIDR block functions match the IPv4 functions, but with /64 masks. When changing the CIDR range of either IPv4 or IPv6, always change both.
 
+## AZ and CIDR block migration
+
+After several attempts to come up with a reliable procedure for replacing subnets in a single update (i.e., making a change to a `AWS::EC2::Subnet` that requires replacement), the whole thing seems fraught. Having never tried this, I think the better option is to create new subnets along side the ones you're looking to replace, and sometime later tear down the old ones.
+
+This procedure has yet to be tested:
+
+1. In one stack update, create the new subnets by creating clones of the `PublicSubnetsStack` and `PrivateSubnetsStack` in `shared-vpc.yml`, and their templates. Be sure to change the CIDR blocks or AZs as necessary in the clones. Don't make any other changes in this stack update.
+2. In a subsequent stack update, change any references in `shared-vpc.yml` to `PublicSubnetsStack` or `PrivateSubnetsStack` to the new cloned stacks, including the `Outputs` of `shared-vpc.yml`.
+3. Some time later, after EC2 instances or anything else that may have been associated with the original subnets has had time to cycle out, use the VPC Console to confirm that all the original subnets _could_ be deleted. **Do not delete them via the Console.** Only use the console to see if there are any instances, ENIs, etc still bound to them.
+4. If all the original subnets are free to be deleted, remove the original `PublicSubnetsStack` and `PrivateSubnetsStack` to tear down the subnets.
+
 ## Changing a subnet's AZs or CIDR block
 
 If it becomes necessary to alter the AZ or CIDR block of one or more subnets, be aware that any changes to the AZ, or IPv4 or IPv6 CIDR blocks of a `AWS::EC2::Subnet` resource will require a replacement. These properties of an existing subnet cannot be updated. This means, for example, if you want to change a subnet from `us-east-1a` to `us-east-1b` but don't necessarily need the CIDR block to change, you cannot only change the AZ. Doing so would cause CloudFormation to try to create a replacment subnet (prior to deleting the existing subnet), and they would have overlapping (in this case, identical) CIDR ranges.
