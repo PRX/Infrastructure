@@ -1,4 +1,4 @@
-# stacks/vpc-v2.yml
+# stacks/shared-vpc.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
@@ -108,50 +108,6 @@ Resources:
       DhcpOptionsId: !Ref DhcpOptions
       VpcId: !Ref Vpc
 
-  # Routing and subnets
-  PublicSubnetsStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: IPv6VpcCidrBlock
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        VpcId: !Ref Vpc
-        VpcCidrBlock: !GetAtt Vpc.CidrBlock
-        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
-        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/public-subnets.yml
-      TimeoutInMinutes: 5
-  PrivateSubnetsStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: IPv6VpcCidrBlock
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        VpcId: !Ref Vpc
-        VpcCidrBlock: !GetAtt Vpc.CidrBlock
-        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
-        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/private-subnets.yml
-      TimeoutInMinutes: 5
-
   # Network ACLs
   PublicNetworkAclStack:
     Type: AWS::CloudFormation::Stack
@@ -188,39 +144,51 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/private-network-acl.yml
       TimeoutInMinutes: 5
 
-  # Public subnet network ACL associations
-  PublicSubnet1NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
+  # Routing and subnets
+  PublicSubnetsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
     Properties:
-      SubnetId: !GetAtt PublicSubnetsStack.Outputs.Subnet1Id
-      NetworkAclId: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
-  PublicSubnet2NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+        NetworkAclName: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/public-subnets.yml
+      TimeoutInMinutes: 5
+  PrivateSubnetsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
     Properties:
-      SubnetId: !GetAtt PublicSubnetsStack.Outputs.Subnet2Id
-      NetworkAclId: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
-  PublicSubnet3NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !GetAtt PublicSubnetsStack.Outputs.Subnet3Id
-      NetworkAclId: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
-
-  # Private subnet network ACL associations
-  PrivateSubnet1NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !GetAtt PrivateSubnetsStack.Outputs.Subnet1Id
-      NetworkAclId: !GetAtt PrivateNetworkAclStack.Outputs.NetworkAclName
-  PrivateSubnet2NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !GetAtt PrivateSubnetsStack.Outputs.Subnet2Id
-      NetworkAclId: !GetAtt PrivateNetworkAclStack.Outputs.NetworkAclName
-  PrivateSubnet3NetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
-    Properties:
-      SubnetId: !GetAtt PrivateSubnetsStack.Outputs.Subnet3Id
-      NetworkAclId: !GetAtt PrivateNetworkAclStack.Outputs.NetworkAclName
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+        NetworkAclName: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/private-subnets.yml
+      TimeoutInMinutes: 5
 
   # AWS PrivateLink and VPC endpoints
   InterfaceEndpointsStack:
