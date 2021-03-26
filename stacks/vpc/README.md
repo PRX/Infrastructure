@@ -1,0 +1,26 @@
+# VPC DevOps
+
+## Subnet CIDR range selection
+
+The `AWS::EC2::Subnet` resources use CloudFormation functions to determine their CIDR ranges, e.g., `!Select [0, !Cidr [!Ref VpcCidrBlock, 16, 12]]`
+
+- The 12 indicates the subnet mask (32 - 12 = 20 = /20)
+- The 16 is a somewhat arbitrary value that tells the Cidr function how big a list of ranges to create. It only needs to be as big as necessary to provide the value being selected, but for consistency it is always set to 16, to match the total number of /20 subnets we could make in the /16 network.
+- The 0 is zero-based index used to select a specific range from the 16 returned by the function. At any given time, only one subnet should be using each value. If two subnets are selecting item 0, they will be selecting the same CIDR range, creating a conflict that AWS will not allow. How the CIDR ranges are applied to each subnet is largely immaterial, as long as there's no overlap. This is a value from 0 to 15.
+- The 12 and 16 should not change unless the sizing of the entire network needs to change.
+- For convenience, the selection index and the list size used for the IPv6 CIDR block functions match the IPv4 functions, but with /64 masks. When changing the CIDR range of either IPv4 or IPv6, always change both.
+
+## Changing a subnet's AZs or CIDR block
+
+If it becomes necessary to alter the AZ or CIDR block of one or more subnets, be aware that any changes to the AZ, or IPv4 or IPv6 CIDR blocks of a `AWS::EC2::Subnet` resource will require a replacement. These properties of an existing subnet cannot be updated. This means, for example, if you want to change a subnet from `us-east-1a` to `us-east-1b` but don't necessarily need the CIDR block to change, you cannot only change the AZ. Doing so would cause CloudFormation to try to create a replacment subnet (prior to deleting the existing subnet), and they would have overlapping (in this case, identical) CIDR ranges.
+
+In order to change a subnet's AZ, you must always also change both the IPv4 and IPv6 CIDR blocks to blocks that are not in use. This is also true when you do specifically want to change the CIDR block of a subnet, regardless of the AZ changing (but you can chooes a new CIDR block without changing the AZ).
+
+## CloudFormation `DELETE_FAILED`
+If a change is made, such as altering the CIDR block of an `AWS::EC2::Subnet` resource, which requires a replacement, it is possible for CloudFormation to get hung up. This is often because of the subnet that is being replaced remaining associated with something that CloudFormation did not or could not update to the new, replacement subnet. Because this is a failure during the `UPDATE_COMPLETE_CLEANUP_IN_PROGRESS` phase of the stack, it will not provoke a rollback. CloudFormation will attempt to delete the subnet, but will fail with a `DependencyViolation` error. It will attempt to delete the subnet several time. Each attempt can take up to 20 minutes to complete. After some number of attempts, CloudFormation will give up trying to complete the deletion, and the stack will move to an `UPDATE_COMPLETE` state. Do not attempt to cancel the stack update of the stack containing the VPC, or any parent stacks before this process completes.
+
+At this point, the CloudFormation stacks will be in a normal state, ready for future updates. The subnet that failed to delete will no longer be associated with or tracked by the CloudFormation stack, but it ***will still exist***. There is likely some other resource still associated with the now-defunct subnet. You should immediately identify the subnet that failed to delete, and any resources that are still associated with it that are blocking its deletion. If the associated resources are managed by the same CloudFormation stack as the subnet, you should determine why the association was not correctly changed to the new subnet during the update and resolve that issues (something may need an explicit `DependsOn` to ensure updates happen in the correct order). If the resource is not managed by the same stack, you should find a new subnet to associate it with that is **not** the newly-created subnet in the stack; doing so would lead to this problem again in the future.
+
+If you were updating multiple subnets in a single stack update, you should repeat this process for each defunct subnet.
+
+If you have reason to believe a stack update involing subnet replacements will run into this issue, you should apply an `UpdateReplacePolicy: Retain` policy to any `AWS::EC2::Subnet` resources being updated. You **must** apply this policy to the resources in an update _before_ the update that triggers the replacement (i.e., one stack update the add the policy, a subsequent update to change the CIDR block). This policy will force CloudFormation to skip the deletion of the old subnet, avoiding the `DependencyViolation` error. Any remnant subnets that are retained in this way should still be cleaned up manually immediately after the stack update. Otherwise, the CloudFormation-managed VPC will include subnets that are unmanged, and consume IP ranges that aren't represented anywhere in a CloudFormation stack. The defunct subnet should be deleted as soon as any associated resources have been moved to different subnets.
