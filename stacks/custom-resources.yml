@@ -164,6 +164,65 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${S3StaticSiteDeployFunction}
       RetentionInDays: 14
 
+  AvailabilityZoneSelectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Deploys the contents of a zip archive to an S3 bucket
+      Handler: index.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import boto3
+        import traceback
+
+        ec2 = boto3.client("ec2")
+
+        DISALLOWED_AZS = ["use1-az3"]
+
+
+        def azFilter(az):
+            return az["ZoneId"] not in DISALLOWED_AZS
+
+
+        def lambda_handler(event, context):
+            try:
+                print(event)
+
+                if event["RequestType"] == "Create" or event["RequestType"] == "Update":
+                    azs = ec2.describe_availability_zones()["AvailabilityZones"]
+                    azs.sort(key=lambda a: a["ZoneName"])
+                    allowed = list(filter(azFilter, azs))
+                    names = list(map(lambda a: a["ZoneName"], allowed))
+
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, { "ZoneNames": names })
+                else:
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+
+            except Exception as e:
+                pass
+                print("Function failed due to exception.")
+                print(e)
+                traceback.print_exc()
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      MemorySize: 128
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Action: ec2:DescribeAvailabilityZones
+              Effect: Allow
+              Resource: "*"
+      Runtime: python3.8
+      Tags:
+        Project: Infrastructure
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 60
+  AvailabilityZoneSelectorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AvailabilityZoneSelectorFunction}
+      RetentionInDays: 14
+
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
     Description: Service token for the SES SMTP credentials generator
@@ -171,3 +230,6 @@ Outputs:
   S3StaticSiteDeployServiceToken:
     Description: Service token for the S3 static site deployer
     Value: !GetAtt S3StaticSiteDeployFunction.Arn
+  AvailabilityZoneSelectorServiceToken:
+    Description: Service token for the availability zone selector
+    Value: !GetAtt AvailabilityZoneSelectorFunction.Arn
