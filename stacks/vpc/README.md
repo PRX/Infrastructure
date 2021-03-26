@@ -16,6 +16,8 @@ If it becomes necessary to alter the AZ or CIDR block of one or more subnets, be
 
 In order to change a subnet's AZ, you must always also change both the IPv4 and IPv6 CIDR blocks to blocks that are not in use. This is also true when you do specifically want to change the CIDR block of a subnet, regardless of the AZ changing (but you can chooes a new CIDR block without changing the AZ).
 
+Please **take extreme caution** when making changes that replace subnets, and understand fully how the replacement will effect other resources, such as EC2 instances that exist in the subnets being replaced.
+
 ## CloudFormation `DELETE_FAILED`
 If a change is made, such as altering the CIDR block of an `AWS::EC2::Subnet` resource, which requires a replacement, it is possible for CloudFormation to get hung up. This is often because of the subnet that is being replaced remaining associated with something that CloudFormation did not or could not update to the new, replacement subnet. Because this is a failure during the `UPDATE_COMPLETE_CLEANUP_IN_PROGRESS` phase of the stack, it will not provoke a rollback. CloudFormation will attempt to delete the subnet, but will fail with a `DependencyViolation` error. It will attempt to delete the subnet several time. Each attempt can take up to 20 minutes to complete. After some number of attempts, CloudFormation will give up trying to complete the deletion, and the stack will move to an `UPDATE_COMPLETE` state. Do not attempt to cancel the stack update of the stack containing the VPC, or any parent stacks before this process completes.
 
