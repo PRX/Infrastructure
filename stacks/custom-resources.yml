@@ -167,7 +167,10 @@ Resources:
   AvailabilityZoneSelectorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Deploys the contents of a zip archive to an S3 bucket
+      Description: >-
+        Provides information about the availability zones that can and should
+        be used for the current region, including a list of zone names, and the
+        count of allowed zones
       Handler: index.lambda_handler
       InlineCode: |
         import cfnresponse
@@ -193,7 +196,10 @@ Resources:
                     allowed = list(filter(azFilter, azs))
                     names = list(map(lambda a: a["ZoneName"], allowed))
 
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, { "ZoneNames": names })
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, {
+                        "ZoneNames": names,
+                        "Count": len(names)
+                    })
                 else:
                     cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
 
