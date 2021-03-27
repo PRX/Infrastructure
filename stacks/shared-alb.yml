@@ -104,8 +104,9 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
-        Allows inbound traffic HTTP traffic from the load balancer, intended
-        to be used on ${EnvironmentType} ALB/ASG/ECS EC2 instances
+        Allows inbound traffic to ECS instances handling traffic from target
+        groups on the load balancer, on ports used for ECS dynamic port
+        mapping, ${EnvironmentType} ALB/ASG/ECS EC2 instances
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -121,25 +122,26 @@ Resources:
   TargetInstanceSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
-      FromPort: 80
+      FromPort: 32768
       GroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
       IpProtocol: tcp
-      SourceSecurityGroupId: !GetAtt ListenerTrafficSecurityGroup.GroupId
-      ToPort: 80
+      SourceSecurityGroupId: !GetAtt LoadBalancerInboundForwardingSecurityGroup.GroupId
+      ToPort: 60999
 
-  ListenerTrafficSecurityGroup:
+  LoadBalancerInboundForwardingSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
-        Allows inbound traffic on the HTTP and HTTPS load balancer listener
-        ports from all IPs, and outbound traffic to the HTTP port destined for
-        the ALB target instance security group, for the ${EnvironmentType}
-        shared ALB
+        Allows inbound traffic from all IPs on the ports configured for the
+        load balancer's listeners (HTTP and HTTPS), as well as outbound traffic
+        from the load balancer to EC2 instances in the target instance security
+        group on ports used for ECS dynamic port mapping, for the
+        ${EnvironmentType} shared ALB
       SecurityGroupEgress:
         - DestinationSecurityGroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
-          FromPort: 80
+          FromPort: 32768
           IpProtocol: tcp
-          ToPort: 80
+          ToPort: 60999
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           FromPort: 80
@@ -236,7 +238,7 @@ Resources:
           Value: !Ref AccessLogsBucket
       Scheme: internet-facing
       SecurityGroups:
-        - !Ref ListenerTrafficSecurityGroup
+        - !Ref LoadBalancerInboundForwardingSecurityGroup
       Subnets:
         - !Ref VpcPublicSubnet1Id
         - !Ref VpcPublicSubnet2Id
