@@ -123,6 +123,8 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
+  # If the logical ID of this resource changes, it needs to be changed in the
+  # user data and metadata as well
   Ec2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -158,9 +160,15 @@ Resources:
           - !Ref InboundNtpTrafficSecurityGroup
         # TagSpecifications:
         UserData:
+          # User data runs commands on EC2 instances when they are launched. To
+          # support configuration updates on running EC2 instance, the user
+          # data should primarily be used to run cfn-init. Any further launch
+          # scripts or tasks should be defined in the resource metadata that
+          # cfn-init loads, and that cfn-hup watches for changes.
+          # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
+          # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
           Fn::Base64:
             Fn::Sub: |
-              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
               Content-Type: multipart/mixed; boundary="==BOUNDARY=="
               MIME-Version: 1.0
 
@@ -191,10 +199,59 @@ Resources:
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
               /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource Asg
               --==BOUNDARY==--
-
       # TagSpecifications:
       #   - TagSpecification
+    Metadata:
+      # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+      # This AWS::CloudFormation::Init metadata is queried by cfn-init, which
+      # is installed and run as part of the launch template's user data
+      AWS::CloudFormation::Init:
+        config:
+          packages:
+            yum:
+              aws-cli: []
+              bc: []
+              jq: []
+          files:
+            /etc/cfn/cfn-hup.conf:
+              # Create a configuration file for cfn-hup
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              # Define the actions to run when the resource metadata (found at
+              # the given path) changes during a stack update.
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-hook-file
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.Ec2LaunchTemplate.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource Ec2LaunchTemplate --region ${AWS::Region}
+                runas=root
+          commands:
+            01_configure_ecs_container_agent:
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
+              command: !Sub |
+                #!/bin/bash
+                echo ECS_CLUSTER=${EcsClusterName} >> /etc/ecs/ecs.config
+          services:
+            sysvinit:
+              cfn-hup:
+                # Starts the cfn-hup service, and restarts the service if
+                # cfn-init modifies the specified configuration files
+                enabled: "true"
+                ensureRunning: "true"
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
 
+  # If the logical ID of this resource changes, it must also be changed in the
+  # arguments of cfn-signal in the launch template's user data
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
     # TODO  UpdatePolicy attribute
