@@ -100,19 +100,23 @@ Resources:
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
 
-  SshSecurityGroup:
+  TargetInstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH traffic from everywhere
+      GroupDescription: !Sub >-
+        Allows inbound traffic on the HTTP and HTTPs load balancer listener
+        ports from all IPs, and outbound traffic to the HTTP port destined for
+        the ALB target instance security group, for the ${EnvironmentType}
+        shared ALB
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
+          FromPort: 80
           IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
+          ToPort: 80
         - CidrIpv6: ::/0
+          FromPort: 80
           IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
+          ToPort: 80
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -125,26 +129,36 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       VpcId: !Ref VpcId
-  WebSecurityGroup:
+
+  ListenerTrafficSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP and HTTPS web traffic from everywhere
+      GroupDescription: !Sub >-
+        Allows inbound traffic on the HTTP and HTTPs load balancer listener
+        ports from all IPs, and outbound traffic to the HTTP port destined for
+        the ALB target instance security group, for the ${EnvironmentType}
+        shared ALB
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
           FromPort: 80
+          IpProtocol: tcp
           ToPort: 80
         - CidrIpv6: ::/0
-          IpProtocol: tcp
           FromPort: 80
+          IpProtocol: tcp
           ToPort: 80
         - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
           FromPort: 443
+          IpProtocol: tcp
           ToPort: 443
         - CidrIpv6: ::/0
-          IpProtocol: tcp
           FromPort: 443
+          IpProtocol: tcp
           ToPort: 443
       Tags:
         - Key: Project
@@ -225,8 +239,7 @@ Resources:
           Value: !Ref AccessLogsBucket
       Scheme: internet-facing
       SecurityGroups:
-        - !Ref SshSecurityGroup
-        - !Ref WebSecurityGroup
+        - !Ref ListenerTrafficSecurityGroup
       Subnets:
         - !Ref VpcPublicSubnet1Id
         - !Ref VpcPublicSubnet2Id
@@ -323,3 +336,6 @@ Outputs:
   HttpsListenerArn:
     Description: The Amazon Resource Name (ARN) of the listener
     Value: !Ref HttpsListener
+  TargetInstanceSecurityGroupId:
+    Description: The group ID of the ALB target instance security group
+    Value: !GetAtt TargetInstanceSecurityGroup.GroupId

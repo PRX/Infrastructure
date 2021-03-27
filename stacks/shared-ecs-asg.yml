@@ -24,6 +24,8 @@ Parameters:
     Type: AWS::EC2::Subnet::Id
   EcsClusterName:
     Type: String
+  AlbTargetInstanceSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -73,12 +75,12 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
-  InboundNtpTrafficSecurityGroup:
+  InboundHttpTrafficSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref VpcId
       GroupDescription: !Sub >-
-        Allows inbound NTP traffic to ${EnvironmentType} ECS ASG instances
+        Allows inbound HTTP traffic to ${EnvironmentType} ECS ASG instances
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           FromPort: 123
@@ -114,34 +116,6 @@ Resources:
           FromPort: 22
           IpProtocol: tcp
           ToPort: 22
-      Tags:
-        - Key: Project
-          Value: platform.prx.org # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub Platform-${EnvironmentType}-ECS-instances-SSH # TODO
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-  InboundEphemeralPortReturnTrafficSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: !Sub >-
-        Allows return traffic to the ephemeral port range used by Linux as the
-        source port when initiating an outbound request from ${EnvironmentType}
-        ECS ASG instances
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 32768
-          IpProtocol: tcp
-          ToPort: 61000
-        - CidrIpv6: ::/0
-          FromPort: 32768
-          IpProtocol: tcp
-          ToPort: 61000
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -211,9 +185,9 @@ Resources:
           Enabled: false # Specifies whether detailed monitoring is enabled
         SecurityGroupIds:
           - !Ref OutboundTrafficSecurityGroup
-          - !Ref InboundNtpTrafficSecurityGroup
+          # - !Ref InboundNtpTrafficSecurityGroup
           - !Ref InboundSshTrafficSecurityGroup
-          - !Ref InboundEphemeralPortReturnTrafficSecurityGroup
+          - !Ref AlbTargetInstanceSecurityGroupId
         # TagSpecifications:
         UserData:
           # User data runs commands on EC2 instances when they are launched. To
