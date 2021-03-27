@@ -104,19 +104,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
-        Allows inbound traffic on the HTTP and HTTPs load balancer listener
-        ports from all IPs, and outbound traffic to the HTTP port destined for
-        the ALB target instance security group, for the ${EnvironmentType}
-        shared ALB
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-        - CidrIpv6: ::/0
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
+        Allows inbound traffic HTTP traffic from the load balancer, intended
+        to be used on ${EnvironmentType} ALB/ASG/ECS EC2 instances
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -129,6 +118,13 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       VpcId: !Ref VpcId
+  TargetInstanceSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 80
+      GroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt ListenerTrafficSecurityGroup.GroupId
 
   ListenerTrafficSecurityGroup:
     Type: AWS::EC2::SecurityGroup
