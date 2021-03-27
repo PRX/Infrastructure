@@ -81,20 +81,74 @@ Resources:
         Allows inbound NTP traffic to ${EnvironmentType} ECS ASG instances
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
-          IpProtocol: udp
           FromPort: 123
+          IpProtocol: udp
           ToPort: 123
         - CidrIpv6: ::/0
-          IpProtocol: udp
           FromPort: 123
+          IpProtocol: udp
           ToPort: 123
       Tags:
         - Key: Project
-          Value: platform.prx.org
+          Value: platform.prx.org # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
           Value: !Sub Platform-${EnvironmentType}-ECS-instances-inbound # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  InboundSshTrafficSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub >-
+        Allows inbound SSH traffic to ${EnvironmentType} ECS ASG instances
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+        - CidrIpv6: ::/0
+          FromPort: 22
+          IpProtocol: tcp
+          ToPort: 22
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-ECS-instances-SSH # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  InboundEphemeralPortReturnTrafficSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub >-
+        Allows return traffic to the ephemeral port range used by Linux as the
+        source port when initiating an outbound request from ${EnvironmentType}
+        ECS ASG instances
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 32768
+          IpProtocol: tcp
+          ToPort: 61000
+        - CidrIpv6: ::/0
+          FromPort: 32768
+          IpProtocol: tcp
+          ToPort: 61000
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-ECS-instances-SSH # TODO
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -158,6 +212,8 @@ Resources:
         SecurityGroupIds:
           - !Ref OutboundTrafficSecurityGroup
           - !Ref InboundNtpTrafficSecurityGroup
+          - !Ref InboundSshTrafficSecurityGroup
+          - !Ref InboundEphemeralPortReturnTrafficSecurityGroup
         # TagSpecifications:
         UserData:
           # User data runs commands on EC2 instances when they are launched. To
