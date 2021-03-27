@@ -11,6 +11,8 @@ Parameters:
     Type: Number
     Default: 4202
   #######
+  AlbFullName:
+    Type: String
   AlbHttpsListenerArn:
     Type: String
   EcsClusterArn:
@@ -31,6 +33,11 @@ Parameters:
     Type: String
   SecretsStackName:
     Type: String
+  NotificationsStackName:
+    Type: String
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
   HostHeaderListenerRule:
@@ -72,6 +79,33 @@ Resources:
       TargetType: instance
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
+  TargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Metrics][ALB][Error] Target 5XX"
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >-
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
 
   EcsService:
     Type: AWS::ECS::Service
