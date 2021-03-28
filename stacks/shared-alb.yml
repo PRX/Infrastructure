@@ -57,25 +57,25 @@ Mappings:
       AccountId: "507241528517"
 
 Parameters:
-  EnvironmentType:
-    Type: String
-  EnvironmentTypeAbbreviation:
-    Type: String
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-  VpcPublicSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPublicSubnet2Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPublicSubnet3Id:
-    Type: AWS::EC2::Subnet::Id
-  NotificationsStackName:
-    Type: String
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  VpcId: { Type: "AWS::EC2::VPC::Id" }
+  VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+  NotificationsStackName: { Type: String }
+  EchoServiceToken: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
+  Constants:
+    Type: Custom::Echo
+    Properties:
+      ServiceToken: !Ref EchoServiceToken
+      VanityAlbDomain: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
+
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
@@ -87,7 +87,7 @@ Resources:
         - "*.staging.prx.tech"
         - "*.prx.mx"
         - "*.pri.org"
-        - !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
+        - !GetAtt Constants.VanityAlbDomain
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
@@ -296,12 +296,12 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: AAAA
-          Name: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
+          Name: !GetAtt Constants.VanityAlbDomain
           AliasTarget:
             DNSName: !GetAtt Alb.DNSName
             HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
         - Type: A
-          Name: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
+          Name: !GetAtt Constants.VanityAlbDomain
           AliasTarget:
             DNSName: !GetAtt Alb.DNSName
             HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
@@ -340,3 +340,8 @@ Outputs:
   TargetInstanceSecurityGroupId:
     Description: The group ID of the ALB target instance security group
     Value: !GetAtt TargetInstanceSecurityGroup.GroupId
+  VanityAlbDomain:
+    Description: >-
+      The vanity wildcard domain configured for the ALB's certificate, and
+      registered in the DNS hosted zone
+    Value: !GetAtt Constants.VanityAlbDomain
