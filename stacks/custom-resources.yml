@@ -207,7 +207,6 @@ Resources:
                     cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
 
             except Exception as e:
-                pass
                 print("Function failed due to exception.")
                 print(e)
                 traceback.print_exc()
@@ -232,6 +231,46 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${AvailabilityZoneSelectorFunction}
       RetentionInDays: 14
 
+  EchoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        Provides information about the availability zones that can and should
+        be used for the current region, including a list of zone names, and the
+        count of allowed zones
+      Handler: index.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import traceback
+
+
+        def lambda_handler(event, context):
+            try:
+                print(event)
+
+                props = event["ResourceProperties"]
+                props.pop("ServiceToken", None)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, props)
+
+            except Exception as e:
+                print("Function failed due to exception.")
+                print(e)
+                traceback.print_exc()
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      MemorySize: 128
+      Runtime: python3.8
+      Tags:
+        Project: Infrastructure
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 4
+  EchoFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EchoFunction}
+      RetentionInDays: 14
+
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
     Description: Service token for the SES SMTP credentials generator
@@ -242,3 +281,6 @@ Outputs:
   AvailabilityZoneSelectorServiceToken:
     Description: Service token for the availability zone selector
     Value: !GetAtt AvailabilityZoneSelectorFunction.Arn
+  EchoServiceToken:
+    Description: Service token for echo
+    Value: !GetAtt EchoFunction.Arn
