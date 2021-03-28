@@ -856,6 +856,34 @@ Resources:
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-ecs-asg.yml"]]
       TimeoutInMinutes: 5
 
+  ProvisionedStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging
+    Properties:
+      Parameters:
+        PublishEcrImageTag: !Ref PublishEcrImageTag
+        PublishSecretsVersion: !Ref PublishSecretsVersion
+
+        MetricsEcrImageTag: !Ref MetricsEcrImageTag
+        MetricsSecretsVersion: !Ref MetricsSecretsVersion
+
+        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/provisioned"]]
+        AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
+        AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
+        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        SecretsBase:
+          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        UploadSigningUserName: !GetAtt ServerlessRootStack.Outputs.UploadSigningUserName
+        UploadSigningEndpointUrl: !GetAtt ServerlessRootStack.Outputs.UploadSigningEndpointUrl
+        UploadSigningAccessKeyId: !GetAtt ServerlessRootStack.Outputs.UploadSigningAccessKeyId
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/provisioned.yml"]]
+      TimeoutInMinutes: 5
 
 Outputs:
   VPCCertificateArn:

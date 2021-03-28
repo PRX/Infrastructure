@@ -1,0 +1,66 @@
+# stacks/provisioned.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Provisioned apps # TODO
+
+Parameters:
+  TemplateUrlPrefix: { Type: String }
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SecretsBase: { Type: String }
+  EcrRegion: { Type: String }
+  PublishEcrImageTag: { Type: String }
+  PublishSecretsVersion: { Type: String }
+  MetricsEcrImageTag: { Type: String }
+  MetricsSecretsVersion: { Type: String }
+  SecretsStackName: { Type: String }
+  NotificationsStackName: { Type: String }
+  UploadSigningUserName: { Type: String }
+  UploadSigningEndpointUrl: { Type: String }
+  UploadSigningAccessKeyId: { Type: String }
+
+Resources:
+  MetricsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        MetricsEcrImageTag: !Ref MetricsEcrImageTag
+        MetricsSecretsVersion: !Ref MetricsSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      TemplateURL: !Sub ${TemplateUrlPrefix}/metrics.yml
+      TimeoutInMinutes: 5
+
+  PublishStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        PublishEcrImageTag: !Ref PublishEcrImageTag
+        PublishSecretsVersion: !Ref PublishSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        UploadSigningUserName: !Ref UploadSigningUserName
+        UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
+        UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
+      TimeoutInMinutes: 5
