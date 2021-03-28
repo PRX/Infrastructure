@@ -1,4 +1,4 @@
-# stacks/provisioned/publish.yml
+# stacks/provisioned/play.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: metrics.prx.org application running in Docker # TODO
@@ -6,10 +6,10 @@ Description: metrics.prx.org application running in Docker # TODO
 Parameters:
   kContainerName:
     Type: String
-    Default: publish-express
+    Default: play-express
   kApplicationPort:
     Type: Number
-    Default: 4200
+    Default: 4300
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -23,9 +23,6 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
-  UploadSigningUserName: { Type: String }
-  UploadSigningEndpointUrl: { Type: String }
-  UploadSigningAccessKeyId: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -40,9 +37,9 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - publish.*
+            - play.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: 200 # TODO
+      Priority: 140 # TODO
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -58,11 +55,11 @@ Resources:
           Value: "15"
       Tags:
         - Key: Project
-          Value: Publish # TODO
+          Value: Metrics # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub Publish-${EnvironmentType} # TODO
+          Value: !Sub Metrics-${EnvironmentType} # TODO
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -75,7 +72,7 @@ Resources:
     Condition: IsProduction
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Publish v2][ALB][Error] Target 5XX" # TODO
+      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
       AlarmActions:
         - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
       InsufficientDataActions:
@@ -83,7 +80,7 @@ Resources:
       OKActions:
         - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
       AlarmDescription: >- # TODO
-        5XX server errors originating from the publish target group exceeded 0
+        5XX server errors originating from the metrics target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
@@ -113,7 +110,7 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       Tags:
         - Key: Project
-          Value: Publish # TODO
+          Value: Metrics # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -140,7 +137,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Tags:
         - Key: Project
-          Value: Publish # TODO
+          Value: Metrics # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -162,7 +159,7 @@ Resources:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
         - Key: Project
-          Value: Publish # TODO
+          Value: Metrics # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -176,7 +173,7 @@ Resources:
         - Cpu: 100 # TODO
           Environment:
             - Name: APP_NAME
-              Value: "publish"
+              Value: metrics
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -185,18 +182,8 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Name: UPLOAD_S3_ENDPOINT_HOST
-              Value: !Sub ${PublishUploadsBucket}.s3-accelerate.dualstack.amazonaws.com
-            - Name: UPLOAD_BUCKET_NAME
-              Value: !Ref PublishUploadsBucket
-            - Name: UPLOAD_PUBLIC_ACCESS_HOST
-              Value: !GetAtt CloudFrontDistribution.DomainName
-            - Name: UPLOAD_SIGNING_SERVICE_URL
-              Value: !Ref UploadSigningEndpointUrl
-            - Name: UPLOAD_SIGNING_SERVICE_KEY_ID
-              Value: !Ref UploadSigningAccessKeyId
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/play.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -212,7 +199,7 @@ Resources:
       NetworkMode: bridge
       Tags:
         - Key: Project
-          Value: Publish # TODO
+          Value: Metrics # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
@@ -220,136 +207,3 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
-
-  PublishUploadsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      AccelerateConfiguration:
-        AccelerationStatus: Enabled
-      CorsConfiguration:
-        CorsRules:
-          - AllowedHeaders:
-              - "*"
-            AllowedMethods:
-              - DELETE
-              - GET
-              - HEAD
-              - POST
-              - PUT
-            AllowedOrigins:
-              - "*"
-            ExposedHeaders:
-              - ETag
-              - Content-Type
-              - Content-Length
-              - Date
-            MaxAge: 3000
-      LifecycleConfiguration:
-        Rules:
-          - ExpirationInDays: 3
-            Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Project
-          Value: Publish # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-  PublishUploadsBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref PublishUploadsBucket
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetObject
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${CloudFrontOriginAccessIdentity}
-            Resource: !Sub arn:aws:s3:::${PublishUploadsBucket}/*
-            Sid: Grant read access to a CloudFront Origin Identity
-        Version: "2012-10-17"
-  PublishUploadsBucketUploadSignerPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: s3:* # TODO Can this be reduced?
-            Effect: Allow
-            Resource: !Sub ${PublishUploadsBucket.Arn}/*
-        Version: "2012-10-17"
-      PolicyName: PublishUploadsBucketAccess
-      Users:
-        - !Ref UploadSigningUserName
-
-  CloudFrontCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        DefaultTTL: 86400
-        MaxTTL: 31536000
-        MinTTL: 0
-        Name: !Sub ${AWS::StackName}-CachePolicy
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: none
-          QueryStringsConfig:
-            QueryStringBehavior: none
-  CloudFrontOriginRequestPolicy:
-    Type: AWS::CloudFront::OriginRequestPolicy
-    Properties:
-      OriginRequestPolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        CookiesConfig:
-          CookieBehavior: none
-        HeadersConfig:
-          HeaderBehavior: none
-        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
-        QueryStringsConfig:
-          QueryStringBehavior: none
-  CloudFrontDistribution:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Comment: !Sub Publish uploads ${AWS::StackName}
-        DefaultCacheBehavior:
-          AllowedMethods:
-            - HEAD
-            - GET
-          CachedMethods:
-            - HEAD
-            - GET
-          CachePolicyId: !Ref CloudFrontCachePolicy
-          Compress: true
-          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
-          TargetOriginId: s3-origin
-          ViewerProtocolPolicy: redirect-to-https
-        Enabled: true
-        HttpVersion: http2
-        IPV6Enabled: true
-        Origins:
-          - DomainName: !GetAtt PublishUploadsBucket.RegionalDomainName
-            Id: s3-origin
-            S3OriginConfig:
-              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}
-        PriceClass: PriceClass_All
-        ViewerCertificate:
-          CloudFrontDefaultCertificate: true
-  CloudFrontOriginAccessIdentity:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
-    Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub Publish uploads ${AWS::StackName} # TODO
