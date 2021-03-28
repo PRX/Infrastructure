@@ -87,15 +87,16 @@ Resources:
         - "*.staging.prx.tech"
         - "*.prx.mx"
         - "*.pri.org"
-        - !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech"
-        - !Sub "*.cdn.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech" # TODO Remove
+        - !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
       Tags:
         - Key: Project
           Value: platform.prx.org # TODO
         - Key: Environment
           Value: !Ref EnvironmentType
         - Key: Name
-          Value: !Sub ${EnvironmentType} ${VpcId} wildcard # TODO
+          Value: !Sub >-
+            Wildcard for ${EnvironmentTypeAbbreviation} shared ALB
+            ${Alb.LoadBalancerName}
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -295,12 +296,12 @@ Resources:
       HostedZoneName: prx.tech.
       RecordSets:
         - Type: AAAA
-          Name: !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech."
+          Name: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
           AliasTarget:
             DNSName: !GetAtt Alb.DNSName
             HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
         - Type: A
-          Name: !Sub "*.${EnvironmentTypeAbbreviation}-${VpcId}.prx.tech."
+          Name: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
           AliasTarget:
             DNSName: !GetAtt Alb.DNSName
             HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
