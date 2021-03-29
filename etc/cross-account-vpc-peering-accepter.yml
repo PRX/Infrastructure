@@ -10,7 +10,7 @@ Parameters:
     Type: String
     Description: >-
       The IPv4 CIDR address block used for the destination match.
-  VpcPeeringConnection:
+  VpcPeeringConnectionId:
     Type: String
     Description: >-
       The VPC peering connection that will be added to the route table
@@ -21,8 +21,8 @@ Parameters:
   AllowDnsResolutionFromRemoteVpc:
     Type: String
     Description: >-
-      Indicates whether DNS queries from the remote VPC for public hostnames
-      resolve to private IP addresses in the local VPC
+      Indicates whether DNS queries from the remote (requester) VPC for public
+      hostnames resolve to private IP addresses in the local (accepter) VPC
     AllowedValues:
       - Enabled
       - Disabled
@@ -32,22 +32,22 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       RouteTableId: !Ref RouteTable
-      VpcPeeringConnectionId: !Ref VpcPeeringConnection
+      VpcPeeringConnectionId: !Ref VpcPeeringConnectionId
       DestinationCidrBlock: !Ref DestinationCidrBlock
+
   VpcPeeringConnectionOptionsCustomResource:
     Type: AWS::CloudFormation::CustomResource
     Properties:
       ServiceToken: !GetAtt ModifyVpcPeeringConnectionOptionsFunction.Arn
       AllowDnsResolutionFromRemoteVpc: !Ref AllowDnsResolutionFromRemoteVpc
+      VpcPeeringConnectionId: !Ref VpcPeeringConnectionId
+
   ModifyVpcPeeringConnectionOptionsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Description: >-
         Handles CloudFormation custom resource requests for modifying VPC
         peering connection options from the accepter side
-      Environment:
-        Variables:
-          VPC_PEERING_CONNECTION_ID: !Ref VpcPeeringConnection
       Handler: index.handler
       InlineCode: |
         const AWS = require("aws-sdk");
@@ -58,30 +58,20 @@ Resources:
         exports.handler = async (event, context) => {
           try {
             console.log(JSON.stringify(event));
-
-            let flag;
+            const props = event.ResourceProperties;
 
             if (["Create", "Update"].includes(event.RequestType)) {
-              flag =
-                event.ResourceProperties.AllowDnsResolutionFromRemoteVpc === "Enabled"
-                  ? true
-                  : false;
-            } else if (["Delete"].includes(event.RequestType)) {
-              // If the custom resource is being deleted, reset the option to
-              // the default value of false
-              flag = false;
-            }
+              const flag = props.AllowDnsResolutionFromRemoteVpc === "Enabled";
 
-            console.log(flag);
-            const res = await ec2
-              .modifyVpcPeeringConnectionOptions({
-                VpcPeeringConnectionId: process.env.VPC_PEERING_CONNECTION_ID,
-                AccepterPeeringConnectionOptions: {
-                  AllowDnsResolutionFromRemoteVpc: flag,
-                },
-              })
-              .promise();
-            console.log(res);
+              const res = await ec2
+                .modifyVpcPeeringConnectionOptions({
+                  VpcPeeringConnectionId: props.VpcPeeringConnectionId,
+                  AccepterPeeringConnectionOptions: {
+                    AllowDnsResolutionFromRemoteVpc: flag,
+                  },
+                })
+                .promise();
+            }
 
             await cfnResponse.send(event, context, cfnResponse.SUCCESS, {});
           } catch (error) {
