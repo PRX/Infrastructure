@@ -26,6 +26,11 @@ Parameters:
   PlaySecretsVersion: { Type: String }
   StyleguideEcrImageTag: { Type: String }
   StyleguideSecretsVersion: { Type: String }
+  NetworksEcrImageTag: { Type: String }
+  NetworksSecretsVersion: { Type: String }
+  DovetailRouterEcrImageTag: { Type: String }
+  DovetailRouterSecretsVersion: { Type: String }
+
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
   UploadSigningUserName: { Type: String }
@@ -36,6 +41,90 @@ Parameters:
   VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
 
 Resources:
+  DovetailRouterStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref DovetailRouterEcrImageTag
+        SecretsVersion: !Ref DovetailRouterSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-router.yml
+      TimeoutInMinutes: 5
+
+  GroveStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref GroveEcrImageTag
+        SecretsVersion: !Ref GroveSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/grove.yml
+      TimeoutInMinutes: 5
+
+  IframelyStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref IframelyEcrImageTag
+        SecretsVersion: !Ref IframelySecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
+      TimeoutInMinutes: 5
+
   MetricsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -62,6 +151,65 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/metrics.yml
+      TimeoutInMinutes: 5
+
+  NetworksStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        # AlbFullName: !Ref AlbFullName
+        # AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        # EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        # SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref NetworksEcrImageTag
+        SecretsVersion: !Ref NetworksSecretsVersion
+        # EcrRegion: !Ref EcrRegion
+        # SecretsStackName: !Ref SecretsStackName
+        # NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        # EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/networks.yml
+      TimeoutInMinutes: 5
+
+  PlayStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref PlayEcrImageTag
+        SecretsVersion: !Ref PlaySecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/play.yml
       TimeoutInMinutes: 5
 
   PublishStack:
@@ -95,90 +243,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
       TimeoutInMinutes: 20
 
-  IframelyStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref IframelyEcrImageTag
-        SecretsVersion: !Ref IframelySecretsVersion
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
-      TimeoutInMinutes: 5
-
-  PlayStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref PlayEcrImageTag
-        SecretsVersion: !Ref PlaySecretsVersion
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/play.yml
-      TimeoutInMinutes: 5
-
-  GroveStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref GroveEcrImageTag
-        SecretsVersion: !Ref GroveSecretsVersion
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/grove.yml
-      TimeoutInMinutes: 5
-
   StyleguideStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -205,35 +269,4 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/styleguide.yml
-      TimeoutInMinutes: 5
-
-  NetworksStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        # AlbFullName: !Ref AlbFullName
-        # AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        # EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        # SecretsBase: !Ref SecretsBase
-        # EcrImageTag: !Ref MetricsEcrImageTag
-        # SecretsVersion: !Ref MetricsSecretsVersion
-        # EcrRegion: !Ref EcrRegion
-        # SecretsStackName: !Ref SecretsStackName
-        # NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        # EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
-        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
-        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}/networks.yml
       TimeoutInMinutes: 5
