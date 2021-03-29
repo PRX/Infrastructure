@@ -216,6 +216,29 @@ Mappings:
       prefix: 73
 
 Resources:
+  CustomResourcesStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        StorageStackName: !Ref InfrastructureStorageStackName
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/custom-resources.yml"]]
+      TimeoutInMinutes: 5
+
+  Constants:
+    Type: Custom::Echo
+    Properties:
+      ServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
+      SourceBucketName:
+        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+
   # Root stacks
   StaticSitesRootStack:
     Type: AWS::CloudFormation::Stack
@@ -351,21 +374,6 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/root.yml"]]
-      TimeoutInMinutes: 5
-  CustomResourcesStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        StorageStackName: !Ref InfrastructureStorageStackName
-        EnvironmentType: !Ref EnvironmentType
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/custom-resources.yml"]]
       TimeoutInMinutes: 5
   # App and shared resource stacks
   VPCStack:
@@ -881,7 +889,7 @@ Resources:
         StyleguideEcrImageTag: !Ref StyleguideEcrImageTag
         StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
 
-        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/provisioned"]]
+        TemplateUrlPrefix: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/provisioned
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
