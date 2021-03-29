@@ -1,0 +1,36 @@
+# stacks/provisioned/networks.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: metrics.prx.org application running in Docker # TODO
+
+Parameters:
+  EnvironmentType: { Type: String }
+  VpcPrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  Nlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: intenral
+      Subnets:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      Type: network
