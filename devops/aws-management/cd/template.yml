@@ -221,6 +221,33 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
+            # VPC peering accepter role stack set
+            # There's no management account deploy for this becasue we
+            # shouldn't have any VPC in the management account
+            - Name: VpcPeeringAccepterRoleStackSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-vpc-peering-accpter-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to add the DevOps-VpcPeeringAccepterRole IAM role to each account,
+                  which can be used to set up inter-account VPC peerings
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-vpc-peering-accepter-role.yml
+                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref Region
+                FailureTolerancePercentage: 0
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
             # CloudWatch cross-account data sharing role stack set
             - Name: CloudWatchDataSharingRoleStackSet
               ActionTypeId:
