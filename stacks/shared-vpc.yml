@@ -49,41 +49,6 @@ Resources:
       AmazonProvidedIpv6CidrBlock: true
       VpcId: !Ref Vpc
 
-  # VPC peering
-  OrganizationVpcPeeringAccepterRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Condition:
-              StringEquals:
-                aws:PrincipalOrgID: !Ref AwsOrganizationId
-            Effect: Allow
-            Principal:
-              AWS: "*"
-      Description: >-
-        This role can be used to accept all VPC peering connection requests
-        from all accounts within the same AWS Organization. It is not specific
-        to the VPC in this stack.
-      Policies:
-        - PolicyName: PeeringConnectionPolicy
-          PolicyDocument:
-            Statement:
-              - Action: ec2:AcceptVpcPeeringConnection
-                Effect: Allow
-                Resource: "*" # arn:${Partition}:ec2:${Region}:${Account}:vpc-peering-connection/${VpcPeeringConnectionId}
-            Version: "2012-10-17"
-      Tags:
-        - Key: Project
-          Value: platform.prx.org # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-
   # DHCP
   DhcpOptions:
     Type: AWS::EC2::DHCPOptions
@@ -292,7 +257,3 @@ Outputs:
   PrivateSubnet3Az:
     Description: AZ of private subnet 1
     Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet3AZ
-
-  OrganizationVpcPeeringAccepterRoleArn:
-    Description: IAM role ARN for the VPC peering accepter role
-    Value: !GetAtt OrganizationVpcPeeringAccepterRole.Arn
