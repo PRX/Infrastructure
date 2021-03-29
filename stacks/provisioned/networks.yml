@@ -4,13 +4,28 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: metrics.prx.org application running in Docker # TODO
 
 Parameters:
+  kContainerName:
+    Type: String
+    Default: networks-web
+  kApplicationPort:
+    Type: Number
+    Default: 3000
+  #######
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
+  SecretsBase: { Type: String }
+  EcrRegion: { Type: String }
+  EcrImageTag: { Type: String }
+  SecretsVersion: { Type: String }
+  SecretsStackName: { Type: String }
+  NotificationsStackName: { Type: String }
   VpcPrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
-  EcrImageTag: { Type: String }
-  SecretsVersion: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -37,3 +52,186 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       Type: network
+  # #####
+
+  PublicWebHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref PublicWebTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - networks.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: 712 # TODO
+
+  PublicWebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /sessions/new
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "15"
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Metrics-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  PublicWebTargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt PublicWebTargetGroup.TargetGroupFullName
+
+  PublicWebEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: !Ref kContainerName
+          ContainerPort: !Ref kApplicationPort
+          TargetGroupArn: !Ref PublicWebTargetGroup
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref PublicWebTaskDefinition
+
+  PublicWebTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  PublicWebExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  PublicWebTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  PublicWebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - web
+          Cpu: 100 # TODO
+          Environment:
+            - Name: APP_NAME
+              Value: networks
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/networks.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PublicWebTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
+          Name: !Ref kContainerName
+          PortMappings:
+            - ContainerPort: !Ref kApplicationPort
+              HostPort: 0
+      ExecutionRoleArn: !GetAtt PublicWebExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt PublicWebTaskRole.Arn
