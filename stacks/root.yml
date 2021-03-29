@@ -225,6 +225,8 @@ Resources:
         StorageStackName: !Ref InfrastructureStorageStackName
         EnvironmentType: !Ref EnvironmentType
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -242,6 +244,10 @@ Resources:
       ServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
       SourceBucketName:
         Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      SecretsBaseRegion:
+        Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
+      CloudFormationNotificationArn:
+        Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
 
   # Root stacks
   StaticSitesRootStack:
@@ -793,15 +799,16 @@ Resources:
     Condition: IsStaging
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         AwsOrganizationId: !Ref AwsOrganizationId
         AvailabilityZoneSelectorServiceToken: !GetAtt CustomResourcesStack.Outputs.AvailabilityZoneSelectorServiceToken
         EnvironmentType: !Ref EnvironmentType
-        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-vpc"]]
-        CloudFormationNotificationArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        TemplateUrlPrefix: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc
+        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -814,7 +821,7 @@ Resources:
     Condition: IsStaging
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
@@ -825,6 +832,8 @@ Resources:
         NotificationsStackName: !Ref NotificationsStackName
         EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -836,10 +845,12 @@ Resources:
     Condition: IsStaging
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -851,7 +862,7 @@ Resources:
     Condition: IsStaging
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         # EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
@@ -863,6 +874,8 @@ Resources:
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
         AlbTargetInstanceSecurityGroupId: !GetAtt SharedAlbStack.Outputs.TargetInstanceSecurityGroupId
       Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
         - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
@@ -874,6 +887,8 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Condition: IsStaging
     Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         PublishEcrImageTag: !Ref PublishEcrImageTag
         PublishSecretsVersion: !Ref PublishSecretsVersion
@@ -894,12 +909,12 @@ Resources:
         StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
 
         TemplateUrlPrefix: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/provisioned
+        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
+        SecretsBase: !GetAtt Constants.SecretsBaseRegion
         EcrRegion: !Ref EcrRegion
         SecretsStackName: !Ref SecretsStackName
         NotificationsStackName: !Ref NotificationsStackName
@@ -908,6 +923,13 @@ Resources:
         UploadSigningUserName: !GetAtt ServerlessRootStack.Outputs.UploadSigningUserName
         UploadSigningEndpointUrl: !GetAtt ServerlessRootStack.Outputs.UploadSigningEndpointUrl
         UploadSigningAccessKeyId: !GetAtt ServerlessRootStack.Outputs.UploadSigningAccessKeyId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
       TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/provisioned.yml
       TimeoutInMinutes: 20
 
