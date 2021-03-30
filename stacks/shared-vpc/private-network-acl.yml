@@ -6,6 +6,8 @@ Description: Private network ACL
 Parameters:
   EnvironmentType: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
+  VpcCidrBlock: { Type: String }
+  VpcIpv6CidrBlocks: { Type: CommaDelimitedList }
 
 Resources:
   PrivateNetworkAcl:
@@ -23,6 +25,90 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+
+  # INGRESS 520
+  # Allows inbound Redis traffic from all IPs within the VPC
+  InboundIpV4RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 520
+  InboundIpV6RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 521
+
+  # INGRESS 620
+  # Allows inbound Memcached traffic from all IPs within the VPC
+  InboundIpV4MemcachedNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 11211
+        To: 11211
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 620
+  InboundIpV6MemcachedNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 11211
+        To: 11211
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 621
+
+  # EGRESS 120
+  # Allows outbound traffic on high-numbered ports to all IPs. This generally
+  # is for return traffic to clients on ephemeral ports. Some of the
+  # ports in this range may be denied by other rules.
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  OutboudIpV4TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: true
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 120
+  OutboudIpV6TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 121
 
 Outputs:
   NetworkAclName:
