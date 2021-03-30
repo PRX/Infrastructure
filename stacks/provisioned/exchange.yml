@@ -10,6 +10,9 @@ Parameters:
   kWorkerContainerName:
     Type: String
     Default: exchange-worker
+  kSayWhenContainerName:
+    Type: String
+    Default: exchange-worker
   kWebApplicationPort:
     Type: Number
     Default: 3000
@@ -338,9 +341,6 @@ Resources:
               awslogs-stream-prefix: ecs
           Memory: 400 # TODO
           Name: !Ref kWorkerContainerName
-          PortMappings:
-            - ContainerPort: !Ref kWebApplicationPort
-              HostPort: 0
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -372,3 +372,89 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
+
+  SayWhenTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  SayWhenTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - worker
+          Cpu: 100 # TODO
+          Environment:
+            - Name: APP_NAME
+              Value: exchange
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: SAY_WHEN_THREAD
+              Value: "true"
+            - Name: AWS_SIGNER_URL
+              Value: !Ref UploadSigningEndpointUrl
+            - Name: AWS_SIGNER_KEY
+              Value: !Ref UploadSigningAccessKeyId
+            - Name: MEMCACHED_PORT_11211_TCP_ADDR
+              Value: !Ref SharedMemcachedEndpointAddress
+            - Name: MEMCACHED_PORT_11211_TCP_PORT
+              Value: !Ref SharedMemcachedEndpointPort
+            - Name: SMTP_ADDRESS
+              Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
+            - Name: SMTP_AUTHENTICATION
+              Value: login
+            - Name: SMTP_PORT
+              Value: "587"
+            - Name: SMTP_DOMAIN
+              Value: prx.org
+            - Name: SMTP_USER_NAME
+              Value: !GetAtt SesSendingSmtpCredentials.UserName
+            - Name: SMTP_PASSWORD
+              Value: !GetAtt SesSendingSmtpCredentials.Password
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/exchange.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref SayWhenTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
+          Name: !Ref kSayWhenContainerName
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt TaskRole.Arn
+  SayWhenEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LaunchType: EC2
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref SayWhenTaskDefinition
