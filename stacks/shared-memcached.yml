@@ -24,6 +24,8 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   AlbTargetInstanceSecurityGroupId:
     Type: AWS::EC2::SecurityGroup::Id
+  SharedVpcId:
+    Type: AWS::EC2::VPC::Id
 
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
@@ -77,7 +79,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-      VpcId: !Ref VPC
+      VpcId: !Ref SharedVpcId
 
   SharedMemcachedCluster:
     Type: AWS::ElastiCache::CacheCluster
@@ -99,7 +101,7 @@ Resources:
       CacheSubnetGroupName: !Ref SharedMemcachedSubnetGroup
       VpcSecurityGroupIds:
         - !GetAtt SharedMemcachedSecurityGroup.GroupId
-        - !If [HasAlbSg, !GetAtt SharedMemcachedSecurityGroup2.GroupId, !Ref AWS::NoValue]
+        - !If [HasAlbSg, !GetAtt SharedMemcachedSecurityGroup2.GroupId, !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
           Value: platform.prx.org
