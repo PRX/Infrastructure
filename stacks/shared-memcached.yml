@@ -22,14 +22,9 @@ Parameters:
     Type: String
   SourceSecurityGroupId1:
     Type: AWS::EC2::SecurityGroup::Id
-  AlbTargetInstanceSecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-  SharedVpcId:
-    Type: AWS::EC2::VPC::Id
 
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
-  HasAlbSg: !Not [!Equals [!Ref AlbTargetInstanceSecurityGroupId, ""]]
 
 Resources:
   SharedMemcachedSubnetGroup:
@@ -60,27 +55,6 @@ Resources:
           Value: !Ref AWS::StackId
       VpcId: !Ref VPC
 
-  SharedMemcachedSecurityGroup2:
-    Type: AWS::EC2::SecurityGroup
-    Condition: HasAlbSg # TODO
-    Properties:
-      GroupDescription: !Sub Shared ${EnvironmentType} memcached security group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 11211
-          SourceSecurityGroupId: !Ref AlbTargetInstanceSecurityGroupId
-          ToPort: 11211
-      Tags:
-        - Key: Project
-          Value: platform.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      VpcId: !Ref SharedVpcId
-
   SharedMemcachedCluster:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
@@ -101,7 +75,6 @@ Resources:
       CacheSubnetGroupName: !Ref SharedMemcachedSubnetGroup
       VpcSecurityGroupIds:
         - !GetAtt SharedMemcachedSecurityGroup.GroupId
-        - !If [HasAlbSg, !GetAtt SharedMemcachedSecurityGroup2.GroupId, !Ref "AWS::NoValue"]
       Tags:
         - Key: Project
           Value: platform.prx.org
