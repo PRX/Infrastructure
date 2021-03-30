@@ -54,6 +54,8 @@ Parameters:
   ExchangeSecretsVersion: { Type: String } #####
   CastleEcrImageTag: { Type: String }
   CastleSecretsVersion: { Type: String }
+  CmsEcrImageTag: { Type: String } #####
+  CmsSecretsVersion: { Type: String } #####
 
 Resources:
   CastleStack:
@@ -87,6 +89,35 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/castle.yml
       TimeoutInMinutes: 40
+
+  CmsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref CmsEcrImageTag
+        SecretsVersion: !Ref CmsSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
+      TimeoutInMinutes: 5
 
   DovetailRouterStack:
     Type: AWS::CloudFormation::Stack
@@ -272,7 +303,7 @@ Resources:
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
-        VpcCidrBlocks: !Ref VpcCidrBlock
+        VpcCidrBlock: !Ref VpcCidrBlock
         VpcIpv6CidrBlocks: !Ref VpcIpv6CidrBlocks
         SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref NetworksEcrImageTag
