@@ -46,6 +46,8 @@ Parameters:
   IdSecretsVersion: { Type: String } #####
   RemixEcrImageTag: { Type: String }
   RemixSecretsVersion: { Type: String }
+  ExchangeEcrImageTag: { Type: String }
+  ExchangeSecretsVersion: { Type: String }
 
 Resources:
   DovetailRouterStack:
@@ -74,6 +76,39 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-router.yml
+      TimeoutInMinutes: 5
+
+  ExchangeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+        UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
+        UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/exchange.yml
       TimeoutInMinutes: 5
 
   GroveStack:
