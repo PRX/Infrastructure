@@ -4,12 +4,18 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: metrics.prx.org application running in Docker # TODO
 
 Parameters:
-  kContainerName:
+  kWebContainerName:
     Type: String
     Default: networks-web
-  kApplicationPort:
+  kWebApplicationPort:
     Type: Number
     Default: 3000
+  kSphinxContainerName:
+    Type: String
+    Default: networks-sphinx
+  kSphinxPort:
+    Type: Number
+    Default: 9312
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -38,67 +44,16 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  Nlb:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  Constants:
+    Type: Custom::Echo
     Properties:
-      IpAddressType: ipv4
-      Scheme: internal
-      Subnets:
-        - !Ref VpcPrivateSubnet1Id
-        - !Ref VpcPrivateSubnet2Id
-        - !Ref VpcPrivateSubnet3Id
-      Tags:
-        - Key: Project
-          Value: Networks # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub networks-${EnvironmentType} # TODO
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      Type: network
+      ServiceToken: !Ref EchoServiceToken
+      SphinxBaseUrl: !Sub https://${Nlb.DNSName}/
+      VanityNlbDomain: !Sub ${Nlb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
 
-  # SphinxSearchdTargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: Nlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthyThresholdCount: 3
-  #     Name: AppName-xxx-sx-VPC # TODO
-  #     Port: 9312
-  #     Protocol: TCP
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - Key: Project
-  #         Value: AppName # TODO
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentType
-  #       - Key: Name
-  #         Value: !Sub AppName-${EnvironmentType} # TODO
-  #       - Key: prx:cloudformation:stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: prx:cloudformation:stack-id
-  #         Value: !Ref AWS::StackId
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # SphinxSearchdListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - TargetGroupArn: !Ref SphinxSearchdTargetGroup
-  #         Type: forward
-  #     LoadBalancerArn: !Ref Nlb
-  #     Port: 9312
-  #     Protocol: TCP
+  # INTERNET-FACING WEB SERVER #################################################
 
-  # #####
-
-  PublicWebHostHeaderListenerRule:
+  PublicWebHostHeaderSharedAlbListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
@@ -109,7 +64,7 @@ Resources:
           Values:
             - networks.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: 712 # TODO
+      Priority: 713 # TODO
 
   PublicWebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -165,6 +120,9 @@ Resources:
         - Name: TargetGroup
           Value: !GetAtt PublicWebTargetGroup.TargetGroupFullName
 
+  # This is the Rails app running in client mode, meaning it will connect to a
+  # remote Sphinx server and run the public-facing web server. It receives
+  # HTTPS traffic via the shared application load balancer.
   PublicWebEcsService:
     Type: AWS::ECS::Service
     Properties:
@@ -175,8 +133,8 @@ Resources:
       DesiredCount: 2
       LaunchType: EC2
       LoadBalancers:
-        - ContainerName: !Ref kContainerName
-          ContainerPort: !Ref kApplicationPort
+        - ContainerName: !Ref kWebContainerName
+          ContainerPort: !Ref kWebApplicationPort
           TargetGroupArn: !Ref PublicWebTargetGroup
       Tags:
         - Key: Project
@@ -262,6 +220,12 @@ Resources:
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: MEMCACHED_PORT_11211_TCP_PORT
               Value: !Ref SharedMemcachedEndpointPort
+            - Name: SPHINX_SERVER
+              Value: !GetAtt Nlb.DNSName
+            - Name: SPHINX_PORT
+              Value: !Ref kSphinxPort
+            - Name: SPHINX_BASE_URL
+              Value: !GetAtt Constants.SphinxBaseUrl
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/networks.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -271,9 +235,9 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: 400 # TODO
-          Name: !Ref kContainerName
+          Name: !Ref kWebContainerName
           PortMappings:
-            - ContainerPort: !Ref kApplicationPort
+            - ContainerPort: !Ref kWebApplicationPort
               HostPort: 0
       ExecutionRoleArn: !GetAtt PublicWebExecutionRole.Arn
       NetworkMode: bridge
@@ -287,3 +251,305 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt PublicWebTaskRole.Arn
+
+  # INTERNAL SPHINX SERVER #####################################################
+
+  Nlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internal
+      Subnets:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      Type: network
+
+  NlbCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !GetAtt Constants.VanityNlbDomain
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub >-
+            For ${EnvironmentTypeAbbreviation} networks NLB
+            ${Nlb.LoadBalancerName}
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
+
+  SphinxServerSearchdTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: Nlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthyThresholdCount: 3
+      Port: !Ref kSphinxPort
+      Protocol: TCP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - Key: Project
+          Value: AppName # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub AppName-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  SphinxServerSearchdNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref SphinxServerSearchdTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref Nlb
+      Port: !Ref kSphinxPort
+      Protocol: TCP
+
+  SphinxServerWebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: Nlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: "3000"
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: TCP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  SphinxServerWebNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref NlbCertificate
+      LoadBalancerArn: !Ref Nlb
+      Port: 443
+      Protocol: TLS
+      SslPolicy: ELBSecurityPolicy-2016-08
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref SphinxServerWebTargetGroup
+
+  SphinxServerInboundSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        Allows web and Sphinx traffic to the Sphinx server service
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCidrBlocks
+          IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+        - CidrIpv6: !Ref VpcIpv6CidrBlocks
+          IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+        - CidrIp: !Ref VpcCidrBlocks
+          IpProtocol: tcp
+          FromPort: 9312
+          ToPort: 9312
+        - CidrIpv6: !Ref VpcIpv6CidrBlocks
+          IpProtocol: tcp
+          FromPort: 9312
+          ToPort: 9312
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+
+  # This is the Sphinx server. It runs both the Networks Rails app, and the
+  # Sphinx processes for handling search queries and indexing. It recieves
+  # HTTP and Sphinx traffic via the network load balancer (defined in this
+  # template). The LOCAL_SPHINX environment variable is responsible for making
+  # the image act as a Sphinx server.
+  SphinxServerEcsService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - SphinxServerSearchdNlbListener
+      - SphinxServerWebNlbListener
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !Ref kSphinxContainerName
+          ContainerPort: !Ref kWebApplicationPort
+          TargetGroupArn: !Ref SphinxServerWebTargetGroup
+        - ContainerName: !Ref kSphinxContainerName
+          ContainerPort: !Ref kSphinxPort
+          TargetGroupArn: !Ref SphinxServerSearchdTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !GetAtt SphinxServerInboundSecurityGroup.GroupId
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref VpcPrivateSubnet1Id
+            - !Ref VpcPrivateSubnet2Id
+            - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref SphinxServerTaskDefinition
+
+  SphinxServerTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  SphinxServerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SphinxServerTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SphinxServerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - web
+          Cpu: 100 # TODO
+          Environment:
+            - Name: APP_NAME
+              Value: networks
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: SIGNER_URL
+              Value: !Ref UploadSigningEndpointUrl
+            - Name: SIGNER_ACCESS_KEY
+              Value: !Ref UploadSigningAccessKeyId
+            - Name: MEMCACHED_PORT_11211_TCP_ADDR
+              Value: !Ref SharedMemcachedEndpointAddress
+            - Name: MEMCACHED_PORT_11211_TCP_PORT
+              Value: !Ref SharedMemcachedEndpointPort
+            - Name: SPHINX_SERVER
+              Value: !GetAtt Nlb.DNSName
+            - Name: SPHINX_PORT
+              Value: !Ref kSphinxPort
+            - Name: SPHINX_BASE_URL
+              Value: !GetAtt Constants.SphinxBaseUrl
+            - Name: LOCAL_SPHINX
+              Value: "true"
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/networks.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref PublicWebTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
+          Name: !Ref kSphinxContainerName
+          PortMappings:
+            - ContainerPort: !Ref kWebApplicationPort
+            - ContainerPort: !Ref kSphinxPort
+      ExecutionRoleArn: !GetAtt SphinxServerExecutionRole.Arn
+      NetworkMode: awsvpc
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt SphinxServerTaskRole.Arn
