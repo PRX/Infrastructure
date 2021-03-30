@@ -883,32 +883,7 @@ Resources:
       TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs-asg.yml
       TimeoutInMinutes: 5
 
-  NewSharedMemcachedStack:
-    Type: AWS::CloudFormation::Stack
-    Condition: IsStaging
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt SharedVpcStack.Outputs.VpcId
-        VPCSubnet1: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-        VPCSubnet2: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
-        VPCSubnet3: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        SourceSecurityGroupId1: !GetAtt SharedAlbStack.Outputs.TargetInstanceSecurityGroupId
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-memcached.yml
-      TimeoutInMinutes: 40
-
-  New2SharedMemcachedStack:
+  PrivateSharedMemcachedStack:
     Type: AWS::CloudFormation::Stack
     Condition: IsStaging
     Properties:
@@ -994,8 +969,8 @@ Resources:
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-        SharedMemcachedEndpointAddress: !GetAtt NewSharedMemcachedStack.Outputs.CacheEndpointAddress
-        SharedMemcachedEndpointPort: !GetAtt NewSharedMemcachedStack.Outputs.CacheEndpointPort
+        SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointAddress
+        SharedMemcachedEndpointPort: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointPort
         AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
         EcsAsgOutboundTrafficSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.OutboundTrafficSecurityGroupId
       Tags:
