@@ -24,6 +24,7 @@ Parameters:
   VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
+  AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
 
   PublishEcrImageTag: { Type: String } #
   PublishSecretsVersion: { Type: String }
@@ -41,6 +42,8 @@ Parameters:
   NetworksSecretsVersion: { Type: String }
   DovetailRouterEcrImageTag: { Type: String } #
   DovetailRouterSecretsVersion: { Type: String }
+  IdEcrImageTag: { Type: String } #
+  IdSecretsVersion: { Type: String }
 
 Resources:
   DovetailRouterStack:
@@ -97,6 +100,35 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/grove.yml
+      TimeoutInMinutes: 5
+
+  IdStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref IdEcrImageTag
+        SecretsVersion: !Ref IdSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/id.yml
       TimeoutInMinutes: 5
 
   IframelyStack:

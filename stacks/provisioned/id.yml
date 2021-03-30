@@ -1,0 +1,258 @@
+# stacks/provisioned/id.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: metrics.prx.org application running in Docker # TODO
+
+Parameters:
+  kContainerName:
+    Type: String
+    Default: id-web
+  kApplicationPort:
+    Type: Number
+    Default: 3000
+  #######
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  VpcId: { Type: "AWS::EC2::VPC::Id" }
+  SecretsBase: { Type: String }
+  EcrRegion: { Type: String }
+  EcrImageTag: { Type: String }
+  SecretsVersion: { Type: String }
+  SecretsStackName: { Type: String }
+  NotificationsStackName: { Type: String }
+  AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - id.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: 155 # TODO
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "15"
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Metrics-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  TargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
+
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: !Ref kContainerName
+          ContainerPort: !Ref kApplicationPort
+          TargetGroupArn: !Ref TargetGroup
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref TaskDefinition
+
+  TaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 100 # TODO
+          Environment:
+            - Name: APP_NAME
+              Value: id
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: SMTP_ADDRESS
+              Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
+            - Name: SMTP_AUTHENTICATION
+              Value: login
+            - Name: SMTP_PORT
+              Value: "587"
+            - Name: SMTP_DOMAIN
+              Value: prx.org
+            - Name: SMTP_USER_NAME
+              Value: !GetAtt SesSendingSmtpCredentials.UserName
+            - Name: SMTP_PASSWORD
+              Value: !GetAtt SesSendingSmtpCredentials.Password
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/id.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
+          Name: !Ref kContainerName
+          PortMappings:
+            - ContainerPort: !Ref kApplicationPort
+              HostPort: 0
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  SesSendingUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - Key: Project
+          Value: id
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SesSendingAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref SesSendingUser
+  SesSendingPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: ses:SendRawEmail
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: SesSendingPolicy
+      Users:
+        - !Ref SesSendingUser
+  SesSendingSmtpCredentials:
+    Type: Custom::AmazonSesSmtpPasswordGenerator
+    Properties:
+      ServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+      AccessKeyId: !Ref SesSendingAccessKey
+      SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
+      Region: !Ref AWS::Region
