@@ -26,24 +26,26 @@ Parameters:
   SharedMemcachedEndpointPort: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
 
-  PublishEcrImageTag: { Type: String } #
-  PublishSecretsVersion: { Type: String }
-  MetricsEcrImageTag: { Type: String } #
+  PublishEcrImageTag: { Type: String } #####
+  PublishSecretsVersion: { Type: String } #####
+  MetricsEcrImageTag: { Type: String }
   MetricsSecretsVersion: { Type: String }
-  IframelyEcrImageTag: { Type: String } #
-  IframelySecretsVersion: { Type: String }
-  GroveEcrImageTag: { Type: String } #
+  IframelyEcrImageTag: { Type: String } #####
+  IframelySecretsVersion: { Type: String } #####
+  GroveEcrImageTag: { Type: String }
   GroveSecretsVersion: { Type: String }
-  PlayEcrImageTag: { Type: String } #
-  PlaySecretsVersion: { Type: String }
-  StyleguideEcrImageTag: { Type: String } #
+  PlayEcrImageTag: { Type: String } #####
+  PlaySecretsVersion: { Type: String } #####
+  StyleguideEcrImageTag: { Type: String }
   StyleguideSecretsVersion: { Type: String }
-  NetworksEcrImageTag: { Type: String } #
-  NetworksSecretsVersion: { Type: String }
-  DovetailRouterEcrImageTag: { Type: String } #
+  NetworksEcrImageTag: { Type: String } #####
+  NetworksSecretsVersion: { Type: String } #####
+  DovetailRouterEcrImageTag: { Type: String }
   DovetailRouterSecretsVersion: { Type: String }
-  IdEcrImageTag: { Type: String } #
-  IdSecretsVersion: { Type: String }
+  IdEcrImageTag: { Type: String } #####
+  IdSecretsVersion: { Type: String } #####
+  RemixEcrImageTag: { Type: String }
+  RemixSecretsVersion: { Type: String }
 
 Resources:
   DovetailRouterStack:
@@ -280,6 +282,34 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
       TimeoutInMinutes: 20
+
+  RemixStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref RemixEcrImageTag
+        SecretsVersion: !Ref RemixSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/remix.yml
+      TimeoutInMinutes: 5
 
   StyleguideStack:
     Type: AWS::CloudFormation::Stack
