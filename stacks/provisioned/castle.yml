@@ -1,0 +1,315 @@
+# stacks/provisioned/metrics.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: metrics.prx.org application running in Docker # TODO
+
+Parameters:
+  kContainerName:
+    Type: String
+    Default: castle-phoenix
+  kApplicationPort:
+    Type: Number
+    Default: 4000
+  #######
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  VpcId: { Type: "AWS::EC2::VPC::Id" }
+  VpcPrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+  SecretsBase: { Type: String }
+  EcrRegion: { Type: String }
+  EcrImageTag: { Type: String }
+  SecretsVersion: { Type: String }
+  SecretsStackName: { Type: String }
+  NotificationsStackName: { Type: String }
+  EcsAsgOutboundTrafficSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - castle.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: 298 # TODO
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /api/v1
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Metrics-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  TargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
+
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: !Ref kContainerName
+          ContainerPort: !Ref kApplicationPort
+          TargetGroupArn: !Ref TargetGroup
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref TaskDefinition
+
+  TaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
+        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 100 # TODO
+          Environment:
+            - Name: APP_NAME
+              Value: "castle"
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: REDIS_HOST
+              Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+            - Name: REDIS_PORT
+              Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/castle.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: 400 # TODO
+          Name: !Ref kContainerName
+          PortMappings:
+            - ContainerPort: !Ref kApplicationPort
+              HostPort: 0
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub Castle ${EnvironmentType} Redis subnet group
+      SubnetIds:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub Castle ${EnvironmentType} Redis security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          SourceSecurityGroupId: !Ref EcsAsgOutboundTrafficSecurityGroupId
+          ToPort: 6379
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      AtRestEncryptionEnabled: false
+      AutomaticFailoverEnabled: true
+      AutoMinorVersionUpgrade: false
+      CacheNodeType: !If
+        - IsProduction
+        - cache.t3.medium
+        - cache.t3.micro
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      Engine: Redis
+      EngineVersion: 6.x
+      MultiAZEnabled: true
+      NumNodeGroups: 1 # 1 = cluster mode disabled, NodeGroups are Shards
+      ReplicasPerNodeGroup: 1 # Replicas are nodes. N replicas will result in N+1 Nodes Per Shard
+      ReplicationGroupDescription: !Sub Castle ${EnvironmentType} Redis
+      SecurityGroupIds:
+        - !GetAtt RedisSecurityGroup.GroupId
+      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  RedisMemoryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 85%" # TODO
+      # AlarmActions:
+      #   - !Ref OpsWarnMessagesSnsTopicArn
+      # InsufficientDataActions:
+      #   - !Ref OpsWarnMessagesSnsTopicArn
+      # OKActions:
+      #   - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >-
+        Max Redis database memory usage exceeded 85% for two consecutive periods
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: DatabaseMemoryUsagePercentage
+      Namespace: AWS/ElastiCache
+      Period: 120
+      Statistic: Maximum
+      Threshold: 0.85
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref RedisReplicationGroup
+  RedisMemoryVeryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 93%" # TODO
+      # AlarmActions:
+      #   - !Ref OpsErrorMessagesSnsTopicArn
+      # InsufficientDataActions:
+      #   - !Ref OpsErrorMessagesSnsTopicArn
+      # OKActions:
+      #   - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >-
+        Max Redis database memory usage exceeded 93% for two consecutive periods
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: DatabaseMemoryUsagePercentage
+      Namespace: AWS/ElastiCache
+      Period: 120
+      Statistic: Maximum
+      Threshold: 0.93
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref RedisReplicationGroup

@@ -25,6 +25,7 @@ Parameters:
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
+  EcsAsgOutboundTrafficSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
   PublishEcrImageTag: { Type: String } #####
   PublishSecretsVersion: { Type: String } #####
@@ -46,10 +47,44 @@ Parameters:
   IdSecretsVersion: { Type: String } #####
   RemixEcrImageTag: { Type: String }
   RemixSecretsVersion: { Type: String }
-  ExchangeEcrImageTag: { Type: String }
-  ExchangeSecretsVersion: { Type: String }
+  ExchangeEcrImageTag: { Type: String } #####
+  ExchangeSecretsVersion: { Type: String } #####
+  CastleEcrImageTag: { Type: String }
+  CastleSecretsVersion: { Type: String }
 
 Resources:
+  CastleStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref CastleEcrImageTag
+        SecretsVersion: !Ref CastleSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EcsAsgOutboundTrafficSecurityGroupId: !Ref EcsAsgOutboundTrafficSecurityGroupId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/castle.yml
+      TimeoutInMinutes: 5
+
   DovetailRouterStack:
     Type: AWS::CloudFormation::Stack
     Properties:
