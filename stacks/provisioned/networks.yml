@@ -40,6 +40,7 @@ Parameters:
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
   EchoServiceToken: { Type: String }
+  EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -410,43 +411,44 @@ Resources:
   # HTTP and Sphinx traffic via the network load balancer (defined in this
   # template). The LOCAL_SPHINX environment variable is responsible for making
   # the image act as a Sphinx server.
-  # SphinxServerEcsService:
-  #   Type: AWS::ECS::Service
-  #   DependsOn:
-  #     - SphinxServerSearchdNlbListener
-  #     - SphinxServerWebNlbListener
-  #   Properties:
-  #     Cluster: !Ref EcsClusterArn
-  #     DeploymentConfiguration:
-  #       MaximumPercent: 200
-  #       MinimumHealthyPercent: 50
-  #     DesiredCount: 1
-  #     LoadBalancers:
-  #       - ContainerName: !Ref kSphinxContainerName
-  #         ContainerPort: !Ref kWebApplicationPort
-  #         TargetGroupArn: !Ref SphinxServerWebTargetGroup
-  #       - ContainerName: !Ref kSphinxContainerName
-  #         ContainerPort: !Ref kSphinxPort
-  #         TargetGroupArn: !Ref SphinxServerSearchdTargetGroup
-  #     NetworkConfiguration:
-  #       AwsvpcConfiguration:
-  #         SecurityGroups:
-  #           - !GetAtt SphinxServerInboundSecurityGroup.GroupId
-  #         AssignPublicIp: DISABLED
-  #         Subnets:
-  #           - !Ref VpcPrivateSubnet1Id
-  #           - !Ref VpcPrivateSubnet2Id
-  #           - !Ref VpcPrivateSubnet3Id
-  #     Tags:
-  #       - Key: Project
-  #         Value: Networks # TODO
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentType
-  #       - Key: prx:cloudformation:stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: prx:cloudformation:stack-id
-  #         Value: !Ref AWS::StackId
-  #     TaskDefinition: !Ref SphinxServerTaskDefinition
+  SphinxServerEcsService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - SphinxServerSearchdNlbListener
+      - SphinxServerWebNlbListener
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LoadBalancers:
+        - ContainerName: !Ref kSphinxContainerName
+          ContainerPort: !Ref kWebApplicationPort
+          TargetGroupArn: !Ref SphinxServerWebTargetGroup
+        - ContainerName: !Ref kSphinxContainerName
+          ContainerPort: !Ref kSphinxPort
+          TargetGroupArn: !Ref SphinxServerSearchdTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !GetAtt SphinxServerInboundSecurityGroup.GroupId
+            - !Ref EcsLaunchEndpointsAccessSecurityGroupId
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref VpcPrivateSubnet1Id
+            - !Ref VpcPrivateSubnet2Id
+            - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref SphinxServerTaskDefinition
 
   SphinxServerTaskLogGroup:
     Type: AWS::Logs::LogGroup
@@ -527,8 +529,8 @@ Resources:
               Value: !Ref kSphinxPort
             - Name: SPHINX_BASE_URL
               Value: !GetAtt Constants.SphinxBaseUrl
-            - Name: LOCAL_SPHINX
-              Value: "true"
+            # - Name: LOCAL_SPHINX
+            #   Value: "true"
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/networks.prx.org:${EcrImageTag}
           LogConfiguration:
