@@ -17,6 +17,7 @@ Parameters:
   VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   EcsClusterName: { Type: String }
   AlbTargetInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -153,9 +154,10 @@ Resources:
             DeleteOnTermination: true
             DeviceIndex: 0
             Groups:
-              - !Ref OutboundTrafficSecurityGroup
-              - !Ref InboundSshTrafficSecurityGroup
+              - !GetAtt OutboundTrafficSecurityGroup.GroupId
+              - !GetAtt InboundSshTrafficSecurityGroup.GroupId
               - !Ref AlbTargetInstanceSecurityGroupId
+              - !Ref EcsLaunchEndpointsAccessSecurityGroupId
             Ipv6AddressCount: 1
         # TagSpecifications:
         UserData:
