@@ -10,14 +10,21 @@ Parameters:
   PublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   PublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
 
-#
 # !!!! IMPORTANT !!!!
 #
-# When creating an interface endpoint with PrivateDnsEnabled turned on,
-# ALL subnets that share a VPC and AZ with the subnets the interface endpoint
-# has been added to will use the private DNS for that endpoint. Be sure that
-# the Endpoints allow traffic from all subnets that are effected, or explicitly
-# add all subnets to the Endpoints.
+# When creating an interfae endpoint with PrivateDnsEnabled enabled, ALL
+# subnets in the VPC in the AZs of subnets listed on the Endpoint will start
+# using private DNS for the endpoints in question.
+#
+# For example, if you add PrivateSubnet1 (us-east-1z) to the ECS endpoint, all
+# other subnets in us-east-1z will resolve the ECS hostname to a private IP.
+# Instances and tasks in PublicSubnet1 that could previously reach the ECS API
+# over the public internet will start accessing it via the private IP via the
+# Endpoint.
+#
+# Ensure that NACLs and security groups for any resources, in all subnets, that
+# could be effected by a new VPC Endpoint are updated prior to establishing the
+# Endpoint.
 
 # https://docs.aws.amazon.com/vpc/latest/userguide/vpce-interface.html
 Resources:
