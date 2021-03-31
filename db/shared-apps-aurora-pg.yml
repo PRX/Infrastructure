@@ -1,0 +1,294 @@
+# TODO stacks/metrics.prx.org.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a Aurora database cluster, and a dedicated VPC for the cluster to
+  use. If the cluster is a primary cluster, it also creates the Aurora global
+  cluster, which secondary clusters can be added to. The VPC creates subnets
+  in three AZs.
+
+Parameters:
+  GlobalClusterIdentifier:
+    Type: String
+    Description: >-
+      (optional) The global cluster identifier that this DB cluster will belong
+      to. If this parameter is excluded, this will be treated as the primary
+      cluser, and a new global cluster will be created.
+  DbClusterMasterUsername:
+    Type: String
+    Description: >-
+      This value is required for primary clusters, and ignored for secondary
+      clusters
+  DbClusterMasterUserPassword:
+    Type: String
+    Description: >-
+      This value is required for primary clusters, and ignored for secondary
+      clusters
+  EnvironmentType:
+    Type: String
+  VpcCidrBlock:
+    Type: String
+
+Conditions:
+  IsSecondaryCluster: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
+  IsPrimaryCluster: !Not [Condition: IsSecondaryCluster]
+
+Resources:
+  GlobalCluster:
+    Type: AWS::RDS::GlobalCluster
+    Condition: IsPrimaryCluster
+    Properties:
+      DeletionProtection: true
+      SourceDBClusterIdentifier: !Ref DbCluster
+      StorageEncrypted: false
+
+  DbCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      # BackupRetentionPeriod
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      DeletionProtection: true
+      EnableCloudwatchLogsExports:
+        - postgresql
+        - upgrade
+      Engine: aurora-postgresql
+      EngineVersion: "12.4"
+      GlobalClusterIdentifier: !If
+        - IsSecondaryCluster
+        - !Ref GlobalClusterIdentifier
+        - !Ref AWS::NoValue
+      MasterUsername: !If
+        - IsPrimaryCluster
+        - !Ref DbClusterMasterUsername
+        - !Ref AWS::NoValue
+      MasterUserPassword: !If
+        - IsPrimaryCluster
+        - !Ref DbClusterMasterUserPassword
+        - !Ref AWS::NoValue
+      # PreferredBackupWindow
+      # PreferredMaintenanceWindow
+      Tags:
+        - Key: Project
+          Value: platform.prx.org #TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC # TODO Needs a better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      # VpcSecurityGroupIds
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      Engine: aurora-postgresql
+      DBClusterIdentifier: !Ref DbCluster
+      # DBParameterGroupName: default.aurora-mysql5.7
+      # PubliclyAccessible: 'true'
+      DBInstanceClass: db.r6g.large
+      # EnablePerformanceInsights
+      # MonitoringInterval
+      # MonitoringRoleArn
+      # PerformanceInsightsRetentionPeriod
+      # PreferredMaintenanceWindow
+      # PubliclyAccessible
+      Tags:
+        - Key: Project
+          Value: platform.prx.org #TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC # TODO Needs a better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: tktktk # TODO
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      Tags:
+        - Key: Project
+          Value: platform.prx.org #TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC # TODO Needs a better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    # TODO Deletion and UpdateReplace policies
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      # EnableDnsSupport: true
+      # EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Project
+          Value: platform.prx.org #TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-VPC # TODO Needs a better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateRouteTable #TODO Better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    # DeletionPolicy: Retain
+    # UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet1 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet1
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    # DeletionPolicy: Retain
+    # UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet1 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet2
+  Subnet3:
+    Type: AWS::EC2::Subnet
+    # DeletionPolicy: Retain
+    # UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 6, 12]]
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-PrivateSubnet1 # TODO better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  Subnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref Subnet3
+  NetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType} # TODO Better name
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  Subnet1NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref Subnet1
+      NetworkAclId: !Ref NetworkAcl
+  Subnet2NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref Subnet2
+      NetworkAclId: !Ref NetworkAcl
+  Subnet3NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref Subnet3
+      NetworkAclId: !Ref NetworkAcl
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: tktk # TODO
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0 # TODO
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+        - CidrIpv6: ::/0 # TODO
+          IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+      Tags:
+        - Key: Name
+          Value: name # TODO
+        - Key: Project
+          Value: project # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref Vpc
