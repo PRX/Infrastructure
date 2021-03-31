@@ -6,10 +6,10 @@ Description: metrics.prx.org application running in Docker # TODO
 Parameters:
   kWebContainerName:
     Type: String
-    Default: cms-web
+    Default: augury-web
   kWorkerContainerName:
     Type: String
-    Default: cms-worker
+    Default: augury-worker
   kApplicationPort:
     Type: Number
     Default: 3000
@@ -26,7 +26,6 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
-  SharedMemcachedEndpointAddress: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -41,7 +40,7 @@ Resources:
       Conditions:
         - Field: host-header
           Values:
-            - cms.*
+            - augury.*
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: 777 # TODO
 
@@ -49,7 +48,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 15
-      HealthCheckPath: /api/v1
+      HealthCheckPath: /health_check
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       Port: 80
@@ -203,7 +202,7 @@ Resources:
           Cpu: 100 # TODO
           Environment:
             - Name: APP_NAME
-              Value: cms
+              Value: augury
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -212,10 +211,8 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Name: MEMCACHE_SERVERS
-              Value: !Ref SharedMemcachedEndpointAddress
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/cms.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/augury.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -253,7 +250,7 @@ Resources:
           Cpu: 100 # TODO
           Environment:
             - Name: APP_NAME
-              Value: cms
+              Value: augury
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -262,10 +259,8 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Name: MEMCACHE_SERVERS
-              Value: !Ref SharedMemcachedEndpointAddress
           Essential: true
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/cms.prx.org:${EcrImageTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/augury.prx.org:${EcrImageTag}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -289,99 +284,3 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
-
-  # TODO
-  # # callback queues are being slow
-  # CmsAudioCallbackSlowAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Slow"
-  #     AlarmActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     InsufficientDataActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     OKActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     AlarmDescription: Audio callbacks are behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 3
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 60
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref AudioSqsCallbackName
-  # CmsImageCallbackSlowAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Image Callbacks Slow"
-  #     AlarmActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     InsufficientDataActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     OKActions:
-  #       - !If [CreateProductionResources, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     AlarmDescription: Image callbacks are behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 3
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 60
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref ImageSqsCallbackName
-  # # callback queues likely aren't processing
-  # CmsAudioCallbackFatalAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Not Processing"
-  #     AlarmActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     InsufficientDataActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     OKActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     AlarmDescription: Audio callbacks are maybe not processing
-  #     ComparisonOperator: GreaterThanOrEqualToThreshold
-  #     EvaluationPeriods: 1
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 300
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref AudioSqsCallbackName
-  # CmsImageCallbackFatalAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Image Callbacks Not Processing"
-  #     AlarmActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     InsufficientDataActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     OKActions:
-  #       - !Ref OpsFatalMessagesSnsTopicArn
-  #     AlarmDescription: Image callbacks are maybe not processing
-  #     ComparisonOperator: GreaterThanOrEqualToThreshold
-  #     EvaluationPeriods: 1
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 300
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref ImageSqsCallbackName
