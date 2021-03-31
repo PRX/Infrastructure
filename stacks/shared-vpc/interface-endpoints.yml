@@ -4,19 +4,156 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Interface VPC endpoints
 
 Parameters:
+  EnvironmentType: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
-  PublicRouteTableId: { Type: String }
-  # PrivateRouteTableId:
-  #   Type: String
+  PrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  PrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  PrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
 
+# https://docs.aws.amazon.com/vpc/latest/userguide/vpce-interface.html
 Resources:
-  Temp:
-    Type: AWS::SNS::Topic
-  # S3Endpoint:
-  #   Type: AWS::EC2::VPCEndpoint
-  #   Properties:
-  #     RouteTableIds:
-  #       - !Ref RouteTable
-  #     ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
-  #     VpcEndpointType: Gateway
-  #     VpcId: !Ref VpcId
+  EcsLaunchEndpointsAccessSecurityGroup:
+    # This security group is intented to be used by EC2 instances, ECS
+    # services, etc. Resources that belong to this group will be able to send
+    # traffic to the services needed to launch tasks in ECS.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to VPC Endpoints required for
+        launching ECS tasks and services in ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub Platform-${EnvironmentType}-LB-web_ssh # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+
+  EcsLaunchEndpointsInboundTrafficSecurityGroup:
+    # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/vpc-endpoints.html#ecs-vpc-endpoint-considerations
+    # This security group should be added to any VPC Endpoints that are
+    # necessary when launching ECS tasks and services in an environment that
+    # does not have internet access, such as private subnets and Fargate. This
+    # includes services like ECR, ECS, CloudWatch Logs, and S3.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the EcsLaunchEndpointsAccessSecurityGroup
+        to flow into VPC Endpoints for AWS services required for launching ECS
+        tasks and services in ${EnvironmentType}
+      Tags:
+        - Key: Project
+          Value: Porter # TODO
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-EcsEndpointsSecurityGroup # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  EcsLaunchEndpointsInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
+      ToPort: 443
+
+  EcrDockerVpcEndpoint:
+    # https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html#ecr-vpc-endpoint-considerations
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  EcrApiVpcEndpoint:
+    # https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html#ecr-vpc-endpoint-considerations
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+  EcsAgentVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-agent
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  EcsTelemetryVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-telemetry
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  EcsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+  CloudWatchLogsVpcEndpoint:
+    # https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/cloudwatch-logs-and-interface-VPC.html#create-VPC-endpoint-for-CloudWatchLogs
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds:
+        - !Ref PrivateSubnet1Id
+        - !Ref PrivateSubnet2Id
+        - !Ref PrivateSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+Outputs:
+  EcsLaunchEndpointsAccessSecurityGroupId:
+    Value: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
