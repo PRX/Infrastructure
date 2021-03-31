@@ -6,9 +6,21 @@ Description: Interface VPC endpoints
 Parameters:
   EnvironmentType: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
+  PublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  PublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  PublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   PrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   PrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   PrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+
+#
+# !!!! IMPORTANT !!!!
+#
+# When creating an interface endpoint with PrivateDnsEnabled turned on,
+# ALL subnets that share a VPC and AZ with the subnets the interface endpoint
+# has been added to will use the private DNS for that endpoint. Be sure that
+# the Endpoints allow traffic from all subnets that are effected, or explicitly
+# add all subnets to the Endpoints.
 
 # https://docs.aws.amazon.com/vpc/latest/userguide/vpce-interface.html
 Resources:
@@ -70,6 +82,14 @@ Resources:
       SourceSecurityGroupId: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
       ToPort: 443
 
+  # TODO Remove this once all EC2 instance have the EcsLaunchEndpointsAccessSecurityGroup group
+  TempAllTrafficTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
+      CidrIp: 0.0.0.0/0
+      IpProtocol: "-1"
+
   EcrDockerVpcEndpoint:
     # https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html#ecr-vpc-endpoint-considerations
     Type: AWS::EC2::VPCEndpoint
@@ -79,6 +99,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.dkr
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
@@ -93,6 +116,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ecr.api
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
@@ -107,6 +133,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-agent
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
@@ -120,6 +149,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs-telemetry
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
@@ -133,6 +165,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.ecs
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
@@ -148,6 +183,9 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
       SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
         - !Ref PrivateSubnet1Id
         - !Ref PrivateSubnet2Id
         - !Ref PrivateSubnet3Id
