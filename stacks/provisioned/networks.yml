@@ -255,27 +255,27 @@ Resources:
 
   # # INTERNAL SPHINX SERVER #####################################################
 
-  # Nlb:
-  #   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-  #   Properties:
-  #     IpAddressType: ipv4
-  #     Scheme: internal
-  #     Subnets:
-  #       - !Ref VpcPrivateSubnet1Id
-  #       - !Ref VpcPrivateSubnet2Id
-  #       - !Ref VpcPrivateSubnet3Id
-  #     Tags:
-  #       - Key: Project
-  #         Value: Networks # TODO
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentType
-  #       - Key: Name
-  #         Value: !Sub networks-${EnvironmentType} # TODO
-  #       - Key: prx:cloudformation:stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: prx:cloudformation:stack-id
-  #         Value: !Ref AWS::StackId
-  #     Type: network
+  Nlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internal
+      Subnets:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      Type: network
 
   # NlbCertificate:
   #   Type: AWS::CertificateManager::Certificate
@@ -370,46 +370,46 @@ Resources:
   #       - Type: forward
   #         TargetGroupArn: !Ref SphinxServerWebTargetGroup
 
-  # SphinxServerInboundSecurityGroup:
-  #   Type: AWS::EC2::SecurityGroup
-  #   Properties:
-  #     GroupDescription: >-
-  #       Allows web and Sphinx traffic to the Sphinx server service
-  #     SecurityGroupIngress:
-  #       - CidrIp: !Ref VpcCidrBlock
-  #         IpProtocol: tcp
-  #         FromPort: 3000
-  #         ToPort: 3000
-  #       - CidrIpv6: !Ref VpcIpv6CidrBlocks
-  #         IpProtocol: tcp
-  #         FromPort: 3000
-  #         ToPort: 3000
-  #       - CidrIp: !Ref VpcCidrBlock
-  #         IpProtocol: tcp
-  #         FromPort: 9312
-  #         ToPort: 9312
-  #       - CidrIpv6: !Ref VpcIpv6CidrBlocks
-  #         IpProtocol: tcp
-  #         FromPort: 9312
-  #         ToPort: 9312
-  #     Tags:
-  #       - Key: Project
-  #         Value: Networks # TODO
-  #       - Key: Environment
-  #         Value: !Ref EnvironmentType
-  #       - Key: Name
-  #         Value: !Sub networks-${EnvironmentType} # TODO
-  #       - Key: prx:cloudformation:stack-name
-  #         Value: !Ref AWS::StackName
-  #       - Key: prx:cloudformation:stack-id
-  #         Value: !Ref AWS::StackId
-  #     VpcId: !Ref VpcId
+  SphinxServerInboundSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        Allows web and Sphinx traffic to the Sphinx server service
+      SecurityGroupIngress:
+        - CidrIp: !Ref VpcCidrBlock
+          IpProtocol: tcp
+          FromPort: !Ref kWebApplicationPort
+          ToPort: !Ref kWebApplicationPort
+        - CidrIpv6: !Ref VpcIpv6CidrBlocks
+          IpProtocol: tcp
+          FromPort: !Ref kWebApplicationPort
+          ToPort: !Ref kWebApplicationPort
+        - CidrIp: !Ref VpcCidrBlock
+          IpProtocol: tcp
+          FromPort: !Ref kSphinxPort
+          ToPort: !Ref kSphinxPort
+        - CidrIpv6: !Ref VpcIpv6CidrBlocks
+          IpProtocol: tcp
+          FromPort: !Ref kSphinxPort
+          ToPort: !Ref kSphinxPort
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
 
-  # # This is the Sphinx server. It runs both the Networks Rails app, and the
-  # # Sphinx processes for handling search queries and indexing. It recieves
-  # # HTTP and Sphinx traffic via the network load balancer (defined in this
-  # # template). The LOCAL_SPHINX environment variable is responsible for making
-  # # the image act as a Sphinx server.
+  # This is the Sphinx server. It runs both the Networks Rails app, and the
+  # Sphinx processes for handling search queries and indexing. It recieves
+  # HTTP and Sphinx traffic via the network load balancer (defined in this
+  # template). The LOCAL_SPHINX environment variable is responsible for making
+  # the image act as a Sphinx server.
   # SphinxServerEcsService:
   #   Type: AWS::ECS::Service
   #   DependsOn:
