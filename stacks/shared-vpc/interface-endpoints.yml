@@ -91,6 +91,58 @@ Resources:
       SourceSecurityGroupId: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
       ToPort: 443
 
+  KmsEndpointAccessSecurityGroup:
+    # This security group is intented to be used by EC2 instances, ECS
+    # services, etc. Resources that belong to this group will be able to send
+    # traffic to the KMS service.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to KMS VPC Endpoints in
+        ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${RootStackName}_shared-vpc_kms-interface-access
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+
+  KmsEndpointInboundTrafficSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the KmsEndpointAccessSecurityGroup
+        to flow into the KMS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - Key: Project
+          Value: Porter # TODO
+        - Key: Name
+          Value: !Sub ${RootStackName}_shared-vpc_kms-interface-inbound
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
+  KmsEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt KmsEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt KmsEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
+
   EcrDockerVpcEndpoint:
     # https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html#ecr-vpc-endpoint-considerations
     Type: AWS::EC2::VPCEndpoint
@@ -178,3 +230,5 @@ Resources:
 Outputs:
   EcsLaunchEndpointsAccessSecurityGroupId:
     Value: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
+  KmsEndpointAccessSecurityGroupId:
+    Value: !GetAtt KmsEndpointAccessSecurityGroup.GroupId
