@@ -3,6 +3,7 @@
 ## VPC Peerings
 
 - After the shared VPC has been created, but before the application stacks are created, the shared VPC needs to get peered with all external VPCs that the apps depend on, such as those containing databases. Only enable application stack creation once you have confirmed that VPC peering is established and configured correctly, including DNS resolution options.
+- Ensure that NACLs and security groups for the external resource allow traffic from the application instances and tasks.
 - VPC peering needs to happen for both the public and private route tables (I think).
 - It doesn't matter which side is the accepter or requester.
 - The "DNS resolution from accepter/requester VPC to private IP" needs to be **Enabled** for the database side of the peering connection, regardless of if it's the accepter or requester. (This allows apps to query the public hostnames of databases/etc, and have those resolve to the private IPs that are routed over the peering connection.)
