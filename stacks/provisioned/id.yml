@@ -176,7 +176,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
-        - Cpu: 100 # TODO
+        - Cpu: !If [IsProduction, 200, 128]
           Environment:
             - Name: APP_NAME
               Value: id
@@ -208,7 +208,8 @@ Resources:
               awslogs-group: !Ref TaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          Memory: 400 # TODO
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort

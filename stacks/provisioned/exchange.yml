@@ -233,7 +233,7 @@ Resources:
       ContainerDefinitions:
         - Command:
             - web
-          Cpu: 100 # TODO
+        - Cpu: !If [IsProduction, 200, 128]
           Environment:
             - Name: APP_NAME
               Value: exchange
@@ -273,7 +273,8 @@ Resources:
               awslogs-group: !Ref WebTaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          Memory: 400 # TODO
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
           Name: !Ref kWebContainerName
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
@@ -301,7 +302,7 @@ Resources:
       ContainerDefinitions:
         - Command:
             - worker
-          Cpu: 100 # TODO
+        - Cpu: !If [IsProduction, 200, 128]
           Environment:
             - Name: APP_NAME
               Value: exchange
@@ -341,7 +342,8 @@ Resources:
               awslogs-group: !Ref WorkerTaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          Memory: 400 # TODO
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
           Name: !Ref kWorkerContainerName
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
@@ -577,7 +579,7 @@ Resources:
   #     TreatMissingData: notBreaching
   #     Dimensions:
   #       - Name: QueueName
-  #         Value: !Sub Prx3${EnvironmentType}SayWhen
+  #         Value: !Sub Prx3${EnvironmentType}SayWhen # TODO
 
   # TODO ExchangeDeliveryUpdateAlarm:
   #   Type: AWS::CloudWatch::Alarm
