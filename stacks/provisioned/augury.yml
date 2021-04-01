@@ -21,6 +21,7 @@ Parameters:
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
+  EchoServiceToken: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
   SecretsBase: { Type: String }
   EcrRegion: { Type: String }
@@ -37,6 +38,12 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
+  Constants:
+    Type: Custom::Echo
+    Properties:
+      ServiceToken: !Ref EchoServiceToken
+      ActualsIngestJobInvocationCountMetricName: !Sub ActualsIngestJobInvocationCount${EnvironmentType}
+
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -298,9 +305,50 @@ Resources:
         { $.msg = "*Performed ImpressionsFetchJob*" }
       LogGroupName: !Ref WorkerTaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub ActualsIngestJobInvocationCount${EnvironmentType}
+        - MetricName: !GetAtt Constants.ActualsIngestJobInvocationCountMetricName
           MetricNamespace: PRX/Augury
           MetricValue: "1"
+  ReallocationJobMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "reallocation_job" }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ReallocationJobElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
+  InventoryUpdateJobMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "inventory_update_job" }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub InventoryUpdateJobElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
+  AuguryActualsAreBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction # TODO
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "[Augury][Worker][ActiveJob] ${EnvironmentType} Augury actuals are behind"
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: Augury actuals are behind
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.ActualsIngestJobInvocationCountMetricName
+      Namespace: PRX/Augury
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: breaching
 
   ForecastTaskLogGroup:
     Type: AWS::Logs::LogGroup
@@ -456,89 +504,56 @@ Resources:
         prx:cloudformation:stack-id: !Ref AWS::StackId
       Timeout: 5
 
-  # TODO AuguryActualsAreBehindAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[Augury][Worker][ActiveJob] ${EnvironmentType} Augury actuals are behind"
-  #     AlarmActions:
-  #       - !Ref OpsErrorMessagesSnsTopicArn
-  #     InsufficientDataActions:
-  #       - !Ref OpsErrorMessagesSnsTopicArn
-  #     OKActions:
-  #       - !Ref OpsErrorMessagesSnsTopicArn
-  #     AlarmDescription: Augury actuals are behind
-  #     ComparisonOperator: LessThanThreshold
-  #     EvaluationPeriods: 3
-  #     MetricName: !Sub "ActualsIngestJobInvocationCount${EnvironmentType}"
-  #     Namespace: PRX/Augury
-  #     Period: 300
-  #     Statistic: Sum
-  #     Threshold: 1
-  #     TreatMissingData: breaching
+  # Forecast task timings
+  ForecastJobMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "forecast_job" }
+      LogGroupName: !Ref ForecastTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ForecastJobElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
 
-  # TODO # augury job timings
-  # ForecastJobMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "forecast_job" }'
-  #     LogGroupName: !Ref AuguryForecastLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ForecastJobElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # ReallocationJobMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "reallocation_job" }'
-  #     LogGroupName: !Ref AuguryWorkerLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ReallocationJobElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # InventoryUpdateJobMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "inventory_update_job" }'
-  #     LogGroupName: !Ref AuguryWorkerLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "InventoryUpdateJobElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # # forecast rscript timings
-  # ForecastDownloadsMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "forecast_downloads" }'
-  #     LogGroupName: !Ref AuguryForecastLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ForecastDownloadsElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # ForecastGeocountriesMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "forecast_geocountries" }'
-  #     LogGroupName: !Ref AuguryForecastLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ForecastGeocountriesElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # ForecastGeosubdivsMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "forecast_geosubdivs" }'
-  #     LogGroupName: !Ref AuguryForecastLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ForecastGeosubdivsElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
-  # ForecastGeometrosMetricFilter:
-  #   Type: "AWS::Logs::MetricFilter"
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "forecast_geometros" }'
-  #     LogGroupName: !Ref AuguryForecastLogGroupName
-  #     MetricTransformations:
-  #       - MetricName: !Sub "ForecastGeometrosElapsed${EnvironmentType}"
-  #         MetricNamespace: PRX/Augury
-  #         MetricValue: $.elapsed
+  # Forecast Rscript timings
+  ForecastDownloadsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "forecast_downloads" }
+      LogGroupName: !Ref ForecastTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ForecastDownloadsElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
+  ForecastGeocountriesMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "forecast_geocountries" }
+      LogGroupName: !Ref ForecastTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ForecastGeocountriesElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
+  ForecastGeosubdivsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "forecast_geosubdivs" }
+      LogGroupName: !Ref ForecastTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ForecastGeosubdivsElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
+  ForecastGeometrosMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "forecast_geometros" }
+      LogGroupName: !Ref ForecastTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub ForecastGeometrosElapsed${EnvironmentType}
+          MetricNamespace: PRX/Augury
+          MetricValue: $.elapsed
