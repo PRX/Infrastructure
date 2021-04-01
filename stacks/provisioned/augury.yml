@@ -1,5 +1,6 @@
 # stacks/provisioned/metrics.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: metrics.prx.org application running in Docker # TODO
 
@@ -28,6 +29,9 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
+  VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -297,6 +301,161 @@ Resources:
         - MetricName: !Sub ActualsIngestJobInvocationCount${EnvironmentType}
           MetricNamespace: PRX/Augury
           MetricValue: "1"
+
+  ForecastTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  ForecastTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - forecast
+          Environment:
+            - Name: APP_NAME
+              Value: augury
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/augury.prx.org:${EcrImageTag}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ForecastTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: augury-forecast
+          Name: augury-forecast
+      Cpu: "4096"
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      Memory: "16384"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Tags:
+        - Key: Project
+          Value: augury
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  ForecastRelaySqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  ForecastRelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Launches fargate forecast executions from SQS
+      Environment:
+        Variables:
+          ECS_CLUSTER_ARN: !Ref EcsClusterArn
+          ECS_TASK_DEFINITION_ARN: !Ref ForecastTaskDefinition
+          VPC_SUBNET_1: !Ref VpcPublicSubnet1Id
+          VPC_SUBNET_2: !Ref VpcPublicSubnet2Id
+          VPC_SUBNET_3: !Ref VpcPublicSubnet3Id
+          MAX_FARGATES: "10"
+          STARTED_BY: !Ref AWS::StackName
+      Events:
+        SqsMessages:
+          Type: SQS
+          Properties:
+            BatchSize: 1
+            Queue: !GetAtt ForecastRelaySqsQueue.Arn
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const ecs = new AWS.ECS();
+
+        const MAX_FARGATES = process.env.MAX_FARGATES;
+        const STARTED_BY = process.env.STARTED_BY;
+
+        // ECS listTask parameters
+        const listParams = {
+          cluster: process.env.ECS_CLUSTER_ARN,
+          desiredStatus: 'RUNNING',
+          maxResults: MAX_FARGATES,
+          startedBy: STARTED_BY,
+        };
+
+        // ECS runTask parameters
+        const runParams = {
+          cluster: process.env.ECS_CLUSTER_ARN,
+          launchType: 'FARGATE',
+          networkConfiguration: {
+            awsvpcConfiguration: {
+              subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
+              assignPublicIp: 'ENABLED',
+            },
+          },
+          platformVersion: '1.4.0',
+          startedBy: STARTED_BY,
+          taskDefinition: process.env.ECS_TASK_DEFINITION_ARN,
+        };
+
+        // lightweight json logger
+        function log(level, msg, extra = {}) {
+          console[level](JSON.stringify({level, msg, ...extra}));
+        }
+
+        exports.handler = async (event) => {
+          const listRes = await ecs.listTasks(listParams).promise();
+          const running = listRes.taskArns.length;
+          if (running < MAX_FARGATES) {
+            log('info', `launching 1 more fargate forecast worker (${running} running)`);
+            try {
+              const runRes = await ecs.runTask(runParams).promise();
+              log('debug', 'ran task', runRes);
+            } catch (err) {
+              log('error', 'error running task', err);
+              throw err;
+            }
+          } else {
+            log('info', `already running ${running} fargate workers`);
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: ecs:ListTasks
+              Effect: Allow
+              Resource: "*"
+            - Action: ecs:RunTask
+              Effect: Allow
+              Resource: !Ref ForecastTaskDefinition
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource:
+                - !GetAtt ExecutionRole.Arn
+                - !GetAtt TaskRole.Arn
+          Version: "2012-10-17"
+      ReservedConcurrentExecutions: 1
+      Runtime: nodejs12.x
+      Tags:
+        Project: augury # TODO
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 5
+
   # TODO AuguryActualsAreBehindAlarm:
   #   Type: AWS::CloudWatch::Alarm
   #   Properties:
