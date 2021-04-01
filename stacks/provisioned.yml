@@ -22,6 +22,9 @@ Parameters:
   UploadSigningUserName: { Type: String }
   UploadSigningEndpointUrl: { Type: String }
   UploadSigningAccessKeyId: { Type: String }
+  VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
@@ -32,6 +35,7 @@ Parameters:
   EcsAsgOutboundTrafficSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  LoadBalancerInboundForwardingSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
   PublishEcrImageTag: { Type: String }
   PublishSecretsVersion: { Type: String }
@@ -235,6 +239,39 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}/exchange.yml
+      TimeoutInMinutes: 20
+
+  FeederStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref FeederEcrImageTag
+        SecretsVersion: !Ref FeederSecretsVersion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        VpcPublicSubnet1Id: !Ref VpcPublicSubnet1Id
+        VpcPublicSubnet2Id: !Ref VpcPublicSubnet2Id
+        VpcPublicSubnet3Id: !Ref VpcPublicSubnet3Id
+        LoadBalancerInboundForwardingSecurityGroupId: !Ref LoadBalancerInboundForwardingSecurityGroupId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}/feeder.yml
       TimeoutInMinutes: 20
 
   GroveStack:
