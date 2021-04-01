@@ -88,7 +88,7 @@ Resources:
     Type: Custom::Echo
     Properties:
       ServiceToken: !Ref EchoServiceToken
-      VanityAlbDomain: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
+      VanityAlbDomain: !Sub feeder.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
@@ -111,6 +111,24 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+
+  VanityAlbDomainRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: !Sub >-
+        Record sets for dualstack traffic to the Feeder ${EnvironmentType} ALB
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !GetAtt Constants.VanityAlbDomain
+          AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+        - Type: A
+          Name: !GetAtt Constants.VanityAlbDomain
+          AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
 
   AccessLogsBucket:
     Type: AWS::S3::Bucket
@@ -513,3 +531,10 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+Outputs:
+  VanityAlbDomain:
+    Description: >-
+      The vanity wildcard domain configured for the ALB's certificate, and
+      registered in the DNS hosted zone
+    Value: !GetAtt Constants.VanityAlbDomain
