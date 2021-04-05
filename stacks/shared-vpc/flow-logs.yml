@@ -6,6 +6,7 @@ Description: Creates VPC flow logs for the shared VPC.
 Parameters:
   EnvironmentType: { Type: String }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
+  RootStackName: { Type: String }
 
 Conditions:
   IsEnabled: !Equals [Enabled, Enabled] # TODO
@@ -55,8 +56,19 @@ Resources:
     Condition: IsEnabled
     Properties:
       DeliverLogsPermissionArn: !GetAtt DeliverLogsRole.Arn
+      LogDestinationType: cloud-watch-logs
       LogGroupName: !Ref FlowLogGroup
       ResourceId: !Ref VpcId
       ResourceType: VPC
-      # TODO Tag
+      Tags:
+        - Key: Project
+          Value: platform.prx.org # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub ${RootStackName}_shared-vpc_all-traffic
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
       TrafficType: ALL
