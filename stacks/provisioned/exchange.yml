@@ -200,6 +200,18 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+  AutoScalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
 
   WebEcsService:
     Type: AWS::ECS::Service
@@ -378,18 +390,6 @@ Resources:
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
 
-  AutoScalingRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: application-autoscaling.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
   WorkerEcsServiceScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
@@ -399,7 +399,7 @@ Resources:
       RoleARN: !GetAtt AutoScalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
-  ExchangeWorkerAutoScalingInPolicy:
+  WorkerEcsServiceStepScaleInPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName: ExchangeWorkerScaleIn
@@ -415,7 +415,7 @@ Resources:
             ScalingAdjustment: -1
           - MetricIntervalUpperBound: -9
             ScalingAdjustment: -2
-  ExchangeWorkerAutoScalingScaleInAlarm:
+  WorkerEcsServiceStepScaleInAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
@@ -433,7 +433,7 @@ Resources:
       Statistic: Average
       Threshold: 10
       TreatMissingData: notBreaching
-  ExchangeWorkerAutoScalingOutPolicy:
+  WorkerEcsServiceStepScaleOutPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
       PolicyName: ExchangeWorkerScaleOut
@@ -452,7 +452,7 @@ Resources:
             ScalingAdjustment: 4
           - MetricIntervalLowerBound: 380
             ScalingAdjustment: 6
-  ExchangeWorkerAutoScalingScaleOutAlarm:
+  WorkerEcsServiceStepScaleOutAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
