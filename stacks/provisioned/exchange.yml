@@ -390,86 +390,86 @@ Resources:
           Value: !Ref AWS::StackId
       TaskDefinition: !Ref WorkerTaskDefinition
 
-  WorkerEcsServiceScalableTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Properties:
-      MinCapacity: !If [IsProduction, 2, 1]
-      MaxCapacity: !If [IsProduction, 20, 4]
-      ResourceId: !Sub service/${EcsClusterName}/${WorkerEcsService.Name}
-      RoleARN: !GetAtt AutoScalingRole.Arn
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
-  WorkerEcsServiceStepScaleInPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: ExchangeWorkerScaleIn
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref WorkerEcsServiceScalableTarget
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: -9
-            MetricIntervalUpperBound: 0
-            ScalingAdjustment: -1
-          - MetricIntervalUpperBound: -9
-            ScalingAdjustment: -2
-  WorkerEcsServiceStepScaleInAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmActions:
-        - !Ref WorkerEcsServiceStepScaleInPolicy
-      AlarmDescription: Scale in exchange workers
-      ComparisonOperator: LessThanOrEqualToThreshold
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
-      EvaluationPeriods: 1
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 60
-      Statistic: Average
-      Threshold: 10
-      TreatMissingData: notBreaching
-  WorkerEcsServiceStepScaleOutPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: ExchangeWorkerScaleOut
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref WorkerEcsServiceScalableTarget
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 120
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: 0
-            MetricIntervalUpperBound: 80
-            ScalingAdjustment: 2
-          - MetricIntervalLowerBound: 80
-            MetricIntervalUpperBound: 380
-            ScalingAdjustment: 4
-          - MetricIntervalLowerBound: 380
-            ScalingAdjustment: 6
-  WorkerEcsServiceStepScaleOutAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmActions:
-        - !Ref WorkerEcsServiceStepScaleOutPolicy
-      AlarmDescription: Scale out exchange workers
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
-      EvaluationPeriods: 1
-      MetricName: ApproximateNumberOfMessagesVisible
-      Namespace: AWS/SQS
-      Period: 60
-      Statistic: Average
-      Threshold: 20
-      TreatMissingData: notBreaching
+  # WorkerEcsServiceScalableTarget:
+  #   Type: AWS::ApplicationAutoScaling::ScalableTarget
+  #   Properties:
+  #     MinCapacity: !If [IsProduction, 2, 1]
+  #     MaxCapacity: !If [IsProduction, 20, 4]
+  #     ResourceId: !Sub service/${EcsClusterName}/${WorkerEcsService.Name}
+  #     RoleARN: !GetAtt AutoScalingRole.Arn
+  #     ScalableDimension: ecs:service:DesiredCount
+  #     ServiceNamespace: ecs
+  # WorkerEcsServiceStepScaleInPolicy:
+  #   Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  #   Properties:
+  #     PolicyName: ExchangeWorkerScaleIn
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref WorkerEcsServiceScalableTarget
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 60
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalLowerBound: -9
+  #           MetricIntervalUpperBound: 0
+  #           ScalingAdjustment: -1
+  #         - MetricIntervalUpperBound: -9
+  #           ScalingAdjustment: -2
+  # WorkerEcsServiceStepScaleInAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmActions:
+  #       - !Ref WorkerEcsServiceStepScaleInPolicy
+  #     AlarmDescription: Scale in exchange workers
+  #     ComparisonOperator: LessThanOrEqualToThreshold
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  #     EvaluationPeriods: 1
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 60
+  #     Statistic: Average
+  #     Threshold: 10
+  #     TreatMissingData: notBreaching
+  # WorkerEcsServiceStepScaleOutPolicy:
+  #   Type: AWS::ApplicationAutoScaling::ScalingPolicy
+  #   Properties:
+  #     PolicyName: ExchangeWorkerScaleOut
+  #     PolicyType: StepScaling
+  #     ScalingTargetId: !Ref WorkerEcsServiceScalableTarget
+  #     StepScalingPolicyConfiguration:
+  #       AdjustmentType: ChangeInCapacity
+  #       Cooldown: 120
+  #       MetricAggregationType: Average
+  #       StepAdjustments:
+  #         - MetricIntervalLowerBound: 0
+  #           MetricIntervalUpperBound: 80
+  #           ScalingAdjustment: 2
+  #         - MetricIntervalLowerBound: 80
+  #           MetricIntervalUpperBound: 380
+  #           ScalingAdjustment: 4
+  #         - MetricIntervalLowerBound: 380
+  #           ScalingAdjustment: 6
+  # WorkerEcsServiceStepScaleOutAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmActions:
+  #       - !Ref WorkerEcsServiceStepScaleOutPolicy
+  #     AlarmDescription: Scale out exchange workers
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     Dimensions:
+  #       - Name: QueueName
+  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  #     EvaluationPeriods: 1
+  #     MetricName: ApproximateNumberOfMessagesVisible
+  #     Namespace: AWS/SQS
+  #     Period: 60
+  #     Statistic: Average
+  #     Threshold: 20
+  #     TreatMissingData: notBreaching
 
   SayWhenTaskLogGroup:
     Type: AWS::Logs::LogGroup
