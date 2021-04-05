@@ -412,6 +412,32 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       VpcId: !Ref VpcId
+  SphinxServerOutboundSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: >-
+        Allows MySQL traffic from the Sphinx server service to all IPs
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+        - CidrIpv6: ::/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+      Tags:
+        - Key: Project
+          Value: Networks # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: Name
+          Value: !Sub networks-${EnvironmentType} # TODO
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      VpcId: !Ref VpcId
 
   # This is the Sphinx server. It runs both the Networks Rails app, and the
   # Sphinx processes for handling search queries and indexing. It recieves
@@ -440,6 +466,7 @@ Resources:
         AwsvpcConfiguration:
           SecurityGroups:
             - !GetAtt SphinxServerInboundSecurityGroup.GroupId
+            - !GetAtt SphinxServerOutboundSecurityGroup.GroupId
             - !Ref EcsLaunchEndpointsAccessSecurityGroupId
             - !Ref KmsEndpointAccessSecurityGroupId
           AssignPublicIp: DISABLED
