@@ -378,11 +378,21 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref SphinxServerWebTargetGroup
 
-  SphinxServerInboundSecurityGroup:
+  SphinxServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: >-
-        Allows web and Sphinx traffic to the Sphinx server service
+        Allows web and Sphinx traffic into the Sphinx server service, and MySQL
+        traffic out
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+        - CidrIpv6: ::/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
       SecurityGroupIngress:
         - CidrIp: !Ref VpcCidrBlock
           IpProtocol: tcp
@@ -400,32 +410,6 @@ Resources:
           IpProtocol: tcp
           FromPort: !Ref kSphinxPort
           ToPort: !Ref kSphinxPort
-      Tags:
-        - Key: Project
-          Value: Networks # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub networks-${EnvironmentType} # TODO
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      VpcId: !Ref VpcId
-  SphinxServerOutboundSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: >-
-        Allows MySQL traffic from the Sphinx server service to all IPs
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 3306
-          IpProtocol: tcp
-          ToPort: 3306
-        - CidrIpv6: ::/0
-          FromPort: 3306
-          IpProtocol: tcp
-          ToPort: 3306
       Tags:
         - Key: Project
           Value: Networks # TODO
@@ -465,8 +449,7 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           SecurityGroups:
-            - !GetAtt SphinxServerInboundSecurityGroup.GroupId
-            - !GetAtt SphinxServerOutboundSecurityGroup.GroupId
+            - !GetAtt SphinxServerSecurityGroup.GroupId
             - !Ref EcsLaunchEndpointsAccessSecurityGroupId
             - !Ref KmsEndpointAccessSecurityGroupId
           AssignPublicIp: DISABLED
