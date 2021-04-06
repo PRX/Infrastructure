@@ -1,0 +1,443 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a deployment pipeline in CodePipeline, along with CodeBuild projects
+  and other resources needed to support the pipeline, for Porter. The main
+  branch of the Porter GitHub repository is continuously deployed to staging.
+  Production requires approval.
+
+Parameters:
+  kPackagedTemplateFileName:
+    Type: String
+    Default: pkg-template.yaml
+  CodeStarConnectionArn:
+    Type: String
+  StagingStackName:
+    Type: String
+  ProductionStackName:
+    Type: String
+  TemplateConfigBucketName:
+    Type: String
+  TemplateConfigObject:
+    Type: String
+
+Resources:
+  SamCodeBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SamCodeBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${SamCodeBuildProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${SamCodeBuildProject}:*
+        Version: "2012-10-17"
+      PolicyName: PorterSamCodeBuildProjectPolicy
+      Roles:
+        - !Ref SamCodeBuildProjectRole
+  SamCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and packages Porter via SAM for future deployment
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt SamCodeBuildProjectRole.Arn
+      Source:
+        BuildSpec: !Sub |-
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: latest
+                python: latest
+                ruby: latest
+            pre_build:
+              commands:
+                - make bootstrap
+                - make deploy-check
+            build:
+              commands:
+                - "sam build --parallel"
+                - "sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kPackagedTemplateFileName}"
+          artifacts:
+            files:
+              - ${kPackagedTemplateFileName}
+            name: SamBuildArtifact
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TimeoutInMinutes: 5
+
+  AcceptanceTestsProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  AcceptanceTestsProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsProject}:*
+          - Action: ssm:GetParameters
+            Effect: Allow
+            Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/stag/meta.prx.org/*
+          - Action:
+              - states:DescribeExecution
+              - states:StartExecution
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+      PolicyName: PorterSamCodeBuildProjectPolicy
+      Roles:
+        - !Ref AcceptanceTestsProjectRole
+  AcceptanceTestsProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Runs acceptance tests for Porter staging
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt AcceptanceTestsProjectRole.Arn
+      Source:
+        BuildSpec: buildspec-acceptance.yml
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TimeoutInMinutes: 15
+
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyName: ResourceManipulationPolicy
+          PolicyDocument:
+            Statement:
+              - Action: "*" # TODO
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
+  PipelineArtifactStore:
+    # The bucket used to store artifacts generated by CodePipeline actions.
+    # This bucket is to be used exclusively by AWS; don't use it to store any
+    # app, infrastructure, or user data.
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        # CodePipeline seems to need access to special buckets
+        - PolicyDocument:
+            Statement:
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: arn:aws:s3:::codepipeline*
+            Version: "2012-10-17"
+          PolicyName: GenericCodePipelineS3PutPolicy
+        # CodePipeline needs access to objects that are used in source actions
+        - PolicyDocument:
+            Statement:
+              - Action: s3:GetBucketVersioning
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${TemplateConfigBucketName}
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${TemplateConfigBucketName}/${TemplateConfigObject}
+            Version: "2012-10-17"
+          PolicyName: S3SourceActionAccessPolicy
+        # Let CodePipeline read and write artifacts
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                Effect: Allow
+                Resource:
+                  - !GetAtt PipelineArtifactStore.Arn
+                  - !Sub ${PipelineArtifactStore.Arn}/*
+            Version: "2012-10-17"
+          PolicyName: ArtifactStoreFullAccess
+        # To allow the pipeline to use a CodeStar Connection
+        - PolicyDocument:
+            Statement:
+              - Action: codestar-connections:*
+                Condition:
+                  ForAllValues:StringEquals:
+                    codestar-connections:PassedToService: codepipeline.amazonaws.com
+                Effect: Allow
+                Resource: !Ref CodeStarConnectionArn
+            Version: "2012-10-17"
+          PolicyName: CodeStarConnectionPolicy
+        # Allow interaction with CodeBuild actions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource:
+                  - !GetAtt SamCodeBuildProject.Arn
+                  - !GetAtt AcceptanceTestsProject.Arn
+            Version: "2012-10-17"
+          PolicyName: CodeBuildActionPolicy
+        # Let CodePipeline describe CloudFormation stacks
+        - PolicyDocument:
+            Statement:
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionStackName}/*
+            Version: "2012-10-17"
+          PolicyName: CloudFormationAccess
+        # Allow PassRole to the CloudFormation role
+        - PolicyDocument:
+            Statement:
+              - Action: iam:PassRole
+                Effect: Allow
+                Resource: !GetAtt CloudFormationRole.Arn
+            Version: "2012-10-17"
+          PolicyName: IamPassRole
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref PipelineArtifactStore
+        Type: S3
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Porter-GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: "1"
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: PRX/Porter
+                BranchName: master
+                OutputArtifactFormat: CODE_ZIP
+              Namespace: infrastructure_repo
+              OutputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              RunOrder: 1
+            - Name: TemplateConfig-S3
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: "1"
+              Configuration:
+                PollForSourceChanges: false
+                S3Bucket: !Ref TemplateConfigBucketName
+                S3ObjectKey: !Ref TemplateConfigObject
+              OutputArtifacts:
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: SAM-Build-and-Package
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref SamCodeBuildProject
+              InputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              OutputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 1
+        - Name: Staging
+          Actions:
+            - Name: Update-Staging-Stack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref StagingStackName
+                TemplateConfiguration: TemplateConfigZipArtifact::staging.json
+                TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 1
+        - Name: Testing
+          Actions:
+            - Name: Acceptance-Tests
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref AcceptanceTestsProject
+              InputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              RunOrder: 1
+        - Name: Production
+          Actions:
+            - Name: Create-Prod-ChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ChangeSetName: !Sub ${AWS::StackName}
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref ProductionStackName
+                TemplateConfiguration: TemplateConfigZipArtifact::production.json
+                TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+                - Name: TemplateConfigZipArtifact
+              RunOrder: 1
+            - Name: Approve-Prod-ChangeSet
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              RunOrder: 2
+            - Name: Execute-Prod-ChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                Capabilities: CAPABILITY_IAM
+                ChangeSetName: !Sub ${AWS::StackName}
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref ProductionStackName
+              RunOrder: 3
