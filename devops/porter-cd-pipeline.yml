@@ -187,13 +187,33 @@ Resources:
               Service: cloudformation.amazonaws.com
         Version: "2012-10-17"
       Policies:
-        - PolicyName: ResourceManipulationPolicy
-          PolicyDocument:
+        - PolicyDocument:
             Statement:
-              - Action: "*" # TODO
+              - Action:
+                  - s3:DeleteBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Effect: Deny
+                Resource: "*"
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource: "*"
+              - Action:
+                  - cloudwatch:*
+                  - ec2:*
+                  - ecs:*
+                  - events:*
+                  - iam:*
+                  - lambda:*
+                  - logs:*
+                  - s3:*
+                  - sns:*
+                  - sqs:*
+                  - states:*
                 Effect: Allow
                 Resource: "*"
             Version: "2012-10-17"
+          PolicyName: ResourceManipulationPolicy
       Tags:
         - Key: Project
           Value: Infrastructure
@@ -403,16 +423,22 @@ Resources:
               RunOrder: 1
         - Name: Production
           Actions:
-            - Name: Create-Prod-ChangeSet
+            - Name: Approve-Prod
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              RunOrder: 1
+            - Name: Update-Prod-Stack
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
                 Provider: CloudFormation
                 Version: "1"
               Configuration:
-                ActionMode: CHANGE_SET_REPLACE
+                ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref ProductionStackName
                 TemplateConfiguration: TemplateConfigZipArtifact::production.json
@@ -420,24 +446,43 @@ Resources:
               InputArtifacts:
                 - Name: SamBuildArtifact
                 - Name: TemplateConfigZipArtifact
-              RunOrder: 1
-            - Name: Approve-Prod-ChangeSet
-              ActionTypeId:
-                Category: Approval
-                Owner: AWS
-                Provider: Manual
-                Version: "1"
               RunOrder: 2
-            - Name: Execute-Prod-ChangeSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: "1"
-              Configuration:
-                ActionMode: CHANGE_SET_EXECUTE
-                Capabilities: CAPABILITY_IAM
-                ChangeSetName: !Sub ${AWS::StackName}
-                RoleArn: !GetAtt CloudFormationRole.Arn
-                StackName: !Ref ProductionStackName
-              RunOrder: 3
+
+            # - Name: Create-Prod-ChangeSet
+            #   ActionTypeId:
+            #     Category: Deploy
+            #     Owner: AWS
+            #     Provider: CloudFormation
+            #     Version: "1"
+            #   Configuration:
+            #     ActionMode: CHANGE_SET_REPLACE
+            #     Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+            #     ChangeSetName: !Sub ${AWS::StackName}
+            #     RoleArn: !GetAtt CloudFormationRole.Arn
+            #     StackName: !Ref ProductionStackName
+            #     TemplateConfiguration: TemplateConfigZipArtifact::production.json
+            #     TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
+            #   InputArtifacts:
+            #     - Name: SamBuildArtifact
+            #     - Name: TemplateConfigZipArtifact
+            #   RunOrder: 1
+            # - Name: Approve-Prod-ChangeSet
+            #   ActionTypeId:
+            #     Category: Approval
+            #     Owner: AWS
+            #     Provider: Manual
+            #     Version: "1"
+            #   RunOrder: 2
+            # - Name: Execute-Prod-ChangeSet
+            #   ActionTypeId:
+            #     Category: Deploy
+            #     Owner: AWS
+            #     Provider: CloudFormation
+            #     Version: "1"
+            #   Configuration:
+            #     ActionMode: CHANGE_SET_EXECUTE
+            #     Capabilities: CAPABILITY_IAM
+            #     ChangeSetName: !Sub ${AWS::StackName}
+            #     RoleArn: !GetAtt CloudFormationRole.Arn
+            #     StackName: !Ref ProductionStackName
+            #   RunOrder: 3
