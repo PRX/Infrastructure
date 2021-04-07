@@ -73,16 +73,12 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value: "30"
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub ${RootStackName}_augury
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TargetType: instance
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
@@ -101,6 +97,11 @@ Resources:
       AlarmDescription: >- # TODO
         5XX server errors originating from the metrics target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
@@ -108,11 +109,6 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !Ref AlbFullName
-        - Name: TargetGroup
-          Value: !GetAtt TargetGroup.TargetGroupFullName
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -128,14 +124,12 @@ Resources:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
   ExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -149,14 +143,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   WebEcsService:
     Type: AWS::ECS::Service
@@ -172,14 +164,12 @@ Resources:
           ContainerPort: !Ref kApplicationPort
           TargetGroupArn: !Ref TargetGroup
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TaskDefinition: !Ref WebTaskDefinition
   WorkerEcsService:
     Type: AWS::ECS::Service
@@ -195,14 +185,12 @@ Resources:
           ContainerPort: !Ref kApplicationPort
           TargetGroupArn: !Ref TargetGroup
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TaskDefinition: !Ref WorkerTaskDefinition
 
   WebTaskLogGroup:
@@ -244,14 +232,12 @@ Resources:
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
   WorkerTaskLogGroup:
@@ -293,14 +279,12 @@ Resources:
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
   WorkerTaskLogImpressionsFetchJobMetricFilter:
@@ -392,28 +376,24 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Tags:
-        - Key: Project
-          Value: augury
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
   ForecastRelaySqsQueue:
     Type: AWS::SQS::Queue
     Properties:
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
   ForecastRelayFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -503,10 +483,12 @@ Resources:
       ReservedConcurrentExecutions: 1
       Runtime: nodejs12.x
       Tags:
-        Project: augury # TODO
-        Environment: !Ref EnvironmentType
+        prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Augury
       Timeout: 5
 
   # Forecast task timings
