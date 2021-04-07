@@ -11,6 +11,7 @@ import urllib.parse
 from dateutil.parser import parse
 import datetime
 import re
+import traceback
 
 sns = boto3.client("sns")
 sts = boto3.client("sts")
@@ -37,6 +38,21 @@ def cloudwatch_client(alarm):
         aws_secret_access_key=role["Credentials"]["SecretAccessKey"],
         aws_session_token=role["Credentials"]["SessionToken"],
     )
+
+
+def fancy_region(region):
+    if region == "US East (N. Virginia)":
+        return "N. Virginia"
+
+    return region
+
+
+def alarm_message_title(alarm):
+    state = alarm["NewStateValue"]
+    region = fancy_region(alarm["Region"])
+    name = re.sub(r"\([A-Za-z0-9_\-]+\)$", "", alarm["AlarmName"]).strip()
+
+    return f"{state} [{region}] {name}"
 
 
 def channel_for_topic(sns_topic_arn):
@@ -218,9 +234,9 @@ def alarm_slack_attachment(alarm):
 
     return {
         "color": color_for_alarm(alarm),
-        "fallback": f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        "fallback": alarm_message_title(alarm),
         "title_link": alarm_console_url,
-        "title": f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        "title": alarm_message_title(alarm),
         "text": f"{alarm['AlarmDescription']}",
         "footer": f"{namespace} – {alarm['Region']}",
         "ts": round(parse(alarm["StateChangeTime"]).timestamp()),
@@ -316,8 +332,8 @@ def ok_slack_attachment(alarm):
 
     return {
         "color": color_for_alarm(alarm),
-        "fallback": f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
-        "title": f"{alarm['NewStateValue']} – {alarm['AlarmName']}",
+        "fallback": alarm_message_title(alarm),
+        "title": alarm_message_title(alarm),
         "title_link": alarm_console_url,
         "text": f"Alarm duration: {duration}",
         "footer": f"{namespace} – {alarm['Region']}",
@@ -360,6 +376,7 @@ def lambda_handler(event, context):
         )
     except Exception as e:
         print(e)
+        traceback.print_exc()
         sns.publish(
             TopicArn=os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"],
             Message=json.dumps(
