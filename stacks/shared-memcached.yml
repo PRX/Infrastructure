@@ -1,9 +1,10 @@
 # stacks/shared-memcached.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: >- # TODO
-  Launches stacks for a number of applications and services that are maintained
-  in separate templates.
+Description: >-
+  Creates a Memcached cluster intended to be used by several applications. The
+  cluster's security group will allow only traffic from a security group
+  provided as a stack parameter.
 
 Parameters:
   VPC:
@@ -100,6 +101,9 @@ Resources:
         - !Ref OpsWarnMessagesSnsTopicArn
       AlarmDescription: Memcached swap usage exceeded 8 MB
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref SharedMemcachedCluster
       EvaluationPeriods: 1
       MetricName: SwapUsage
       Namespace: AWS/ElastiCache
@@ -107,9 +111,6 @@ Resources:
       Statistic: Maximum
       Threshold: 8000000
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref SharedMemcachedCluster
   SharedMemcachedHighSwapUsageAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: CreateProductionResources
@@ -124,6 +125,9 @@ Resources:
         - !Ref OpsErrorMessagesSnsTopicArn
       AlarmDescription: Memcached swap usage exceeded 32 MB
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref SharedMemcachedCluster
       EvaluationPeriods: 1
       MetricName: SwapUsage
       Namespace: AWS/ElastiCache
@@ -131,9 +135,6 @@ Resources:
       Statistic: Maximum
       Threshold: 32000000
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref SharedMemcachedCluster
 
 Outputs:
   CacheEndpointAddress:
