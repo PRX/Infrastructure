@@ -306,6 +306,26 @@ Resources:
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  WorkerEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: !If [IsProduction, 6, 1]
+      LaunchType: EC2
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref WorkerTaskDefinition
   WorkerTaskLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -371,26 +391,6 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
-  WorkerEcsService:
-    Type: AWS::ECS::Service
-    Properties:
-      Cluster: !Ref EcsClusterArn
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 6, 1]
-      LaunchType: EC2
-      PropagateTags: TASK_DEFINITION
-      Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TaskDefinition: !Ref WorkerTaskDefinition
 
   WorkerEcsServiceScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
@@ -473,6 +473,26 @@ Resources:
       Threshold: 20
       TreatMissingData: notBreaching
 
+  SayWhenEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      LaunchType: EC2
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - Key: Project
+          Value: Metrics # TODO
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TaskDefinition: !Ref SayWhenTaskDefinition
   SayWhenTaskLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -539,26 +559,6 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
-  SayWhenEcsService:
-    Type: AWS::ECS::Service
-    Properties:
-      Cluster: !Ref EcsClusterArn
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: 1
-      LaunchType: EC2
-      PropagateTags: TASK_DEFINITION
-      Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TaskDefinition: !Ref SayWhenTaskDefinition
   # TODO SayWhenHighVisibleMessagesAlarm:
   #   Type: AWS::CloudWatch::Alarm
   #   Properties:
