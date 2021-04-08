@@ -132,7 +132,7 @@ Parameters:
     Type: String
   BacksawArchiveS3ObjectVersion:
     Type: String
-  # Parameter Overrides
+  # Parameter Overrides from the CodePipeline action
   InfrastructureStorageStackName:
     Type: String
   NotificationsStackName:
@@ -250,6 +250,11 @@ Resources:
         Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
       CloudFormationNotificationArn:
         Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      TemplateUrlBase:
+        Fn::Sub:
+          - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
+          - SourceBucketName:
+              Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
 
   # Root stacks
   StaticSitesRootStack:
@@ -1014,7 +1019,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/provisioned.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/provisioned.yml
       TimeoutInMinutes: 40
 
 Outputs:
