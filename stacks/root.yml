@@ -14,6 +14,18 @@ Description: >-
   in separate templates.
 
 Parameters:
+  # Optional
+  NewRelicLicenseKey:
+    Type: String
+    Default: ""
+  VpcPeeringStatus:
+    Type: String
+    Description: tktk
+    AllowedValues:
+      - Complete
+      - Incomplete
+    Default: Complete # TODO Default should be disabled
+  # Required
   AwsOrganizationId:
     Type: String
   AsgKeyPairName:
@@ -28,9 +40,6 @@ Parameters:
     AllowedValues:
       - Staging
       - Production
-  NewRelicLicenseKey:
-    Type: String
-    Default: ""
   # Application Specific
   AuguryEcrImageTag:
     Type: String
@@ -146,6 +155,7 @@ Parameters:
 
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  HasVpcPeeringComplete: !Equals [!Ref VpcPeeringStatus, Complete]
 
 Mappings:
   EnvironmentTypeMap:
@@ -923,7 +933,8 @@ Resources:
 
   ProvisionedStack:
     Type: AWS::CloudFormation::Stack
-    Condition: IsStaging # TODO This needs to be a parameter so that app creation can be disabled prior to VPC peering
+    Condition: IsStaging # TODO
+    # Condition: HasVpcPeeringComplete # TODO
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
