@@ -251,6 +251,12 @@ Resources:
       CloudFormationNotificationArn:
         Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       TemplateUrlBase:
+        # This is a URL including the hostname of the source bucket, and the
+        # path starting with a Git commit hash for the Infrastructure
+        # repository. Some or all of the contents of the repo live under that
+        # path.
+        # It does not include a trailing slash.
+        # e.g., https://prx-infrastructure-us-east-1-source.s3.amazonaws.com/000e4f9a6b3836efbfc722fe7d2fd598b03edfd4
         Fn::Sub:
           - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
           - SourceBucketName:
@@ -811,7 +817,7 @@ Resources:
         AvailabilityZoneSelectorServiceToken: !GetAtt CustomResourcesStack.Outputs.AvailabilityZoneSelectorServiceToken
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
-        TemplateUrlPrefix: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc
+        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc
         CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -819,7 +825,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc.yml
       TimeoutInMinutes: 20
 
   SharedAlbStack:
@@ -844,7 +850,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-alb.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-alb.yml
       TimeoutInMinutes: 20
   SharedEcsClusterStack:
     Type: AWS::CloudFormation::Stack
@@ -860,7 +866,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs-cluster.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs-cluster.yml
       TimeoutInMinutes: 20
   SharedEcsAsgStack:
     Type: AWS::CloudFormation::Stack
@@ -886,7 +892,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs-asg.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs-asg.yml
       TimeoutInMinutes: 20
 
   PrivateSharedMemcachedStack:
@@ -912,7 +918,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-memcached.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
   ProvisionedStack:
@@ -980,7 +986,7 @@ Resources:
         FeederEcrImageTag: !Ref FeederEcrImageTag
         FeederSecretsVersion: !Ref FeederSecretsVersion
 
-        TemplateUrlPrefix: !Sub https://${Constants.SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/provisioned
+        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/provisioned
         CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
