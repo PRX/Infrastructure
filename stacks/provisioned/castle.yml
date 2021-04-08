@@ -62,16 +62,12 @@ Resources:
         - Key: deregistration_delay.timeout_seconds
           Value: "30"
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub ${RootStackName}_castle
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
       TargetType: instance
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
@@ -90,6 +86,11 @@ Resources:
       AlarmDescription: >- # TODO
         5XX server errors originating from the metrics target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt TargetGroup.TargetGroupFullName
       EvaluationPeriods: 1
       MetricName: HTTPCode_Target_5XX_Count
       Namespace: AWS/ApplicationELB
@@ -97,11 +98,6 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !Ref AlbFullName
-        - Name: TargetGroup
-          Value: !GetAtt TargetGroup.TargetGroupFullName
 
   EcsService:
     Type: AWS::ECS::Service
@@ -117,14 +113,12 @@ Resources:
           ContainerPort: !Ref kApplicationPort
           TargetGroupArn: !Ref TargetGroup
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
       TaskDefinition: !Ref TaskDefinition
 
   TaskLogGroup:
@@ -144,14 +138,12 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -166,14 +158,12 @@ Resources:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -211,14 +201,12 @@ Resources:
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
   RedisSubnetGroup:
@@ -260,21 +248,19 @@ Resources:
         - !GetAtt RedisSecurityGroup.GroupId
       SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
       Tags:
-        - Key: Project
-          Value: Metrics # TODO
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
   RedisMemoryLowAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
       ActionsEnabled: true
       AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 85%" # TODO
-      # AlarmActions:
+      # TODO AlarmActions:
       #   - !Ref OpsWarnMessagesSnsTopicArn
       # InsufficientDataActions:
       #   - !Ref OpsWarnMessagesSnsTopicArn
@@ -283,6 +269,9 @@ Resources:
       AlarmDescription: >-
         Max Redis database memory usage exceeded 85% for two consecutive periods
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref RedisReplicationGroup
       EvaluationPeriods: 2
       MetricName: DatabaseMemoryUsagePercentage
       Namespace: AWS/ElastiCache
@@ -290,16 +279,13 @@ Resources:
       Statistic: Maximum
       Threshold: 0.85
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
   RedisMemoryVeryLowAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
       ActionsEnabled: true
       AlarmName: "[Castle][Redis][Memory] Memory usage exceeded 93%" # TODO
-      # AlarmActions:
+      # TODO AlarmActions:
       #   - !Ref OpsErrorMessagesSnsTopicArn
       # InsufficientDataActions:
       #   - !Ref OpsErrorMessagesSnsTopicArn
@@ -308,6 +294,9 @@ Resources:
       AlarmDescription: >-
         Max Redis database memory usage exceeded 93% for two consecutive periods
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: CacheClusterId
+          Value: !Ref RedisReplicationGroup
       EvaluationPeriods: 2
       MetricName: DatabaseMemoryUsagePercentage
       Namespace: AWS/ElastiCache
@@ -315,6 +304,3 @@ Resources:
       Statistic: Maximum
       Threshold: 0.93
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
