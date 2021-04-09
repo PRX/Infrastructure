@@ -4,6 +4,23 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: metrics.prx.org application running in Docker # TODO
 
 Mappings:
+  Domains:
+    # The ServiceDomain is the name used to create alias records in each region
+    # for the load balancer. Having multiple records with the same name in this
+    # way creates latency records. This is the domain responsible for both
+    # the multi-region latency-based routing policy, and health checks and
+    # failover. The health of any given DNS record (i.e., region) is based on
+    # the health of the load balancer being targeted by the alias. The health
+    # of the load balancer is in turn based on the health of its target groups.
+    # A load balancer is only considered healthy (and thus a possible return
+    # value of the service domain) if all target groups contain at least one
+    # healthy target.
+    # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy.html#routing-policy-latency
+    # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-latency-alias.html
+    Staging:
+      ServiceDomain: dt3-alpha-stag.prx.tech # TODO
+    Production:
+      ServiceDomain: dt3-alpha.prx.tech # TODO
   ElbService:
     # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
     us-east-1:
@@ -83,14 +100,20 @@ Resources:
     Properties:
       ServiceToken: !Ref EchoServiceToken
       VanityAlbDomain: !Sub dovetail.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
-      ServiceDomain: dt3-alpha.prx.tech
+      ServiceDomain: !FindInMap [Domains, !Ref EnvironmentType, ServiceDomain]
 
   Certificate:
+    # This certificate does not include an entry for the service domain, since
+    # that will generally be prx.tech, and there is some risk is serving user-
+    # generated content from the same domain as other apps. So even though the
+    # prx.tech service domain is used for DNS purposes, it should not be used
+    # for other purposes.
     Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !If [IsProduction, dovetail.prxu.org, dovetail.staging.prxu.org]
       SubjectAlternativeNames:
         - !GetAtt Constants.VanityAlbDomain
+        - !GetAtt Constants.ServiceDomain # TODO Should not exist
       Tags:
         - Key: Name
           Value: !Sub Dovetail Router ${EnvironmentTypeAbbreviation} ALB ${Alb.LoadBalancerName}
@@ -105,7 +128,7 @@ Resources:
   VanityAlbDomainRecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: !Sub >-
+      Comment: !Sub >- # TODO
         Record sets for dualstack traffic to the Dovetail ${EnvironmentType} ALB
       HostedZoneName: prx.tech.
       RecordSets:
@@ -119,11 +142,10 @@ Resources:
             HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
           Name: !GetAtt Constants.VanityAlbDomain
           Type: A
-
   ServiceFailoverRecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: !Sub >-
+      Comment: !Sub >- # TODO
         Record sets for dualstack traffic to the Dovetail ${EnvironmentType} ALB
       HostedZoneName: prx.tech.
       RecordSets:
