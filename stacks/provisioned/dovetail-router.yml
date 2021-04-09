@@ -83,6 +83,7 @@ Resources:
     Properties:
       ServiceToken: !Ref EchoServiceToken
       VanityAlbDomain: !Sub dovetail.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
+      ServiceDomain: dt3-alpha.prx.tech
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
@@ -100,6 +101,48 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Router }
       ValidationMethod: DNS
+
+  VanityAlbDomainRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: !Sub >-
+        Record sets for dualstack traffic to the Dovetail ${EnvironmentType} ALB
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.VanityAlbDomain
+          Type: AAAA
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.VanityAlbDomain
+          Type: A
+
+  ServiceFailoverRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: !Sub >-
+        Record sets for dualstack traffic to the Dovetail ${EnvironmentType} ALB
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.ServiceDomain
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: AAAA
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.ServiceDomain
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: A
 
   AccessLogsBucket:
     Type: AWS::S3::Bucket
