@@ -227,107 +227,107 @@ Resources:
       Threshold: 0.2
       TreatMissingData: notBreaching
 
-  # HttpListener:
-  #   # Generally all HTTP traffic is redirected to HTTPS
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - RedirectConfig:
-  #           Host: "#{host}"
-  #           Path: "/#{path}"
-  #           Port: "443"
-  #           Protocol: HTTPS
-  #           Query: "#{query}"
-  #           StatusCode: HTTP_301
-  #         Type: redirect
-  #     LoadBalancerArn: !Ref Alb
-  #     Port: 80
-  #     Protocol: HTTP
-  # HttpsListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     Certificates:
-  #       - CertificateArn: !Ref Certificate
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref TargetGroup
-  #     LoadBalancerArn: !Ref Alb
-  #     Port: 443
-  #     Protocol: HTTPS
+  HttpListener:
+    # Generally all HTTP traffic is redirected to HTTPS
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - RedirectConfig:
+            Host: "#{host}"
+            Path: "/#{path}"
+            Port: "443"
+            Protocol: HTTPS
+            Query: "#{query}"
+            StatusCode: HTTP_301
+          Type: redirect
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+  HttpsListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: !Ref Certificate
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref Alb
+      Port: 443
+      Protocol: HTTPS
 
-  # TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 15
-  #     HealthCheckPath: /
-  #     HealthCheckTimeoutSeconds: 5
-  #     HealthyThresholdCount: 3
-  #     Port: 80
-  #     Protocol: HTTP
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "15"
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:family, Value: Dovetail }
-  #       - { Key: prx:dev:application, Value: Router } # TODO
-  #     TargetType: instance
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # TargetGroupHttp5xxAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Condition: IsProduction
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
-  #     AlarmActions:
-  #       - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-  #     InsufficientDataActions:
-  #       - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-  #     OKActions:
-  #       - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-  #     AlarmDescription: >- # TODO
-  #       5XX server errors originating from the metrics target group exceeded 0
-  #     ComparisonOperator: GreaterThanThreshold
-  #     Dimensions:
-  #       - Name: LoadBalancer
-  #         Value: !GetAtt Alb.LoadBalancerFullName
-  #       - Name: TargetGroup
-  #         Value: !GetAtt WebTargetGroup.TargetGroupFullName
-  #     EvaluationPeriods: 1
-  #     MetricName: HTTPCode_Target_5XX_Count
-  #     Namespace: AWS/ApplicationELB
-  #     Period: 60
-  #     Statistic: Sum
-  #     Threshold: 0
-  #     TreatMissingData: notBreaching
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "15"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router } # TODO
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  TargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        5XX server errors originating from the metrics target group exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !GetAtt Alb.LoadBalancerFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
 
-  # EcsService:
-  #   Type: AWS::ECS::Service
-  #   Properties:
-  #     Cluster: !Ref EcsClusterArn
-  #     DeploymentConfiguration:
-  #       MaximumPercent: 200
-  #       MinimumHealthyPercent: 50
-  #     DesiredCount: 2
-  #     EnableECSManagedTags: true
-  #     LaunchType: EC2
-  #     LoadBalancers:
-  #       - ContainerName: !Ref kContainerName
-  #         ContainerPort: !Ref kApplicationPort
-  #         TargetGroupArn: !Ref WebTargetGroup
-  #     PropagateTags: TASK_DEFINITION
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:family, Value: Dovetail }
-  #       - { Key: prx:dev:application, Value: Router } # TODO
-  #     TaskDefinition: !Ref TaskDefinition
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 2
+      EnableECSManagedTags: true
+      LaunchType: EC2
+      LoadBalancers:
+        - ContainerName: !Ref kContainerName
+          ContainerPort: !Ref kApplicationPort
+          TargetGroupArn: !Ref WebTargetGroup
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router } # TODO
+      TaskDefinition: !Ref TaskDefinition
 
   TaskLogGroup:
     Type: AWS::Logs::LogGroup
