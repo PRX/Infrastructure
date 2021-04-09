@@ -81,7 +81,6 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   Constants:
@@ -93,11 +92,10 @@ Resources:
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: feeder.prx.org
+      DomainName: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
       SubjectAlternativeNames:
-        - feeder.prx.tech
         - !GetAtt Constants.VanityAlbDomain
-        - !If [IsStaging, feeder.staging.prx.tech, !Ref "AWS::NoValue"]
+        - !If [IsProduction, feeder.prx.tech, !Ref "AWS::NoValue"]
       Tags:
         - Key: Name
           Value: !Sub Feeder ${EnvironmentTypeAbbreviation} ALB ${Alb.LoadBalancerName}
