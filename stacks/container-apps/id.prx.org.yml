@@ -17,8 +17,6 @@ Parameters:
     Type: String
   PlatformALBCanonicalHostedZoneID:
     Type: String
-  PlatformALBHTTPListenerArn:
-    Type: String
   PlatformALBHTTPSListenerArn:
     Type: String
   PlatformALBListenerPriorityPrefix:
@@ -106,19 +104,6 @@ Resources:
             - id.*
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
-  ALBHTTPHostWildcardListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: CreateProductionResources
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - id.*
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "00"]]
   ALBHTTPSExplicitListenerRule:
     Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
     Condition: HasExplicitHostHeader
@@ -131,19 +116,6 @@ Resources:
           Values:
             - !Ref ExplicitHostHeader
       ListenerArn: !Ref PlatformALBHTTPSListenerArn
-      Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "10"]]
-  ALBHTTPExplicitListenerRule:
-    Type: "AWS::ElasticLoadBalancingV2::ListenerRule"
-    Condition: HasExplicitHostHeader
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - !Ref ExplicitHostHeader
-      ListenerArn: !Ref PlatformALBHTTPListenerArn
       Priority: !Join ["", [!Ref PlatformALBListenerPriorityPrefix, "10"]]
   # CloudWatch Alarms
   ALBTargetGroup500Alarm:
