@@ -279,6 +279,57 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
+
+  ProxyHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: !Sub ${EnvironmentType} prx.org proxy
+      Tags:
+        Project: upload.radiotopia.fm # TODO
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+  ProxyHttpLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: lambda/PRX-proxy.prx.org.zip
+        Version: !Ref CodeS3ObjectVersion
+      Description: !Sub ${EnvironmentType} Top-level proxy server for www.prx.org
+      Environment:
+        Variables:
+          CORPORATE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, CorporateHost]
+          EXCHANGE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ExchangeHost]
+          PRX_SESSION_KEY: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, PrxSessionKey]
+      Events:
+        ApiRootRequest:
+          Properties:
+            ApiId: !Ref ProxyHttpApi
+            Method: any
+            Path: /
+          Type: HttpApi
+        ApiDeepRequest:
+          Properties:
+            ApiId: !Ref ProxyHttpApi
+            Method: any
+            Path: /{proxy+}
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 192
+      Runtime: nodejs14.x
+      Tags:
+        Project: upload.prx.org # TODO
+        Environment: !Ref EnvironmentType
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 30
+  ProxyHttpLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProxyHttpLambdaFunction}
+      RetentionInDays: 60
+
 Outputs:
   ApiDomainName:
     Description: The custom API domain name
