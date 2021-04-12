@@ -1,28 +1,30 @@
 # dns/radiotopia.fm-hosted_zone.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
-  Hosted zone and record sets for radiotopia.fm
+Description: Hosted zone and record sets for radiotopia.fm
+
 Parameters:
   Domain:
     Default: radiotopia.fm.
     Description: The domain name and hosted zone
     Type: String
+
 Resources:
   HostedZone:
-    Type: "AWS::Route53::HostedZone"
+    Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
         Comment: Primary Radiotopia domain
       HostedZoneTags:
         - Key: Project
           Value: radiotopia.fm
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       Name: !Ref Domain
+
   Text:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       # Route53 expects TXT record values to be enclosed in double quotes, so in
       # the YAML they need to be double-quoted.
@@ -49,22 +51,22 @@ Resources:
           Type: TXT
           Name: !Sub cm._domainkey.${Domain}
   GSuite:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: G Suite
       HostedZoneId: !Ref HostedZone
       RecordSets:
         - ResourceRecords:
-            - "1 ASPMX.L.GOOGLE.COM."
-            - "5 ALT1.ASPMX.L.GOOGLE.COM."
-            - "5 ALT2.ASPMX.L.GOOGLE.COM."
-            - "10 ASPMX2.GOOGLEMAIL.COM."
-            - "10 ASPMX3.GOOGLEMAIL.COM."
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "300"
           Type: MX
           Name: !Ref Domain
   Squarespace:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Squarespace
       HostedZoneId: !Ref HostedZone
@@ -88,7 +90,7 @@ Resources:
           Type: CNAME
           Name: !Sub 8k7w47c5y878fddxzmfk.${Domain}
   MailChimp:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: MailChimp
       HostedZoneId: !Ref HostedZone
@@ -99,7 +101,7 @@ Resources:
           Type: CNAME
           Name: !Sub k1._domainkey.${Domain}
   Zendesk:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Zendesk
       HostedZoneId: !Ref HostedZone
@@ -125,7 +127,7 @@ Resources:
           Type: CNAME
           Name: !Sub zendesk4.${Domain}
   Feedburner:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: MailChimp
       HostedZoneId: !Ref HostedZone
@@ -136,7 +138,7 @@ Resources:
           Type: CNAME
           Name: !Sub feeds.${Domain}
   Media:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Media server
       HostedZoneId: !Ref HostedZone
@@ -154,7 +156,7 @@ Resources:
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
   RadiotopiaRadio:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Radio and API
       HostedZoneId: !Ref HostedZone
@@ -184,7 +186,7 @@ Resources:
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
   Legacy:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Radio and API
       HostedZoneId: !Ref HostedZone
@@ -201,19 +203,8 @@ Resources:
             DNSName: d1r9u0eotsa1l1.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-  Temp:
-    Type: "AWS::Route53::RecordSetGroup"
-    Properties:
-      Comment: Temporay
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - ResourceRecords:
-            - d39dsm1bpkt516.cloudfront.net.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub radiopublic.${Domain}
   Plus:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Plus
       HostedZoneId: !Ref HostedZone
@@ -230,54 +221,64 @@ Resources:
             DNSName: dlbhchudv5ekb.cloudfront.net.
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-  Aws:
-    Type: "AWS::Route53::RecordSetGroup"
+
+  AwsAcmLegacyUsEast1:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for prx-legacy in us-east-1
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # media.radiotopia.fm
+        - Name: !Sub _d08d1dd9ebb8f0903008027de35c7443.media.${Domain}
+          ResourceRecords:
+            - _f84ee6a2d5ebb0fe4d7f3fa1a67d8ac5.ltfvzjuylp.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # plus.radiotopia.fm
+        - Name: !Sub _527919f09cd53f2d466afab5136dba0f.plus.${Domain}
+          ResourceRecords:
+            - _fc9392af0c0798539c03622e6a298c83.auiqqraehs.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # radio.radiotopia.fm
+        - Name: !Sub _4525099436d18c052c0f5f43a2e8e790.radio.${Domain}
+          ResourceRecords:
+            - _35433c66939db2c77a310172c59b43c2.ltfvzjuylp.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # tower.radiotopia.fm
+        - Name: !Sub _942b9c2d7b54df93353882888bb19f35.tower.${Domain}
+          ResourceRecords:
+            - _c9c7cba0a64dff93660df39aabd91f43.ltfvzjuylp.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # v1.radiotopia.fm
+        - Name: !Sub _9a0de402b0a08bbb89b2bf80baf817cd.v1.${Domain}
+          ResourceRecords:
+            - _4a621ed053272a0ac3952335200703e2.ltfvzjuylp.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # www.radiotopia.fm
+        - Name: !Sub _f6f13aacd4c0dd200558803022700890.www.${Domain}
+          ResourceRecords:
+            - _19d9909a7ddd472ac2a76f6651492b15.ltfvzjuylp.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+  AwsAcm:
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: AWS ACM, etc
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        # TODO
+        - Name: !Sub _dc6d9619021cc31940a1192fda2df1f1.${Domain}
+          ResourceRecords:
             - _b9bc3cabdffb748e59ca5978c09d9485.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _dc6d9619021cc31940a1192fda2df1f1.${Domain}
-        - ResourceRecords:
+        # TODO
+        - Name: !Sub _1daaef68a02e2ef714d25935180b8192.feeds.${Domain}
+          ResourceRecords:
             - _fc5d225af903e59bec83de07d729d9e6.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _1daaef68a02e2ef714d25935180b8192.feeds.${Domain}
-        - ResourceRecords:
-            - _f84ee6a2d5ebb0fe4d7f3fa1a67d8ac5.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _d08d1dd9ebb8f0903008027de35c7443.media.${Domain}
-        - ResourceRecords:
-            - _fc9392af0c0798539c03622e6a298c83.auiqqraehs.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _527919f09cd53f2d466afab5136dba0f.plus.${Domain}
-        - ResourceRecords:
-            - _35433c66939db2c77a310172c59b43c2.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _4525099436d18c052c0f5f43a2e8e790.radio.${Domain}
-        - ResourceRecords:
-            - _0394c9305f3b2d2259b6615e5e542092.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _03c84deca74b028065383d62338b2ae9.radiopublic.${Domain}
-        - ResourceRecords:
-            - _c9c7cba0a64dff93660df39aabd91f43.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _942b9c2d7b54df93353882888bb19f35.tower.${Domain}
-        - ResourceRecords:
-            - _4a621ed053272a0ac3952335200703e2.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _9a0de402b0a08bbb89b2bf80baf817cd.v1.${Domain}
-        - ResourceRecords:
-            - _19d9909a7ddd472ac2a76f6651492b15.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
-          Type: CNAME
-          Name: !Sub _f6f13aacd4c0dd200558803022700890.www.${Domain}

@@ -1,12 +1,13 @@
 # dns/passengerlist.org-hosted_zone.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
-  Hosted zone and record sets for passengerlist.org
+Description: Hosted zone and record sets for passengerlist.org
+
 Parameters:
   Domain:
     Default: passengerlist.org.
     Description: The domain name and hosted zone
     Type: String
+
 Resources:
   HostedZone:
     Type: AWS::Route53::HostedZone
@@ -21,6 +22,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       Name: !Ref Domain
+
   Feeds:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -39,27 +41,36 @@ Resources:
             DNSName: d37xabah88u7hv.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-  Aws:
+  AwsAcmFeedCdnProdUsEast1:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: AWS
+      Comment: AWS ACM validation records for prx-feed-cdn-prod in us-east-1
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        # feed.passengerlist.org
+        - Name: !Sub _0423d885692cf0495ca5b1db80e0692a.feed.${Domain}
+          ResourceRecords:
             - _0c68b076d347713f620ba75f400a67cf.duyqrilejt.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _0423d885692cf0495ca5b1db80e0692a.feed.${Domain}
-        - ResourceRecords:
+  AwsAcmLegacyUsEast1:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for prx-legacy in us-east-1
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # departures.passengerlist.org
+        - Name: !Sub _bb6e020f8890ff1d2a083b3f48fe9130.departures.${Domain}
+          ResourceRecords:
             - _e33b5da41af60eba75029ea33a83935b.duyqrilejt.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _bb6e020f8890ff1d2a083b3f48fe9130.departures.${Domain}
-        - ResourceRecords:
+        # join.passengerlist.org
+        - Name: !Sub _a01b496f93bfcdcca5f27247b8a8dd85.join.${Domain}
+          ResourceRecords:
             - _5bb50ac22f4316417edde72b9c7eba26.olprtlswtu.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _a01b496f93bfcdcca5f27247b8a8dd85.join.${Domain}
   Website:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -143,11 +154,11 @@ Resources:
       HostedZoneId: !Ref HostedZone
       RecordSets:
         - ResourceRecords:
-            - "1 ASPMX.L.GOOGLE.COM."
-            - "5 ALT1.ASPMX.L.GOOGLE.COM."
-            - "5 ALT2.ASPMX.L.GOOGLE.COM."
-            - "10 ASPMX2.GOOGLEMAIL.COM."
-            - "10 ASPMX3.GOOGLEMAIL.COM."
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "300"
           Type: MX
           Name: !Ref Domain

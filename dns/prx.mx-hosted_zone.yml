@@ -1,28 +1,30 @@
 # dns/prx.mx-hosted_zone.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
-  Hosted zone and record sets for prx.mx
+Description: Hosted zone and record sets for prx.mx
+
 Parameters:
   Domain:
     Default: prx.mx.
     Description: The domain name and hosted zone
     Type: String
+
 Resources:
   HostedZone:
-    Type: "AWS::Route53::HostedZone"
+    Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
         Comment: Remix domain
       HostedZoneTags:
         - Key: Project
           Value: Remix
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       Name: !Ref Domain
+
   Website:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: WWW
       HostedZoneId: !Ref HostedZone
@@ -44,24 +46,26 @@ Resources:
           TTL: "300"
           Type: CNAME
           Name: !Sub www.${Domain}
-  Aws:
-    Type: "AWS::Route53::RecordSetGroup"
+  AwsAcmLegacyUsEast1:
+    Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: AWS ACM, etc
+      Comment: AWS ACM validation records for prx-legacy in us-east-1
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        # prx.mx, *.prx.mx
+        - Name: !Sub _27bbc5f87c001a6920754062a0e9b5cf.${Domain}
+          ResourceRecords:
             - _a1223e715b9fc43c557b8daf3fa0df78.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _27bbc5f87c001a6920754062a0e9b5cf.${Domain}
-        - ResourceRecords:
+        # www.prx.mx
+        - Name: !Sub _bd387aa4bcceb75e21fd7829da00c1f6.www.${Domain}
+          ResourceRecords:
             - _aea5801b5cb705095b04dc4371193ffc.ltfvzjuylp.acm-validations.aws.
-          TTL: "300"
+          TTL: "3600"
           Type: CNAME
-          Name: !Sub _bd387aa4bcceb75e21fd7829da00c1f6.www.${Domain}
   Text:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       # Route53 expects TXT record values to be enclosed in double quotes, so in
       # the YAML they need to be double-quoted.
@@ -77,17 +81,17 @@ Resources:
           Type: TXT
           Name: !Ref Domain
   GSuite:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: G Suite
       HostedZoneId: !Ref HostedZone
       RecordSets:
         - ResourceRecords:
-            - "1 ASPMX.L.GOOGLE.COM."
-            - "5 ALT1.ASPMX.L.GOOGLE.COM."
-            - "5 ALT2.ASPMX.L.GOOGLE.COM."
-            - "10 ASPMX2.GOOGLEMAIL.COM."
-            - "10 ASPMX3.GOOGLEMAIL.COM."
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "300"
           Type: MX
           Name: !Ref Domain
