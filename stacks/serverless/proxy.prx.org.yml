@@ -284,13 +284,14 @@ Resources:
   ProxyHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      Description: !Sub ${EnvironmentType} prx.org proxy
+      Description: !Sub ${EnvironmentType} proxy service
       DisableExecuteApiEndpoint: false
       Tags:
-        Project: upload.radiotopia.fm # TODO
-        Environment: !Ref EnvironmentType
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
+        - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { PropagateAtLaunch: true, Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { PropagateAtLaunch: true, Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { PropagateAtLaunch: true, Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { PropagateAtLaunch: true, Key: prx:dev:application, Value: Proxy }
   ProxyHttpLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -298,12 +299,13 @@ Resources:
         Bucket: !Ref CodeS3Bucket
         Key: lambda/PRX-proxy.prx.org.zip
         Version: !Ref CodeS3ObjectVersion
-      Description: !Sub ${EnvironmentType} Top-level proxy server for www.prx.org
+      Description: !Sub ${EnvironmentType} proxy server
       Environment:
         Variables:
           CORPORATE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, CorporateHost]
           EXCHANGE_HOST: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, ExchangeHost]
           PRX_SESSION_KEY: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, PrxSessionKey]
+          EXECUTE_API_ENDPOINT_HOST: !Sub ${ProxyHttpApi}.execute-api.${AWS::Region}.amazonaws.com
       Events:
         ApiRootRequest:
           Properties:
@@ -323,10 +325,11 @@ Resources:
       MemorySize: 192
       Runtime: nodejs14.x
       Tags:
-        Project: upload.prx.org # TODO
-        Environment: !Ref EnvironmentType
+        prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
       Timeout: 30
   ProxyHttpLambdaLogGroup:
     Type: AWS::Logs::LogGroup
