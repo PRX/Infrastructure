@@ -249,7 +249,25 @@ Resources:
   # arguments of cfn-signal in the launch template's user data
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
-    # TODO  UpdatePolicy attribute
+    CreationPolicy:
+      AutoScalingCreationPolicy:
+        MinSuccessfulInstancesPercent: 100
+      ResourceSignal:
+        Count: 1
+        Timeout: PT5M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: false
+      AutoScalingRollingUpdate:
+        MaxBatchSize: 1
+        MinInstancesInService: 0
+        MinSuccessfulInstancesPercent: 100
+        PauseTime: PT0S
+        # SuspendProcesses:
+        #   - List of processes
+        WaitOnResourceSignals: false
+      AutoScalingScheduledAction:
+        IgnoreUnmodifiedGroupSizeProperties: true
     Properties:
       Cooldown: "240"
       HealthCheckGracePeriod: 512
@@ -259,16 +277,10 @@ Resources:
         Version: !GetAtt Ec2LaunchTemplate.LatestVersionNumber
       # LifecycleHookSpecificationList
       MaxInstanceLifetime: 1209600 # 14 days
-      MaxSize: !If
-        - IsProduction
-        - "40"
-        - "20"
+      MaxSize: !If [IsProduction, "50", "20"]
       MetricsCollection:
         - Granularity: 1Minute
-      MinSize: !If
-        - IsProduction
-        - "4"
-        - "0"
+      MinSize: !If [IsProduction, "7", "0"]
       NewInstancesProtectedFromScaleIn: true
       # TODO NotificationConfigurations
       Tags:
