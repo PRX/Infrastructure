@@ -38,28 +38,26 @@ Mappings:
       CorporateHost: "corporate.prx.tech"
       ExchangeHost: "exchange.prx.org"
       PrxSessionKey: "_prx_session"
+
 Resources:
   Certificate:
-    Type: "AWS::CertificateManager::Certificate"
+    Type: AWS::CertificateManager::Certificate
     Properties:
-      DomainName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
-      SubjectAlternativeNames:
-        - "prx.org"
-        - "www.prx.org"
-        - !If [CreateStagingResources, proxy2.staging.prx.tech, !Ref "AWS::NoValue"]
-        - !If [CreateStagingResources, proxy2b.staging.prx.tech, !Ref "AWS::NoValue"]
+      DomainName: !If [CreateProductionResources, www.prx.org, proxy.staging.prx.tech]
+      SubjectAlternativeNames: !If
+        - CreateProductionResources
+        - - prx.org
+          - proxy.prx.tech
+        - !Ref AWS::NoValue
       Tags:
-        - Key: Project
-          Value: proxy.prx.org
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub ProxyPrxOrg-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${RootStackName}_proxy" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
       ValidationMethod: DNS
+
   ProxyLambdaIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -180,6 +178,7 @@ Resources:
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ProxyRestApi}/${ProxyRestApiStage}/*"
   ProxyRestApiDomainName:
     Type: "AWS::ApiGateway::DomainName"
+    Condition: CreateProductionResources
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DomainName]
@@ -194,12 +193,14 @@ Resources:
           Value: !Ref AWS::StackId
   ProxyRestApiBasePathMapping:
     Type: "AWS::ApiGateway::BasePathMapping"
+    Condition: CreateProductionResources
     Properties:
       DomainName: !Ref ProxyRestApiDomainName
       RestApiId: !Ref ProxyRestApi
       Stage: prod
   ProxyRestApiDomainNameRecordSetGroup:
     Type: "AWS::Route53::RecordSetGroup"
+    Condition: CreateProductionResources
     Properties:
       Comment: Record sets for proxy server API
       HostedZoneName: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, HostedZoneName]
@@ -288,9 +289,11 @@ Resources:
     Properties:
       Description: !Sub ${EnvironmentType} proxy service
       DisableExecuteApiEndpoint: false
-      Domain:
-        CertificateArn: !Ref Certificate
-        DomainName: proxy2.staging.prx.tech
+      # Domain: !If
+      #   - CreateStagingResources
+      #   - CertificateArn: !Ref Certificate
+      #     DomainName: proxy2.staging.prx.tech
+      #   - !Ref AWS::NoValue
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -341,24 +344,26 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${ProxyHttpLambdaFunction}
       RetentionInDays: 60
 
-  DomainName:
-    Type: AWS::ApiGatewayV2::DomainName
-    Properties:
-      DomainName: proxy2b.staging.prx.tech
-      DomainNameConfigurations:
-        - CertificateArn: !Ref Certificate
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: !Ref EnvironmentType
-        prx:dev:application: Proxy
-  Mapping:
-    Type: AWS::ApiGatewayV2::ApiMapping
-    Properties:
-      ApiId: !Ref ProxyHttpApi
-      DomainName: proxy2b.staging.prx.tech
-      Stage: $default
+  # DomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Condition: CreateStagingResources
+  #   Properties:
+  #     DomainName: proxy2b.staging.prx.tech
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # Mapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Condition: CreateStagingResources
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: proxy2b.staging.prx.tech
+  #     Stage: $default
 
 Outputs:
   ApiDomainName:
