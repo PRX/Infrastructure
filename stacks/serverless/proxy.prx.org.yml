@@ -2,9 +2,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Top-level proxy server for www.prx.org
 Transform: AWS::Serverless-2016-10-31
+
 Conditions:
   CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+
 Parameters:
   OpsWarnMessagesSnsTopicArn:
     Type: String
@@ -292,11 +294,6 @@ Resources:
     Properties:
       Description: !Sub ${EnvironmentType} proxy service
       DisableExecuteApiEndpoint: false
-      # Domain: !If
-      #   - CreateStagingResources
-      #   - CertificateArn: !Ref Certificate
-      #     DomainName: proxy2.staging.prx.tech
-      #   - !Ref AWS::NoValue
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -347,23 +344,49 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${ProxyHttpLambdaFunction}
       RetentionInDays: 60
 
-  # DomainName:
-  #   Type: AWS::ApiGatewayV2::DomainName
-  #   Condition: CreateStagingResources
-  #   Properties:
-  #     DomainName: proxy2b.staging.prx.tech
-  #     DomainNameConfigurations:
-  #       - CertificateArn: !Ref Certificate
-  #     Tags:
-  #       prx:meta:tagging-version: "2021-04-07"
-  #       prx:cloudformation:stack-name: !Ref AWS::StackName
-  #       prx:cloudformation:stack-id: !Ref AWS::StackId
-  #       prx:ops:environment: !Ref EnvironmentType
-  #       prx:dev:application: Proxy
-  # Mapping:
-  #   Type: AWS::ApiGatewayV2::ApiMapping
-  #   Condition: CreateStagingResources
-  #   Properties:
-  #     ApiId: !Ref ProxyHttpApi
-  #     DomainName: proxy2b.staging.prx.tech
-  #     Stage: $default
+  # Create an association between proxy.prx.tech (or staging.proxy.prx.tech)
+  # and the API Gateway. The API is a regional API, so the domain can be
+  # associated with one API in each AWS region. DNS records are also created in
+  # each region, which creates a latency-based routing policy for DNS queries
+  # of the domain.
+  UtilityDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: CreateStagingResources # TODO
+    Properties:
+      DomainName: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
+  UtilityApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: CreateStagingResources # TODO
+    Properties:
+      ApiId: !Ref ProxyHttpApi
+      DomainName: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+      Stage: $default
+  UtilityDomainNameRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: CreateStagingResources # TODO
+    Properties:
+      Comment: Record sets for proxy server API
+      HostedZoneName: prx.tech
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+            HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
+          Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: A
+        - AliasTarget:
+            DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+            HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
+          Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: AAAA
