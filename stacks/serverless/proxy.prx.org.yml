@@ -1,11 +1,11 @@
 # stacks/proxy.prx.org.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Top-level proxy server for www.prx.org
 Transform: AWS::Serverless-2016-10-31
-
-Conditions:
-  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
-  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+Description: >-
+  Creates a serverless app to handle traffic to various domains that needs to
+  be proxied or redirected based on rule sets. In staging, it only handles
+  proxy.staging.prx.org. In production, the API is also mapped to the domains
+  it's designed to proxy, such as prx.org and pri.org.
 
 Parameters:
   OpsWarnMessagesSnsTopicArn:
@@ -43,6 +43,10 @@ Mappings:
       CorporateHost: "corporate.prx.tech"
       ExchangeHost: "exchange.prx.org"
       PrxSessionKey: "_prx_session"
+
+Conditions:
+  CreateStagingResources: !Equals [!Ref EnvironmentType, Staging]
+  CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
   Certificate:
@@ -378,6 +382,7 @@ Resources:
       RecordSets:
         - AliasTarget:
             DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+            EvaluateTargetHealth: true # TODO Add health check
             HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
           Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
           Region: !Ref AWS::Region
@@ -385,8 +390,55 @@ Resources:
           Type: A
         - AliasTarget:
             DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+            EvaluateTargetHealth: true
             HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
           Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
           Type: AAAA
+
+  # In production, create associations between prx.org and www.prx.org and the
+  # API Gateway. These are also regional, and need to exist in each region the
+  # API is deployed to. There will only be a single DNS record for each domain,
+  # though, which will point to proxy.prx.tech.
+  # There are no counterparts to these domains in staging.
+  # ApexDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Condition: CreateProductionResources # TODO
+  #   Properties:
+  #     DomainName: prx.org
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # ApexApiMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Condition: CreateProductionResources # TODO
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: !Ref ApexDomainName
+  #     Stage: $default
+  # WwwDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Condition: CreateProductionResources # TODO
+  #   Properties:
+  #     DomainName: www.prx.org
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # WwwApiMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Condition: CreateProductionResources # TODO
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: !Ref WwwDomainName
+  #     Stage: $default
