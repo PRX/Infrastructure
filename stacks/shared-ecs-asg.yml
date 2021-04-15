@@ -9,6 +9,13 @@ Description: >-
   security groups. Instances in the ASG are launched in public subnets.
 
 Parameters:
+  kImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    # Update this value to change which AMI the launch template uses. You can
+    # find the latest image name here:
+    # https://console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_name/description
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20210413-x86_64-ebs/image_id
+  #
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   KeyPairName: { Type: "AWS::EC2::KeyPair::KeyName" }
@@ -110,6 +117,7 @@ Resources:
 
   # If the logical ID of this resource changes, it needs to be changed in the
   # user data and metadata as well
+  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
   Ec2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -118,7 +126,7 @@ Resources:
           CpuCredits: unlimited
         IamInstanceProfile:
           Arn: !GetAtt InstanceProfile.Arn
-        ImageId: ami-09a3cad575b7eabaa # TODO Make multi-region aware
+        ImageId: !Ref kImageId
         InstanceType: !If
           - IsProduction
           - t3a.medium
