@@ -562,50 +562,68 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TaskRoleArn: !GetAtt TaskRole.Arn
-  # TODO SayWhenHighVisibleMessagesAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing"
-  #     AlarmActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     InsufficientDataActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     OKActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     AlarmDescription: SayWhen is very behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 12
-  #     MetricName: ApproximateNumberOfMessagesVisible
-  #     Namespace: AWS/SQS
-  #     Period: 300
-  #     Statistic: Average
-  #     Threshold: 50
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Sub Prx3${EnvironmentType}SayWhen # TODO
+  SayWhenHighVisibleMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing" # TODO
+      AlarmActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: SayWhen is very behind
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub Prx3${EnvironmentType}SayWhen # TODO
+      EvaluationPeriods: 12
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Average
+      Threshold: 50
+      TreatMissingData: notBreaching
 
-  # TODO ExchangeDeliveryUpdateAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     ActionsEnabled: true
-  #     AlarmName: !Sub "[Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing"
-  #     AlarmActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     InsufficientDataActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     OKActions:
-  #       - !If [CreateProductionResources, !Ref OpsFatalMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-  #     AlarmDescription: Deliveries are very behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 12
-  #     MetricName: ApproximateNumberOfMessagesVisible
-  #     Namespace: AWS/SQS
-  #     Period: 300
-  #     Statistic: Average
-  #     Threshold: 100
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+  ExchangeDeliveryUpdateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing" # TODO
+      AlarmActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::If:
+            - IsProduction
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
+            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: Deliveries are very behind
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+      EvaluationPeriods: 12
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Average
+      Threshold: 100
+      TreatMissingData: notBreaching
