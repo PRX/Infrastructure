@@ -11,15 +11,6 @@ Parameters:
   kPackagedTemplateFileName:
     Type: String
     Default: pkg-template.yaml
-  kArtifactImageKey:
-    Type: String
-    Default: image
-  kFtpArtifactFileName:
-    Type: String
-    Default: ftp-artifact.json
-  kTranscodeArtifactFileName:
-    Type: String
-    Default: transcode-artifact.json
   #######
   CodeStarConnectionArn:
     Type: String
@@ -55,6 +46,8 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
+  # Runs `sam build` and `sam package`, and outputs the resulting
+  # CloudFormation template as an artifact.
   SamCodeBuildProjectLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -142,6 +135,9 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  # Runs `docker build` for the transcode task image if necessary, and pushes
+  # the result to the ECR repository above. The CodeBuild project exports a
+  # variable called IMAGE_NAME with the Docker image name:tag in all cases.
   TranscodeBuildProjectLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -218,8 +214,11 @@ Resources:
           Status: ENABLED
       ServiceRole: !GetAtt TranscodeBuildProjectRole.Arn
       Source:
-        BuildSpec: !Sub |-
+        BuildSpec: |-
           version: 0.2
+          env:
+            exported-variables:
+              - IMAGE_NAME
           phases:
             install:
               runtime-versions:
@@ -245,12 +244,7 @@ Resources:
                   if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
             post_build:
               commands:
-                - >-
-                  echo "{ \"${kArtifactImageKey}\": \"$imageName\" }" > ${kTranscodeArtifactFileName}
-          artifacts:
-            files:
-              - ${kTranscodeArtifactFileName}
-            name: TranscodeBuildArtifact
+                - export IMAGE_NAME="$imageName"
         Type: CODEPIPELINE
       Tags:
         - Key: Project
@@ -261,6 +255,9 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  # Runs `docker build` for the FTP copy task image if necessary, and pushes
+  # the result to the ECR repository above. The CodeBuild project exports a
+  # variable called IMAGE_NAME with the Docker image name:tag in all cases.
   FtpBuildProjectLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -337,8 +334,11 @@ Resources:
           Status: ENABLED
       ServiceRole: !GetAtt FtpBuildProjectRole.Arn
       Source:
-        BuildSpec: !Sub |-
+        BuildSpec: |-
           version: 0.2
+          env:
+            exported-variables:
+              - IMAGE_NAME
           phases:
             install:
               runtime-versions:
@@ -364,12 +364,7 @@ Resources:
                   if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
             post_build:
               commands:
-                - >-
-                  echo "{ \"${kArtifactImageKey}\": \"$imageName\" }" > ${kFtpArtifactFileName}
-          artifacts:
-            files:
-              - ${kFtpArtifactFileName}
-            name: FtpBuildArtifact
+                - export IMAGE_NAME="$imageName"
         Type: CODEPIPELINE
       Tags:
         - Key: Project
@@ -380,6 +375,23 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  # Runs Porter's acceptance test suite against the staging state machine
+  AcceptanceTestsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 1
+            Status: Enabled
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
   AcceptanceTestsProjectLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -437,6 +449,9 @@ Resources:
       Description: Runs acceptance tests for Porter staging
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: PORTER_TEST_BUCKET_NAME
+            Value: !Ref AcceptanceTestsBucket
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         Type: LINUX_CONTAINER
       LogsConfig:
@@ -639,7 +654,6 @@ Resources:
                 FullRepositoryId: PRX/Porter
                 BranchName: master
                 OutputArtifactFormat: CODE_ZIP
-              Namespace: infrastructure_repo
               OutputArtifacts:
                 - Name: PorterRepoSourceArtifact
               RunOrder: 1
@@ -658,6 +672,8 @@ Resources:
               RunOrder: 1
         - Name: Build
           Actions:
+            # The output artifact is the CloudFormation template that's a
+            # result of `sam build && sam package`
             - Name: SAM-Build-and-Package
               ActionTypeId:
                 Category: Build
@@ -671,6 +687,8 @@ Resources:
               OutputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 1
+            # Exports a variable called IMAGE_NAME to the namespace with the
+            # docker image name:tag
             - Name: Transcode-Docker-Build-and-Publish
               ActionTypeId:
                 Category: Build
@@ -681,9 +699,10 @@ Resources:
                 ProjectName: !Ref TranscodeBuildProject
               InputArtifacts:
                 - Name: PorterRepoSourceArtifact
-              OutputArtifacts:
-                - Name: TranscodeBuildArtifact
+              Namespace: transcode_build
               RunOrder: 1
+            # Exports a variable called IMAGE_NAME to the namespace with the
+            # docker image name:tag
             - Name: FTP-Docker-Build-and-Publish
               ActionTypeId:
                 Category: Build
@@ -694,11 +713,16 @@ Resources:
                 ProjectName: !Ref FtpBuildProject
               InputArtifacts:
                 - Name: PorterRepoSourceArtifact
-              OutputArtifacts:
-                - Name: FtpBuildArtifact
+              Namespace: ftp_build
               RunOrder: 1
         - Name: Staging
           Actions:
+            # Runs a CloudFormation update using the SAM template (the
+            # artifact from SAM Build action), and passes in the Docker image
+            # names from the FTP and transcode build steps as pipeline
+            # variables. Also passes in the template config file from the
+            # source action. Outputs the stack outputs as pipeline variables in
+            # a namespace.
             - Name: Update-Staging-Stack
               ActionTypeId:
                 Category: Deploy
@@ -708,10 +732,10 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                ParameterOverrides: !Sub |
+                ParameterOverrides: |
                   {
-                    "FtpCopyEcsTaskDefinitionImage": { "Fn::GetParam" : ["FtpBuildArtifact", "${kFtpArtifactFileName}", "${kArtifactImageKey}"]},
-                    "TranscodeEcsTaskDefinitionImage": { "Fn::GetParam" : ["TranscodeBuildArtifact", "${kTranscodeArtifactFileName}", "${kArtifactImageKey}"]}
+                    "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
+                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}"
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref StagingStackName
@@ -720,12 +744,15 @@ Resources:
                 TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
-                - Name: FtpBuildArtifact
-                - Name: TranscodeBuildArtifact
                 - Name: TemplateConfigZipArtifact
+              Namespace: staging_deploy
               RunOrder: 1
         - Name: Testing
           Actions:
+            # Runs the Porter acceptance tests using the S3 bucket from above
+            # against the just-deployed staging state machine. The state
+            # mahine's ARN is passed in to the build as an environment variable
+            # from the staging deploy actions' output variables.
             - Name: Acceptance-Tests
               ActionTypeId:
                 Category: Build
@@ -733,6 +760,13 @@ Resources:
                 Provider: CodeBuild
                 Version: "1"
               Configuration:
+                EnvironmentVariables: |-
+                  [
+                    {
+                      "name": "PORTER_STATE_MACHINE_ARN",
+                      "value": "#{staging_deploy.StateMachineArn}"
+                    }
+                  ]
                 ProjectName: !Ref AcceptanceTestsProject
               InputArtifacts:
                 - Name: PorterRepoSourceArtifact
@@ -746,6 +780,8 @@ Resources:
                 Provider: Manual
                 Version: "1"
               RunOrder: 1
+            # Behaves the same as the staging deploy action, but against the
+            # production stack.
             - Name: Update-Prod-Stack
               ActionTypeId:
                 Category: Deploy
@@ -755,10 +791,10 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                ParameterOverrides: !Sub |
+                ParameterOverrides: |
                   {
-                    "FtpCopyEcsTaskDefinitionImage": { "Fn::GetParam" : ["FtpBuildArtifact", "${kFtpArtifactFileName}", "${kArtifactImageKey}"]},
-                    "TranscodeEcsTaskDefinitionImage": { "Fn::GetParam" : ["TranscodeBuildArtifact", "${kTranscodeArtifactFileName}", "${kArtifactImageKey}"]}
+                    "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
+                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}"
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref ProductionStackName
@@ -766,46 +802,5 @@ Resources:
                 TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
-                - Name: FtpBuildArtifact
-                - Name: TranscodeBuildArtifact
                 - Name: TemplateConfigZipArtifact
               RunOrder: 2
-
-            # - Name: Create-Prod-ChangeSet
-            #   ActionTypeId:
-            #     Category: Deploy
-            #     Owner: AWS
-            #     Provider: CloudFormation
-            #     Version: "1"
-            #   Configuration:
-            #     ActionMode: CHANGE_SET_REPLACE
-            #     Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-            #     ChangeSetName: !Sub ${AWS::StackName}
-            #     RoleArn: !GetAtt CloudFormationRole.Arn
-            #     StackName: !Ref ProductionStackName
-            #     TemplateConfiguration: TemplateConfigZipArtifact::production.json
-            #     TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
-            #   InputArtifacts:
-            #     - Name: SamBuildArtifact
-            #     - Name: TemplateConfigZipArtifact
-            #   RunOrder: 1
-            # - Name: Approve-Prod-ChangeSet
-            #   ActionTypeId:
-            #     Category: Approval
-            #     Owner: AWS
-            #     Provider: Manual
-            #     Version: "1"
-            #   RunOrder: 2
-            # - Name: Execute-Prod-ChangeSet
-            #   ActionTypeId:
-            #     Category: Deploy
-            #     Owner: AWS
-            #     Provider: CloudFormation
-            #     Version: "1"
-            #   Configuration:
-            #     ActionMode: CHANGE_SET_EXECUTE
-            #     Capabilities: CAPABILITY_IAM
-            #     ChangeSetName: !Sub ${AWS::StackName}
-            #     RoleArn: !GetAtt CloudFormationRole.Arn
-            #     StackName: !Ref ProductionStackName
-            #   RunOrder: 3
