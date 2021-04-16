@@ -55,6 +55,10 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
 
+  SamCodeBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
   SamCodeBuildProjectRole:
     Type: AWS::IAM::Role
     Properties:
@@ -84,13 +88,10 @@ Resources:
             Effect: Allow
             Resource: !Sub ${PipelineArtifactStore.Arn}/*
           - Action:
-              - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${SamCodeBuildProject}
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${SamCodeBuildProject}:*
+            Resource: !GetAtt SamCodeBuildProjectLogGroup.Arn
         Version: "2012-10-17"
       PolicyName: PorterSamCodeBuildProjectPolicy
       Roles:
@@ -105,6 +106,10 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref SamCodeBuildProjectLogGroup
+          Status: ENABLED
       ServiceRole: !GetAtt SamCodeBuildProjectRole.Arn
       Source:
         BuildSpec: !Sub |-
@@ -137,6 +142,10 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  TranscodeBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
   TranscodeBuildProjectRole:
     Type: AWS::IAM::Role
     Properties:
@@ -179,13 +188,10 @@ Resources:
             Effect: Allow
             Resource: !GetAtt TranscodeEcrRepository.Arn
           - Action:
-              - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${TranscodeBuildProject}
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${TranscodeBuildProject}:*
+            Resource: !GetAtt TranscodeBuildProjectLogGroup.Arn
         Version: "2012-10-17"
       PolicyName: PorterTranscodeBuildProjectPolicy
       Roles:
@@ -206,6 +212,10 @@ Resources:
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         PrivilegedMode: true
         Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref TranscodeBuildProjectLogGroup
+          Status: ENABLED
       ServiceRole: !GetAtt TranscodeBuildProjectRole.Arn
       Source:
         BuildSpec: !Sub |-
@@ -251,6 +261,10 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  FtpBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
   FtpBuildProjectRole:
     Type: AWS::IAM::Role
     Properties:
@@ -293,13 +307,10 @@ Resources:
             Effect: Allow
             Resource: !GetAtt FtpEcrRepository.Arn
           - Action:
-              - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${FtpBuildProject}
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${FtpBuildProject}:*
+            Resource: !GetAtt FtpBuildProjectLogGroup.Arn
         Version: "2012-10-17"
       PolicyName: PorterFtpBuildProjectPolicy
       Roles:
@@ -320,6 +331,10 @@ Resources:
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         PrivilegedMode: true
         Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref FtpBuildProjectLogGroup
+          Status: ENABLED
       ServiceRole: !GetAtt FtpBuildProjectRole.Arn
       Source:
         BuildSpec: !Sub |-
@@ -365,6 +380,10 @@ Resources:
           Value: !Ref AWS::StackId
       TimeoutInMinutes: 15
 
+  AcceptanceTestsProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
   AcceptanceTestsProjectRole:
     Type: AWS::IAM::Role
     Properties:
@@ -394,13 +413,10 @@ Resources:
             Effect: Allow
             Resource: !Sub ${PipelineArtifactStore.Arn}/*
           - Action:
-              - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
             Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsProject}
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsProject}:*
+            Resource: !GetAtt AcceptanceTestsProjectLogGroup.Arn
           - Action: ssm:GetParameters
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/stag/meta.prx.org/*
@@ -423,6 +439,10 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref AcceptanceTestsProjectLogGroup
+          Status: ENABLED
       ServiceRole: !GetAtt AcceptanceTestsProjectRole.Arn
       Source:
         BuildSpec: buildspec-acceptance.yml
