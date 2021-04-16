@@ -356,7 +356,6 @@ Resources:
   # of the domain.
   UtilityDomainName:
     Type: AWS::ApiGatewayV2::DomainName
-    Condition: CreateStagingResources # TODO
     Properties:
       DomainName: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
       DomainNameConfigurations:
@@ -369,14 +368,12 @@ Resources:
         prx:dev:application: Proxy
   UtilityApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
-    Condition: CreateStagingResources # TODO
     Properties:
       ApiId: !Ref ProxyHttpApi
       DomainName: !Ref UtilityDomainName
       Stage: $default
   UtilityDomainNameRecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: CreateStagingResources # TODO
     Properties:
       Comment: Record sets for proxy server API
       HostedZoneName: prx.tech.
@@ -403,43 +400,43 @@ Resources:
   # API is deployed to. There will only be a single DNS record for each domain,
   # though, which will point to proxy.prx.tech.
   # There are no counterparts to these domains in staging.
-  # ApexDomainName:
-  #   Type: AWS::ApiGatewayV2::DomainName
-  #   Condition: CreateProductionResources # TODO
-  #   Properties:
-  #     DomainName: prx.org
-  #     DomainNameConfigurations:
-  #       - CertificateArn: !Ref Certificate
-  #     Tags:
-  #       prx:meta:tagging-version: "2021-04-07"
-  #       prx:cloudformation:stack-name: !Ref AWS::StackName
-  #       prx:cloudformation:stack-id: !Ref AWS::StackId
-  #       prx:ops:environment: !Ref EnvironmentType
-  #       prx:dev:application: Proxy
-  # ApexApiMapping:
-  #   Type: AWS::ApiGatewayV2::ApiMapping
-  #   Condition: CreateProductionResources # TODO
-  #   Properties:
-  #     ApiId: !Ref ProxyHttpApi
-  #     DomainName: !Ref ApexDomainName
-  #     Stage: $default
-  # WwwDomainName:
-  #   Type: AWS::ApiGatewayV2::DomainName
-  #   Condition: CreateProductionResources # TODO
-  #   Properties:
-  #     DomainName: www.prx.org
-  #     DomainNameConfigurations:
-  #       - CertificateArn: !Ref Certificate
-  #     Tags:
-  #       prx:meta:tagging-version: "2021-04-07"
-  #       prx:cloudformation:stack-name: !Ref AWS::StackName
-  #       prx:cloudformation:stack-id: !Ref AWS::StackId
-  #       prx:ops:environment: !Ref EnvironmentType
-  #       prx:dev:application: Proxy
-  # WwwApiMapping:
-  #   Type: AWS::ApiGatewayV2::ApiMapping
-  #   Condition: CreateProductionResources # TODO
-  #   Properties:
-  #     ApiId: !Ref ProxyHttpApi
-  #     DomainName: !Ref WwwDomainName
-  #     Stage: $default
+  PrxOrgDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: CreateProductionResources
+    Properties:
+      DomainName: prx.org
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
+  PrxOrgApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: CreateProductionResources
+    Properties:
+      ApiId: !Ref ProxyHttpApi
+      DomainName: !Ref PrxOrgDomainName
+      Stage: $default
+  WwwPrxOrgDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: CreateProductionResources
+    Properties:
+      DomainName: www.prx.org
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
+  WwwPrxOrgApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: CreateProductionResources
+    Properties:
+      ApiId: !Ref ProxyHttpApi
+      DomainName: !Ref WwwPrxOrgDomainName
+      Stage: $default
