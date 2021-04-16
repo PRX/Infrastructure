@@ -11,6 +11,16 @@ Parameters:
   kPackagedTemplateFileName:
     Type: String
     Default: pkg-template.yaml
+  kArtifactImageKey:
+    Type: String
+    Default: image
+  kFtpArtifactFileName:
+    Type: String
+    Default: ftp-artifact.json
+  kTranscodeArtifactFileName:
+    Type: String
+    Default: transcode-artifact.json
+  #######
   CodeStarConnectionArn:
     Type: String
   StagingStackName:
@@ -23,6 +33,28 @@ Parameters:
     Type: String
 
 Resources:
+  FtpEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      # TODO LifecyclePolicy:
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TranscodeEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+
   SamCodeBuildProjectRole:
     Type: AWS::IAM::Role
     Properties:
@@ -89,12 +121,240 @@ Resources:
                 - make deploy-check
             build:
               commands:
-                - "sam build --parallel"
-                - "sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kPackagedTemplateFileName}"
+                - sam build --parallel
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kPackagedTemplateFileName}
           artifacts:
             files:
               - ${kPackagedTemplateFileName}
             name: SamBuildArtifact
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TimeoutInMinutes: 15
+
+  TranscodeBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  TranscodeBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - ecr:*RepositoryPolicy
+              - ecr:BatchCheckLayerAvailability
+              - ecr:CompleteLayerUpload
+              - ecr:DescribeImages
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+            Effect: Allow
+            Resource: !GetAtt TranscodeEcrRepository.Arn
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${TranscodeBuildProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${TranscodeBuildProject}:*
+        Version: "2012-10-17"
+      PolicyName: PorterTranscodeBuildProjectPolicy
+      Roles:
+        - !Ref TranscodeBuildProjectRole
+  TranscodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and publishes the transcode task Docker image
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: ECR_REPOSITORY_NAME
+            Value: !Ref TranscodeEcrRepository
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt TranscodeBuildProjectRole.Arn
+      Source:
+        BuildSpec: !Sub |-
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                docker: 19
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+            build:
+              commands:
+                # Calculate the SHA1 hash of the transcode directory
+                - sha1=`find containers/transcode -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                # Construct the Docker image name:tag using the hash
+                - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
+                # See if that tag already exists in the repository
+                - >-
+                  lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
+                # Only build and push the image if it doesn't exist, meaning the directory and code has changed
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker build -t transcode containers/transcode; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker tag transcode:latest "$imageName"; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
+            post_build:
+              commands:
+                - >-
+                  echo "{ \"${kArtifactImageKey}\": \"$imageName\" }" > ${kTranscodeArtifactFileName}
+          artifacts:
+            files:
+              - ${kTranscodeArtifactFileName}
+            name: TranscodeBuildArtifact
+        Type: CODEPIPELINE
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TimeoutInMinutes: 15
+
+  FtpBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - Key: Project
+          Value: Infrastructure
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  FtpBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - ecr:*RepositoryPolicy
+              - ecr:BatchCheckLayerAvailability
+              - ecr:CompleteLayerUpload
+              - ecr:DescribeImages
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+            Effect: Allow
+            Resource: !GetAtt FtpEcrRepository.Arn
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${FtpBuildProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${FtpBuildProject}:*
+        Version: "2012-10-17"
+      PolicyName: PorterFtpBuildProjectPolicy
+      Roles:
+        - !Ref FtpBuildProjectRole
+  FtpBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and publishes the FTP task Docker image
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: ECR_REPOSITORY_NAME
+            Value: !Ref FtpEcrRepository
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      ServiceRole: !GetAtt FtpBuildProjectRole.Arn
+      Source:
+        BuildSpec: !Sub |-
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                docker: 19
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+            build:
+              commands:
+                # Calculate the SHA1 hash of the ftp directory
+                - sha1=`find containers/ftp -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                # Construct the Docker image name:tag using the hash
+                - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
+                # See if that tag already exists in the repository
+                - >-
+                  lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
+                # Only build and push the image if it doesn't exist, meaning the directory and code has changed
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker build -t ftp containers/ftp; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker tag ftp:latest "$imageName"; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
+            post_build:
+              commands:
+                - >-
+                  echo "{ \"${kArtifactImageKey}\": \"$imageName\" }" > ${kFtpArtifactFileName}
+          artifacts:
+            files:
+              - ${kFtpArtifactFileName}
+            name: FtpBuildArtifact
         Type: CODEPIPELINE
       Tags:
         - Key: Project
@@ -306,6 +566,8 @@ Resources:
                 Effect: Allow
                 Resource:
                   - !GetAtt SamCodeBuildProject.Arn
+                  - !GetAtt TranscodeBuildProject.Arn
+                  - !GetAtt FtpBuildProject.Arn
                   - !GetAtt AcceptanceTestsProject.Arn
             Version: "2012-10-17"
           PolicyName: CodeBuildActionPolicy
@@ -389,6 +651,32 @@ Resources:
               OutputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 1
+            - Name: Transcode-Docker-Build-and-Publish
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref TranscodeBuildProject
+              InputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              OutputArtifacts:
+                - Name: TranscodeBuildArtifact
+              RunOrder: 1
+            - Name: FTP-Docker-Build-and-Publish
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref FtpBuildProject
+              InputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              OutputArtifacts:
+                - Name: FtpBuildArtifact
+              RunOrder: 1
         - Name: Staging
           Actions:
             - Name: Update-Staging-Stack
@@ -400,12 +688,20 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "FtpCopyEcsTaskDefinitionImage": { "Fn::GetParam" : ["FtpBuildArtifact", "${kFtpArtifactFileName}", "${kArtifactImageKey}"]},
+                    "TranscodeEcsTaskDefinitionImage": { "Fn::GetParam" : ["TranscodeBuildArtifact", "${kTranscodeArtifactFileName}", "${kArtifactImageKey}"]}
+                  }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref StagingStackName
                 TemplateConfiguration: TemplateConfigZipArtifact::staging.json
+                # Get the YAML template from `sam package` out of the artifact
                 TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
+                - Name: FtpBuildArtifact
+                - Name: TranscodeBuildArtifact
                 - Name: TemplateConfigZipArtifact
               RunOrder: 1
         - Name: Testing
