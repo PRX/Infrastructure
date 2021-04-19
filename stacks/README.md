@@ -12,6 +12,10 @@
 
 - There will be some ACM certificates created that need DNS records created during setup. Easiest to watch the ASM Console and use the button to add the records to Route 53 for utility prx.tech records. For more permanent records (*.prx.org, etc), you should generate and install those records ahead of time.
 
+## Elasticsearch Service-linked Role
+
+- Before an Elasticsearch domain can be created via CloudFormation, the service-linked role for Elasticsearch must be created elsewhere. The easiest way I've found to do this is create a ES domain via Console. You can delete it before it even finishes launching, and the role will continue to exist.
+
 # Tear Down
 
 - Redis and Memcached clusters can take 5-20 minutes to delete

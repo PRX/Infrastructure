@@ -31,6 +31,7 @@ Parameters:
   SharedMemcachedEndpointAddress: { Type: String }
   VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  EcsAsgOutboundTrafficSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -273,6 +274,22 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  ElasticsearchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: !Sub CMS ${EnvironmentType} Elasticsearch security group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 9200
+          SourceSecurityGroupId: !Ref EcsAsgOutboundTrafficSecurityGroupId
+          ToPort: 9200
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: CMS }
   ElasticsearchDomain:
     Type: AWS::Elasticsearch::Domain
     Properties:
@@ -304,8 +321,8 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VPCOptions:
-        # SecurityGroupIds:
-        #   - String
+        SecurityGroupIds:
+          - !GetAtt ElasticsearchSecurityGroup.GroupId
         SubnetIds:
           - !Ref VpcPublicSubnet1Id
           - !If [IsProduction, !Ref VpcPublicSubnet2Id, !Ref "AWS::NoValue"]
