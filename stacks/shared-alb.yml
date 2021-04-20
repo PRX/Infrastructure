@@ -96,43 +96,15 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       ValidationMethod: DNS
 
-  TargetInstanceSecurityGroup:
+  LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
-        Allows inbound traffic to ECS instances handling traffic from target
-        groups on the load balancer, on ports used for ECS dynamic port
-        mapping, ${EnvironmentType} ALB/ASG/ECS EC2 instances
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-alb_target_instance" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-  TargetInstanceSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      FromPort: 32768
-      GroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
-      IpProtocol: tcp
-      SourceSecurityGroupId: !GetAtt LoadBalancerInboundForwardingSecurityGroup.GroupId
-      ToPort: 60999
-
-  LoadBalancerInboundForwardingSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Allows inbound traffic from all IPs on the load balancer HTTP
-        listener ports, and outbound traffic from the load balancer to EC2
-        instances in the target instance security group on ECS dynamic port
-        mapping ports, for the ${EnvironmentType} shared ALB
-      SecurityGroupEgress:
-        - DestinationSecurityGroupId: !GetAtt TargetInstanceSecurityGroup.GroupId
-          FromPort: 32768
-          IpProtocol: tcp
-          ToPort: 60999
+        The main security group for the ${EnvironmentType} shared ALB, and
+        only the ALB should belong to this group. Controls inbound
+        (i.e., internet) traffic to the ALB, and traffic from the ALB to its
+        EC2 instances and ECS container instances. By default, allows all HTTP
+        and HTTPS inbound traffic.
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
           FromPort: 80
@@ -224,7 +196,7 @@ Resources:
           Value: !Ref AccessLogsBucket
       Scheme: internet-facing
       SecurityGroups:
-        - !Ref LoadBalancerInboundForwardingSecurityGroup
+        - !Ref LoadBalancerSecurityGroup
       Subnets:
         - !Ref VpcPublicSubnet1Id
         - !Ref VpcPublicSubnet2Id
@@ -344,14 +316,11 @@ Outputs:
   HttpsListenerArn:
     Description: The Amazon Resource Name (ARN) of the listener
     Value: !Ref HttpsListener
-  TargetInstanceSecurityGroupId:
-    Description: The group ID of the ALB target instance security group
-    Value: !GetAtt TargetInstanceSecurityGroup.GroupId
-  LoadBalancerInboundForwardingSecurityGroupId:
+  LoadBalancerSecurityGroupId:
     Description: >-
       The group ID of the ALB security group that allows inbound web traffic
       and outbound traffic to instances
-    Value: !GetAtt LoadBalancerInboundForwardingSecurityGroup.GroupId
+    Value: !GetAtt LoadBalancerSecurityGroup.GroupId
   VanityAlbDomain:
     Description: >-
       The vanity wildcard domain configured for the ALB's certificate, and

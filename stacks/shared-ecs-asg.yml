@@ -24,7 +24,7 @@ Parameters:
   VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   EcsClusterName: { Type: String }
-  AlbTargetInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  LoadBalancerSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
@@ -73,47 +73,82 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
-  InboundSshTrafficSecurityGroup:
+  InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      VpcId: !Ref VpcId
       GroupDescription: !Sub >-
-        Allows inbound SSH traffic to ${EnvironmentType} ECS ASG instances
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
-        - CidrIpv6: ::/0
-          FromPort: 22
-          IpProtocol: tcp
-          ToPort: 22
+        The primary security group for ${EnvironmentType} EC2 instances used in
+        the shared ASG and ECS cluster (i.e., ECS container instances).
       Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-asg_instance-ssh" }
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-ecs-asg_instance" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-
-  OutboundTrafficSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
       VpcId: !Ref VpcId
-      GroupDescription: !Sub >-
+  InstanceSecurityGroupAlbDynamicPortIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow ingress traffic from the LB SG to the instance SG on ports by
+        ECS task dynamic port mapping.
+      FromPort: 32768
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
+      ToPort: 60999
+  InstanceSecurityGroupSshIpv4Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
+        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
+      FromPort: 22
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  InstanceSecurityGroupSshIpv6Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
+      FromPort: 22
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  InstanceSecurityGroupAllIpv4Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
         Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
-      SecurityGroupEgress:
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: "-1"
-        - CidrIpv6: ::/0
-          IpProtocol: "-1"
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-asg_instance-outbound" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: "-1"
+  InstanceSecurityGroupAllIpv6Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: "-1"
+
+  # This adds a rule to the load balancer security group defined in
+  # shared-alb.yml
+  LoadBalancerSecurityGroupInstanceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow all egress traffic from the LB SG to the instance SG.
+      # Based on the following recommednation
+      # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 0
+      GroupId: !Ref LoadBalancerSecurityGroupId
+      IpProtocol: tcp
+      ToPort: 65535
 
   # If the logical ID of this resource changes, it needs to be changed in the
   # user data and metadata as well
@@ -139,9 +174,7 @@ Resources:
             DeleteOnTermination: true
             DeviceIndex: 0
             Groups:
-              - !GetAtt OutboundTrafficSecurityGroup.GroupId
-              - !GetAtt InboundSshTrafficSecurityGroup.GroupId
-              - !Ref AlbTargetInstanceSecurityGroupId
+              - !Ref InstanceSecurityGroup
               - !Ref EcsLaunchEndpointsAccessSecurityGroupId
               - !Ref KmsEndpointAccessSecurityGroupId
             Ipv6AddressCount: 1
@@ -325,8 +358,8 @@ Resources:
           CapacityProvider: !Ref DefaultCapacityProvider
 
 Outputs:
-  OutboundTrafficSecurityGroupId:
+  InstanceSecurityGroupId:
     Description: >-
-      The group ID of the security group that allows all outbound traffic for
-      ECS ASG instances
-    Value: !GetAtt OutboundTrafficSecurityGroup.GroupId
+      The group ID of the primary security group for EC2 instances belonging to
+      the shared ASG
+    Value: !GetAtt InstanceSecurityGroup.GroupId

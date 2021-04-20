@@ -74,10 +74,10 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
-  LoadBalancerInboundForwardingSecurityGroupId: { Type: String }
   VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -172,6 +172,68 @@ Resources:
             Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
         Version: "2012-10-17"
 
+  LoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The main security group for the ${EnvironmentType} Feeder ALB, and
+        only the ALB should belong to this group. Controls inbound
+        (i.e., internet) traffic to the ALB, and traffic from the ALB to its
+        EC2 instances and ECS container instances. By default, allows all HTTP
+        and HTTPS inbound traffic.
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIpv6: ::/0
+          FromPort: 80
+          IpProtocol: tcp
+          ToPort: 80
+        - CidrIp: 0.0.0.0/0
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIpv6: ::/0
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-alb_inbound_forwarding" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VpcId: !Ref VpcId
+  LoadBalancerSecurityGroupInstanceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow all egress traffic from the Feeder LB SG to the instance SG.
+      # Based on the following recommednation
+      # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
+      DestinationSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+      FromPort: 0
+      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 65535
+
+  # This adds a rule to the instance security group defined in
+  # shared-ecs-asg.yml
+  InstanceSecurityGroupAlbDynamicPortIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow ingress traffic from the Feeder LB SG to the instance SG on ports
+        by ECS task dynamic port mapping.
+      FromPort: 32768
+      GroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
+      ToPort: 60999
+
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -186,7 +248,7 @@ Resources:
           Value: !Ref AccessLogsBucket
       Scheme: internet-facing
       SecurityGroups:
-        - !Ref LoadBalancerInboundForwardingSecurityGroupId
+        - !GetAtt LoadBalancerSecurityGroup.GroupId
       Subnets:
         - !Ref VpcPublicSubnet1Id
         - !Ref VpcPublicSubnet2Id
