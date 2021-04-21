@@ -371,6 +371,46 @@ Resources:
       ManagedPolicyArns:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sqs:*
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:*_feeder_*
+            Version: "2012-10-17"
+          PolicyName: SqsFullApplicationAccess
+        - PolicyDocument:
+            Statement:
+              - Action: sns:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*_announce_feed_*
+                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*_announce_story_*
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: SnsFullApplicationAccess
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:ListAllMyBuckets
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListBucketVersions
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:PutObjectVersionAcl
+                Resource: !If # TODO Better multi-region support
+                  - IsProduction
+                  - ["arn:aws:s3:::prx-feed/*", "arn:aws:s3:::prx-feed"]
+                  - ["arn:aws:s3:::staging-prx-feed/*", "arn:aws:s3:::staging-prx-feed"]
+            Version: "2012-10-17"
+          PolicyName: S3FeedBucketAccess
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
