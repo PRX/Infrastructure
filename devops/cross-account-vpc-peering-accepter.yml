@@ -14,7 +14,11 @@ Parameters:
     Type: String
     Description: >-
       The VPC peering connection that will be added to the route table
-  RouteTable:
+  PublicRouteTableId:
+    Type: String
+    Description: >-
+      A route will be added to the table for the VPR peering connection
+  PrivateRouteTableId:
     Type: String
     Description: >-
       A route will be added to the table for the VPR peering connection
@@ -27,11 +31,23 @@ Parameters:
       - Enabled
       - Disabled
 
+Conditions:
+  HasPublicRouteTableId: !Not [!Equals [!Ref PrivateRouteTableId, ""]]
+  HasPrivateRouteTableId: !Not [!Equals [!Ref PrivateRouteTableId, ""]]
+
 Resources:
-  Route:
+  PublicRoute:
     Type: AWS::EC2::Route
+    Condition: HasPublicRouteTableId
     Properties:
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref PublicRouteTableId
+      VpcPeeringConnectionId: !Ref VpcPeeringConnectionId
+      DestinationCidrBlock: !Ref DestinationCidrBlock
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: HasPrivateRouteTableId
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableId
       VpcPeeringConnectionId: !Ref VpcPeeringConnectionId
       DestinationCidrBlock: !Ref DestinationCidrBlock
 
