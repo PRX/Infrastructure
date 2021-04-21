@@ -6,6 +6,13 @@ Description: >-
 
 Parameters:
   RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  SharedEcsClusterName: { Type: String }
+  SharedVpcId: { Type: "AWS::EC2::VPC::Id" }
+  SharedEcsAsgName: { Type: String }
+  SharedAlbName: { Type: String }
+  FeederAlbName: { Type: String }
+  DovetailAlbName: { Type: String }
 
 # Conditions:
 #   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -14,19 +21,19 @@ Resources:
   Foo:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardBody: |-
+      DashboardBody: !Sub |-
         {
-          "widgets": [
-            {
-              "type": "text",
-              "x": 0,
-              "y": 0,
-              "width": 6,
-              "height": 6,
-              "properties": {
-                "markdown": "\n# Heading\n"
-              }
-            }
-          ]
+            "widgets": [
+                {
+                    "height": 9,
+                    "width": 6,
+                    "y": 0,
+                    "x": 0,
+                    "type": "text",
+                    "properties": {
+                        "markdown": "\n# AWS Console\n\n- [CloudFormation root stack](https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/stackinfo?stackId=${RootStackId})\n- [ECS Cluster](https://console.aws.amazon.com/ecs/home?region=${AWS::Region}#/clusters/${SharedEcsClusterName}/services)\n- [Shared VPC](https://console.aws.amazon.com/vpc/home?region=${AWS::Region}#VpcDetails:VpcId=${SharedVpcId}) | [Subnets](https://console.aws.amazon.com/vpc/home?region=${AWS::Region}#subnets:search=${SharedVpcId}) | [NACLs](https://console.aws.amazon.com/vpc/home?region=${AWS::Region}#acls:search=${SharedVpcId}) | [Peering](https://console.aws.amazon.com/vpc/home?region=${AWS::Region}#PeeringConnections:search=${SharedVpcId})\n- [EC2 Instances](https://console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#Instances:instanceState=running;search=${SharedVpcId}) | [Shared ASG](https://console.aws.amazon.com/ec2autoscaling/home?region=${AWS::Region}#/details/${SharedEcsAsgName}?view=details) | [Shared ALB](https://console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#LoadBalancers:search=${SharedAlbName};sort=loadBalancerName)\n- [Dovetail ALB](https://console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#LoadBalancers:search=${DovetailAlbName};sort=loadBalancerName) | [Feeder ALB](https://console.aws.amazon.com/ec2/v2/home?region=${AWS::Region}#LoadBalancers:search=${FeederAlbName};sort=loadBalancerName)"
+                    }
+                }
+            ]
         }
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-Overview
