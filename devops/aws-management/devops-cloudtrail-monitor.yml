@@ -31,7 +31,6 @@
 # }
 
 AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
 Description: >-
   tktktk
 
@@ -40,62 +39,64 @@ Parameters:
     Type: String
 
 Resources:
-  MonitorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Description: >-
-        Receives CloudWatch Events rule events related to CloudTrail activity
-        and sends alerting messages to the Slack relay
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
-      Events:
-        CloudTrailEventsRule:
-          Type: EventBridgeRule
-          Properties:
-            Pattern:
-              detail-type:
-                - AWS API Call via CloudTrail
-                - AWS Console Sign In via CloudTrail
-              detail:
-                userIdentity:
-                  type:
-                    - Root
-      Handler: index.handler
-      InlineCode: |
-        const AWS = require('aws-sdk');
+  Foo:
+    Type: AWS::SNS::Topic
+  # MonitorFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Description: >-
+  #       Receives CloudWatch Events rule events related to CloudTrail activity
+  #       and sends alerting messages to the Slack relay
+  #     Environment:
+  #       Variables:
+  #         SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+  #     Events:
+  #       CloudTrailEventsRule:
+  #         Type: EventBridgeRule
+  #         Properties:
+  #           Pattern:
+  #             detail-type:
+  #               - AWS API Call via CloudTrail
+  #               - AWS Console Sign In via CloudTrail
+  #             detail:
+  #               userIdentity:
+  #                 type:
+  #                   - Root
+  #     Handler: index.handler
+  #     InlineCode: |
+  #       const AWS = require('aws-sdk');
 
-        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+  #       const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 
-        const SLACK_ICON = ':ops-cloudtrail:';
-        const SLACK_USERNAME = 'AWS CloudTrail';
-        const SLACK_CHANNEL = '#ops-fatal';
+  #       const SLACK_ICON = ':ops-cloudtrail:';
+  #       const SLACK_USERNAME = 'AWS CloudTrail';
+  #       const SLACK_CHANNEL = '#ops-fatal';
 
-        exports.handler = async (event) => {
-          console.log(JSON.stringify(event));
+  #       exports.handler = async (event) => {
+  #         console.log(JSON.stringify(event));
 
-          await sns.publish({
-            TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-            Message: JSON.stringify({
-              channel: SLACK_CHANNEL,
-              username: SLACK_USERNAME,
-              icon_emoji: SLACK_ICON,
-              text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
-            }),
-          }).promise();
-        };
-      MemorySize: 128
-      # Policies:
-      #   - SNSPublishMessagePolicy:
-      #       TopicName: !Ref SlackMessageRelayTopicArn
-      Runtime: nodejs12.x
-      Tags:
-        Project: Admin
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-      Timeout: 10
-  MonitorFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${MonitorFunction}
-      RetentionInDays: 30
+  #         await sns.publish({
+  #           TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+  #           Message: JSON.stringify({
+  #             channel: SLACK_CHANNEL,
+  #             username: SLACK_USERNAME,
+  #             icon_emoji: SLACK_ICON,
+  #             text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
+  #           }),
+  #         }).promise();
+  #       };
+  #     MemorySize: 128
+  #     # Policies:
+  #     #   - SNSPublishMessagePolicy:
+  #     #       TopicName: !Ref SlackMessageRelayTopicArn
+  #     Runtime: nodejs12.x
+  #     Tags:
+  #       Project: Admin
+  #       "prx:cloudformation:stack-name": !Ref AWS::StackName
+  #       "prx:cloudformation:stack-id": !Ref AWS::StackId
+  #     Timeout: 10
+  # MonitorFunctionLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub /aws/lambda/${MonitorFunction}
+  #     RetentionInDays: 30
