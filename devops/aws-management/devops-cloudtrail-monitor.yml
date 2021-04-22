@@ -1,0 +1,101 @@
+# etc/root-account-activity-monitor.yml
+# Sample CloudWatch Events event (from CloudTrail)
+# {
+#    "version": "0",
+#    "id": "a76750eb-b69f-ae47-b183-4d3cb0700618",
+#    "detail-type": "AWS API Call via CloudTrail",
+#    "source": "aws.s3",
+#    "account": "048723829744",
+#    "time": "2018-05-22T12:44:24Z",
+#    "region": "us-east-1",
+#    "resources": [],
+#    "detail": {
+#       "eventVersion": "1.05",
+#       "userIdentity": {},
+#       "eventTime": "2018-05-22T12:44:24Z",
+#       "eventSource": "s3.amazonaws.com",
+#       "eventName": "DeleteBucket",
+#       "awsRegion": "us-east-1",
+#       "sourceIPAddress": "209.6.231.175",
+#       "userAgent": "[S3Console/0.4, aws-internal/3]",
+#       "requestParameters": {},
+#       "responseElements": null,
+#       "additionalEventData": {
+#          "vpcEndpointId": "vpce-6d72a204"
+#       },
+#       "requestID": "51A7870C114C931C",
+#       "eventID": "d687e2af-5a29-4acb-bc41-6892b36420bf",
+#       "eventType": "AwsApiCall",
+#       "vpcEndpointId": "vpce-6d72a204"
+#    }
+# }
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  tktktk
+
+Parameters:
+  SlackMessageRelayTopicArn:
+    Type: String
+
+Resources:
+  MonitorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        Receives CloudWatch Events rule events related to CloudTrail activity
+        and sends alerting messages to the Slack relay
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        CloudTrailEventsRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              detail-type:
+                - AWS API Call via CloudTrail
+                - AWS Console Sign In via CloudTrail
+              detail:
+                userIdentity:
+                  type:
+                    - Root
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+        const SLACK_ICON = ':ops-cloudtrail:';
+        const SLACK_USERNAME = 'AWS CloudTrail';
+        const SLACK_CHANNEL = '#ops-fatal';
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          await sns.publish({
+            TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+            Message: JSON.stringify({
+              channel: SLACK_CHANNEL,
+              username: SLACK_USERNAME,
+              icon_emoji: SLACK_ICON,
+              text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
+            }),
+          }).promise();
+        };
+      MemorySize: 128
+      # Policies:
+      #   - SNSPublishMessagePolicy:
+      #       TopicName: !Ref SlackMessageRelayTopicArn
+      Runtime: nodejs12.x
+      Tags:
+        Project: Admin
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+      Timeout: 10
+  MonitorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MonitorFunction}
+      RetentionInDays: 30
