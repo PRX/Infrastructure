@@ -39,29 +39,93 @@ Parameters:
     Type: String
 
 Resources:
-  Foo:
-    Type: AWS::SNS::Topic
+  MonitorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      # Policies:
+      #   - PolicyName: StepFunctionsPolicy
+      #     PolicyDocument:
+      #       Statement:
+      #         - Effect: Allow
+      #           Action:
+      #             - states:StartExecution
+      #           Resource:
+      #             - !Ref StateMachine
+      #       Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Security }
+  MonitorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |-
+          const AWS = require('aws-sdk');
+
+          exports.handler = async (event) => {
+            console.log(JSON.stringify(event));
+          };
+      Description: >-
+        Receives CloudWatch Events rule events related to CloudTrail activity
+        and sends alerting messages to the Slack relay
+      # Environment:
+      #   Variables:
+      #     ACCOUNT_ID: !Ref AWS::AccountId
+      #     STATE_MACHINE_ARN: !Ref StateMachine
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt MonitorFunctionRole.Arn
+      Runtime: nodejs12.x
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Security }
+      Timeout: 8
+  MonitorFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MonitorFunction}
+      RetentionInDays: 30
+
+  RootActivityEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: >-
+        Triggers the monitor function for any root account activity in the
+        region
+      EventPattern:
+        detail-type:
+          - AWS API Call via CloudTrail
+          - AWS Console Sign In via CloudTrail
+        detail:
+          userIdentity:
+            type:
+              - Root
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt MonitorFunction.Arn
+          Id: !Sub ${AWS::StackName}.CloudTrailMonitor
+
   # MonitorFunction:
   #   Type: AWS::Serverless::Function
   #   Properties:
-  #     Description: >-
-  #       Receives CloudWatch Events rule events related to CloudTrail activity
-  #       and sends alerting messages to the Slack relay
   #     Environment:
   #       Variables:
   #         SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
-  #     Events:
-  #       CloudTrailEventsRule:
-  #         Type: EventBridgeRule
-  #         Properties:
-  #           Pattern:
-  #             detail-type:
-  #               - AWS API Call via CloudTrail
-  #               - AWS Console Sign In via CloudTrail
-  #             detail:
-  #               userIdentity:
-  #                 type:
-  #                   - Root
   #     Handler: index.handler
   #     InlineCode: |
   #       const AWS = require('aws-sdk');
@@ -85,18 +149,6 @@ Resources:
   #           }),
   #         }).promise();
   #       };
-  #     MemorySize: 128
   #     # Policies:
   #     #   - SNSPublishMessagePolicy:
   #     #       TopicName: !Ref SlackMessageRelayTopicArn
-  #     Runtime: nodejs12.x
-  #     Tags:
-  #       Project: Admin
-  #       "prx:cloudformation:stack-name": !Ref AWS::StackName
-  #       "prx:cloudformation:stack-id": !Ref AWS::StackId
-  #     Timeout: 10
-  # MonitorFunctionLogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: !Sub /aws/lambda/${MonitorFunction}
-  #     RetentionInDays: 30
