@@ -1,0 +1,107 @@
+# etc/resource-reporter.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Handles Resource SNS Events, Sends Report to Slack
+
+Parameters:
+  SlackMessageRelayTopicArn: { Type: String }
+
+Resources:
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/JobExecutionSnsTopicLambdaFunction/
+      Description: >-
+        tktktk
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        AudioCreate:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_audio_create
+          Type: SNS
+        AudioDelete:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_audio_delete
+          Type: SNS
+        AudioUpdate:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_audio_update
+          Type: SNS
+        StoryCreate:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_story_create
+          Type: SNS
+        StoryDelete:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_story_delete
+          Type: SNS
+        StoryPublish:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_story_publish
+          Type: SNS
+        StoryUnpublish:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_story_unpublish
+          Type: SNS
+        StoryUpdate:
+          Properties:
+            Topic: arn:aws:sns:us-east-1:561178107736:production_announce_story_update
+          Type: SNS
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+        function msg(event) {
+          const payload = JSON.parse(event.Records[0].Sns.Message);
+
+          if (payload.subject === 'audio') {
+            return;
+            // const body = JSON.parse(payload.body);
+            // return `Audio file event: [${payload.action}:${body.status}] ${body.filename}`;
+          } else if (payload.subject === 'story') {
+            const body = JSON.parse(payload.body);
+            return `Show: *${body['_embedded']['prx:series'].title}*\nEpisode: *${body.title}*\nAction: \`${payload.action}\``;
+          }
+
+          return payload;
+        }
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          const text = msg(event);
+
+          if (!text) {
+            return;
+          }
+
+          await sns.publish({
+            Message: JSON.stringify({
+              channel: 'C01V6UYNQ59',
+              username: 'Publish Activity',
+              icon_emoji: ':great-eye:',
+              text
+            }),
+            TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN
+          }).promise();
+        };
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !Ref SlackMessageRelayTopicArn
+      Runtime: nodejs12.x
+      # Tags:
+      #   Project: Porter
+      #   prx:cloudformation:stack-name: !Ref AWS::StackName
+      #   prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 8
+  FunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${Function}
+      RetentionInDays: 7
