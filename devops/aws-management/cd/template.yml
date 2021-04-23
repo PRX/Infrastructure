@@ -362,7 +362,7 @@ Resources:
                   to create a Lambda function that can monitor CloudTrails for various
                   types of activity.
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
-                Parameters: ParameterKey=SlackMessageRelayTopicArn,ParameterValue=tktk
+                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
                 DeploymentTargets: !Ref OrganizationRootId
@@ -607,24 +607,22 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Action:
-              - sns:Publish
+          - Action: sns:Publish
             Effect: Allow
-            Resource:
-              - !Ref SlackMessageRelayTopicArn
+            Resource: !Ref SlackMessageRelayTopicArn
+        Version: "2012-10-17"
   CodePipelineJobResultWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
-            Action:
+          - Action:
               - codepipeline:PutJobSuccessResult
               - codepipeline:PutJobFailureResult
+            Effect: Allow
             Resource: "*"
+        Version: "2012-10-17"
   DeploymentNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
