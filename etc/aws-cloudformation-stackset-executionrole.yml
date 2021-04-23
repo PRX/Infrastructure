@@ -1,51 +1,51 @@
 # etc/aws-cloudformation-stackset-executionrole.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Configure the AWSCloudFormationStackSetExecutionRole to enable use of your account as a target account in AWS CloudFormation StackSets.
+Description: >-
+  Configure the AWSCloudFormationStackSetExecutionRole to enable use of your
+  account as a target account in AWS CloudFormation StackSets.
+
 Parameters:
   AdministratorAccountId:
     Type: String
     Description: AWS Account Id of the administrator account (the account in which StackSets will be created).
     MaxLength: 12
     MinLength: 12
+
 Resources:
   ExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: AWSCloudFormationStackSetExecutionRole
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              AWS:
-                - !Ref AdministratorAccountId
-            Action:
-              - sts:AssumeRole
-      Path: /
+              AWS: !Ref AdministratorAccountId
+        Version: "2012-10-17"
       Policies:
-        - PolicyName: CloudFormationPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
+        - PolicyDocument:
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - cloudformation:*
                   - sns:Publish*
-                Resource:
-                  - "*"
-        - PolicyName: RootAccountActivityMonitorPolicy
-          PolicyDocument:
+                Effect: Allow
+                Resource: "*"
             Version: "2012-10-17"
+          PolicyName: CloudFormationPolicy
+        - PolicyDocument:
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - cloudtrail:*
                   - events:*
                   - iam:*
                   - lambda:*
+                  - logs:*
                   - s3:*
-                Resource:
-                  - "*"
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: RootAccountActivityMonitorPolicy
+      RoleName: AWSCloudFormationStackSetExecutionRole
       Tags:
         - Key: Project
           Value: Infrastructure
