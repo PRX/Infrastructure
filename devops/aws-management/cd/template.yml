@@ -373,6 +373,31 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
+            # CloudTrail monitor stack set for management account
+            - Name: CloudTrailStackSetForManagementAccount
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-cloudtrail-monitor-mgmt
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in each region in the management account
+                  to create a Lambda function that can monitor CloudTrails for various
+                  types of activity.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
+                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
+                PermissionModel: SELF_MANAGED
+                DeploymentTargets: !Ref AWS::AccountId
+                # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
+                Regions: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
+                FailureTolerancePercentage: 95
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
         - Name: Notify
           Actions:
             - Name: DeploymentNotification
