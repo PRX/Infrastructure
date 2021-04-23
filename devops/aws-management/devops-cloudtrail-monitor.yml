@@ -51,16 +51,14 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      # Policies:
-      #   - PolicyName: StepFunctionsPolicy
-      #     PolicyDocument:
-      #       Statement:
-      #         - Effect: Allow
-      #           Action:
-      #             - states:StartExecution
-      #           Resource:
-      #             - !Ref StateMachine
-      #       Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref SlackMessageRelayTopicArn
+            Version: "2012-10-17"
+          PolicyName: SlackRelaySnsPolicy
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -74,16 +72,27 @@ Resources:
         ZipFile: |-
           const AWS = require('aws-sdk');
 
+          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
           exports.handler = async (event) => {
             console.log(JSON.stringify(event));
+
+            await sns.publish({
+              TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+              Message: JSON.stringify({
+                channel: '#ops-fatal',
+                username: 'AWS CloudTrail',
+                icon_emoji: ':ops-cloudtrail:',
+                text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
+              }),
+            }).promise();
           };
       Description: >-
         Receives CloudWatch Events rule events related to CloudTrail activity
         and sends alerting messages to the Slack relay
-      # Environment:
-      #   Variables:
-      #     ACCOUNT_ID: !Ref AWS::AccountId
-      #     STATE_MACHINE_ARN: !Ref StateMachine
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt MonitorFunctionRole.Arn
@@ -119,36 +128,3 @@ Resources:
       Targets:
         - Arn: !GetAtt MonitorFunction.Arn
           Id: CloudTrailMonitor.RootActivity
-
-  # MonitorFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     Environment:
-  #       Variables:
-  #         SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
-  #     Handler: index.handler
-  #     InlineCode: |
-  #       const AWS = require('aws-sdk');
-
-  #       const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
-
-  #       const SLACK_ICON = ':ops-cloudtrail:';
-  #       const SLACK_USERNAME = 'AWS CloudTrail';
-  #       const SLACK_CHANNEL = '#ops-fatal';
-
-  #       exports.handler = async (event) => {
-  #         console.log(JSON.stringify(event));
-
-  #         await sns.publish({
-  #           TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-  #           Message: JSON.stringify({
-  #             channel: SLACK_CHANNEL,
-  #             username: SLACK_USERNAME,
-  #             icon_emoji: SLACK_ICON,
-  #             text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
-  #           }),
-  #         }).promise();
-  #       };
-  #     # Policies:
-  #     #   - SNSPublishMessagePolicy:
-  #     #       TopicName: !Ref SlackMessageRelayTopicArn
