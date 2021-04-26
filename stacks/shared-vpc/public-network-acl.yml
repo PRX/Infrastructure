@@ -78,13 +78,9 @@ Resources:
       RuleNumber: 131
 
   # INGRESS 140
-  # Allows inbound traffic on high-numbered ports from all IPs. This generally
-  # is for return HTTP(S) traffic from requests made from hosts within the VPC.
-  # Some of the ports in this range may be denied by other rules.
-  # This assumes that the HTTP requests are originating from Linux host, and
-  # use the common ephemeral port range for that operating system.
-  # These are also the dynamic ports used with ECS port mapping, allowing
-  # traffic between the load balancer and ECS instances.
+  # Allows inbound traffic on ephemeral and dynamic ports, such as for traffic
+  # to ECS tasks with dynamic port mapping, load balancer traffic, and return
+  # traffic for requests made from instances within the VPC.
   # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
   InboudIpV4TcpEphemeralPortsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
@@ -93,8 +89,8 @@ Resources:
       Egress: false
       NetworkAclId: !Ref PublicNetworkAcl
       PortRange:
-        From: 32768
-        To: 61000
+        From: 1024
+        To: 65535
       Protocol: 6 # TCP
       RuleAction: allow
       RuleNumber: 140
@@ -105,8 +101,8 @@ Resources:
       Ipv6CidrBlock: ::/0
       NetworkAclId: !Ref PublicNetworkAcl
       PortRange:
-        From: 32768
-        To: 61000
+        From: 1024
+        To: 65535
       Protocol: 6 # TCP
       RuleAction: allow
       RuleNumber: 141
