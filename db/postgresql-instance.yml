@@ -17,6 +17,7 @@ Metadata:
           - EngineVersion
           - DBInstanceClass
           - AllocatedStorage
+          - ProvisionedIOPS
           - BackupRetentionPeriod
       - Label:
           default: DB Setup
@@ -57,7 +58,7 @@ Parameters:
   EngineVersion:
     Type: String
     Description: Postgres version to use
-    AllowedValues: ["9.4.24", "9.5.19", "9.6.15", "10.10", "11.5"]
+    AllowedValues: ["9.4.24", "9.5.19", "9.6.15", "10.10", "11.5", "11.9"]
   EnvironmentType:
     Type: String
     Description: Environment for this database
@@ -75,6 +76,9 @@ Parameters:
     Description: Value for the project tag
     MinLength: 1
     MaxLength: 256
+  ProvisionedIOPS:
+    Type: Number
+    Description: The number of IOPS that the database provisions (leave blank to use GP2 storage)
   UniqueName:
     Type: String
     Description: Unique name for associated resources (CamelCase; should not include env name)
@@ -86,6 +90,7 @@ Parameters:
 Conditions:
   CreateAlarms: !Not [!Equals [!Ref AlarmSnsTopic, ""]]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  UseProvisionedStorage: !Not [!Equals [!Ref ProvisionedIOPS, ""]]
 Mappings:
   EngineVersionMap:
     "9.4.24":
@@ -97,6 +102,8 @@ Mappings:
     "10.10":
       family: postgres10
     "11.5":
+      family: postgres11
+    "11.9":
       family: postgres11
   StorageAlarmMap:
     "100":
@@ -158,6 +165,7 @@ Resources:
       EnablePerformanceInsights: !If [IsProduction, true, false]
       Engine: postgres
       EngineVersion: !Ref EngineVersion
+      Iops: !If [UseProvisionedStorage, !Ref ProvisionedIOPS, !Ref "AWS::NoValue"]
       MasterUsername: !Ref MasterUsername
       MasterUserPassword: !Ref MasterUserPassword
       MultiAZ: !If [IsProduction, true, false]
@@ -165,7 +173,7 @@ Resources:
       PreferredBackupWindow: "08:00-08:30"
       PreferredMaintenanceWindow: "tue:06:15-tue:06:45"
       PubliclyAccessible: true
-      StorageType: gp2
+      StorageType: !If [UseProvisionedStorage, "io1", "gp2"]
       Tags:
         - Key: Project
           Value: !Ref ProjectName
