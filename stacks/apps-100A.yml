@@ -1,0 +1,84 @@
+# stacks/provisioned.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Provisioned apps # TODO
+
+Parameters:
+  TemplateUrlPrefix: { Type: String }
+  CloudFormationNotificationArn: { Type: String }
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EcsClusterName: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: "AWS::EC2::VPC::Id" }
+  VpcCidrBlock: { Type: String }
+  VpcIpv6CidrBlocks: { Type: String }
+  SecretsBase: { Type: String }
+  EcrRegion: { Type: String }
+  SecretsStackName: { Type: String }
+  NotificationsStackName: { Type: String }
+  UploadSigningUserName: { Type: String }
+  UploadSigningEndpointUrl: { Type: String }
+  UploadSigningAccessKeyId: { Type: String }
+  VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
+  VpcPrivateSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
+  SharedMemcachedEndpointAddress: { Type: String }
+  SharedMemcachedEndpointPort: { Type: String }
+  AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
+  EchoServiceToken: { Type: String }
+  EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+
+  IframelyEcrImageTag: { Type: String }
+  IframelySecretsVersion: { Type: String }
+  IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
+
+Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
+
+Resources:
+  IframelyStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref IframelyEcrImageTag
+        SecretsVersion: !Ref IframelySecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref IframelySharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Iframely }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
+      TimeoutInMinutes: 20
+
+Outputs:
+  StackName:
+    Value: !Ref AWS::StackName
