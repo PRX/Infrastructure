@@ -1,0 +1,36 @@
+# stacks/resource-groups.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates resource groups for resources in the stack, based on various sets of
+  tag and resource type filters.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+
+Resources:
+  StackResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Description: >-
+        Inlcudes all supported resources that belong to the root stack
+      Name: !Sub ${RootStackName}
+      ResourceQuery:
+        Query:
+          ResourceTypeFilters:
+            - AWS::AllSupported
+          TagFilters:
+            - Key: prx:cloudformation:root-stack-id
+              Values:
+                - !Ref RootStackId
+        Type: TAG_FILTERS_1_0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
