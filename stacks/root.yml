@@ -1113,61 +1113,47 @@ Resources:
   #     TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-200A.yml
   #     TimeoutInMinutes: 40
 
-  # Apps300AStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Condition: IsStaging # TODO
-  #   Properties:
-  #     NotificationARNs:
-  #       - !GetAtt Constants.CloudFormationNotificationArn
-  #     Parameters:
-  #       DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
-  #       DovetailRouterSecretsVersion: !Ref DovetailrouterSecretsVersion
-  #       DovetailLegacyEcrImageTag: !Ref DovetailEcrImageTag
-  #       DovetailLegacySecretsVersion: !Ref DovetailSecretsVersion
+  Apps300AStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging # TODO
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        SecretsBase: !GetAtt Constants.SecretsBaseRegion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
+        EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
+        SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.InstanceSecurityGroupId
 
-  #       TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-  #       CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
-  #       AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
-  #       AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
-  #       EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
-  #       EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
-  #       VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-  #       VpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
-  #       VpcIpv6CidrBlocks: !GetAtt SharedVpcStack.Outputs.VpcIpv6CidrBlocks
-  #       SecretsBase: !GetAtt Constants.SecretsBaseRegion
-  #       EcrRegion: !Ref EcrRegion
-  #       SecretsStackName: !Ref SecretsStackName
-  #       NotificationsStackName: !Ref NotificationsStackName
-  #       EnvironmentType: !Ref EnvironmentType
-  #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-  #       RootStackName: !GetAtt Constants.RootStackName
-  #       RootStackId: !GetAtt Constants.RootStackId
-  #       VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-  #       VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
-  #       VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
-  #       VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-  #       VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-  #       VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-  #       SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointAddress
-  #       SharedMemcachedEndpointPort: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointPort
-  #       AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
-  #       EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
-  #       EcsLaunchEndpointsAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
-  #       KmsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KmsEndpointAccessSecurityGroupId
-  #       SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.InstanceSecurityGroupId
-  #       UploadSigningUserName: !GetAtt App100AStack.Outputs.S3SigningUserName
-  #       UploadSigningEndpointUrl: !GetAtt App100AStack.Outputs.S3SigningEndpointUrl
-  #       UploadSigningAccessKeyId: !GetAtt App100AStack.Outputs.S3SigningAccessKeyId
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Common }
-  #     TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-300A.yml
-  #     TimeoutInMinutes: 40
+        # App-specific parameters
+
+        DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
+        DovetailRouterSecretsVersion: !Ref DovetailrouterSecretsVersion
+        DovetailLegacyEcrImageTag: !Ref DovetailEcrImageTag
+        DovetailLegacySecretsVersion: !Ref DovetailSecretsVersion
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-300A.yml
+      TimeoutInMinutes: 40
 
   Apps400AStack:
     Type: AWS::CloudFormation::Stack
