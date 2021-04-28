@@ -991,10 +991,6 @@ Resources:
 
         # App-specific parameters
 
-        BacksawArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
-
-        BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
-
         CmsEcrImageTag: !Ref CmsEcrImageTag
         CmsSecretsVersion: !Ref CmsSecretsVersion
         CmsSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
@@ -1037,6 +1033,8 @@ Resources:
   #       AuguryEcrImageTag: !Ref AuguryEcrImageTag
   #       AugurySecretsVersion: !Ref AugurySecretsVersion
   #       AugurySharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Augury, prefix]
+
+  #       BetaPrxOrgArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
 
   #       CastleEcrImageTag: !Ref CastleEcrImageTag
   #       CastleSecretsVersion: !Ref CastleSecretsVersion
@@ -1102,6 +1100,8 @@ Resources:
   #       S3SigningUserName: !GetAtt App100AStack.Outputs.S3SigningUserName
   #       S3SigningEndpointUrl: !GetAtt App100AStack.Outputs.S3SigningEndpointUrl
   #       S3SigningAccessKeyId: !GetAtt App100AStack.Outputs.S3SigningAccessKeyId
+  #       S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
+  #       DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
   #     Tags:
   #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
   #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1168,6 +1168,36 @@ Resources:
   #       - { Key: prx:dev:application, Value: Common }
   #     TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-300A.yml
   #     TimeoutInMinutes: 40
+
+  Apps400AStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging # TODO
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
+        S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
+
+        # App-specific parameters
+
+        BacksawArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
+      TimeoutInMinutes: 40
 
   ResourceGroupsStack:
     Type: AWS::CloudFormation::Stack

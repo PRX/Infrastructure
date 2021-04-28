@@ -37,10 +37,14 @@ Parameters:
   S3SigningUserName: { Type: String }
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
+  DeploymentPackageBucketName: { Type: String }
+  S3StaticSiteDeployServiceToken: { Type: String }
 
   AuguryEcrImageTag: { Type: String }
   AugurySecretsVersion: { Type: String }
   AugurySharedAlbListenerRulePriorityPrefix: { Type: String }
+
+  BetaPrxOrgArchiveS3ObjectVersion: { Type: String }
 
   CastleEcrImageTag: { Type: String }
   CastleSecretsVersion: { Type: String }
@@ -72,9 +76,6 @@ Parameters:
   RemixEcrImageTag: { Type: String }
   RemixSecretsVersion: { Type: String }
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
-
-Conditions:
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   AuguryStack:
@@ -113,6 +114,30 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       TemplateURL: !Sub ${TemplateUrlPrefix}/augury.yml
       TimeoutInMinutes: 20
+
+  BetaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Beta }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/beta.yml
+      TimeoutInMinutes: 5
 
   CastleStack:
     Type: AWS::CloudFormation::Stack

@@ -26,10 +26,6 @@ Parameters:
   DeploymentPackageBucketName: { Type: String }
   S3StaticSiteDeployServiceToken: { Type: String }
 
-  BacksawArchiveS3ObjectVersion: { Type: String }
-
-  BetaPrxOrgArchiveS3ObjectVersion: { Type: String }
-
   CmsEcrImageTag: { Type: String }
   CmsSecretsVersion: { Type: String }
   CmsSharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -56,55 +52,6 @@ Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
-  BacksawStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        CodeS3Bucket: !Ref DeploymentPackageBucketName
-        StaticSiteArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
-        EnvironmentType: !Ref EnvironmentType
-        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/backsaw.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Backsaw }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/backsaw.yml
-      TimeoutInMinutes: 5
-
-  BetaStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        CodeS3Bucket: !Ref DeploymentPackageBucketName
-        StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
-        EnvironmentType: !Ref EnvironmentType
-        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Beta }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/beta.yml
-      TimeoutInMinutes: 5
-
   CmsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
