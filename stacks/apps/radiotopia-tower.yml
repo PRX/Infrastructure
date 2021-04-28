@@ -1,0 +1,128 @@
+# stacks/serverless/tower.radiotopia.fm.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: Radiotopia Radio API
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Parameters:
+  NotificationsStackName: { Type: String }
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectVersion: { Type: String }
+
+Resources:
+  # API
+  # https://tower.radiotopia.fm/api/v2/episodes.json
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+          - X-Amz-Security-Token
+        AllowMethods:
+          - GET
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Radiotopia
+        prx:dev:application: Tower
+
+  TowerEndpointFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: lambda/PRX-tower.radiotopia.fm.zip
+        Version: !Ref CodeS3ObjectVersion
+      Description: Radiotopia Radio API v2
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /api/v2/episodes.json
+          Type: HttpApi
+      Handler: index.handler
+      Layers:
+        - arn:aws:lambda:us-east-1:561178107736:layer:npm-rgrove-parse-xml:1 # TODO Multiregion
+      MemorySize: 512
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Radiotopia
+        prx:dev:application: Tower
+      Timeout: 16
+  TowerEndpointFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Tower][Lambda][Error] Invocation 4XX" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: The error rate on the Tower lambda has exceeded 2
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TowerEndpointFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+  TowerEndpointFunctionThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Tower][Lambda][Throttles] Invocation 429" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: Throttles on the Tower lambda has exceeded 0
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TowerEndpointFunction
+      EvaluationPeriods: 1
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  TowerEndpointFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TowerEndpointFunction}
+      RetentionInDays: 14
