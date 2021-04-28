@@ -24,6 +24,11 @@ Parameters:
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   DeploymentPackageBucketName: { Type: String }
+  S3StaticSiteDeployServiceToken: { Type: String }
+
+  BacksawArchiveS3ObjectVersion: { Type: String }
+
+  BetaPrxOrgArchiveS3ObjectVersion: { Type: String }
 
   CmsEcrImageTag: { Type: String }
   CmsSecretsVersion: { Type: String }
@@ -51,41 +56,90 @@ Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
-  # CmsStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Properties:
-  #     NotificationARNs:
-  #       - !Ref CloudFormationNotificationArn
-  #     Parameters:
-  #       AlbFullName: !Ref AlbFullName
-  #       AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-  #       EcsClusterArn: !Ref EcsClusterArn
-  #       VpcId: !Ref VpcId
-  #       SecretsBase: !Ref SecretsBase
-  #       EcrImageTag: !Ref CmsEcrImageTag
-  #       SecretsVersion: !Ref CmsSecretsVersion
-  #       AlbListenerRulePriorityPrefix: !Ref CmsSharedAlbListenerRulePriorityPrefix
-  #       EcrRegion: !Ref EcrRegion
-  #       SecretsStackName: !Ref SecretsStackName
-  #       NotificationsStackName: !Ref NotificationsStackName
-  #       EnvironmentType: !Ref EnvironmentType
-  #       RootStackName: !Ref RootStackName
-  #       RootStackId: !Ref RootStackId
-  #       EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-  #       SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
-  #       VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
-  #       VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
-  #       SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: CMS }
-  #     TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
-  #     TimeoutInMinutes: 20
+  BacksawStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        StaticSiteArchiveS3ObjectVersion: !Ref BacksawArchiveS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/backsaw.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Backsaw }
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, backsaw.yml]]
+      TimeoutInMinutes: 5
+
+  BetaStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        StaticSiteArchiveS3ObjectVersion: !Ref BetaPrxOrgArchiveS3ObjectVersion
+        EnvironmentType: !Ref EnvironmentType
+        StaticSiteCloudFrontOai: !Sub /prx/${EnvironmentTypeAbbreviation}/beta.prx.org/CLOUDFRONT_OAI # TODO Multi-region refactor
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Beta }
+      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, beta.yml]]
+      TimeoutInMinutes: 5
+
+  CmsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref CmsEcrImageTag
+        SecretsVersion: !Ref CmsSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref CmsSharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: CMS }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
+      TimeoutInMinutes: 40
 
   IdStack:
     Type: AWS::CloudFormation::Stack
