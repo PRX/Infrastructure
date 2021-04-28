@@ -38,14 +38,48 @@ Parameters:
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
+  CmsEcrImageTag: { Type: String }
+  CmsSecretsVersion: { Type: String }
+  CmsSharedAlbListenerRulePriorityPrefix: { Type: String }
+
   IframelyEcrImageTag: { Type: String }
   IframelySecretsVersion: { Type: String }
   IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
+
+  StyleguideEcrImageTag: { Type: String }
+  StyleguideSecretsVersion: { Type: String }
+  StyleguideSharedAlbListenerRulePriorityPrefix: { Type: String }
 
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
+  CmsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref CmsEcrImageTag
+        SecretsVersion: !Ref CmsSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref CmsSharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+
   IframelyStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -77,6 +111,39 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Iframely }
       TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
+      TimeoutInMinutes: 20
+
+  StyleguideStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref StyleguideEcrImageTag
+        SecretsVersion: !Ref StyleguideSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref StyleguideSharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Styleguide }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/styleguide.yml
       TimeoutInMinutes: 20
 
 Outputs:
