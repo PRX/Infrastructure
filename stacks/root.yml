@@ -960,76 +960,65 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
-  # Apps100AStack:
-  #   Type: AWS::CloudFormation::Stack
-  #   Condition: IsStaging # TODO
-  #   Properties:
-  #     NotificationARNs:
-  #       - !GetAtt Constants.CloudFormationNotificationArn
-  #     Parameters:
-  #       CmsEcrImageTag: !Ref CmsEcrImageTag
-  #       CmsSecretsVersion: !Ref CmsSecretsVersion
-  #       CmsSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
+  Apps100AStack:
+    Type: AWS::CloudFormation::Stack
+    Condition: IsStaging # TODO
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
+        AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
+        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        SecretsBase: !GetAtt Constants.SecretsBaseRegion
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
+        VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
+        SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointAddress
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
+        SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.InstanceSecurityGroupId
+        DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
 
-  #       IdEcrImageTag: !Ref IdEcrImageTag
-  #       IdSecretsVersion: !Ref IdSecretsVersion
-  #       IdSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Id, prefix]
+        CmsEcrImageTag: !Ref CmsEcrImageTag
+        CmsSecretsVersion: !Ref CmsSecretsVersion
+        CmsSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Cms, prefix]
 
-  #       IframelyEcrImageTag: !Ref IframelyEcrImageTag
-  #       IframelySecretsVersion: !Ref IframelySecretsVersion
-  #       IframelySharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Iframely, prefix]
+        IdEcrImageTag: !Ref IdEcrImageTag
+        IdSecretsVersion: !Ref IdSecretsVersion
+        IdSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Id, prefix]
 
-  #       PlayEcrImageTag: !Ref PlayEcrImageTag
-  #       PlaySecretsVersion: !Ref PlaySecretsVersion
-  #       PlaySharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Play, prefix]
+        IframelyEcrImageTag: !Ref IframelyEcrImageTag
+        IframelySecretsVersion: !Ref IframelySecretsVersion
+        IframelySharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Iframely, prefix]
 
-  #       S3SigningLambdaCodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
+        PlayEcrImageTag: !Ref PlayEcrImageTag
+        PlaySecretsVersion: !Ref PlaySecretsVersion
+        PlaySharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Play, prefix]
 
-  #       StyleguideEcrImageTag: !Ref StyleguideEcrImageTag
-  #       StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
-  #       StyleguideSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Styleguide, prefix]
+        S3SigningLambdaCodeS3ObjectVersion: !Ref UploadLambdaCodeS3ObjectVersion
 
-  #       TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-  #       CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
-  #       AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
-  #       AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
-  #       EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
-  #       EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
-  #       VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-  #       VpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
-  #       VpcIpv6CidrBlocks: !GetAtt SharedVpcStack.Outputs.VpcIpv6CidrBlocks
-  #       SecretsBase: !GetAtt Constants.SecretsBaseRegion
-  #       EcrRegion: !Ref EcrRegion
-  #       SecretsStackName: !Ref SecretsStackName
-  #       NotificationsStackName: !Ref NotificationsStackName
-  #       EnvironmentType: !Ref EnvironmentType
-  #       EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-  #       RootStackName: !GetAtt Constants.RootStackName
-  #       RootStackId: !GetAtt Constants.RootStackId
-  #       VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-  #       VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
-  #       VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
-  #       VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-  #       VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-  #       VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-  #       SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointAddress
-  #       SharedMemcachedEndpointPort: !GetAtt PrivateSharedMemcachedStack.Outputs.CacheEndpointPort
-  #       AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
-  #       EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
-  #       EcsLaunchEndpointsAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
-  #       KmsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KmsEndpointAccessSecurityGroupId
-  #       SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.InstanceSecurityGroupId
-  #       DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Common }
-  #     TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-100A.yml
-  #     TimeoutInMinutes: 40
+        StyleguideEcrImageTag: !Ref StyleguideEcrImageTag
+        StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
+        StyleguideSharedAlbListenerRulePriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Styleguide, prefix]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-100A.yml
+      TimeoutInMinutes: 40
 
   # Apps200AStack:
   #   Type: AWS::CloudFormation::Stack
