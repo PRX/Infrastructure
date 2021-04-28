@@ -50,9 +50,13 @@ Parameters:
   EchoServiceToken: { Type: String }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  SharedRdsMysqlEndpoint: { Type: String }
+  SharedAuroraMysqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsMysqlEndpoint, ""]]
+  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
 
 Resources:
   Constants:
@@ -134,6 +138,7 @@ Resources:
   # HTTPS traffic via the shared application load balancer.
   PublicWebEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -426,6 +431,7 @@ Resources:
   # the image act as a Sphinx server.
   SphinxServerEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     DependsOn:
       - SphinxServerSearchdNlbListener
       - SphinxServerWebNlbListener

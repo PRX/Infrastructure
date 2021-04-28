@@ -32,9 +32,13 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
+  SharedRdsPostgresqlEndpoint: { Type: String }
+  SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
+  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
 
 Resources:
   WildcardHostHeaderListenerRule:
@@ -158,6 +162,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -298,6 +303,7 @@ Resources:
         - { Key: prx:dev:application, Value: Remix }
   WorkerScheduledRule:
     Type: AWS::Events::Rule
+    Condition: HasRdsEndpoint
     Properties:
       Description: !Sub Periodically loads ${EnvironmentType} Remix episodes
       ScheduleExpression: rate(1 hour)

@@ -38,9 +38,13 @@ Parameters:
   S3SigningAccessKeyId: { Type: String }
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
+  SharedRdsMysqlEndpoint: { Type: String }
+  SharedAuroraMysqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsMysqlEndpoint, ""]]
+  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
 
 Resources:
   ExchangeWildcardHostHeaderListenerRule:
@@ -211,6 +215,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -303,6 +308,7 @@ Resources:
 
   WorkerEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -469,6 +475,7 @@ Resources:
 
   SayWhenEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:

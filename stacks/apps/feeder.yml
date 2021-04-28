@@ -79,9 +79,13 @@ Parameters:
   VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  SharedRdsPostgresqlEndpoint: { Type: String }
+  SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
+  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
 
 Resources:
   Constants:
@@ -487,6 +491,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     DependsOn:
       - HttpListener
       - HttpsListener
@@ -568,6 +573,7 @@ Resources:
 
   WorkerEcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
