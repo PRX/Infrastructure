@@ -33,6 +33,11 @@ Parameters:
   S3SigningUserName: { Type: String }
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
+  CastleHostname: { Type: String }
+  CmsHostname: { Type: String }
+  IdHostname: { Type: String }
+  MetricsHostname: { Type: String }
+  PlayHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -184,7 +189,7 @@ Resources:
         - Cpu: !If [IsProduction, 100, 64]
           Environment:
             - Name: APP_NAME
-              Value: "publish"
+              Value: publish
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -203,6 +208,20 @@ Resources:
               Value: !Ref S3SigningEndpointUrl
             - Name: UPLOAD_SIGNING_SERVICE_KEY_ID
               Value: !Ref S3SigningAccessKeyId
+            - Name: AUTH_HOST # TODO Remove from secrets
+              Value: !Ref IdHostname
+            - Name: CASTLE_HOST # TODO Remove from secrets
+              Value: !Ref CastleHostname
+            - Name: CMS_HOST # TODO Remove from secrets
+              Value: !Ref CmsHostname
+            - Name: METRICS_HOST # TODO Remove from secrets
+              Value: !Ref MetricsHostname
+            - Name: PLAY_HOST # TODO Remove from secrets
+              Value: !Ref PlayHostname
+            - Name: NEW_RELIC_APP_NAME # TODO Remove from secrets
+              Value: !If [IsProduction, Publish Production, Publish Staging]
+            - Name: UPLOAD_BUCKET_FOLDER # TODO Remove from secrets
+              Value: !If [IsProduction, prod, staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${EcrImageTag}
           LogConfiguration:

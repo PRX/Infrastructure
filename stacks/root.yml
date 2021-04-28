@@ -11,7 +11,10 @@ AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
   Launches stacks for a number of applications and services that are maintained
-  in separate templates.
+  in separate templates. This stack is only intended to be launched once in a
+  given region, and launching more than one will likely fail. The stack can
+  operate in either Primary or Secondary mode, depending on its current role in
+  a multi-region setup.
 
 Parameters:
   # Optional
@@ -95,6 +98,7 @@ Parameters:
   PipelineExecutionNonce: { Type: String }
 
 Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Mappings:
@@ -216,6 +220,13 @@ Resources:
           - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
           - SourceBucketName:
               Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      BetaHostname: !If [IsProduction, beta.prx.org, beta.staging.prx.tech]
+      CastleHostname: !If [IsProduction, castle.prx.tech, castle.staging.prx.tech]
+      CmsHostname: !If [IsProduction, cms.prx.org, cms.staging.prx.tech]
+      FeederHostname: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
+      IdHostname: !If [IsProduction, id.prx.org, id.staging.prx.tech]
+      MetricsHostname: !If [IsProduction, metrics.prx.org, metrics.staging.prx.tech]
+      PlayHostname: !If [IsProduction, play.prx.org, play.staging.prx.tech]
 
   # Root stacks
   StaticSitesRootStack:
@@ -1027,6 +1038,11 @@ Resources:
         S3SigningAccessKeyId: !GetAtt Apps100AStack.Outputs.S3SigningAccessKeyId
         S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
         DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
+        CastleHostname: !GetAtt Constants.CastleHostname
+        CmsHostname: !GetAtt Constants.CmsHostname
+        IdHostname: !GetAtt Constants.IdHostname
+        MetricsHostname: !GetAtt Constants.MetricsHostname
+        PlayHostname: !GetAtt Constants.PlayHostname
 
         # App-specific parameters
 
@@ -1095,6 +1111,8 @@ Resources:
         VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
         EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
         SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgStack.Outputs.InstanceSecurityGroupId
+        CastleHostname: !GetAtt Constants.CastleHostname
+        IdHostname: !GetAtt Constants.IdHostname
 
         # App-specific parameters
 
