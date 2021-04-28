@@ -30,9 +30,9 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
-  UploadSigningUserName: { Type: String }
-  UploadSigningEndpointUrl: { Type: String }
-  UploadSigningAccessKeyId: { Type: String }
+  S3SigningUserName: { Type: String }
+  S3SigningEndpointUrl: { Type: String }
+  S3SigningAccessKeyId: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -49,7 +49,7 @@ Resources:
           Values:
             - publish.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -200,9 +200,9 @@ Resources:
             - Name: UPLOAD_PUBLIC_ACCESS_HOST
               Value: !GetAtt CloudFrontDistribution.DomainName
             - Name: UPLOAD_SIGNING_SERVICE_URL
-              Value: !Ref UploadSigningEndpointUrl
+              Value: !Ref S3SigningEndpointUrl
             - Name: UPLOAD_SIGNING_SERVICE_KEY_ID
-              Value: !Ref UploadSigningAccessKeyId
+              Value: !Ref S3SigningAccessKeyId
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${EcrRegion}.amazonaws.com/publish.prx.org:${EcrImageTag}
           LogConfiguration:
@@ -298,7 +298,7 @@ Resources:
         Version: "2012-10-17"
       PolicyName: PublishUploadsBucketAccess
       Users:
-        - !Ref UploadSigningUserName
+        - !Ref S3SigningUserName
 
   # Publish briefly needs access to uploads in their temp location; this
   # CloudFront distribution provides public access to the not-public bucket

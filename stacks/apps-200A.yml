@@ -34,27 +34,65 @@ Parameters:
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
-  DeploymentPackageBucketName: { Type: String }
+  S3SigningUserName: { Type: String }
+  S3SigningEndpointUrl: { Type: String }
+  S3SigningAccessKeyId: { Type: String }
 
-  CmsEcrImageTag: { Type: String }
-  CmsSecretsVersion: { Type: String }
-  CmsSharedAlbListenerRulePriorityPrefix: { Type: String }
+  ExchangeEcrImageTag: { Type: String }
+  ExchangeSecretsVersion: { Type: String }
+  ExchangeSharedAlbListenerRulePriorityPrefix: { Type: String }
 
-  IframelyEcrImageTag: { Type: String }
-  IframelySecretsVersion: { Type: String }
-  IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
+  NetworksEcrImageTag: { Type: String }
+  NetworksSecretsVersion: { Type: String }
+  NetworksSharedAlbListenerRulePriorityPrefix: { Type: String }
 
-  S3SigningLambdaCodeS3ObjectVersion: { Type: String }
-
-  StyleguideEcrImageTag: { Type: String }
-  StyleguideSecretsVersion: { Type: String }
-  StyleguideSharedAlbListenerRulePriorityPrefix: { Type: String }
+  PublishEcrImageTag: { Type: String }
+  PublishSecretsVersion: { Type: String }
+  PublishSharedAlbListenerRulePriorityPrefix: { Type: String }
 
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
-  CmsStack:
+  ExchangeStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        EcsClusterName: !Ref EcsClusterName
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref ExchangeEcrImageTag
+        SecretsVersion: !Ref ExchangeSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref ExchangeSharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+        S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
+        S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/exchange.yml
+      TimeoutInMinutes: 20
+
+  NetworksStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
@@ -64,21 +102,29 @@ Resources:
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
+        VpcCidrBlock: !Ref VpcCidrBlock
+        VpcIpv6CidrBlocks: !Ref VpcIpv6CidrBlocks
         SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref CmsEcrImageTag
-        SecretsVersion: !Ref CmsSecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref CmsSharedAlbListenerRulePriorityPrefix
+        EcrImageTag: !Ref NetworksEcrImageTag
+        SecretsVersion: !Ref NetworksSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref NetworksSharedAlbListenerRulePriorityPrefix
         EcrRegion: !Ref EcrRegion
         SecretsStackName: !Ref SecretsStackName
         NotificationsStackName: !Ref NotificationsStackName
         EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
         VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
         VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
-        SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
+        S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
+        S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
+        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
+        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
+        EchoServiceToken: !Ref EchoServiceToken
+        EcsLaunchEndpointsAccessSecurityGroupId: !Ref EcsLaunchEndpointsAccessSecurityGroupId
+        KmsEndpointAccessSecurityGroupId: !Ref KmsEndpointAccessSecurityGroupId
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -86,11 +132,11 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: CMS }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
+        - { Key: prx:dev:application, Value: Networks }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/networks.yml
       TimeoutInMinutes: 20
 
-  IframelyStack:
+  PublishStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
@@ -101,9 +147,9 @@ Resources:
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref IframelyEcrImageTag
-        SecretsVersion: !Ref IframelySecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref IframelySharedAlbListenerRulePriorityPrefix
+        EcrImageTag: !Ref PublishEcrImageTag
+        SecretsVersion: !Ref PublishSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref PublishSharedAlbListenerRulePriorityPrefix
         EcrRegion: !Ref EcrRegion
         SecretsStackName: !Ref SecretsStackName
         NotificationsStackName: !Ref NotificationsStackName
@@ -111,6 +157,9 @@ Resources:
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
+        S3SigningUserName: !Ref S3SigningUserName
+        S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
+        S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -118,82 +167,11 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Iframely }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
-      TimeoutInMinutes: 20
-
-  S3SigningStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        CodeS3Bucket: !Ref DeploymentPackageBucketName
-        CodeS3ObjectVersion: !Ref S3SigningLambdaCodeS3ObjectVersion
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: S3 Signing Service }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/s3-signing.yml
-      TimeoutInMinutes: 5
-
-  StyleguideStack:
-    Type: AWS::CloudFormation::Stack
-    Condition: IsStaging
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref StyleguideEcrImageTag
-        SecretsVersion: !Ref StyleguideSecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref StyleguideSharedAlbListenerRulePriorityPrefix
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Styleguide }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/styleguide.yml
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Publish }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
       TimeoutInMinutes: 20
 
 Outputs:
   StackName:
     Value: !Ref AWS::StackName
-
-  S3SigningUserName:
-    Description: The user name of the IAM user whose key is used for signing
-    Value: !GetAtt S3SigningStack.Outputs.UploadSigningUserName
-  S3SigningAccessKeyId:
-    Description: >-
-      The IAM access key ID for the access key used to generate S3 API
-      request signatures
-    Value: !GetAtt S3SigningStack.Outputs.SigningAccessKeyId
-  S3SigningEndpointUrl:
-    Description: The user name of the IAM user whose key is used for signing
-    Value: !GetAtt S3SigningStack.Outputs.SigningEndpointUrl
-
-  CmsElasticsearchDomainName:
-    Value: !GetAtt CmsStack.Outputs.ElasticsearchDomainName

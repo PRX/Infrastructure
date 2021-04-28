@@ -21,9 +21,6 @@ Parameters:
   EcrRegion: { Type: String }
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
-  UploadSigningUserName: { Type: String }
-  UploadSigningEndpointUrl: { Type: String }
-  UploadSigningAccessKeyId: { Type: String }
   VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet2Id: { Type: "AWS::EC2::Subnet::Id" }
   VpcPublicSubnet3Id: { Type: "AWS::EC2::Subnet::Id" }
@@ -38,9 +35,6 @@ Parameters:
   KmsEndpointAccessSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
 
-  PublishEcrImageTag: { Type: String }
-  PublishSecretsVersion: { Type: String }
-  PublishSharedAlbListenerRulePriorityPrefix: { Type: String }
   MetricsEcrImageTag: { Type: String }
   MetricsSecretsVersion: { Type: String }
   MetricsSharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -50,9 +44,6 @@ Parameters:
   PlayEcrImageTag: { Type: String }
   PlaySecretsVersion: { Type: String }
   PlaySharedAlbListenerRulePriorityPrefix: { Type: String }
-  NetworksEcrImageTag: { Type: String }
-  NetworksSecretsVersion: { Type: String }
-  NetworksSharedAlbListenerRulePriorityPrefix: { Type: String }
   DovetailRouterEcrImageTag: { Type: String }
   DovetailRouterSecretsVersion: { Type: String }
   DovetailLegacyEcrImageTag: { Type: String }
@@ -63,9 +54,6 @@ Parameters:
   RemixEcrImageTag: { Type: String }
   RemixSecretsVersion: { Type: String }
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
-  ExchangeEcrImageTag: { Type: String }
-  ExchangeSecretsVersion: { Type: String }
-  ExchangeSharedAlbListenerRulePriorityPrefix: { Type: String }
   CastleEcrImageTag: { Type: String }
   CastleSecretsVersion: { Type: String }
   CastleSharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -153,18 +141,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/castle.yml
       TimeoutInMinutes: 40
 
-
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: CMS }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
-      TimeoutInMinutes: 20
-
   DovetailRouterStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -203,44 +179,6 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Router } # TODO
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-router.yml
-      TimeoutInMinutes: 20
-
-  ExchangeStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        EcsClusterName: !Ref EcsClusterName
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref ExchangeEcrImageTag
-        SecretsVersion: !Ref ExchangeSecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref ExchangeSharedAlbListenerRulePriorityPrefix
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
-        UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
-        UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
-        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
-        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Exchange }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/exchange.yml
       TimeoutInMinutes: 20
 
   FeederStack:
@@ -378,50 +316,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/metrics.yml
       TimeoutInMinutes: 20
 
-  NetworksStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        VpcCidrBlock: !Ref VpcCidrBlock
-        VpcIpv6CidrBlocks: !Ref VpcIpv6CidrBlocks
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref NetworksEcrImageTag
-        SecretsVersion: !Ref NetworksSecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref NetworksSharedAlbListenerRulePriorityPrefix
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
-        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
-        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
-        UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
-        UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
-        SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
-        SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
-        EchoServiceToken: !Ref EchoServiceToken
-        EcsLaunchEndpointsAccessSecurityGroupId: !Ref EcsLaunchEndpointsAccessSecurityGroupId
-        KmsEndpointAccessSecurityGroupId: !Ref KmsEndpointAccessSecurityGroupId
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Networks }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/networks.yml
-      TimeoutInMinutes: 20
-
   PlayStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -453,42 +347,6 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Play }
       TemplateURL: !Sub ${TemplateUrlPrefix}/play.yml
-      TimeoutInMinutes: 20
-
-  PublishStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref PublishEcrImageTag
-        SecretsVersion: !Ref PublishSecretsVersion
-        AlbListenerRulePriorityPrefix: !Ref PublishSharedAlbListenerRulePriorityPrefix
-        EcrRegion: !Ref EcrRegion
-        SecretsStackName: !Ref SecretsStackName
-        NotificationsStackName: !Ref NotificationsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        UploadSigningUserName: !Ref UploadSigningUserName
-        UploadSigningEndpointUrl: !Ref UploadSigningEndpointUrl
-        UploadSigningAccessKeyId: !Ref UploadSigningAccessKeyId
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Publish }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
       TimeoutInMinutes: 20
 
   RemixStack:
@@ -537,5 +395,3 @@ Outputs:
     Value: !GetAtt DovetailRouterStack.Outputs.AlbName
   CastleRedisCacheName:
     Value: !GetAtt CastleStack.Outputs.RedisCacheName
-  CmsElasticsearchDomainName:
-    Value: !GetAtt CmsStack.Outputs.ElasticsearchDomainName
