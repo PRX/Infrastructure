@@ -44,6 +44,10 @@ Parameters:
   IframelySecretsVersion: { Type: String }
   IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
 
+  PlayEcrImageTag: { Type: String }
+  PlaySecretsVersion: { Type: String }
+  PlaySharedAlbListenerRulePriorityPrefix: { Type: String }
+
   S3SigningLambdaCodeS3ObjectVersion: { Type: String }
 
   StyleguideEcrImageTag: { Type: String }
@@ -121,6 +125,39 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Iframely }
       TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
+      TimeoutInMinutes: 20
+
+  PlayStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref PlayEcrImageTag
+        SecretsVersion: !Ref PlaySecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref PlaySharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Play }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/play.yml
       TimeoutInMinutes: 20
 
   S3SigningStack:
