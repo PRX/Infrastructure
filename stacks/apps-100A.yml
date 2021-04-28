@@ -40,6 +40,10 @@ Parameters:
   CmsSecretsVersion: { Type: String }
   CmsSharedAlbListenerRulePriorityPrefix: { Type: String }
 
+  IdEcrImageTag: { Type: String }
+  IdSecretsVersion: { Type: String }
+  IdSharedAlbListenerRulePriorityPrefix: { Type: String }
+
   IframelyEcrImageTag: { Type: String }
   IframelySecretsVersion: { Type: String }
   IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -92,6 +96,40 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       TemplateURL: !Sub ${TemplateUrlPrefix}/cms.yml
+      TimeoutInMinutes: 20
+
+  IdStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        SecretsBase: !Ref SecretsBase
+        EcrImageTag: !Ref IdEcrImageTag
+        SecretsVersion: !Ref IdSecretsVersion
+        AlbListenerRulePriorityPrefix: !Ref IdSharedAlbListenerRulePriorityPrefix
+        EcrRegion: !Ref EcrRegion
+        SecretsStackName: !Ref SecretsStackName
+        NotificationsStackName: !Ref NotificationsStackName
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: PRX }
+        - { Key: prx:dev:application, Value: ID }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/id.yml
       TimeoutInMinutes: 20
 
   IframelyStack:
