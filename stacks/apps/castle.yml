@@ -32,9 +32,11 @@ Parameters:
   SecretsStackName: { Type: String }
   NotificationsStackName: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: "AWS::EC2::SecurityGroup::Id" }
+  CastleRdsPostgresqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasRdsEndpoint: !Not [!Equals [!Ref CastleRdsPostgresqlEndpoint, ""]]
 
 Resources:
   HostHeaderListenerRule:
@@ -105,6 +107,7 @@ Resources:
 
   EcsService:
     Type: AWS::ECS::Service
+    Condition: HasRdsEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
