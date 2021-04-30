@@ -39,8 +39,6 @@ Parameters:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectVersion:
     Type: String
-  PixelPrxOrgCodeS3ObjectVersion:
-    Type: String
 Resources:
   UploadLambdaStack:
     Type: "AWS::CloudFormation::Stack"
@@ -261,31 +259,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "analytics-ingest-alarms.yml"]]
       TimeoutInMinutes: 5
-  PixelPrxOrgStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        CodeS3Bucket:
-          Fn::ImportValue: !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectVersion: !Ref PixelPrxOrgCodeS3ObjectVersion
-        EnvironmentType: !Ref EnvironmentType
-        Destinations: !Sub "/prx/${EnvironmentTypeAbbreviation}/pixel.prx.org/DESTINATIONS"
-        KinesisStream: !Sub "/prx/${EnvironmentTypeAbbreviation}/pixel.prx.org/KINESIS_STREAM"
-        IdHost: !Sub "/prx/${EnvironmentTypeAbbreviation}/pixel.prx.org/ID_HOST"
-        SignerSecret: !Sub "/prx/${EnvironmentTypeAbbreviation}/pixel.prx.org/SIGNER_SECRET"
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "pixel.prx.org.yml"]]
-      TimeoutInMinutes: 15
 Outputs:
   UploadSigningUserName:
     Description: The user name of the IAM user whose key is used for signing
