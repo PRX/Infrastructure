@@ -32,8 +32,7 @@ send_sns_callback_message() {
     [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
     # Optional Lambda code parameters
-    [ -z "$PRX_LAMBDA_CODE_S3_KEY" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_KEY\"}"
-    [ -z "$PRX_LAMBDA_CODE_S3_VERSION_ID" ] || MSGATR+=",\"PRX_LAMBDA_CODE_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_S3_VERSION_ID\"}"
+    [ -z "$PRX_LAMBDA_CODE_CONFIG_VALUE" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_VALUE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_VALUE\"}"
     [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_PARAMETERS\"}"
 
     # Optional S3 static site parameters
