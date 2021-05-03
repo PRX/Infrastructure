@@ -191,7 +191,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
   const environmentVariables = [
     {
       name: 'PRX_REPO',
-      value: event.repository.full_name,
+      value: event.repository.full_name, // e.g. PRX/MyApp
     },
     {
       name: 'PRX_COMMIT',
