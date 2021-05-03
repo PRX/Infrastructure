@@ -135,7 +135,7 @@ push_to_s3_lambda() {
             cleaned=`docker rm $container_id`
 
             echo "Sending zip archive to S3..."
-            key = "GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
             aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
 
             export PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
@@ -166,7 +166,7 @@ push_to_s3_static() {
             cleaned=`docker rm $container_id`
 
             echo "Sending zip archive to S3..."
-            key = "GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
             aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
 
             export PRX_S3_STATIC_CONFIG_VALUE="$key"
