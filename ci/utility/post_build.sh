@@ -37,8 +37,7 @@ send_sns_callback_message() {
     [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_PARAMETERS\"}"
 
     # Optional S3 static site parameters
-    [ -z "$PRX_S3_STATIC_S3_KEY" ] || MSGATR+=",\"PRX_S3_STATIC_S3_KEY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_S3_KEY\"}"
-    [ -z "$PRX_S3_STATIC_S3_VERSION_ID" ] || MSGATR+=",\"PRX_S3_STATIC_S3_VERSION_ID\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_S3_VERSION_ID\"}"
+    [ -z "$PRX_S3_STATIC_CONFIG_VALUE" ] || MSGATR+=",\"PRX_S3_STATIC_CONFIG_VALUE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_CONFIG_VALUE\"}"
     [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_S3_STATIC_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_S3_STATIC_CONFIG_PARAMETERS\"}"
 
     MSGATR+="}"
@@ -115,7 +114,7 @@ push_to_ecr() {
 # from the CodeBuild needs to be pushed to that key in the standard Application
 # Code bucket provided by the Storage stack.
 push_to_s3_lambda() {
-    if [ -n "$PRX_LAMBDA_CODE_S3_KEY" ]
+    if [ -n "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
         if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
@@ -136,16 +135,17 @@ push_to_s3_lambda() {
             cleaned=`docker rm $container_id`
 
             echo "Sending zip archive to S3..."
-            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_LAMBDA_CODE_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
+            key = "GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
 
-            export PRX_LAMBDA_CODE_S3_VERSION_ID="$version_id"
+            export PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
         fi
     fi
 }
 
 #
 push_to_s3_static() {
-    if [ -n "$PRX_S3_STATIC_S3_KEY" ]
+    if [ -n "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]
     then
         if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for S3 static code push"; fi
         if [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]; then build_error "PRX_S3_STATIC_CONFIG_PARAMETERS required for S3 static code push"; fi
@@ -166,9 +166,10 @@ push_to_s3_static() {
             cleaned=`docker rm $container_id`
 
             echo "Sending zip archive to S3..."
-            version_id=`aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $PRX_S3_STATIC_S3_KEY --acl private --body build.zip --output text --query 'VersionId'`
+            key = "GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
 
-            export PRX_S3_STATIC_S3_VERSION_ID="$version_id"
+            export PRX_S3_STATIC_CONFIG_VALUE="$key"
         fi
 
     fi

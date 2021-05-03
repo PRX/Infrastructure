@@ -90,61 +90,52 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - codebuild.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: CiCodeBuildSourceArchiveBucketBasicAccess
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - s3:GetObject
                   - s3:GetObjectVersion
-                Resource:
-                  - !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+            Version: "2012-10-17"
         - PolicyName: ApplicationCodeWriteAccess
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
+            Version: "2012-10-17"
         - PolicyName: ParameterStorePolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameters
-                Resource:
-                  - "*" # TODO
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: "*" # TODO
+            Version: "2012-10-17"
         - PolicyName: SnsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
+              - Action: sns:Publish
+                Effect: Allow
                 Resource:
                   - !Ref CiStatusSnsTopic
                   - !Ref CodeBuildCallbackSnsTopic
+            Version: "2012-10-17"
         - PolicyName: ECRAccess
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - ecr:GetAuthorizationToken
                   - ecr:CreateRepository
+                Effect: Allow
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -155,18 +146,17 @@ Resources:
                   - ecr:CompleteLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:PutImage
-                Resource:
-                  - !Sub arn:aws:ecr:us-east-1:${AWS::AccountId}:repository/*
+                Resource: !Sub arn:aws:ecr:us-east-1:${AWS::AccountId}:repository/*
+            Version: "2012-10-17"
         - PolicyName: PorterPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - "states:StartExecution"
                   - "states:DescribeExecution"
-                Resource:
-                  - "*" # TODO
+                Effect: Allow
+                Resource: "*" # TODO
+            Version: "2012-10-17"
       ManagedPolicyArns:
         - Fn::ImportValue: !Sub ${InfrastructureSecretsStackName}-SecretsInstanceAccessPolicyArn
         - Fn::ImportValue: !Sub ${InfrastructureSecretsStackName}-SecretsInstanceDecryptPolicyArn
@@ -280,42 +270,37 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: XrayTracePolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
-                Resource:
-                  - "*"
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
         - PolicyName: SnsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource:
-                  - !Ref GitHubEventSnsTopic
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref GitHubEventSnsTopic
+            Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
         - Key: Project
           Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
+        - Key: prx:cloudformation:stack-name
           Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
+        - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
   GitHubWebhookEndpointLambdaFunction:
     Type: AWS::Serverless::Function
@@ -382,52 +367,43 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: XrayTracePolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
-                Resource:
-                  - "*"
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
         - PolicyName: SnsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
-                Resource:
-                  - !Ref CiStatusSnsTopic
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref CiStatusSnsTopic
+            Version: "2012-10-17"
         - PolicyName: S3Policy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - s3:PutObject
-                Resource:
-                  - !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
+            Version: "2012-10-17"
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - codebuild:StartBuild
-                Resource:
-                  - !GetAtt CiCodeBuildProject.Arn
+              - Action: codebuild:StartBuild
+                Effect: Allow
+                Resource: !GetAtt CiCodeBuildProject.Arn
+            Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
@@ -504,63 +480,54 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: XrayTracePolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - xray:PutTraceSegments
                   - xray:PutTelemetryRecords
-                Resource:
-                  - "*"
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
         - PolicyName: S3Policy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
+                Effect: Allow
+                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
+            Version: "2012-10-17"
         - PolicyName: CodeBuildPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - codebuild:BatchGetBuilds
-                Resource:
-                  - !GetAtt CiCodeBuildProject.Arn
+              - Action: codebuild:BatchGetBuilds
+                Effect: Allow
+                Resource: !GetAtt CiCodeBuildProject.Arn
+            Version: "2012-10-17"
         - PolicyName: CloudWatchMetricsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - cloudwatch:PutMetricData
-                Resource:
-                  - "*"
+              - Action: cloudwatch:PutMetricData
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
         - PolicyName: SnsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
+              - Action: sns:Publish
+                Effect: Allow
                 Resource:
                   - !Ref CiStatusSnsTopic
                   - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+            Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
@@ -639,24 +606,21 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: SnsPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sns:Publish
+              - Action: sns:Publish
+                Effect: Allow
                 Resource:
                   - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+            Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:

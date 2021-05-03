@@ -19,10 +19,8 @@
 #   PRX_ECR_CONFIG_PARAMETERS: only for Docker apps
 #   PRX_ECR_IMAGE: only for Docker apps
 #   PRX_ECR_TAG: only for Docker apps
-#   PRX_LAMBDA_CODE_S3_KEY: only for Lambda apps
 #   PRX_LAMBDA_CODE_S3_VERSION_ID: only for Lambda apps
 #   PRX_LAMBDA_CODE_CONFIG_PARAMETERS: only for Lambda apps
-#   PRX_S3_STATIC_S3_KEY: only for S3 static sites
 #   PRX_S3_STATIC_S3_VERSION_ID: only for S3 static sites
 #   PRX_S3_STATIC_CONFIG_PARAMETERS: only for S3 static sites
 
@@ -92,7 +90,7 @@ def update_github_status(sns_message):
     urllib.request.urlopen(req)
 
 
-def update_staging_config_status(sns_message):
+def update_staging_config_file(sns_message):
     attrs = sns_message["MessageAttributes"]
 
     if attrs["STATUS"]["Value"] == "true":
@@ -129,35 +127,35 @@ def update_staging_config_status(sns_message):
 
                 staging_config["Parameters"][key_name.strip()] = ecr_tag
 
-        if "PRX_LAMBDA_CODE_S3_VERSION_ID" in attrs:
+        if "PRX_LAMBDA_CODE_CONFIG_VALUE" in attrs:
             print("...Updating Lambda code S3 version ID value...")
 
             config_did_change = True
 
             # Update config with new S3 Version ID
 
-            version_id = attrs["PRX_LAMBDA_CODE_S3_VERSION_ID"]["Value"]
+            config_value = attrs["PRX_LAMBDA_CODE_CONFIG_VALUE"]["Value"]
 
             key_names = attrs["PRX_LAMBDA_CODE_CONFIG_PARAMETERS"]["Value"].split(",")
             for key_name in key_names:
-                print(f"...Setting {key_name.strip()} to {version_id}...")
+                print(f"...Setting {key_name.strip()} to {config_value}...")
 
-                staging_config["Parameters"][key_name.strip()] = version_id
+                staging_config["Parameters"][key_name.strip()] = config_value
 
-        if "PRX_S3_STATIC_S3_VERSION_ID" in attrs:
+        if "PRX_S3_STATIC_CONFIG_VALUE" in attrs:
             print("...Updating S3 static site S3 version ID value...")
 
             config_did_change = True
 
             # Update config with new S3 Version ID
 
-            version_id = attrs["PRX_S3_STATIC_S3_VERSION_ID"]["Value"]
+            config_value = attrs["PRX_S3_STATIC_CONFIG_VALUE"]["Value"]
 
             key_names = attrs["PRX_S3_STATIC_CONFIG_PARAMETERS"]["Value"].split(",")
             for key_name in key_names:
-                print(f"...Setting {key_name.strip()} to {version_id}...")
+                print(f"...Setting {key_name.strip()} to {config_value}...")
 
-                staging_config["Parameters"][key_name.strip()] = version_id
+                staging_config["Parameters"][key_name.strip()] = config_value
 
         # Zip the new config up
 
@@ -325,6 +323,6 @@ def lambda_handler(event, context):
     if "MessageAttributes" in sns_object and len(sns_object["MessageAttributes"]) > 0:
         # New CI
         update_github_status(sns_object)
-        update_staging_config_status(sns_object)
+        update_staging_config_file(sns_object)
         post_notification_status(sns_object)
         log_build_metrics(sns_object)
