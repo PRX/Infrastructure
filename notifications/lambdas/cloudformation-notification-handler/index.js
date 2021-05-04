@@ -9,7 +9,10 @@
 
 const AWS = require('aws-sdk');
 
-const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+const sns = new AWS.SNS({
+  apiVersion: '2010-03-31',
+  region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
+});
 
 const SLACK_DEBUG_CHANNEL = '#ops-debug';
 const SLACK_INFO_CHANNEL = '#ops-info';

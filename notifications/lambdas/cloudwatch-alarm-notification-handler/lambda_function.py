@@ -13,7 +13,9 @@ import datetime
 import re
 import traceback
 
-sns = boto3.client("sns")
+sns = boto3.client(
+    "sns", region_name=os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"].split(":")[3]
+)
 sts = boto3.client("sts")
 cloudwatch = boto3.client("cloudwatch")
 
