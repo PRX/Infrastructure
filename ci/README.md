@@ -97,8 +97,7 @@ For apps and services that run as AWS Lambda functions, the `post_build` script 
 
 In order for `post_build` to handle Lambda-based apps, the following environment variables must be set:
 
-- `PRX_LAMBDA_CODE_S3_KEY` – The S3 object key to use for the zipped code archive file. This object will always be placed in a bucket based on the `PRX_APPLICATION_CODE_BUCKET` environment variable, which has a default value provided by the CI base system, and generally should not be changed.
-- `PRX_LAMBDA_CODE_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (e.g., `AcmeAppLambdaVersionId` or `AcmeAppS3ObjectVersion,DuplicateAcmeAppS3ObjectVersion`). The CD process requires that these parameter names include the string `S3ObjectVersion` in order to work properly.
+- `PRX_LAMBDA_CODE_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object key of the zip file containing the Lambda code (e.g., `AcmeAppLambdaObjectKey` or `AcmeAppLambdaObjectKey,DuplicateAcmeAppLambdaObjectKey`). The CD process requires that these parameter names include the string `S3ObjectKey` in order to work properly.
 
 Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.lambda`, which allows for the build process to involve any number of different Docker images.
 
@@ -112,8 +111,7 @@ The callback function will track the S3 version ID of the zip archive object, an
 
 In order for `post_build` to handle S3 static sites, the following environment variables must be set:
 
-- `PRX_S3_STATIC_S3_KEY` – The S3 object key to use for the zipped code archive file. This object will always be placed in a bucket based on the `PRX_APPLICATION_CODE_BUCKET` environment variable, which has a default value provided by the CI base system, and generally should not be changed.
-- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object version ID of the zip file containing the Lambda code (e.g., `AcmeAppStaticS3ObjectVersion`). The CD process requires that these parameter names include the string `S3ObjectVersion` in order to work properly.
+- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object key of the zip file containing the Lambda code (e.g., `AcmeAppStaticS3ObjectKey`). The CD process requires that these parameter names include the string `S3ObjectKey` in order to work properly.
 
 Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_S3_STATIC_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.s3static`, which allows for the build process to involve any number of different Docker images.
 
