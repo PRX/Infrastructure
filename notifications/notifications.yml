@@ -48,13 +48,11 @@ Resources:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Action:
-              - sns:Publish
+          - Action: sns:Publish
             Effect: Allow
-            Resource:
-              - !Ref SlackMessageRelaySnsTopic
+            Resource: !Ref SlackMessageRelaySnsTopic
+        Version: "2012-10-17"
   # Slack message relay
   SlackMessageRelaySnsTopic:
     Type: AWS::SNS::Topic
@@ -130,43 +128,41 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: AccountPublish
+          - Action: sns:Publish
             Effect: Allow
             Principal:
               AWS: !Ref SnsTopicPolicyPublishAllowanceAccountIds
-            Action:
-              - sns:Publish
             Resource: !Ref CloudFormationNotificationSnsTopic
-          - Sid: OrganizationPublish
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref CloudFormationNotificationSnsTopic
+            Sid: AccountPublish
+          - Action: sns:Publish
             Condition:
               StringEquals:
-                "aws:PrincipalOrgID": !Ref SnsTopicPolicyPublishAllowanceOrganizationId
-          - Sid: OwnerAllAccess
+                aws:PrincipalOrgID: !Ref SnsTopicPolicyPublishAllowanceOrganizationId
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:GetTopicAttributes
-              - sns:SetTopicAttributes
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Sid: OrganizationPublish
+          - Action:
               - sns:AddPermission
-              - sns:RemovePermission
               - sns:DeleteTopic
-              - sns:Subscribe
+              - sns:GetTopicAttributes
               - sns:ListSubscriptionsByTopic
               - sns:Publish
               - sns:Receive
-            Resource: !Ref CloudFormationNotificationSnsTopic
+              - sns:RemovePermission
+              - sns:SetTopicAttributes
+              - sns:Subscribe
             Condition:
               StringEquals:
-                "AWS:SourceOwner": !Ref AWS::AccountId
+                AWS:SourceOwner: !Ref AWS::AccountId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: !Ref CloudFormationNotificationSnsTopic
+            Sid: OwnerAllAccess
+        Version: "2012-10-17"
       Topics:
         - !Ref CloudFormationNotificationSnsTopic
   CloudFormationNotificationHandlerLambdaFunction:
@@ -357,18 +353,17 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: CloudWatchAlarmsPublish
+          - Action: sns:Publish
+            Condition:
+              ArnLike:
+                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:Publish
             Resource: !Ref OpsDebugMessagesSnsTopic
-            Condition:
-              ArnLike:
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+            Sid: CloudWatchAlarmsPublish
+        Version: "2012-10-17"
       Topics:
         - !Ref OpsDebugMessagesSnsTopic
   OpsInfoMessagesSnsTopic:
@@ -378,18 +373,17 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: CloudWatchAlarmsPublish
+          - Action: sns:Publish
+            Condition:
+              ArnLike:
+                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsInfoMessagesSnsTopic
-            Condition:
-              ArnLike:
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Sid: CloudWatchAlarmsPublish
+        Version: "2012-10-17"
       Topics:
         - !Ref OpsInfoMessagesSnsTopic
   OpsWarnMessagesSnsTopic:
@@ -399,18 +393,17 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: CloudWatchAlarmsPublish
+          - Action: sns:Publish
+            Condition:
+              ArnLike:
+                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsWarnMessagesSnsTopic
-            Condition:
-              ArnLike:
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Sid: CloudWatchAlarmsPublish
+        Version: "2012-10-17"
       Topics:
         - !Ref OpsWarnMessagesSnsTopic
   OpsErrorMessagesSnsTopic:
@@ -420,18 +413,17 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: CloudWatchAlarmsPublish
+          - Action: sns:Publish
+            Condition:
+              ArnLike:
+                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsErrorMessagesSnsTopic
-            Condition:
-              ArnLike:
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Sid: CloudWatchAlarmsPublish
+        Version: "2012-10-17"
       Topics:
         - !Ref OpsErrorMessagesSnsTopic
   OpsFatalMessagesSnsTopic:
@@ -441,18 +433,17 @@ Resources:
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
-        Version: "2012-10-17"
         Statement:
-          - Sid: CloudWatchAlarmsPublish
+          - Action: sns:Publish
+            Condition:
+              ArnLike:
+                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
             Effect: Allow
             Principal:
               AWS: "*"
-            Action:
-              - sns:Publish
-            Resource: !Ref OpsFatalMessagesSnsTopic
-            Condition:
-              ArnLike:
-                "aws:SourceArn": "arn:aws:cloudwatch:*:*:alarm:*"
+            Resource: !Ref OpsDebugMessagesSnsTopic
+            Sid: CloudWatchAlarmsPublish
+        Version: "2012-10-17"
       Topics:
         - !Ref OpsFatalMessagesSnsTopic
 
