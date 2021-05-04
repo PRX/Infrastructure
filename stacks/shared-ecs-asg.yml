@@ -378,7 +378,8 @@ Resources:
           SLACK_MESSAGE_RELAY_TOPIC_ARN:
             Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
       Events:
-        CloudTrailEventsRule:
+        AsgEventsRule:
+          # https://docs.aws.amazon.com/autoscaling/ec2/userguide/cloud-watch-events.html
           Type: EventBridgeRule
           Properties:
             Pattern:
@@ -388,7 +389,7 @@ Resources:
               source:
                 - aws.autoscaling
       Handler: index.handler
-      InlineCode: |
+      InlineCode: | # TODO
         const AWS = require('aws-sdk');
 
         const sns = new AWS.SNS({
@@ -396,8 +397,39 @@ Resources:
           region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
         });
 
+        const regions = {
+          'us-east-2': 'Ohio',
+          'us-east-1': 'N. Virginia',
+          'us-west-1': 'N. California',
+          'us-west-2': 'Oregon',
+          'af-south-1': 'Cape Town',
+          'ap-east-1': 'Hong Kong',
+          'ap-south-1': 'Mumbai',
+          'ap-northeast-3': 'Osaka',
+          'ap-northeast-2': 'Seoul',
+          'ap-southeast-1': 'Singapore',
+          'ap-southeast-2': 'Sydney',
+          'ap-northeast-1': 'Tokyo',
+          'ca-central-1': 'Central',
+          'eu-central-1': 'Frankfurt',
+          'eu-west-1': 'Ireland',
+          'eu-west-2': 'London',
+          'eu-south-1': 'Milan',
+          'eu-west-3': 'Paris',
+          'eu-north-1': 'Stockholm',
+          'me-south-1': 'Bahrain',
+          'sa-east-1': 'São Paulo',
+        };
+
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
+
+          if (!event.detail.EC2InstanceId || !event.detail.Cause) {
+            return;
+          }
+
+          const asgUrl = `https://console.aws.amazon.com/ec2autoscaling/home?region=${event.region}#/details/${event.detail.AutoScalingGroupName}?view=details`;
+          const instanceUrl = `https://console.aws.amazon.com/ec2/v2/home?region=${event.region}#InstanceDetails:instanceId=${event.detail.EC2InstanceId}`;
 
           await sns.publish({
             TargetArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
@@ -405,7 +437,7 @@ Resources:
               channel: '#ops-debug',
               username: 'AWS Auto Scaling',
               icon_emoji: ':ops-autoscaling:',
-              text: 'Placeholder auto scaling event notification…',
+              text: `${regions[event.region] || event.region} » <${asgUrl}|ASG> *<${instanceUrl}|${event.detail.EC2InstanceId}>*\n> _${event.detail.Cause}_`,
             }),
           }).promise();
         };
