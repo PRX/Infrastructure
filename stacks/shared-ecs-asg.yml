@@ -1,5 +1,6 @@
 # stacks/shared-ecs-asg.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates an Auto Scaling Group that launches EC2 instances into the shared ECS
@@ -19,6 +20,7 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NotificationsStackName: { Type: String }
   KeyPairName: { Type: "AWS::EC2::KeyPair::KeyName" }
   VpcId: { Type: "AWS::EC2::VPC::Id" }
   VpcPublicSubnet1Id: { Type: "AWS::EC2::Subnet::Id" }
@@ -365,6 +367,68 @@ Resources:
         - Base: 0
           Weight: 1
           CapacityProvider: !Ref DefaultCapacityProvider
+
+  EventsNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub >-
+        Handles auto scaling events from the ${EnvironmentType} shared ASG
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Events:
+        CloudTrailEventsRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              detail:
+                AutoScalingGroupName:
+                  - !Ref Asg
+              source:
+                - aws.autoscaling
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({
+          apiVersion: '2010-03-31',
+          region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
+        });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          await sns.publish({
+            TargetArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+            Message: JSON.stringify({
+              channel: '#ops-debug',
+              username: 'AWS Auto Scaling',
+              icon_emoji: ':ops-autoscaling:',
+              text: 'Placeholder auto scaling event notification…',
+            }),
+          }).promise();
+        };
+      MemorySize: 128
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName:
+              Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Runtime: nodejs12.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Common
+      Timeout: 10
+  EventsNotificationsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EventsNotificationsFunction}
+      RetentionInDays: 7
 
 Outputs:
   InstanceSecurityGroupId:
