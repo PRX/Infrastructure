@@ -100,7 +100,7 @@ push_to_ecr() {
         else
             # Construct the image name with a tag
             ECR_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${SAFE_ECR_REPO_NAME}:${PRX_COMMIT}"
-            export ECR_IMAGE_NAME="$ECR_IMAGE_NAME"
+            export PRX_ECR_IMAGE="$ECR_IMAGE_NAME"
 
             echo "Pushing image $IMAGE_ID to ECR $ECR_IMAGE_NAME..."
             docker tag $IMAGE_ID $ECR_IMAGE_NAME

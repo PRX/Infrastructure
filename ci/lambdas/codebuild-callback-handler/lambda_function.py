@@ -111,14 +111,14 @@ def update_staging_config_file(sns_message):
         with zipfile.ZipFile(archive_path, "r") as archive:
             staging_config = json.load(archive.open("staging.json"))
 
-        if "ECR_IMAGE_NAME" in attrs:
+        if "PRX_ECR_IMAGE" in attrs:
             print("...Updating ECR image value...")
 
             config_did_change = True
 
             # Update config with new ECR image
 
-            ecr_image_name = attrs["ECR_IMAGE_NAME"]["Value"]
+            ecr_image_name = attrs["PRX_ECR_IMAGE"]["Value"]
 
             for key_name in attrs["PRX_ECR_CONFIG_PARAMETERS"]["Value"].split(","):
                 print(f"...Setting {key_name.strip()} to {ecr_image_name}...")
@@ -221,18 +221,19 @@ def post_notification_status(sns_message):
             num = attrs["PRX_GITHUB_PR"]["Value"]
             pr_url = f"https://github.com/{repo}/pull/{num}"
             text_lines.append(f"<{pr_url}|{pr_url}>")
-        elif "ECR_IMAGE_NAME" in attrs:
-            image_name = attrs["ECR_IMAGE_NAME"]["Value"]
+        elif "PRX_ECR_IMAGE" in attrs:
+            image_name = attrs["PRX_ECR_IMAGE"]["Value"]
             region = re.search(r"dkr\.ecr\.(.*)\.amazonaws\.com", image_name).group(1)
             account_id = re.search(r"^([0-9]+)\.", image_name).group(1)
             repo_name = re.search(r"/([^:]+):", image_name).group(1)
+            tag = re.search(r":([af-0-9]+)$", image_name).group(1)
 
             ecr_url = (
                 f"https://console.aws.amazon.com/"
                 f"ecr/repositories/private/{account_id}/{repo_name}?region={region}"
             )
             text_lines.append(
-                f"Docker image pushed to <{ecr_url}|ECR> with name `{image_name}`"
+                f"Docker image pushed to <{ecr_url}|ECR> with tag `{tag}`"
             )
         elif "PRX_LAMBDA_CODE_CONFIG_VALUE" in attrs:
             s3_object = attrs["PRX_LAMBDA_CODE_CONFIG_VALUE"]["Value"]
