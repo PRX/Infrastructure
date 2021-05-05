@@ -226,7 +226,7 @@ def post_notification_status(sns_message):
             region = re.search(r"dkr\.ecr\.(.*)\.amazonaws\.com", image_name).group(1)
             account_id = re.search(r"^([0-9]+)\.", image_name).group(1)
             repo_name = re.search(r"/([^:]+):", image_name).group(1)
-            tag = re.search(r":([af-0-9]+)$", image_name).group(1)
+            tag = re.search(r":([a-f0-9]+)$", image_name).group(1)
 
             ecr_url = (
                 f"https://console.aws.amazon.com/"
