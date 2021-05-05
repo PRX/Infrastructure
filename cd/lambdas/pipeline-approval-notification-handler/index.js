@@ -127,10 +127,12 @@ function parameterDeltasListValue(key, value) {
     return `\`<${url}|${value.slice(0, 6)}>\``;
   }
 
-  if (/EcrImageTag/.test(key)) {
-    const slug = key.replace('EcrImageTag', '');
-    const url = `https://github.com/PRX/${slug}.prx.org/commit/${value}`;
-    return `\`<${url}|${value}>\``;
+  if (/dkr\.ecr/.test(value)) {
+    const repo = value.match(/github\/([^:]+):/)[1];
+    const commit = value.match(/:([0-9a-f]{40})$/)[1];
+
+    const url = `https://github.com/${repo}/commit/${commit}`;
+    return `\`<${url}|${commit.slice(0, 6)}>\``;
   }
 
   // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
