@@ -25,11 +25,9 @@ send_sns_callback_message() {
     [ -z "$PRX_GITHUB_PR" ] || MSGATR+=",\"PRX_GITHUB_PR\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_GITHUB_PR\"}"
 
     # Optional ECR parameters
-    [ -z "$PRX_ECR_REGION" ] || MSGATR+=",\"PRX_ECR_REGION\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REGION\"}"
     [ -z "$PRX_ECR_REPOSITORY" ] || MSGATR+=",\"PRX_ECR_REPOSITORY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REPOSITORY\"}"
     [ -z "$PRX_ECR_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_ECR_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_CONFIG_PARAMETERS\"}"
     [ -z "$PRX_ECR_IMAGE" ] || MSGATR+=",\"PRX_ECR_IMAGE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_IMAGE\"}"
-    [ -z "$PRX_ECR_TAG" ] || MSGATR+=",\"PRX_ECR_TAG\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_TAG\"}"
 
     # Optional Lambda code parameters
     [ -z "$PRX_LAMBDA_CODE_CONFIG_VALUE" ] || MSGATR+=",\"PRX_LAMBDA_CODE_CONFIG_VALUE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_LAMBDA_CODE_CONFIG_VALUE\"}"
@@ -66,27 +64,31 @@ build_error() {
     exit 1
 }
 
-# If PRX_ECR_REPOSITORY is present, we try to push to ECR
+# If PRX_ECR_CONFIG_PARAMETERS is present, we try to push to ECR
 push_to_ecr() {
-    if [ -n "$PRX_ECR_REPOSITORY" ]
+    if [ -n "$PRX_ECR_CONFIG_PARAMETERS" ]
     then
-        if [ -z "$PRX_ECR_REGION" ]; then build_error "PRX_ECR_REGION required for ECR push"; fi
         if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
         echo "Handling ECR push..."
 
         echo "Logging into ECR..."
-        $(aws ecr get-login --no-include-email --region $PRX_ECR_REGION)
+        $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
         echo "...Logged in to ECR"
+
+        UNSAFE_ECR_REPO_NAME="GitHub/${PRX_REPO}"
+        # Do any transformations necessary to satisfy ECR naming requirements:
+        # Start with letter, [a-z0-9-_/.] (maybe, docs are unclear)
+        SAFE_ECR_REPO_NAME=$(echo "$UNSAFE_ECR_REPO_NAME" | tr '[:upper:]' '[:lower:]')
 
         # Need to allow errors temporarily to check if the repo exists
         set +e
-        aws ecr describe-repositories --repository-names "$PRX_ECR_REPOSITORY" > /dev/null 2>&1
+        aws ecr describe-repositories --repository-names "$SAFE_ECR_REPO_NAME" > /dev/null 2>&1
         if [ $? -eq 0 ]
         then
             echo "ECR Repository already exists"
         else
             echo "Creating ECR repository"
-            aws ecr create-repository --repository-name "$PRX_ECR_REPOSITORY"
+            aws ecr create-repository --repository-name "$SAFE_ECR_REPO_NAME"
         fi
         set -e
 
@@ -97,14 +99,12 @@ push_to_ecr() {
             build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
         else
             # Construct the image name with a tag
-            TAG="${PRX_COMMIT:0:7}"
-            export PRX_ECR_TAG="$TAG"
-            TAGGED_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${PRX_ECR_REGION}.amazonaws.com/${PRX_ECR_REPOSITORY}:${TAG}"
-            export PRX_ECR_IMAGE="$TAGGED_IMAGE_NAME"
+            ECR_IMAGE_NAME="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${SAFE_ECR_REPO_NAME}:${PRX_COMMIT}"
+            export ECR_IMAGE_NAME="$ECR_IMAGE_NAME"
 
-            echo "Pushing image $IMAGE_ID to ECR $TAGGED_IMAGE_NAME..."
-            docker tag $IMAGE_ID $TAGGED_IMAGE_NAME
-            docker push $TAGGED_IMAGE_NAME
+            echo "Pushing image $IMAGE_ID to ECR $ECR_IMAGE_NAME..."
+            docker tag $IMAGE_ID $ECR_IMAGE_NAME
+            docker push $ECR_IMAGE_NAME
         fi
     fi
 }

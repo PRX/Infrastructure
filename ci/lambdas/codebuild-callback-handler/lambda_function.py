@@ -14,19 +14,17 @@
 #   PRX_REPO
 #   PRX_COMMIT
 #   PRX_GITHUB_PR: only for pull requests
-#   PRX_ECR_REGION: only for Docker apps
-#   PRX_ECR_REPOSITORY: only for Docker apps
 #   PRX_ECR_CONFIG_PARAMETERS: only for Docker apps
 #   PRX_ECR_IMAGE: only for Docker apps
-#   PRX_ECR_TAG: only for Docker apps
-#   PRX_LAMBDA_CODE_S3_VERSION_ID: only for Lambda apps
+#   PRX_LAMBDA_CODE_CONFIG_VALUE: only for Lambda apps
 #   PRX_LAMBDA_CODE_CONFIG_PARAMETERS: only for Lambda apps
-#   PRX_S3_STATIC_S3_VERSION_ID: only for S3 static sites
+#   PRX_S3_STATIC_CONFIG_VALUE: only for S3 static sites
 #   PRX_S3_STATIC_CONFIG_PARAMETERS: only for S3 static sites
 
 
 import boto3
 import os
+import re
 import zipfile
 import json
 import uuid
@@ -113,19 +111,19 @@ def update_staging_config_file(sns_message):
         with zipfile.ZipFile(archive_path, "r") as archive:
             staging_config = json.load(archive.open("staging.json"))
 
-        if "PRX_ECR_TAG" in attrs:
-            print("...Updating ECR image tag value...")
+        if "ECR_IMAGE_NAME" in attrs:
+            print("...Updating ECR image value...")
 
             config_did_change = True
 
-            # Update config with new ECR Tag
+            # Update config with new ECR image
 
-            ecr_tag = attrs["PRX_ECR_TAG"]["Value"]
+            ecr_image_name = attrs["ECR_IMAGE_NAME"]["Value"]
 
             for key_name in attrs["PRX_ECR_CONFIG_PARAMETERS"]["Value"].split(","):
-                print(f"...Setting {key_name.strip()} to {ecr_tag}...")
+                print(f"...Setting {key_name.strip()} to {ecr_image_name}...")
 
-                staging_config["Parameters"][key_name.strip()] = ecr_tag
+                staging_config["Parameters"][key_name.strip()] = ecr_image_name
 
         if "PRX_LAMBDA_CODE_CONFIG_VALUE" in attrs:
             print("...Updating Lambda code S3 version ID value...")
@@ -223,27 +221,25 @@ def post_notification_status(sns_message):
             num = attrs["PRX_GITHUB_PR"]["Value"]
             pr_url = f"https://github.com/{repo}/pull/{num}"
             text_lines.append(f"<{pr_url}|{pr_url}>")
-        elif "PRX_ECR_TAG" in attrs:
-            tag = attrs["PRX_ECR_TAG"]["Value"]
-            ecr_region = attrs["PRX_ECR_REGION"]["Value"]
-            ecr_repo = attrs["PRX_ECR_REPOSITORY"]["Value"]
+        elif "ECR_IMAGE_NAME" in attrs:
+            image_name = attrs["ECR_IMAGE_NAME"]["Value"]
+            region = re.search(r"dkr\.ecr\.(.*)\.amazonaws\.com", image_name).group(1)
+            account_id = re.search(r"^([0-9]+)\.", image_name).group(1)
+            repo_name = re.search(r"/([^:]+):", image_name).group(1)
+
             ecr_url = (
-                f"https://console.aws.amazon.com"
-                f"/ecs/home?region={ecr_region}#/repositories/{ecr_repo}"
+                f"https://console.aws.amazon.com/"
+                f"ecr/repositories/private/{account_id}/{repo_name}?region={region}"
             )
             text_lines.append(
-                f"Docker image pushed to <{ecr_url}|ECR> with tag `{tag}`"
+                f"Docker image pushed to <{ecr_url}|ECR> with name `{image_name}`"
             )
-        elif "PRX_LAMBDA_CODE_S3_VERSION_ID" in attrs:
-            s3_version = attrs["PRX_LAMBDA_CODE_S3_VERSION_ID"]["Value"]
-            text_lines.append(
-                f"Lambda code pushed to S3 with version ID `{s3_version}`"
-            )
-        elif "PRX_S3_STATIC_S3_VERSION_ID" in attrs:
-            s3_version = attrs["PRX_S3_STATIC_S3_VERSION_ID"]["Value"]
-            text_lines.append(
-                f"S3 static site pushed to S3 with version ID `{s3_version}`"
-            )
+        elif "PRX_LAMBDA_CODE_CONFIG_VALUE" in attrs:
+            s3_object = attrs["PRX_LAMBDA_CODE_CONFIG_VALUE"]["Value"]
+            text_lines.append(f"Lambda code pushed to S3 object `{s3_object}`")
+        elif "PRX_S3_STATIC_CONFIG_VALUE" in attrs:
+            s3_object = attrs["PRX_S3_STATIC_CONFIG_VALUE"]["Value"]
+            text_lines.append(f"S3 static site pushed to S3 object `{s3_object}`")
         else:
             text_lines.append("No pull request; no known artifact")
 
