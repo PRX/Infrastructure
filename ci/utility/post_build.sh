@@ -25,7 +25,6 @@ send_sns_callback_message() {
     [ -z "$PRX_GITHUB_PR" ] || MSGATR+=",\"PRX_GITHUB_PR\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_GITHUB_PR\"}"
 
     # Optional ECR parameters
-    [ -z "$PRX_ECR_REPOSITORY" ] || MSGATR+=",\"PRX_ECR_REPOSITORY\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_REPOSITORY\"}"
     [ -z "$PRX_ECR_CONFIG_PARAMETERS" ] || MSGATR+=",\"PRX_ECR_CONFIG_PARAMETERS\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_CONFIG_PARAMETERS\"}"
     [ -z "$PRX_ECR_IMAGE" ] || MSGATR+=",\"PRX_ECR_IMAGE\": {\"DataType\": \"String\", \"StringValue\": \"$PRX_ECR_IMAGE\"}"
 
