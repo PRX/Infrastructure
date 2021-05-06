@@ -83,11 +83,11 @@ If you opt in to using the common CI support code, the project must execute the 
 
 For apps that run on Docker through ECS, the `post_build` script can push build docker images to a repository in ECR. In such cases, the callback Lambda function will update metadata used by CD to keep the deployed applications in sync with the new images in ECR.
 
+The images will be pushed to ECR repositories that correspond to their source GitHub repository. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an ECR repository named `github/prx/my-app`. The ECR repository will be in the same region that CI is running in.
+
 In order for `post_build` to handle ECS-based apps, the following environment variables must be set:
 
-- `PRX_ECR_REPOSITORY` – The name of the ECR repository that built Docker images will get pushed to
-- `PRX_ECR_REGION` – The AWS region that the repository defined by `PRX_ECR_REPOSITORY` was created in
-- `PRX_ECR_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the tag of the Docker image that was pushed to ECR (e.g., `AcmeAppEcrImageTag` or `AcmeAppEcrImageTag,DuplicateAcmeAppEcrImageTag`). The CD process requires that these parameter names include the string `EcrImageTag` in order to work properly.
+- `PRX_ECR_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the name of the Docker image that was pushed to ECR (e.g., `AcmeAppEcrImageTag` or `AcmeAppEcrImageTag,DuplicateAcmeAppEcrImageTag`). The CD process requires that these parameter names include the string `EcrImageTag` in order to work properly.
 
 Additionally, the `post_build` script will only push one image to ECR, and only if it contains a `LABEL` of `org.prx.app`, as set in the image's `Dockerfile`. This allows for the build process to create any number of extra Docker images for testing purposes beyond the application's own image.
 
