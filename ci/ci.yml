@@ -78,12 +78,11 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
       VersioningConfiguration:
         Status: Enabled
   CiCodeBuildIamRole:
@@ -161,12 +160,11 @@ Resources:
         - Fn::ImportValue: !Sub ${InfrastructureSecretsStackName}-SecretsInstanceAccessPolicyArn
         - Fn::ImportValue: !Sub ${InfrastructureSecretsStackName}-SecretsInstanceDecryptPolicyArn
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   CiCodeBuildLogsIamPolicy:
     Type: AWS::IAM::Policy
     Properties:
@@ -213,12 +211,11 @@ Resources:
         Location: !Join ["", ["arn:aws:s3:::", !Ref CiCodeBuildSourceArchiveBucket, "/", !FindInMap [Shared, SourceArchives, Key]]]
         Type: S3
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
       TimeoutInMinutes: 16
   # CI System API
   CiCertificate:
@@ -226,14 +223,12 @@ Resources:
     Properties:
       DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: Name
-          Value: !Sub ${AWS::StackName} ${AWS::Region} wildcard
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}_ci" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
       ValidationMethod: DNS
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -242,9 +237,11 @@ Resources:
         CertificateArn: !Ref CiCertificate
         DomainName: !Sub api.${AWS::Region}.${AWS::StackName}.prx.tech
       Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Infrastructure
   # GitHub Webhook Endpoint Handler
   # An HTTP endpoint is registered with GitHub to receive Pull Request and Push
   # events. A Lambda function handles requests made to that endpoint. If the
@@ -280,12 +277,11 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   GitHubWebhookEndpointLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -307,9 +303,11 @@ Resources:
       Role: !GetAtt GitHubWebhookEndpointIamRole.Arn
       Runtime: nodejs12.x
       Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Infrastructure
       Timeout: 3
   GitHubWebhookEndpointLambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -347,6 +345,13 @@ Resources:
   # code to known location and triggers a build in CodeBuild project.
   GitHubEventSnsTopic:
     Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   GitHubEventHandlerIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -391,12 +396,11 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   GitHubEventHandlerLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -420,9 +424,11 @@ Resources:
       Role: !GetAtt GitHubEventHandlerIamRole.Arn
       Runtime: nodejs12.x
       Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Infrastructure
       Timeout: 30
   GitHubEventHandlerLambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -460,6 +466,13 @@ Resources:
   # event.
   CodeBuildCallbackSnsTopic:
     Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   CodeBuildCallbackIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -515,12 +528,11 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   CodeBuildCallbackHandlerLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -545,9 +557,11 @@ Resources:
       Role: !GetAtt CodeBuildCallbackIamRole.Arn
       Runtime: python3.6
       Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Infrastructure
       Timeout: 3
   CodeBuildCallbackHandlerLambdaLogGroup:
     Type: AWS::Logs::LogGroup
@@ -586,6 +600,13 @@ Resources:
   # sent to the global Slack Message Relay topic.
   CiStatusSnsTopic:
     Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   CiStatusNotificationHandlerIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -608,12 +629,11 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CI }
   CiStatusNotificationHandlerLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -634,9 +654,11 @@ Resources:
       Role: !GetAtt CiStatusNotificationHandlerIamRole.Arn
       Runtime: nodejs12.x
       Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Infrastructure
       Timeout: 10
   CiStatusNotificationHandlerLambdaLogGroup:
     Type: AWS::Logs::LogGroup
