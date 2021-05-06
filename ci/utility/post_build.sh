@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -a
 
 # First parameter is required and is a boolean indicating if the build was a
 # success. Second paremeter is an error message if the build was a failure.
