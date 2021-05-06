@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-set -a
 
 # First parameter is required and is a boolean indicating if the build was a
 # success. Second paremeter is an error message if the build was a failure.
@@ -137,7 +136,8 @@ push_to_s3_lambda() {
             key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
             aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
 
-            export PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
+            PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
+            export PRX_LAMBDA_CODE_CONFIG_VALUE
         fi
     fi
 }
@@ -205,3 +205,5 @@ init() {
 }
 
 init
+
+export PRX_LAMBDA_CODE_CONFIG_VALUE
