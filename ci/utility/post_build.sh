@@ -55,7 +55,7 @@ send_sns_callback_message() {
 build_success() {
     echo "Script completed successfully!"
     send_sns_callback_message true "Success"
-    exit 0
+    # exit 0
 }
 
 build_error() {
@@ -135,10 +135,8 @@ push_to_s3_lambda() {
 
             echo "Sending zip archive to S3..."
             key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            export PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
             aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body build.zip
-
-            PRX_LAMBDA_CODE_CONFIG_VALUE="$key"
-            export PRX_LAMBDA_CODE_CONFIG_VALUE
         fi
     fi
 }
