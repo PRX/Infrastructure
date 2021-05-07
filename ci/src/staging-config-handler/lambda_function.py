@@ -119,9 +119,12 @@ def lambda_handler(event, context):
     info = event_detail["additional-information"]
 
     all_env_vars = {}
-    for v in info["environment"]["environment-variables"]:
-        all_env_vars[v["name"]] = v["value"]
-    for v in info["exported-environment-variables"]:
-        all_env_vars[v["name"]] = v["value"]
+    if "environment-variables" in info["environment"]:
+        for v in info["environment"]["environment-variables"]:
+            all_env_vars[v["name"]] = v["value"]
+
+    if "exported-environment-variables" in info:
+        for v in info["exported-environment-variables"]:
+            all_env_vars[v["name"]] = v["value"]
 
     update_staging_config_file(event, all_env_vars)
