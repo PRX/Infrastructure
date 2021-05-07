@@ -89,7 +89,7 @@ module.exports = {
 
       moreLines.push(`> ${prAuthor}: ${prTitle}`);
       moreLines.push(
-        `Merging commits from \`${branch}\` into \`${prBaseBranch}\``,
+        `Will merge commits from \`${branch}\` into \`${prBaseBranch}\``,
       );
     }
 
