@@ -341,7 +341,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Infra][CI][Lambda][Errors] GitHub Event Handler" # TODO
+      AlarmName: "[Infra][CI][Lambda][Errors] Build Handler" # TODO
       AlarmActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
@@ -413,7 +413,31 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${StagingConfigHandlerFunction}
       RetentionInDays: 5
-  # # TODO Alarm
+  StagingConfigHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CI][Lambda][Errors] Staging config Handler" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        The error rate on the staging config handler lambda has exceeded 0 in
+        the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StagingConfigHandlerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
 
   GitHubStatusHandlerFunction:
     Type: AWS::Serverless::Function
@@ -452,7 +476,31 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${GitHubStatusHandlerFunction}
       RetentionInDays: 5
-  # # TODO Alarm
+  GitHubStatusHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CI][Lambda][Errors] GitHub status Handler" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        The error rate on the GitHub status handler lambda has exceeded 0 in
+        the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GitHubStatusHandlerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
 
   SlackMessageHandlerFunction:
     Type: AWS::Serverless::Function
@@ -497,7 +545,31 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${SlackMessageHandlerFunction}
       RetentionInDays: 5
-  # # TODO Alarm
+  SlackMessageHandlerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: "[Infra][CI][Lambda][Errors] Slack message Handler" # TODO
+      AlarmActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      OKActions:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmDescription: >- # TODO
+        The error rate on the Slack message handler lambda has exceeded 0 in
+        the last five minutes.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackMessageHandlerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
 Outputs:
   GitHubWebhookEndpointUrl:
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
