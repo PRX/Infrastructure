@@ -43,7 +43,7 @@ push_to_ecr() {
 
             echo "Pushing image $image_id to ECR $ecr_image_name..."
             docker tag $image_id $ecr_image_name
-            docker push $ECR_IMAGE_NAME
+            docker push $ecr_image_name
         fi
     fi
 }
