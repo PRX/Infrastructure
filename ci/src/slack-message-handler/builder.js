@@ -86,6 +86,9 @@ module.exports = {
       const prTitle = allEnvVars.PRX_GITHUB_PR_TITLE;
       const prBaseBranch = allEnvVars.PRX_GITHUB_PR_BASE_BRANCH;
       const prAuthor = allEnvVars.PRX_GITHUB_PR_AUTHOR;
+      const prAction = allEnvVars.PRX_GITHUB_ACTION;
+
+      line1.push(`via ${prAction}`);
 
       moreLines.push(`> ${prAuthor}: ${prTitle}`);
       moreLines.push(
