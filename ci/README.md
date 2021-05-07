@@ -26,19 +26,19 @@ The following describes each aspect of the CI system in the order that they usua
 
 For an organization in GitHub (e.g. [PRX](https://github.com/prx/)) a [webhook](https://developer.github.com/webhooks/) is configured which will be sent **pull request** and **push** events. This will cause GitHub to notify an HTTP endpoint every time either of those events takes place on *any* repository in the organization.
 
-An HTTP REST API is constructed using [Amazon API Gateway](https://aws.amazon.com/api-gateway/) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, and filters out some noise that is expected, and passes relevant events to an [Amazon SNS](https://aws.amazon.com/sns/) topic for further processing.
+An HTTP API is constructed using [Amazon API Gateway](https://aws.amazon.com/api-gateway/) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, and filters out some noise that is expected, and sends relevant events to an [Amazon EvetntBridge](https://aws.amazon.com/eventbridge/) for further processing.
 
-#### GitHub Event Handling
+The URL of the API to use for the webhook configuration is an output of the CloudFormation stack.
 
-Event data that are published to SNS by the GitHub webhook request handler function get handled immediately by another Lambda function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
+#### Starting a Build
+
+Event data that are published to EventBridge by the GitHub webhook request handler function get handled immediately by another Lambda function: the build handler function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
 
 If it's determined that an event represents code that should be built and tested, this function will:
 
 - Request a zipball archive of the code from GitHub for the commit in question
 - Push that archive to [Amazon S3](https://aws.amazon.com/s3/) (so that it is available later in the process)
 - Configure and trigger a build for the code in [AWS CodeBuild](https://aws.amazon.com/codebuild/)
-- Update the GitHub commit status for the code being tested
-- Send a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible
 
 #### CodeBuild
 
@@ -52,15 +52,18 @@ The configuration for each build is determined by the event Lambda function. Thi
 - The location, in S3, of the code to be tested
 - Various environment variables that help with the rest of the CI process
 
-#### Build Callback
+#### Build Events
 
-Once a build run has completed, a third Lambda function is generally invoked to complete the CI process. Information about the original GitHub event, as well information about the results of the build run, are published to SNS, and the callback function handles those messages.
+Several additional Lambda functions are configured as targets for EventBridge rules that watch for state changes on the CodeBuild project. These functions are responsible for handling some or all of the various stages of a build (start, success, fail, etc). The purpose of these functions are things like:
 
-Though the function handles some housekeeping tasks, such as updating the GitHub commit status and sending developer notifications, its most important function is to publish information about deployable code artifacts that result from the builds. This only happens when such an artifact exists (i.e., not when building feature branches). Specifically, the function updates a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) that can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
+- Update the GitHub commit status for the code being tested
+- Send a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible
+
+Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) in a predefined location, which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
 
 ### Auxiliary Components
 
-In addition to the primary stages of the CI process, there are several components that are used to assist. There is another Lambda function that is used to process notifications that get generated throughout the system. Also a utility shell script called `post_build.sh` is maintained and can be executed as part of build spec at the end of a build run. This script can handle many aspects of the build run process that are common to most projects.
+A utility shell script called `post_build.sh` is maintained and can be executed as part of build spec at the end of a build run. This script can handle many aspects of the build run process that are common to most projects.
 
 ## Continuous Integration Support
 

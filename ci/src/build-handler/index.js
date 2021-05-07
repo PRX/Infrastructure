@@ -1,6 +1,5 @@
 /**
- * Invoked by: SNS Subscription
- * Returns: Error or status message
+ * Invoked by: EventBridge rule
  *
  * Handles GitHub events that have been forwarded from the webhook endpoint.
  * This function handles the start of the build process for default branches and
@@ -8,8 +7,6 @@
  * Broadly, it does the following:
  * 1. Check to make sure this event should trigger a build
  * 2. Trigger a CodeBuild by copying current code to S3 (the CodeBuild source)
- * 3. Send a notification that the build is starting (for Slack/etc)
- * 4. Set the GitHub status to 'pending' for the sha
  * This Lambda should not be considered to be entirely or even mostly
  * responsible for the configuration of CodeBuild environment. It should only
  * worry about the parts of the configuration that result from the events
@@ -21,7 +18,6 @@ const fs = require('fs');
 const AWS = require('aws-sdk');
 
 const codebuild = new AWS.CodeBuild({ apiVersion: '2016-10-06' });
-const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 /** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
@@ -68,93 +64,6 @@ function eventIsPullRequest(event) {
   }
 
   return false;
-}
-
-/**
- * Note: The response to this request should be a 201
- * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#statuses
- * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
- * @param {object} build
- * @returns {Promise<void>}
- */
-function updateGitHubStatus(event, build) {
-  return new Promise((resolve, reject) => {
-    console.log('Updating GitHub status');
-
-    // Get request properties
-    const repo = event.repository.full_name;
-    const sha = eventIsPullRequest(event)
-      ? event.pull_request.head.sha
-      : event.after;
-
-    const { arn } = build;
-    const region = arn.split(':')[3];
-    const buildId = arn.split('/')[1];
-    const buildUrl = `https://${region}.console.aws.amazon.com/codebuild/home#/builds/${buildId}/view/new`;
-
-    const payload = {
-      state: 'pending',
-      target_url: buildUrl,
-      description: 'Build has started running in CodeBuild',
-      context: 'continuous-integration/prxci',
-    };
-    const json = JSON.stringify(payload);
-
-    // Setup request options
-    const options = {
-      host: 'api.github.com',
-      path: `/repos/${repo}/statuses/${sha}`,
-      method: 'POST',
-      headers: GITHUB_HEADERS,
-    };
-
-    options.headers['Content-Length'] = Buffer.byteLength(json);
-
-    // Request with response handler
-    console.log(`Calling statuses API: ${options.path}`);
-    const req = https.request(options, (res) => {
-      res.setEncoding('utf8');
-
-      let json2 = '';
-      res.on('data', (chunk) => {
-        json2 += chunk;
-      });
-      res.on('end', () => {
-        switch (res.statusCode) {
-          case 201:
-            console.log('GitHub status updated');
-            resolve();
-            break;
-          default:
-            console.error('GitHub status update failed');
-            console.error(`HTTP ${res.statusCode}`);
-            console.error(json2);
-            reject(new Error('GitHub status update failed!'));
-        }
-      });
-    });
-
-    // Generic request error handling
-    req.on('error', (e) => reject(e));
-
-    req.write(json);
-    req.end();
-  });
-}
-
-/**
- * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
- * @param {object} build
- * @returns {Promise<AWS.SNS.PublishResponse, AWS.AWSError>}
- */
-function postNotification(event, build) {
-  console.log('Sending Slack notification message');
-  return sns
-    .publish({
-      TopicArn: process.env.CI_STATUS_TOPIC_ARN,
-      Message: JSON.stringify({ event, build }),
-    })
-    .promise();
 }
 
 /**
@@ -205,8 +114,17 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     // callback for setting the GitHub status.
 
     const num = event.pull_request.number;
+    const title = event.pull_request.title;
     const branch = event.pull_request.head.ref;
+    const baseBranch = event.pull_request.base.ref;
+    const author = event.pull_request.user.login;
     environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
+    environmentVariables.push({ name: 'PRX_GITHUB_PR_TITLE', value: title });
+    environmentVariables.push({
+      name: 'PRX_GITHUB_PR_BASE_BRANCH',
+      value: baseBranch,
+    });
+    environmentVariables.push({ name: 'PRX_GITHUB_PR_AUTHOR', value: author });
     environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
     environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
   } else {
@@ -221,7 +139,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
   }
 
-  const data = await codebuild
+  await codebuild
     .startBuild({
       projectName: process.env.CODEBUILD_PROJECT_NAME,
       sourceVersion: versionId,
@@ -231,11 +149,6 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     .promise();
 
   console.log('CodeBuild started');
-
-  const status = updateGitHubStatus(event, data.build);
-  const notification = postNotification(event, data.build);
-
-  await Promise.all([status, notification]);
 }
 
 /**
@@ -498,17 +411,14 @@ async function handlePushEvent(event) {
 }
 
 /**
- * @param {SNSEvent} event
+ * @param {*} event
  * @returns {Promise<void>}
  */
 exports.handler = async (event) => {
-  const snsMsg = event.Records[0].Sns;
+  console.log(JSON.stringify(event));
 
-  const githubEvent = snsMsg.MessageAttributes.githubEvent.Value;
-  const githubEventObj = JSON.parse(snsMsg.Message);
-
-  console.log(`Received message for event: ${githubEvent}`);
-  console.log(snsMsg.Message);
+  const githubEvent = event['detail-type'];
+  const githubEventObj = event.detail;
 
   switch (githubEvent) {
     case 'push':

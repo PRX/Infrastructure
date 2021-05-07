@@ -2,7 +2,7 @@
 # This stack should generally only be launched once globally
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: >
+Description: >-
   Creates a continuous integration system to handle testing, building, and
   pushing assets in response to changes on GitHub
 Mappings:
@@ -55,17 +55,17 @@ Parameters:
     Type: String
   InfrastructureConfigStagingKey:
     Default: template-config-staging.zip
-    Description: >
+    Description: >-
       The S3 object key for the staging template configuration file archive
       (.zip), inside the InfrastructureConfigBucket
     Type: String
   GitHubToken:
-    Description: >
+    Description: >-
       A GitHub access token with permissions to update statuses, request
       content, etc
     Type: String
   GitHubWebhookSecret:
-    Description: >
+    Description: >-
       The secret provided by GitHub for the push and pull request events webhook
     Type: String
 Resources:
@@ -119,15 +119,15 @@ Resources:
                 Effect: Allow
                 Resource: "*" # TODO
             Version: "2012-10-17"
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource:
-                  - !Ref CiStatusSnsTopic
-                  - !Ref CodeBuildCallbackSnsTopic
-            Version: "2012-10-17"
+        # - PolicyName: SnsPolicy
+        #   PolicyDocument:
+        #     Statement:
+        #       - Action: sns:Publish
+        #         Effect: Allow
+        #         Resource:
+        #           - !Ref CiStatusSnsTopic
+        #           - !Ref CodeBuildCallbackSnsTopic
+        #     Version: "2012-10-17"
         - PolicyName: ECRAccess
           PolicyDocument:
             Statement:
@@ -194,8 +194,6 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
-          - Name: PRX_SNS_CALLBACK
-            Value: !Ref CodeBuildCallbackSnsTopic
           - Name: PRX_AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
           - Name: PRX_APPLICATION_CODE_BUCKET
@@ -217,80 +215,26 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CI }
       TimeoutInMinutes: 16
-  # CI System API
-  CiCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !Sub "*.${AWS::Region}.${AWS::StackName}.prx.tech"
-      Tags:
-        - { Key: Name, Value: !Sub "${AWS::StackName}_ci" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-      ValidationMethod: DNS
+
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      Domain:
-        CertificateArn: !Ref CiCertificate
-        DomainName: !Sub api.${AWS::Region}.${AWS::StackName}.prx.tech
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
         prx:ops:environment: Production
         prx:dev:application: CI
-  # GitHub Webhook Endpoint Handler
-  # An HTTP endpoint is registered with GitHub to receive Pull Request and Push
-  # events. A Lambda function handles requests made to that endpoint. If the
-  # event seems like it should be handled by CI, it is handed off to the
-  # GitHub Event Handler.
-  GitHubWebhookEndpointIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyName: XrayTracePolicy
-          PolicyDocument:
-            Statement:
-              - Action:
-                  - xray:PutTraceSegments
-                  - xray:PutTelemetryRecords
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource: !Ref GitHubEventSnsTopic
-            Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  GitHubWebhookEndpointLambdaFunction:
+  GitHubWebhookEndpointFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambdas/github-webhook-endpoint/
-      Description: Backs the GitHub webhook payload requests endpoint
+      CodeUri: src/github-webhook-endpoint/
+      Description: >-
+        Receives and validates GitHub webhooks (push, pull_request, etc
+        events), and relays the event data to EventBridge.
       Environment:
         Variables:
           GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
-          GITHUB_EVENT_HANDLER_TOPIC_ARN: !Ref GitHubEventSnsTopic
       Events:
         GitHubWebhookRequest:
           Properties:
@@ -300,8 +244,13 @@ Resources:
           Type: HttpApi
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt GitHubWebhookEndpointIamRole.Arn
-      Runtime: nodejs12.x
+      Policies:
+        - Statement:
+            - Action: events:PutEvents
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -309,26 +258,29 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CI
       Timeout: 3
-  GitHubWebhookEndpointLambdaLogGroup:
+  GitHubWebhookEndpointLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${GitHubWebhookEndpointLambdaFunction}
+      LogGroupName: !Sub /aws/lambda/${GitHubWebhookEndpointFunction}
       RetentionInDays: 5
   GitHubWebhookEndpointErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Infra][CI][Lambda][Errors] GitHub Webhook Endpoint"
+      AlarmName: "[Infra][CI][Lambda][Errors] GitHub Webhook Endpoint" # TODO
       AlarmActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
       OKActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      AlarmDescription: >-
+      AlarmDescription: >- # TODO
         The error rate on the GitHub webhook endpoint lambda has exceeded 0 in
         the last five minutes.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GitHubWebhookEndpointFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -336,93 +288,43 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref GitHubWebhookEndpointLambdaFunction
-  # GitHub Event Handler
-  # GitHub Pull Request and Push events for projects that support the CI system
-  # are sent to the GitHub Event Handler. The Lambda function copies the project
-  # code to known location and triggers a build in CodeBuild project.
-  GitHubEventSnsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  GitHubEventHandlerIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyName: XrayTracePolicy
-          PolicyDocument:
-            Statement:
-              - Action:
-                  - xray:PutTraceSegments
-                  - xray:PutTelemetryRecords
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource: !Ref CiStatusSnsTopic
-            Version: "2012-10-17"
-        - PolicyName: S3Policy
-          PolicyDocument:
-            Statement:
-              - Action: s3:PutObject
-                Effect: Allow
-                Resource: !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
-            Version: "2012-10-17"
-        - PolicyName: CodeBuildPolicy
-          PolicyDocument:
-            Statement:
-              - Action: codebuild:StartBuild
-                Effect: Allow
-                Resource: !GetAtt CiCodeBuildProject.Arn
-            Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  GitHubEventHandlerLambdaFunction:
+
+  BuildHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambdas/github-event-handler/
-      Description: Handles GitHub events forwarded from the endpoint
+      CodeUri: src/build-handler/
+      Description: >-
+        Listens for GitHub webhook events on EventBridge, and starts CI builds
+        in CodeBuild for appropriate events. Pulls the code for these builds
+        from GitHub and pushes it to S3.
       Environment:
         Variables:
           GITHUB_ACCESS_TOKEN: !Ref GitHubToken
-          CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
           CODEBUILD_PROJECT_NAME: !Ref CiCodeBuildProject
           CODEBUILD_SOURCE_ARCHIVE_BUCKET: !Ref CiCodeBuildSourceArchiveBucket
           CODEBUILD_SOURCE_ARCHIVE_KEY: !FindInMap [Shared, SourceArchives, Key]
           AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Events:
-        SnsMessages:
+        GitHubWebhook:
           Properties:
-            Topic: !Ref GitHubEventSnsTopic
-          Type: SNS
+            Pattern:
+              source:
+                - org.prx.ci.github-webhook
+          Type: EventBridgeRule
       Handler: index.handler
       MemorySize: 256
-      Role: !GetAtt GitHubEventHandlerIamRole.Arn
-      Runtime: nodejs12.x
+      Policies:
+        - Statement:
+            - Action: s3:PutObject
+              Effect: Allow
+              Resource: !Sub ${CiCodeBuildSourceArchiveBucket.Arn}/*
+          Version: "2012-10-17"
+        - Statement:
+            - Action: codebuild:StartBuild
+              Effect: Allow
+              Resource: !GetAtt CiCodeBuildProject.Arn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -430,26 +332,29 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CI
       Timeout: 30
-  GitHubEventHandlerLambdaLogGroup:
+  BuildHandlerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${GitHubEventHandlerLambdaFunction}
+      LogGroupName: !Sub /aws/lambda/${BuildHandlerFunction}
       RetentionInDays: 5
-  GitHubEventHandlerErrorAlarm:
+  BuildHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
-      AlarmName: "[Infra][CI][Lambda][Errors] GitHub Event Handler"
+      AlarmName: "[Infra][CI][Lambda][Errors] GitHub Event Handler" # TODO
       AlarmActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
       InsufficientDataActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
       OKActions:
         - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      AlarmDescription: >-
+      AlarmDescription: >- # TODO
         The error rate on the GitHub event handler lambda has exceeded 0 in
         the last five minutes.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref BuildHandlerFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -457,202 +362,45 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref GitHubEventHandlerLambdaFunction
-  # CodeBuild Callback
-  # Once a CI build finishes, it posts information about the build result to an
-  # SNS topic. A Lambda function is subscribed to the topic, and can process the
-  # event.
-  CodeBuildCallbackSnsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  CodeBuildCallbackIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyName: XrayTracePolicy
-          PolicyDocument:
-            Statement:
-              - Action:
-                  - xray:PutTraceSegments
-                  - xray:PutTelemetryRecords
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-        - PolicyName: S3Policy
-          PolicyDocument:
-            Statement:
-              - Action:
-                  - s3:GetObject
-                  - s3:PutObject
-                Effect: Allow
-                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-            Version: "2012-10-17"
-        - PolicyName: CodeBuildPolicy
-          PolicyDocument:
-            Statement:
-              - Action: codebuild:BatchGetBuilds
-                Effect: Allow
-                Resource: !GetAtt CiCodeBuildProject.Arn
-            Version: "2012-10-17"
-        - PolicyName: CloudWatchMetricsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: cloudwatch:PutMetricData
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource:
-                  - !Ref CiStatusSnsTopic
-                  - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
-            Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  CodeBuildCallbackHandlerLambdaFunction:
+
+  StagingConfigHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambdas/codebuild-callback-handler/
-      Description: Handles post-build callbacks from CodeBuild CI projects
+      CodeUri: src/staging-config-handler/
+      Description: >-
+        Listens for successful CI CodeBuild builds on EventBridge, and updates
+        the staging stack template config JSON file in S3 with new code package
+        identifiers when necessary.
       Environment:
         Variables:
-          CI_STATUS_TOPIC_ARN: !Ref CiStatusSnsTopic
-          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
           INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
       Events:
-        SnsMessages:
+        CodeBuild:
           Properties:
-            Topic: !Ref CodeBuildCallbackSnsTopic
-          Type: SNS
+            Pattern:
+              detail:
+                build-status:
+                  - SUCCEEDED
+                project-name:
+                  - !Ref CiCodeBuildProject
+              detail-type:
+                - CodeBuild Build State Change
+              source:
+                - aws.codebuild
+          Type: EventBridgeRule
       Handler: lambda_function.lambda_handler
-      MemorySize: 128
-      Role: !GetAtt CodeBuildCallbackIamRole.Arn
-      Runtime: python3.6
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CI
-      Timeout: 3
-  CodeBuildCallbackHandlerLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${CodeBuildCallbackHandlerLambdaFunction}
-      RetentionInDays: 5
-  CodeBuildCallbackHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Infra][CI][Lambda][Errors] CodeBuild Callback Handler"
-      AlarmActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      AlarmDescription: >-
-        The error rate on the CodeBuild callback handler lambda has exceeded 0
-        in the last five minutes.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CodeBuildCallbackHandlerLambdaFunction
-  # CI Status notifications
-  # Status notifications for the CI system are handled by a single Lambda
-  # function, which is susbscribed to a dedicaed SNS topic. Various parts of the
-  # system post to the topic, and the function creates Slack messages that are
-  # sent to the global Slack Message Relay topic.
-  CiStatusSnsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  CiStatusNotificationHandlerIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: "2012-10-17"
+      MemorySize: 192
       Policies:
-        - PolicyName: SnsPolicy
-          PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource:
-                  - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
-            Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  CiStatusNotificationHandlerLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: lambdas/ci-status-notification-handler/
-      Description: >-
-        Handles status notifications for CI builds
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
-      Events:
-        SnsMessages:
-          Properties:
-            Topic: !Ref CiStatusSnsTopic
-          Type: SNS
-      Handler: index.handler
-      MemorySize: 128
-      Role: !GetAtt CiStatusNotificationHandlerIamRole.Arn
-      Runtime: nodejs12.x
+        - Statement:
+            - Action:
+                - s3:GetObject
+                - s3:PutObject
+              Effect: Allow
+              Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
+          Version: "2012-10-17"
+      Runtime: python3.8
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -660,36 +408,96 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CI
       Timeout: 10
-  CiStatusNotificationHandlerLambdaLogGroup:
+  StagingConfigHandlerLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${CiStatusNotificationHandlerLambdaFunction}
+      LogGroupName: !Sub /aws/lambda/${StagingConfigHandlerFunction}
       RetentionInDays: 5
-  CiStatusNotificationHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
+  # # TODO Alarm
+
+  GitHubStatusHandlerFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      ActionsEnabled: true
-      AlarmName: "[Infra][CI][Lambda][Errors] CI Status Handler"
-      AlarmActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      AlarmDescription: >-
-        The error rate on the CI status notifications handler lambda has
-        exceeded 0 in the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CiStatusNotificationHandlerLambdaFunction
+      CodeUri: src/github-status-handler/
+      Description: >-
+        Listens for CI CodeBuild state changes on EventBridge and updates
+        GitHub repository statuses as necessary.
+      Environment:
+        Variables:
+          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+      Events:
+        CodeBuild:
+          Properties:
+            Pattern:
+              detail:
+                project-name:
+                  - !Ref CiCodeBuildProject
+              detail-type:
+                - CodeBuild Build State Change
+              source:
+                - aws.codebuild
+          Type: EventBridgeRule
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CI
+      Timeout: 10
+  GitHubStatusHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GitHubStatusHandlerFunction}
+      RetentionInDays: 5
+  # # TODO Alarm
+
+  SlackMessageHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/slack-message-handler/
+      Description: >-
+        Listens for CI CodeBuild state changes on EventBridge and sends
+        notifications to Slack about build progress.
+      Environment:
+        Variables:
+          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+          SLACK_MESSAGE_RELAY_TOPIC_ARN:
+            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Events:
+        CodeBuild:
+          Properties:
+            Pattern:
+              detail:
+                project-name:
+                  - !Ref CiCodeBuildProject
+              detail-type:
+                - CodeBuild Build State Change
+              source:
+                - aws.codebuild
+          Type: EventBridgeRule
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName:
+              Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CI
+      Timeout: 10
+  SlackMessageHandlerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SlackMessageHandlerFunction}
+      RetentionInDays: 5
+  # # TODO Alarm
 Outputs:
   GitHubWebhookEndpointUrl:
-    Value: !Sub "https://api.${AWS::Region}.${AWS::StackName}.prx.tech/v1/github/webhook"
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com

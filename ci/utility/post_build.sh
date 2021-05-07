@@ -128,7 +128,6 @@ init() {
         if [ -z "$PRX_REPO" ]; then build_error "PRX_REPO required"; fi
         if [ -z "$PRX_COMMIT" ]; then build_error "PRX_COMMIT required"; fi
 
-
         # Handle code publish if enabled
         if [ "$PRX_CI_PUBLISH" = "true" ]
         then
