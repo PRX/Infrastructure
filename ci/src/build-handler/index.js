@@ -118,6 +118,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     const branch = event.pull_request.head.ref;
     const baseBranch = event.pull_request.base.ref;
     const author = event.pull_request.user.login;
+    const action = event.action;
     environmentVariables.push({ name: 'PRX_GITHUB_PR', value: `${num}` });
     environmentVariables.push({ name: 'PRX_GITHUB_PR_TITLE', value: title });
     environmentVariables.push({
@@ -125,6 +126,7 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
       value: baseBranch,
     });
     environmentVariables.push({ name: 'PRX_GITHUB_PR_AUTHOR', value: author });
+    environmentVariables.push({ name: 'PRX_GITHUB_ACTION', value: action });
     environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
     environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
   } else {
