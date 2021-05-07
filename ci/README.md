@@ -14,7 +14,7 @@ The high-level goals of the system are:
 
 ## Project architecture
 
-In order to build a system to accomplish all that, we spin up a number of AWS resources (using a CloudFormation template). Launching a stack from the `ci.yml` template is fairly straightforward, but this CI project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
+In order to build a system to accomplish all that, we spin up a number of AWS resources (using a CloudFormation template). Launching a stack from the `ci/template.yml` template is fairly straightforward, but this CI project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
 
 While the CI stack is designed to be launched in any AWS region, regardless of where the applications running through it are hosted or deployed, it is the case that only one instance of the stack should be running at a time. There is likely nothing terrible that would happen if multiple instances were running, but the same tests would be running against the same code multiple times with no added benefit, and artifacts would be published several times for each set of code changes. It's unlikely this would break a deployment system, but it should be avoided.
 
@@ -42,7 +42,7 @@ If it's determined that an event represents code that should be built and tested
 
 #### CodeBuild
 
-When the previous step triggers a build, it does so by calling `startBuild` on a CodeBuild project that was setup by the `ci.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
+When the previous step triggers a build, it does so by calling `startBuild` on a CodeBuild project that was setup by the `ci/template.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
 
 CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers are dealt with _inside_ of CodeBuild's native Docker build environment container (ie, Docker running inside a Docker container).
 
