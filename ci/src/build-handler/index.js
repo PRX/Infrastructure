@@ -137,8 +137,12 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     // push the code, etc).
 
     const branch = (event.ref || 'unknown').replace(/^refs\/heads\//, '');
+    const before = event.before;
+    const after = event.after;
     environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
     environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
+    environmentVariables.push({ name: 'PRX_GITHUB_BEFORE', value: before });
+    environmentVariables.push({ name: 'PRX_GITHUB_AFTER', value: after });
   }
 
   await codebuild
