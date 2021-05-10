@@ -1,3 +1,5 @@
+const github = require('./github');
+
 function codebuildUrl(event) {
   const region = event.region;
   const account = event.account;
@@ -82,13 +84,30 @@ module.exports = {
       );
     }
 
+    if (!pr) {
+      const beforeSha = allEnvVars['PRX_GITHUB_BEFORE'];
+      const afterSha = allEnvVars['PRX_GITHUB_AFTER'];
+      const resp = await github.compare(ownerAndRepo, beforeSha, afterSha);
+
+      if (resp?.commits.length > 0) {
+        resp.commits.forEach((c) => {
+          const commitUrl = `https://github.com/${ownerAndRepo}/commit/${c.sha}`;
+          const commitSha = c.sha.substring(0, 7);
+          const msg = c.commit.message;
+          moreLines.push(
+            `> \`<${commitUrl}|${commitSha}>\` ${c.author.login}: ${msg}`,
+          );
+        });
+      }
+    }
+
     if (pr) {
       const prTitle = allEnvVars.PRX_GITHUB_PR_TITLE;
       const prBaseBranch = allEnvVars.PRX_GITHUB_PR_BASE_BRANCH;
       const prAuthor = allEnvVars.PRX_GITHUB_PR_AUTHOR;
       const prAction = allEnvVars.PRX_GITHUB_ACTION;
 
-      line1.push(`via ${prAction}`);
+      line1.push(`(${prAction})`);
 
       moreLines.push(`> ${prAuthor}: ${prTitle}`);
       moreLines.push(
