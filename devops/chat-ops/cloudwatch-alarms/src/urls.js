@@ -58,18 +58,23 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
       if (i.HistorySummary.includes('to OK')) {
         const data = JSON.parse(i.HistoryData);
 
-        const startTs = Date.parse(data.oldState.stateReasonData.startDate);
+        if (
+          data?.newState?.stateReasonData?.startDate &&
+          data?.oldState?.stateReasonData?.startDate
+        ) {
+          const startTs = Date.parse(data.oldState.stateReasonData.startDate);
 
-        const firstOkDatapoint = data.newState.stateReasonData.evaluatedDatapoints.sort(
-          (a, b) => a.timestamp.localeCompare(b.timestamp),
-        )[0];
-        const endTs = Date.parse(firstOkDatapoint.timestamp);
+          const firstOkDatapoint = data.newState.stateReasonData.evaluatedDatapoints.sort(
+            (a, b) => a.timestamp.localeCompare(b.timestamp),
+          )[0];
+          const endTs = Date.parse(firstOkDatapoint.timestamp);
 
-        // # is encoded to *23 in the colors
-        verticals.push([
-          { value: new Date(startTs).toISOString(), color: '*23d62728' },
-          { value: new Date(endTs).toISOString(), color: '*23d62728' },
-        ]);
+          // # is encoded to *23 in the colors
+          verticals.push([
+            { value: new Date(startTs).toISOString(), color: '*23d62728' },
+            { value: new Date(endTs).toISOString(), color: '*23d62728' },
+          ]);
+        }
       }
     });
 
@@ -81,16 +86,18 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
       const data = JSON.parse(i.HistoryData);
 
-      const startTs = Date.parse(data.newState.stateReasonData.startDate);
+      if (data?.newState?.stateReasonData?.startDate) {
+        const startTs = Date.parse(data.newState.stateReasonData.startDate);
 
-      // # is encoded to *23 in the colors
-      verticals.push([
-        {
-          value: new Date(startTs).toISOString(),
-          color: '*23d62728',
-          fill: 'after',
-        },
-      ]);
+        // # is encoded to *23 in the colors
+        verticals.push([
+          {
+            value: new Date(startTs).toISOString(),
+            color: '*23d62728',
+            fill: 'after',
+          },
+        ]);
+      }
     }
   }
 

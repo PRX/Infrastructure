@@ -12,11 +12,16 @@ const urls = require('../urls');
 function datapoints(event) {
   if (event.detail.state.reasonData) {
     const data = JSON.parse(event.detail.state.reasonData);
-    const points = data.evaluatedDatapoints
-      .map((p) => `\`${p.value}\``)
-      .reverse();
 
-    return [`*Datapoints:* ${points.join(', ')}`];
+    if (data?.evaluatedDatapoints?.length) {
+      const pointsWithValues = data.evaluatedDatapoints.filter((p) => p.value);
+
+      if (pointsWithValues.length) {
+        const points = pointsWithValues.map((p) => `\`${p.value}\``).reverse();
+
+        return [`*Datapoints:* ${points.join(', ')}`];
+      }
+    }
   }
 
   return [];
