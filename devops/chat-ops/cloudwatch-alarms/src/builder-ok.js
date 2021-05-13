@@ -36,7 +36,9 @@ module.exports = {
 
         const url = urls.metricsConsole(event, desc, history);
 
-        return [`*Alarm duration:* <${url}|${duration} ${durationUnit}>`];
+        return [
+          `*Alarm duration:* ${duration} ${durationUnit} | View in: <${url}|CloudWatch Metrics>`,
+        ];
       }
     }
 
