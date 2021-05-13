@@ -55,7 +55,7 @@ function alarmStatistic(alarm) {
 /**
  * Describes the relationship of the overall evaluation period and the number
  * of datapoints within the evaluation period that breached the threshold.
- * @param {Number} period
+ * @param {Number} periodInSeconds
  * @param {Number} evaluationPeriods
  * @param {Number} datapointsToAlarm
  * @param {Number} evaluationInterval
