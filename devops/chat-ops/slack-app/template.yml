@@ -1,6 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
+
 Description: Creates backend resources for the PRX DevOps Slack app
+
 Parameters:
   SlackSigningSecet:
     Type: String
@@ -20,8 +22,6 @@ Parameters:
       The name of a role that exists in all member accounts of an AWS
       Organization, which has permissions for various DevOps operations, such
       as listing and executing pipelines.
-  OpsWarnMessagesSnsTopicArn:
-    Type: String
   DevOpsSlackUserIds:
     Type: String
   PrxLegacyAccountId:
@@ -30,6 +30,7 @@ Parameters:
     Type: String
   InfrastructureConfigStagingKey:
     Type: String
+
 Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
@@ -71,12 +72,11 @@ Resources:
                   - !Sub arn:aws:iam::*:role/*${DevOpsCrossAccountAccessRoleName}
             Version: "2012-10-17"
       Tags:
-        - Key: Project
-          Value: DevOps
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
   AppFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -113,9 +113,11 @@ Resources:
       Role: !GetAtt AppFunctionIamRole.Arn
       Runtime: nodejs14.x
       Tags:
-        Project: DevOps
+        prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
       Timeout: 8
   AppFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -155,9 +157,11 @@ Resources:
       MemorySize: 128
       Runtime: nodejs14.x
       Tags:
-        Project: DevOps
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
       Timeout: 8
   RelayFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -192,12 +196,11 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       Tags:
-        - Key: Project
-          Value: DevOps
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
   RelayFunctionFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -234,9 +237,8 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Tags:
-        - Key: Project
-          Value: DevOps
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
