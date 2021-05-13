@@ -14,7 +14,7 @@ function cwmEncode(inp) {
   if (Array.isArray(inp)) {
     str = str.concat(`(${inp.map((e) => `~${cwmEncode(e)}`).join('')})`);
   } else if (typeof inp === 'string') {
-    str = str.concat(`'${encodeURI(inp).replace(/\%/g, '*')}`);
+    str = str.concat(`'${encodeURIComponent(inp).replace(/\%/g, '*')}`);
   } else if (typeof inp === 'boolean') {
     str = str.concat(inp ? 'true' : 'false');
   } else if (typeof inp === 'number') {
@@ -52,8 +52,6 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
   if (history?.AlarmHistoryItems?.length) {
     history.AlarmHistoryItems.forEach((i) => {
-      const time = i.Timestamp.toISOString();
-
       // Find all state changes to OK, and create a range from the beginning
       // of the previous state (the start of the alarm) to the beginning of the
       // OK event
@@ -65,8 +63,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
         const firstOkDatapoint = data.newState.stateReasonData.evaluatedDatapoints.sort(
           (a, b) => a.timestamp.localeCompare(b.timestamp),
         )[0];
-        const endTs =
-          Date.parse(firstOkDatapoint.timestamp) - alarm.Period * 1000;
+        const endTs = Date.parse(firstOkDatapoint.timestamp);
 
         // # is encoded to *23 in the colors
         verticals.push([
@@ -99,6 +96,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
   const m = alarm.DatapointsToAlarm || alarm.EvaluationPeriods;
   const n = alarm.EvaluationPeriods;
+  const stat = alarm.Statistic ? alarm.Statistic : alarm.ExtendedStatistic;
 
   return [
     'https://console.aws.amazon.com/cloudwatch/home?',
@@ -134,9 +132,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
             acc.push(cur.Value);
             return acc;
           }, []),
-          {
-            stat: alarm.Statistic,
-          },
+          { stat },
         ],
       ],
     }),
