@@ -55,12 +55,14 @@ function alarmStatistic(alarm) {
 /**
  * Describes the relationship of the overall evaluation period and the number
  * of datapoints within the evaluation period that breached the threshold.
+ * @param {Number} period
  * @param {Number} evaluationPeriods
  * @param {Number} datapointsToAlarm
  * @param {Number} evaluationInterval
  * @returns {String}
  */
 function evaluationSummary(
+  periodInSeconds,
   evaluationPeriods,
   datapointsToAlarm,
   evaluationInterval,
@@ -73,15 +75,23 @@ function evaluationSummary(
     intervalUnits = 'minutes';
   }
 
+  let period = periodInSeconds;
+  let periodUnit = 'second';
+
+  if (periodInSeconds >= 60) {
+    period = Math.round(period / 60);
+    periodUnit = 'minute';
+  }
+
   if (evaluationPeriods === 1) {
     // Entire threshold breach was a single period/datapoint
-    return '';
+    return `for at least one ${period} ${periodUnit} period`;
   } else if (datapointsToAlarm === evaluationPeriods) {
     // Threshold breach was multiple, consecutive periods
-    return `for ${interval} consecutive ${intervalUnits}`;
+    return `for ${evaluationPeriods} consecutive ${period} ${periodUnit} periods`;
   } else {
     // Threshold breach was "M of N" periods
-    return `at least ${datapointsToAlarm} times in ${interval} ${intervalUnits}`;
+    return `for at least ${datapointsToAlarm} ${period} ${periodUnit} periods in ${interval} ${intervalUnits}`;
   }
 }
 
@@ -103,14 +113,11 @@ function cause(event, desc, history) {
     [
       '*Cause:*',
 
-      // The duration of each data point, e.g., "30 second" or "5 minute"
-      period >= 60 ? `${Math.round(period / 60)} minute` : `${period} second`,
+      // E.g., Average, Sum, p99
+      alarmStatistic(alarm),
 
       // E.g., HTTPCode_ELB_5XX_Count, CPUUtilization
-      `\`${alarm.MetricName}\``,
-
-      // E.g., average, sum, p99
-      alarmStatistic(alarm).toLowerCase(),
+      `of \`${alarm.MetricName}\` metric was`,
 
       // E.g., <, >
       operators.comparison(alarm.ComparisonOperator),
@@ -120,6 +127,7 @@ function cause(event, desc, history) {
 
       // A human-readable summary of the interval evaluation
       evaluationSummary(
+        period,
         evaluationPeriods,
         datapointsToAlarm,
         evaluationInterval,
