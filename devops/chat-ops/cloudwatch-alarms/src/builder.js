@@ -17,6 +17,7 @@ const sts = new AWS.STS({ apiVersion: '2011-06-15' });
 function cleanName(alarmName) {
   return alarmName
     .replace(/\>/g, '&gt;')
+    .replace(/\</g, '&lt;')
     .replace(/\([A-Za-z0-9_\-]+\)$/, '')
     .trim();
 }
