@@ -12,22 +12,25 @@ function cwmEncode(inp) {
   let str = '';
 
   if (Array.isArray(inp)) {
-    // Array elements get a ~ prefix
+    // Arrays elements get a ~ prefix and are enclosed in (…)
     str = str.concat(`(${inp.map((e) => `~${cwmEncode(e)}`).join('')})`);
   } else if (typeof inp === 'string') {
     // Strings are URL encoded, but then % is replaced with *
+    // Also they get a ' prefix
     str = str.concat(`'${encodeURIComponent(inp).replace(/\%/g, '*')}`);
   } else if (typeof inp === 'boolean') {
     str = str.concat(inp ? 'true' : 'false');
   } else if (typeof inp === 'number') {
     str = str.concat(`${inp}`);
   } else if (typeof inp === 'object') {
+    // Hashes are enclosed in ~(…)
     str = str.concat('~(');
 
     Object.keys(inp).forEach((k, i) => {
       // The first key doesn't get a ~, but all others do
       str = str.concat(i === 0 ? '' : '~');
       str = str.concat(k);
+      // The key and value are separated by ~
       str = str.concat(`~${cwmEncode(inp[k])}`);
     });
 
