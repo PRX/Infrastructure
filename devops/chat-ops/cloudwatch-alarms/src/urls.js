@@ -71,7 +71,10 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
           // # is encoded to *23 in the colors
           verticals.push([
-            { value: new Date(startTs).toISOString(), color: '*ff9896' },
+            {
+              value: new Date(startTs).toISOString(),
+              color: '#ff9896'.replace('#', '*23'),
+            },
             { value: new Date(endTs).toISOString() },
           ]);
         }
@@ -89,10 +92,9 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
       if (data?.newState?.stateReasonData?.startDate) {
         const startTs = Date.parse(data.newState.stateReasonData.startDate);
 
-        // # is encoded to *23 in the colors
         verticals.push({
           value: new Date(startTs).toISOString(),
-          color: '*23d62728',
+          color: '#3d62728'.replace('#', '*23'),
           fill: 'after',
         });
       }
