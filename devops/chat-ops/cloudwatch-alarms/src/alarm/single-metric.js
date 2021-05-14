@@ -3,7 +3,13 @@
 const operators = require('../operators');
 const urls = require('../urls');
 
-function started(event) {
+/**
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+ * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * * @returns {String[]}
+ */
+function started(event, desc, history) {
   if (event.detail.state.reasonData) {
     const data = JSON.parse(event.detail.state.reasonData);
 
@@ -25,7 +31,11 @@ function started(event) {
         durationUnit = 'minutes';
       }
 
-      return [`*Started:* ${duration} ${durationUnit} ago`];
+      const metricsUrl = urls.metricsConsole(event, desc, history);
+
+      return [
+        `*Started:* ${duration} ${durationUnit} ago | *View in:* <${metricsUrl}|CloudWatch Metrics>`,
+      ];
     }
   }
 
@@ -153,11 +163,10 @@ function cause(event, desc, history) {
       // E.g., HTTPCode_ELB_5XX_Count, CPUUtilization
       `of \`${alarm.MetricName}\` metric was`,
 
-      // E.g., <, >
-      operators.comparison(alarm.ComparisonOperator),
-
-      // The threshold value for the alarm
-      `\`${alarm.Threshold}\``,
+      // E.g., ≥ 150
+      `\`${operators.comparison(alarm.ComparisonOperator)} ${
+        alarm.Threshold
+      }\``,
 
       // A human-readable summary of the interval evaluation
       evaluationSummary(
@@ -172,18 +181,6 @@ function cause(event, desc, history) {
   ];
 }
 
-/**
- * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
- * * @returns {String[]}
- */
-function links(event, desc, history) {
-  const metricsUrl = urls.metricsConsole(event, desc, history);
-
-  return [`View in: <${metricsUrl}|CloudWatch Metrics>`];
-}
-
 module.exports = {
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
@@ -195,10 +192,9 @@ module.exports = {
     return [
       event.detail.configuration.description,
       ...cause(event, desc, history),
-      ...started(event),
+      ...started(event, desc, history),
       ...datapoints(event),
       ...last24Hours(history),
-      ...links(event, desc, history),
     ];
   },
 };

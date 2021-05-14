@@ -33,7 +33,7 @@ module.exports = {
         const url = urls.metricsConsole(event, desc, history);
 
         return [
-          `*Alarm duration:* ${duration} ${durationUnit} | View in: <${url}|CloudWatch Metrics>`,
+          `*Alarm duration:* ${duration} ${durationUnit} | *View in:* <${url}|CloudWatch Metrics>`,
         ];
       }
     }
