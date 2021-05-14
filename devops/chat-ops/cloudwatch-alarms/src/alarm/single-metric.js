@@ -3,6 +3,35 @@
 const operators = require('../operators');
 const urls = require('../urls');
 
+function started(event) {
+  if (event.detail.state.reasonData) {
+    const data = JSON.parse(event.detail.state.reasonData);
+
+    if (data?.startDate) {
+      const now = +new Date();
+      const startTime = Date.parse(data.startDate);
+
+      const dif = now - startTime;
+      const difSec = dif / 1000;
+
+      let duration = difSec;
+      let durationUnit = 'seconds';
+
+      if (difSec >= 3600) {
+        duration = Math.round(difSec / 3600);
+        durationUnit = 'hours';
+      } else if (difSec >= 60) {
+        duration = Math.round(difSec / 60);
+        durationUnit = 'minutes';
+      }
+
+      return [`*Started:* ${duration} ${durationUnit} ago`];
+    }
+  }
+
+  return [];
+}
+
 /**
  * Returns the datapoints that were evaluated and caused the alarm to move to
  * an ALARM state
@@ -166,6 +195,7 @@ module.exports = {
     return [
       event.detail.configuration.description,
       ...cause(event, desc, history),
+      ...started(event),
       ...datapoints(event),
       ...last24Hours(history),
       ...links(event, desc, history),
