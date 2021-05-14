@@ -12,8 +12,10 @@ function cwmEncode(inp) {
   let str = '';
 
   if (Array.isArray(inp)) {
+    // Array elements get a ~ prefix
     str = str.concat(`(${inp.map((e) => `~${cwmEncode(e)}`).join('')})`);
   } else if (typeof inp === 'string') {
+    // Strings are URL encoded, but then % is replaced with *
     str = str.concat(`'${encodeURIComponent(inp).replace(/\%/g, '*')}`);
   } else if (typeof inp === 'boolean') {
     str = str.concat(inp ? 'true' : 'false');
@@ -23,19 +25,16 @@ function cwmEncode(inp) {
     str = str.concat('~(');
 
     Object.keys(inp).forEach((k, i) => {
+      // The first key doesn't get a ~, but all others do
       str = str.concat(i === 0 ? '' : '~');
       str = str.concat(k);
-
-      if (typeof inp[k] === 'object') {
-        str = str.concat(`~${cwmEncode(inp[k])}`);
-      } else {
-        str = str.concat(`~${cwmEncode(inp[k])}`);
-      }
+      str = str.concat(`~${cwmEncode(inp[k])}`);
     });
 
     str = str.concat(')');
   }
 
+  // Seems like double ~ collapse down to one?
   return str.replace(/~~/g, '~');
 }
 
