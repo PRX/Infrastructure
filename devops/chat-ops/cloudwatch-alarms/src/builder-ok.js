@@ -10,15 +10,11 @@ module.exports = {
    * @returns {String[]}
    */
   detailLines(event, desc, history) {
-    if (
-      event.detail?.previousState?.reasonData &&
-      event.detail?.state?.reasonData
-    ) {
-      const stateData = JSON.parse(event.detail.state.reasonData);
+    if (event.detail?.previousState?.reasonData) {
       const previousData = JSON.parse(event.detail.previousState.reasonData);
 
-      if (stateData?.startDate && previousData?.startDate) {
-        const okTime = Date.parse(stateData.startDate);
+      if (event?.detail?.state?.timestamp && previousData?.startDate) {
+        const okTime = Date.parse(event.detail.state.timestamp);
         const alarmTime = Date.parse(previousData.startDate);
         const dif = okTime - alarmTime;
         const difSec = dif / 1000;
