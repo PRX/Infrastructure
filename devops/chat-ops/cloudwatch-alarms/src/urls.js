@@ -71,8 +71,8 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
           // # is encoded to *23 in the colors
           verticals.push([
-            { value: new Date(startTs).toISOString(), color: '*23d62728' },
-            { value: new Date(endTs).toISOString(), color: '*23d62728' },
+            { value: new Date(startTs).toISOString(), color: '*ff9896' },
+            { value: new Date(endTs).toISOString() },
           ]);
         }
       }
@@ -90,13 +90,11 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
         const startTs = Date.parse(data.newState.stateReasonData.startDate);
 
         // # is encoded to *23 in the colors
-        verticals.push([
-          {
-            value: new Date(startTs).toISOString(),
-            color: '*23d62728',
-            fill: 'after',
-          },
-        ]);
+        verticals.push({
+          value: new Date(startTs).toISOString(),
+          color: '*23d62728',
+          fill: 'after',
+        });
       }
     }
   }
@@ -156,6 +154,7 @@ module.exports = {
   alarmConsole(event) {
     const name = event.detail.alarmName;
     const encoded = encodeURI(name.replace(/\ /g, '+')).replace(/%/g, '$');
+    console.log(encoded);
     return `https://console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
   },
   /**
