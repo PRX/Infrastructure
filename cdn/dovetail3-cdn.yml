@@ -1,0 +1,199 @@
+# cdn/dovetail3-cdn.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Creates a CloudFront distribution to validate and redirect viewer-requests,
+  invoke dovetail-cdn-arranger to stitch new arrangements, and origin-pull from
+  any dovetail-cdn-arranger S3 bucket.
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Stack Dependencies
+        Parameters:
+          - InfrastructureNotificationsStackName
+      - Label:
+          default: Distribution Parameters
+        Parameters:
+          - OriginBucket
+          - DistributionDomain
+    ParameterLabels:
+      OriginBucket:
+        default: Primary dovetail-cdn-arranger S3 Bucket
+      DistributionDomain:
+        default: Domain Name
+      InfrastructureNotificationsStackName:
+        default: Notifications stack name
+Parameters:
+  OriginBucket:
+    Type: String
+    Description: eg. some-bucket-name.s3.amazonaws.com
+  DistributionDomain:
+    Type: String
+    Description: eg. dovetail3-cdn.prxu.org
+  InfrastructureNotificationsStackName:
+    Default: infrastructure-notifications
+    Description: The name of a previously launched notifications stack
+    Type: String
+Resources:
+  Certificate:
+    Type: "AWS::CertificateManager::Certificate"
+    Properties:
+      DomainName: !Ref DistributionDomain
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: Name
+          Value: !Sub "${AWS::StackName} ${AWS::Region}"
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+      ValidationMethod: DNS
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - !Ref DistributionDomain
+        CustomErrorResponses:
+          # dovetail uploaded, but file wasn't there!
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 403
+            ResponseCode: 500
+          # unrecognized uri or arrangement not found
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 404
+          # lambda caught an error
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 500
+          # callback(null, {invalid-response})
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 502
+          # timeout / memory-exceeded / callback(err)
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 503
+          # unknown
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 504
+        DefaultCacheBehavior:
+          AllowedMethods: [HEAD, GET]
+          CachedMethods: [HEAD, GET]
+          Compress: false
+          ForwardedValues:
+            QueryString: false
+          # TODO: viewer-request cloudfront function
+          # TODO: origin-request edge lambda function
+          TargetOriginId: dovetail3-stitch-s3
+          ViewerProtocolPolicy: allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        # TODO: cloudfront logging to kinesis with an S3 backup
+        Origins:
+          # TODO: multiple dovetail-cdn-arranger S3 bucket origins, in case
+          # lambda executions fail for some reason
+          - DomainName: !Ref OriginBucket
+            Id: dovetail3-stitch-s3
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        PriceClass: PriceClass_200
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  CloudFrontOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: Dovetail 3 CDN
+  CloudFrontDistribution400Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 4XX"]]
+      AlarmActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The 4xx rate on the Dovetail 3 CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 2
+      MetricName: 4xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 300
+      Statistic: Average
+      Threshold: 30
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistribution500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 5XX"]]
+      AlarmActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the Dovetail 3 CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 5
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Average
+      Threshold: 0.5
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistributionFatal500Alarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] Fatal 5XX"]]
+      AlarmActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
+      AlarmDescription: >
+        The error rate on the Dovetail 3 CDN is too dang high
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 3
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Average
+      Threshold: 2.0
+      TreatMissingData: notBreaching
+      Unit: Percent
+Outputs:
+  CloudFrontDomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
