@@ -1,9 +1,12 @@
 # cdn/dovetail3-cdn.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: >
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
   Creates a CloudFront distribution to validate and redirect viewer-requests,
   invoke dovetail-cdn-arranger to stitch new arrangements, and origin-pull from
   any dovetail-cdn-arranger S3 bucket.
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -23,6 +26,7 @@ Metadata:
         default: Domain Name
       InfrastructureNotificationsStackName:
         default: Notifications stack name
+
 Parameters:
   OriginBucket:
     Type: String
@@ -34,9 +38,10 @@ Parameters:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
     Type: String
+
 Resources:
   Certificate:
-    Type: "AWS::CertificateManager::Certificate"
+    Type: AWS::CertificateManager::Certificate
     Properties:
       DomainName: !Ref DistributionDomain
       Tags:
@@ -49,6 +54,66 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+
+  CloudFrontFunctionCodeFetherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Deploys the contents of a zip archive to an S3 bucket
+      Handler: index.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import traceback
+        import urllib.request
+        import urllib.parse
+
+
+        def lambda_handler(event, context):
+            try:
+                print(event)
+
+                url = "https://raw.githubusercontent.com/PRX/dovetail-cdn-viewer-request/main/index.js"
+                f = urllib.request.urlopen(url)
+                body = f.read().decode("utf-8")
+
+                props = {
+                  "ViewerRequestFunctionCode": body
+                }
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, props)
+
+            except Exception as e:
+                print("Function failed due to exception.")
+                print(e)
+                traceback.print_exc()
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      MemorySize: 256
+      Runtime: python3.8
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 60
+  CloudFrontFunctionCodeFetherFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudFrontFunctionCodeFetherFunction}
+      RetentionInDays: 5
+
+  CodeFetcher:
+    Type: Custom::CodeFetcher
+    Properties:
+      ServiceToken: !GetAtt CloudFrontFunctionCodeFetherFunction.Arn
+      Cycle: 1 # Change this when the code in GitHub changes
+
+  ViewerRequestCloudFrontFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      AutoPublish: true # TODO
+      FunctionCode: !GetAtt CodeFetcher.ViewerRequestFunctionCode
+      FunctionConfig:
+        Comment: tktk
+        Runtime: cloudfront-js-1.0
+      Name: dt3-viewer-request # TODO maybe needs to be unique per environment?
+
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -80,7 +145,7 @@ Resources:
         QueryStringsConfig:
           QueryStringBehavior: none
   CloudFrontDistribution:
-    Type: "AWS::CloudFront::Distribution"
+    Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         Aliases:
@@ -137,13 +202,15 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+
   CloudFrontOriginAccessIdentity:
     Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: Dovetail 3 CDN
+
   CloudFrontDistribution400Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
       AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 4XX"]]
@@ -170,7 +237,7 @@ Resources:
       TreatMissingData: notBreaching
       Unit: Percent
   CloudFrontDistribution500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
       AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 5XX"]]
@@ -197,7 +264,7 @@ Resources:
       TreatMissingData: notBreaching
       Unit: Percent
   CloudFrontDistributionFatal500Alarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Properties:
       ActionsEnabled: true
       AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] Fatal 5XX"]]
@@ -223,6 +290,7 @@ Resources:
       Threshold: 2.0
       TreatMissingData: notBreaching
       Unit: Percent
+
 Outputs:
   CloudFrontDomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
