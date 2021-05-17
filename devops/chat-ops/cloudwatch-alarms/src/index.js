@@ -65,7 +65,9 @@ exports.handler = async (event) => {
     // Ignore some alarms based on their name
     if (
       event.detail.alarmName.includes('AS:In') ||
-      event.detail.alarmName.includes('AS:Out')
+      event.detail.alarmName.includes('AS:Out') ||
+      event.detail.alarmName.includes('TargetTracking') ||
+      event.detail.alarmName.includes('Production Pollers Low CPU Usage')
     ) {
       return;
     }
