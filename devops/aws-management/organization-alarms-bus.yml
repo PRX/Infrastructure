@@ -3,16 +3,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Creates a EventBridge rule that forwards all CloudWatch Alarms state change
-  events to the DevOps alarms bus
+  events to the DevOps alarms bus. The DevOps event bus must be in a region
+  that supports cross-region EventBridge rules.
 
 Parameters:
   DevOpsCloudWatchAlarmsBusArn:
     Type: String
-  DevOpsAccountId:
-    Type: String
-
-Conditions:
-  IsNotDevOpsAccount: !Not [!Equals [!Ref DevOpsAccountId, !Ref "AWS::AccountId"]]
 
 Resources:
   EventRuleRole:
@@ -41,7 +37,6 @@ Resources:
         - { Key: prx:dev:application, Value: DevOps }
   EventRule:
     Type: AWS::Events::Rule
-    Condition: IsNotDevOpsAccount
     Properties:
       EventPattern:
         detail-type:
