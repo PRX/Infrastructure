@@ -49,6 +49,36 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+  CloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: none
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
     Properties:
@@ -77,11 +107,11 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: [HEAD, GET]
           CachedMethods: [HEAD, GET]
+          CachePolicyId: !Ref CloudFrontCachePolicy
           Compress: false
-          ForwardedValues:
-            QueryString: false
           # TODO: viewer-request cloudfront function
           # TODO: origin-request edge lambda function
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           TargetOriginId: dovetail3-stitch-s3
           ViewerProtocolPolicy: allow-all
         DefaultRootObject: index.html
