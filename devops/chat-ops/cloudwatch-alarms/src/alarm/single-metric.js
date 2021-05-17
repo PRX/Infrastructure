@@ -4,6 +4,23 @@ const operators = require('../operators');
 const urls = require('../urls');
 
 /**
+ * Returns the number of decimal places in a number
+ * e.g., 1 => 0, 1.000 => 0, 1.0001 => 4
+ * @param {Number} a
+ * @returns {Number}
+ */
+function precision(a) {
+  if (!isFinite(a)) return 0;
+  let e = 1;
+  let p = 0;
+  while (Math.round(a * e) / e !== a) {
+    e *= 10;
+    p++;
+  }
+  return p;
+}
+
+/**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
  * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
@@ -23,7 +40,10 @@ function started(event, desc, history) {
       let duration = difSec;
       let durationUnit = 'seconds';
 
-      if (difSec >= 3600) {
+      if (difSec >= 86400) {
+        duration = Math.round(difSec / 86400);
+        durationUnit = 'days';
+      } else if (difSec >= 3600) {
         duration = Math.round(difSec / 3600);
         durationUnit = 'hours';
       } else if (difSec >= 60) {
@@ -46,9 +66,10 @@ function started(event, desc, history) {
  * Returns the datapoints that were evaluated and caused the alarm to move to
  * an ALARM state
  * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
  * @returns {String[]}
  */
-function datapoints(event) {
+function datapoints(event, desc) {
   if (event.detail.state.reasonData) {
     const data = JSON.parse(event.detail.state.reasonData);
 
@@ -56,7 +77,27 @@ function datapoints(event) {
       const pointsWithValues = data.evaluatedDatapoints.filter((p) => p.value);
 
       if (pointsWithValues.length) {
-        const points = pointsWithValues.map((p) => `\`${p.value}\``).reverse();
+        const maxDigits = 4;
+
+        const points = pointsWithValues
+          .map((p) => {
+            let pThreshold = 3;
+            if (desc?.MetricAlarms?.[0]?.Threshold) {
+              pThreshold = precision(desc.MetricAlarms[0].Threshold);
+            }
+
+            const pDatapoint = precision(p.value);
+
+            // Print the datapoint values with at most 4 decimal points, and at
+            // least the number of decimals in the datapoint or threshold
+            // value, whichever is larger.
+            const digits = Math.min(
+              maxDigits,
+              Math.max(pDatapoint, pThreshold),
+            );
+            return `\`${p.value.toFixed(digits)}\``;
+          })
+          .reverse();
 
         return [`*Datapoints:* ${points.join(', ')}`];
       }
@@ -193,7 +234,7 @@ module.exports = {
       event.detail.configuration.description,
       ...cause(event, desc, history),
       ...started(event, desc, history),
-      ...datapoints(event),
+      ...datapoints(event, desc),
       ...last24Hours(history),
     ];
   },
