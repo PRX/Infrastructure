@@ -65,12 +65,16 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Description: Deploys the contents of a zip archive to an S3 bucket
+      Environment:
+        Variables:
+          EXPIRED_REDIRECT_PREFIX: !Ref ExpiredRedirectPrefix
       Handler: index.lambda_handler
       InlineCode: |
         import cfnresponse
         import traceback
         import urllib.request
         import urllib.parse
+        import os
 
 
         def lambda_handler(event, context):
@@ -80,6 +84,7 @@ Resources:
                 url = "https://raw.githubusercontent.com/PRX/dovetail-cdn-viewer-request/main/index.js"
                 f = urllib.request.urlopen(url)
                 body = f.read().decode("utf-8")
+                body = body.replace("<EXPIRED_REDIRECT_PREFIX>", os.environ["EXPIRED_REDIRECT_PREFIX"])
 
                 props = {
                   "ViewerRequestFunctionCode": body
