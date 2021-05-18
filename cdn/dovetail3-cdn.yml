@@ -109,7 +109,7 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${CloudFrontFunctionCodeFetcherFunction}
       RetentionInDays: 5
 
-  CodeFetcher:
+  GithubCodeFetcher:
     Type: Custom::CodeFetcher
     Properties:
       ServiceToken: !GetAtt CloudFrontFunctionCodeFetcherFunction.Arn
@@ -119,9 +119,9 @@ Resources:
     Type: AWS::CloudFront::Function
     Properties:
       AutoPublish: true # TODO
-      FunctionCode: !GetAtt CodeFetcher.ViewerRequestFunctionCode
+      FunctionCode: !GetAtt GithubCodeFetcher.ViewerRequestFunctionCode
       FunctionConfig:
-        Comment: tktk
+        Comment: Handle viewer-requests for Dovetail 3 CDN
         Runtime: cloudfront-js-1.0
       Name: dt3-viewer-request # TODO maybe needs to be unique per environment?
 
@@ -161,6 +161,7 @@ Resources:
       DistributionConfig:
         Aliases:
           - !Ref DistributionDomain
+        Comment: !Ref DistributionDomain
         CustomErrorResponses:
           # dovetail uploaded, but file wasn't there!
           - ErrorCachingMinTTL: 0
@@ -187,7 +188,7 @@ Resources:
           Compress: false
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionARN
+              FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
           # TODO: origin-request edge lambda function
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           TargetOriginId: dovetail3-stitch-s3
