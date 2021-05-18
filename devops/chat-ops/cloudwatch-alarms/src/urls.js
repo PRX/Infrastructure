@@ -96,7 +96,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
         verticals.push({
           value: new Date(startTs).toISOString(),
-          color: '#3d62728'.replace('#', '*23'),
+          color: '#d62728'.replace('#', '*23'),
           fill: 'after',
         });
       }
