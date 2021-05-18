@@ -19,11 +19,17 @@ Metadata:
         Parameters:
           - OriginBucket
           - DistributionDomain
+          - ExpiredRedirectPrefix
+          - EnvironmentTypeAbbreviation
     ParameterLabels:
       OriginBucket:
         default: Primary dovetail-cdn-arranger S3 Bucket
       DistributionDomain:
         default: Domain Name
+      ExpiredRedirectPrefix:
+        default: Prefix for redirecting back to Dovetail
+      EnvironmentTypeAbbreviation:
+        default: Environment type used in naming things
       InfrastructureNotificationsStackName:
         default: Notifications stack name
 
@@ -34,6 +40,15 @@ Parameters:
   DistributionDomain:
     Type: String
     Description: eg. dovetail3-cdn.prxu.org
+  ExpiredRedirectPrefix:
+    Type: String
+    Description: eg. https://dovetail.prxu.org/_
+  EnvironmentTypeAbbreviation:
+    Type: String
+    AllowedValues:
+      - test
+      - stag
+      - prod
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
@@ -55,16 +70,20 @@ Resources:
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
 
-  CloudFrontFunctionCodeFetherFunction:
+  CloudFrontFunctionCodeFetcherFunction:
     Type: AWS::Serverless::Function
     Properties:
       Description: Deploys the contents of a zip archive to an S3 bucket
+      Environment:
+        Variables:
+          EXPIRED_REDIRECT_PREFIX: !Ref ExpiredRedirectPrefix
       Handler: index.lambda_handler
       InlineCode: |
         import cfnresponse
         import traceback
         import urllib.request
         import urllib.parse
+        import os
 
 
         def lambda_handler(event, context):
@@ -74,6 +93,7 @@ Resources:
                 url = "https://raw.githubusercontent.com/PRX/dovetail-cdn-viewer-request/main/index.js"
                 f = urllib.request.urlopen(url)
                 body = f.read().decode("utf-8")
+                body = body.replace("<EXPIRED_REDIRECT_PREFIX>", os.environ["EXPIRED_REDIRECT_PREFIX"])
 
                 props = {
                   "ViewerRequestFunctionCode": body
@@ -92,27 +112,27 @@ Resources:
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
       Timeout: 60
-  CloudFrontFunctionCodeFetherFunctionLogGroup:
+  CloudFrontFunctionCodeFetcherFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${CloudFrontFunctionCodeFetherFunction}
+      LogGroupName: !Sub /aws/lambda/${CloudFrontFunctionCodeFetcherFunction}
       RetentionInDays: 5
 
-  CodeFetcher:
+  GithubCodeFetcher:
     Type: Custom::CodeFetcher
     Properties:
-      ServiceToken: !GetAtt CloudFrontFunctionCodeFetherFunction.Arn
+      ServiceToken: !GetAtt CloudFrontFunctionCodeFetcherFunction.Arn
       Cycle: 1 # Change this when the code in GitHub changes
 
-  ViewerRequestCloudFrontFunction:
+  ViewerRequestFunction:
     Type: AWS::CloudFront::Function
     Properties:
       AutoPublish: true # TODO
-      FunctionCode: !GetAtt CodeFetcher.ViewerRequestFunctionCode
+      FunctionCode: !GetAtt GithubCodeFetcher.ViewerRequestFunctionCode
       FunctionConfig:
-        Comment: tktk
+        Comment: Handle viewer-requests for Dovetail 3 CDN
         Runtime: cloudfront-js-1.0
-      Name: dt3-viewer-request # TODO maybe needs to be unique per environment?
+      Name: !Sub "dt3-viewer-request-${EnvironmentTypeAbbreviation}"
 
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
@@ -150,6 +170,7 @@ Resources:
       DistributionConfig:
         Aliases:
           - !Ref DistributionDomain
+        Comment: !Ref DistributionDomain
         CustomErrorResponses:
           # dovetail uploaded, but file wasn't there!
           - ErrorCachingMinTTL: 0
@@ -176,7 +197,7 @@ Resources:
           Compress: false
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+              FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
           # TODO: origin-request edge lambda function
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           TargetOriginId: dovetail3-stitch-s3
