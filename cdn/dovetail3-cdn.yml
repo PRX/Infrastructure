@@ -20,6 +20,7 @@ Metadata:
           - OriginBucket
           - DistributionDomain
           - ExpiredRedirectPrefix
+          - EnvironmentTypeAbbreviation
     ParameterLabels:
       OriginBucket:
         default: Primary dovetail-cdn-arranger S3 Bucket
@@ -27,6 +28,8 @@ Metadata:
         default: Domain Name
       ExpiredRedirectPrefix:
         default: Prefix for redirecting back to Dovetail
+      EnvironmentTypeAbbreviation:
+        default: Environment type used in naming things
       InfrastructureNotificationsStackName:
         default: Notifications stack name
 
@@ -40,6 +43,12 @@ Parameters:
   ExpiredRedirectPrefix:
     Type: String
     Description: eg. https://dovetail.prxu.org/_
+  EnvironmentTypeAbbreviation:
+    Type: String
+    AllowedValues:
+      - test
+      - stag
+      - prod
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
@@ -115,7 +124,7 @@ Resources:
       ServiceToken: !GetAtt CloudFrontFunctionCodeFetcherFunction.Arn
       Cycle: 1 # Change this when the code in GitHub changes
 
-  ViewerRequestCloudFrontFunction:
+  ViewerRequestFunction:
     Type: AWS::CloudFront::Function
     Properties:
       AutoPublish: true # TODO
@@ -123,7 +132,7 @@ Resources:
       FunctionConfig:
         Comment: Handle viewer-requests for Dovetail 3 CDN
         Runtime: cloudfront-js-1.0
-      Name: dt3-viewer-request # TODO maybe needs to be unique per environment?
+      Name: !Sub "dt3-viewer-request-${EnvironmentTypeAbbreviation}"
 
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
@@ -188,7 +197,7 @@ Resources:
           Compress: false
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+              FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
           # TODO: origin-request edge lambda function
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           TargetOriginId: dovetail3-stitch-s3
