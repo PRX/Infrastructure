@@ -89,7 +89,7 @@ module.exports = {
       const afterSha = allEnvVars['PRX_GITHUB_AFTER'];
       const resp = await github.compare(ownerAndRepo, beforeSha, afterSha);
 
-      if (resp?.commits.length > 0) {
+      if (resp?.commits?.length > 0) {
         resp.commits.forEach((c) => {
           const commitUrl = `https://github.com/${ownerAndRepo}/commit/${c.sha}`;
           const commitSha = c.sha.substring(0, 7);

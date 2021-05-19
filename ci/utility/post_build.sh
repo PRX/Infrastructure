@@ -6,7 +6,7 @@ set -a
 push_to_ecr() {
     if [ -n "$PRX_ECR_CONFIG_PARAMETERS" ]
     then
-        if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then build_error "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
+        if [ -z "$PRX_ECR_CONFIG_PARAMETERS" ]; then exit 1 "PRX_ECR_CONFIG_PARAMETERS required for ECR push"; fi
         echo "Handling ECR push..."
 
         echo "Logging into ECR..."
@@ -35,7 +35,7 @@ push_to_ecr() {
         image_id=$(docker images --filter "label=org.prx.app" --format "{{.ID}}" | head -n 1)
 
         if [ -z "$image_id" ]; then
-            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
+            exit 1 "No Docker image found; ensure at least one Dockerfile has an org.prx.app label"
         else
             # Construct the image name with a tag
             ecr_image_name="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${safe_ecr_repo_name}:${PRX_COMMIT}"
@@ -54,8 +54,8 @@ push_to_ecr() {
 push_to_s3_lambda() {
     if [ -n "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]
     then
-        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
-        if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then build_error "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
+        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then exit 1 "PRX_APPLICATION_CODE_BUCKET required for Lambda code push"; fi
+        if [ -z "$PRX_LAMBDA_CODE_CONFIG_PARAMETERS" ]; then exit 1 "PRX_LAMBDA_CODE_CONFIG_PARAMETERS required for Lambda code push"; fi
         if [ -z "$PRX_LAMBDA_ARCHIVE_BUILD_PATH" ]; then export PRX_LAMBDA_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
         echo "Handling Lambda code push..."
 
@@ -63,7 +63,7 @@ push_to_s3_lambda() {
         image_id=$(docker images --filter "label=org.prx.lambda" --format "{{.ID}}" | head -n 1)
 
         if [ -z "$image_id" ]; then
-            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
+            exit 1 "No Docker image found; ensure at least one Dockerfile has an org.prx.lambda label"
         else
             container_id=$(docker create $image_id)
 
@@ -84,8 +84,8 @@ push_to_s3_lambda() {
 push_to_s3_static() {
     if [ -n "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]
     then
-        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then build_error "PRX_APPLICATION_CODE_BUCKET required for S3 static code push"; fi
-        if [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]; then build_error "PRX_S3_STATIC_CONFIG_PARAMETERS required for S3 static code push"; fi
+        if [ -z "$PRX_APPLICATION_CODE_BUCKET" ]; then exit 1 "PRX_APPLICATION_CODE_BUCKET required for S3 static code push"; fi
+        if [ -z "$PRX_S3_STATIC_CONFIG_PARAMETERS" ]; then exit 1 "PRX_S3_STATIC_CONFIG_PARAMETERS required for S3 static code push"; fi
         if [ -z "$PRX_S3_STATIC_ARCHIVE_BUILD_PATH" ]; then export PRX_S3_STATIC_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
         echo "Handling S3 static code push..."
 
@@ -93,7 +93,7 @@ push_to_s3_static() {
         image_id=$(docker images --filter "label=org.prx.s3static" --format "{{.ID}}" | head -n 1)
 
         if [ -z "$image_id" ]; then
-            build_error "No Docker image found; ensure at least one Dockerfile has an org.prx.s3static label"
+            exit 1 "No Docker image found; ensure at least one Dockerfile has an org.prx.s3static label"
         else
             container_id=$(docker create $image_id)
 
@@ -123,10 +123,10 @@ init() {
     else
         # Check for required environment variables
         ## Set on the CodeBuild project definition
-        if [ -z "$PRX_AWS_ACCOUNT_ID" ]; then build_error "PRX_AWS_ACCOUNT_ID required"; fi
+        if [ -z "$PRX_AWS_ACCOUNT_ID" ]; then exit 1 "PRX_AWS_ACCOUNT_ID required"; fi
         ## Set from startBuild
-        if [ -z "$PRX_REPO" ]; then build_error "PRX_REPO required"; fi
-        if [ -z "$PRX_COMMIT" ]; then build_error "PRX_COMMIT required"; fi
+        if [ -z "$PRX_REPO" ]; then exit 1 "PRX_REPO required"; fi
+        if [ -z "$PRX_COMMIT" ]; then exit 1 "PRX_COMMIT required"; fi
 
         # Handle code publish if enabled
         if [ "$PRX_CI_PUBLISH" = "true" ]
