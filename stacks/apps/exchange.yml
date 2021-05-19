@@ -35,7 +35,6 @@ Parameters:
   SecretsVersion: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
   SecretsStackName: { Type: String }
-  NotificationsStackName: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
@@ -138,14 +137,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      ActionsEnabled: true
       AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
-      AlarmActions:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
       AlarmDescription: >- # TODO
         5XX server errors originating from the metrics target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
@@ -565,23 +557,7 @@ Resources:
   SayWhenHighVisibleMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing" # TODO
-      AlarmActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing" # TODO Fatal for prod, warn for stag
       AlarmDescription: SayWhen is very behind
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
@@ -598,23 +574,7 @@ Resources:
   ExchangeDeliveryUpdateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing" # TODO
-      AlarmActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - Fn::If:
-            - IsProduction
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsFatalMessagesSnsTopicArn
-            - Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing" # TODO  Fatal for prod, warn for stag
       AlarmDescription: Deliveries are very behind
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
