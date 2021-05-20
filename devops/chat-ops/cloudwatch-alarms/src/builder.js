@@ -121,7 +121,6 @@ module.exports = {
       text = text.substring(0, 3000);
     }
 
-
     blox.push({
       type: 'section',
       text: {
