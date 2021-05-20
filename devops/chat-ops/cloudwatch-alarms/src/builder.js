@@ -107,11 +107,26 @@ module.exports = {
 
     lines.push(...detailLines(event, desc, history));
 
+    let text = lines.join('\n');
+
+    // Text blocks within attachments have a 3000 character limit. If the text
+    // is too large, try removing the annotations from the CloudWatch Alarms
+    // URL, since they can be long if there have been many recent alarms
+    if (text.length > 3000) {
+      text = text.replace(/(~annotations.*?\)\)\))/, '');
+    }
+
+    // If the text is still too long, brute force it down to 3000 characters
+    if (text.length > 3000) {
+      text = text.substring(0, 3000);
+    }
+
+
     blox.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: lines.join('\n'),
+        text,
       },
     });
 
