@@ -35,6 +35,8 @@ Parameters:
     Type: String
   DovetailCdnArrangerCodeS3ObjectKey:
     Type: String
+  DovetailCdnOriginRequestCodeS3ObjectKey:
+    Type: String
   AnalyticsIngestLambdaCodeS3ObjectKey:
     Type: String
   RadiotopiaTowerLambdaCodeS3ObjectKey:
@@ -176,6 +178,25 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Sub ${TemplateUrlPrefix}dovetail-cdn-arranger.yml
+      TimeoutInMinutes: 5
+  DovetailCdnOriginRequestStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        CodeS3Bucket:
+          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
+        CodeS3ObjectKey: !Ref DovetailCdnOriginRequestCodeS3ObjectKey
+        EnvironmentType: !Ref EnvironmentType
+        ArrangerFunctionArn: !GetAtt DovetailCdnArrangerStack.Outputs.ArrangerFunctionArn
+        ArrangerBucketArn: !GetAtt DovetailCdnArrangerStack.Outputs.ArrangerBucketArn
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Sub ${TemplateUrlPrefix}dovetail-cdn-origin-request.yml
       TimeoutInMinutes: 5
   AnalyticsIngestLambdasStack:
     Type: "AWS::CloudFormation::Stack"
