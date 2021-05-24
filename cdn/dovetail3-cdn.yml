@@ -20,6 +20,7 @@ Metadata:
           - OriginBucket
           - DistributionDomain
           - ExpiredRedirectPrefix
+          - OriginRequestFunctionArn
           - EnvironmentTypeAbbreviation
     ParameterLabels:
       OriginBucket:
@@ -28,6 +29,8 @@ Metadata:
         default: Domain Name
       ExpiredRedirectPrefix:
         default: Prefix for redirecting back to Dovetail
+      OriginRequestFunctionArn:
+        default: Dovetail origin request lambda
       EnvironmentTypeAbbreviation:
         default: Environment type used in naming things
       InfrastructureNotificationsStackName:
@@ -43,6 +46,9 @@ Parameters:
   ExpiredRedirectPrefix:
     Type: String
     Description: eg. https://dovetail.prxu.org/_
+  OriginRequestFunctionArn:
+    Type: String
+    Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
   EnvironmentTypeAbbreviation:
     Type: String
     AllowedValues:
@@ -198,7 +204,9 @@ Resources:
           FunctionAssociations:
             - EventType: viewer-request
               FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
-          # TODO: origin-request edge lambda function
+          LambdaFunctionAssociations:
+            - EventType: origin-request
+              LambdaFunctionARN: !Ref OriginRequestFunctionArn
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
           TargetOriginId: dovetail3-stitch-s3
           ViewerProtocolPolicy: allow-all
