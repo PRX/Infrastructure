@@ -172,6 +172,7 @@ Resources:
           QueryStringBehavior: none
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
+    DependsOn: ViewerRequestFunction
     Properties:
       DistributionConfig:
         Aliases:
@@ -203,7 +204,9 @@ Resources:
           Compress: false
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+              FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+              # TODO: this is stalling CFN updates for like ... no reason.
+              # FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
           LambdaFunctionAssociations:
             - EventType: origin-request
               LambdaFunctionARN: !Ref OriginRequestFunctionArn
