@@ -82,7 +82,11 @@ function datapoints(event, desc) {
         const points = pointsWithValues
           .map((p) => {
             let pThreshold = 3;
-            if (desc?.MetricAlarms?.[0]?.Threshold) {
+            console.log(desc);
+            if (
+              desc?.MetricAlarms?.[0]?.Threshold ||
+              desc?.MetricAlarms?.[0]?.Threshold === 0
+            ) {
               pThreshold = precision(desc.MetricAlarms[0].Threshold);
             }
 
