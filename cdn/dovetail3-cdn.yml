@@ -22,6 +22,7 @@ Metadata:
           - ExpiredRedirectPrefix
           - OriginRequestFunctionArn
           - EnvironmentTypeAbbreviation
+          - RealtimeLogKinesisStreamArn
     ParameterLabels:
       OriginBucket:
         default: Primary dovetail-cdn-arranger S3 Bucket
@@ -33,6 +34,8 @@ Metadata:
         default: Dovetail origin request lambda
       EnvironmentTypeAbbreviation:
         default: Environment type used in naming things
+      RealtimeLogKinesisStreamArn:
+        default: Kinesis stream for realtime logs
       InfrastructureNotificationsStackName:
         default: Notifications stack name
 
@@ -55,6 +58,9 @@ Parameters:
       - test
       - stag
       - prod
+  RealtimeLogKinesisStreamArn:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
   InfrastructureNotificationsStackName:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
@@ -211,6 +217,7 @@ Resources:
             - EventType: origin-request
               LambdaFunctionARN: !Ref OriginRequestFunctionArn
           OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+          RealtimeLogConfigArn: !Ref RealtimeLogConfig
           TargetOriginId: dovetail3-stitch-s3
           ViewerProtocolPolicy: allow-all
         DefaultRootObject: index.html
@@ -236,6 +243,59 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+
+  RealtimeLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: RealtimeLogKinesisPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - kinesis:DescribeStreamSummary
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Effect: Allow
+                Resource: !Ref RealtimeLogKinesisStreamArn
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  RealtimeLogConfig:
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn
+          StreamType: Kinesis
+      Fields:
+        - timestamp
+        - c-ip
+        - sc-status
+        - cs-method
+        - cs-uri-stem
+        - cs-user-agent
+        - cs-referer
+        - x-forwarded-for
+        - sc-content-len
+        - sc-range-start
+        - sc-range-end
+      Name: !Sub dt3-realtime-logs-${EnvironmentTypeAbbreviation}
+      SamplingRate: 100
 
   CloudFrontOriginAccessIdentity:
     Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
