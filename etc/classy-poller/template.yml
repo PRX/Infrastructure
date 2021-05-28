@@ -1,0 +1,76 @@
+# etc/adzerk-poller/template.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that polls the Adzerk API and finds ad flight
+  starting soon, which get sent to Slack
+
+Parameters:
+  ClassyApiClientId:
+    Type: String
+  ClassyApiClientSecret:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+  Frequency:
+    Type: String
+    Description: In minutes, greater than 1
+    Default: 2
+
+Resources:
+  PollerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: index.js
+      Description: >-
+        Polls Classy for new activity
+      Environment:
+        Variables:
+          CLASSY_API_CLIENT_ID: !Ref ClassyApiClientId
+          CLASSY_API_CLIENT_SECRET: !Ref ClassyApiClientSecret
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+          POLLING_FREQUENCY: !Ref Frequency
+      Events:
+        Poller:
+          Properties:
+            Description: Runs the Classy poller
+            Enabled: true
+            Schedule: !Sub rate(${Frequency} minutes)
+          Type: Schedule
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      # Tags:
+      #   Project: Misc
+      #   prx:cloudformation:stack-name: !Ref AWS::StackName
+      #   prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 16
+  PollerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PollerFunction}
+      RetentionInDays: 30
+  # PollerFunctionErrorAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: "[Classy] Elevated error volume"
+  #     AlarmDescription: >-
+  #       The error rate on the Classy app has exceeded 0.
+  #     ComparisonOperator: GreaterThanThreshold
+  #     Dimensions:
+  #       - Name: FunctionName
+  #         Value: !Ref PollerFunction
+  #     EvaluationPeriods: 1
+  #     MetricName: Errors
+  #     Namespace: AWS/Lambda
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
