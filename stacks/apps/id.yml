@@ -78,9 +78,9 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Metrics v2][ALB][Error] Target 5XX" # TODO
+      AlarmName: "[ID v2][ALB][Error] Target 5XX" # TODO
       AlarmDescription: >- # TODO
-        5XX server errors originating from the metrics target group exceeded 0
+        5XX server errors originating from the ID target group exceeded 0
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: LoadBalancer
@@ -103,7 +103,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: !If [IsProduction, 2, 1]
       EnableECSManagedTags: true
       LaunchType: EC2
       LoadBalancers:
@@ -182,6 +182,8 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: DB_PORT_3306_TCP_ADDR
+              Value: !Ref SharedRdsMysqlEndpoint
             - Name: SMTP_ADDRESS
               Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
             - Name: SMTP_AUTHENTICATION
