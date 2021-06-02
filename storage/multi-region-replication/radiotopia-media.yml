@@ -17,9 +17,12 @@ Description: >-
 Parameters:
   DestinationBucketArn:
     Type: String
+  CloudFrontOai:
+    Type: String
 
 Conditions:
   HasDestinationBucketArn: !Not [!Equals [!Ref DestinationBucketArn, ""]]
+  HasCloudFrontOai: !Not [!Equals [!Ref CloudFrontOai, ""]]
 
 Resources:
   ReplicationRole:
@@ -104,3 +107,17 @@ Resources:
         - !Ref AWS::NoValue
       VersioningConfiguration:
         Status: Enabled # Required for replication
+  RadiotopiaMediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: HasCloudFrontOai
+    Properties:
+      Bucket: !Ref RadiotopiaMediaBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS: !Ref CloudFrontOai
+            Resource: !Sub ${RadiotopiaMediaBucket.Arn}/*
+            Sid: Grant read access to a CloudFront Origin Identity
