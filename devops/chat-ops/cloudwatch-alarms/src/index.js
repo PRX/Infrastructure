@@ -48,6 +48,7 @@
 const AWS = require('aws-sdk');
 const color = require('./color');
 const builder = require('./builder');
+const channels = require('./channels');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -80,7 +81,7 @@ exports.handler = async (event) => {
         Message: JSON.stringify({
           username: 'Amazon CloudWatch Alarms',
           icon_emoji: ':ops-cloudwatch-alarm:',
-          channel: '#sandbox2',
+          channel: channels.channel(event),
           attachments: [
             {
               color: color.value(event),

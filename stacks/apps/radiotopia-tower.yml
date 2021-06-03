@@ -10,6 +10,7 @@ Conditions:
 
 Parameters:
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
@@ -76,8 +77,12 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Tower][Lambda][Error] Invocation 4XX" # TODO
-      AlarmDescription: The error rate on the Tower lambda has exceeded 2
+      AlarmName: !Sub WARN [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> ELEVATED FUNCTION ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Radiotopia Tower endpoint Lambda function is
+        experiencing function errors, thrown by the code or runtime. The
+        invocations likely origintated from API Gateway and will not be
+        retried.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -93,8 +98,12 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Tower][Lambda][Throttles] Invocation 429" # TODO
-      AlarmDescription: Throttles on the Tower lambda has exceeded 0
+      AlarmName: !Sub INFO [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Radiotopia Tower endpoint Lambda function has
+        reached maximum concurrency and requests are failing. This is a 429
+        status code for the Lambda invocation, but results in a 5XX error for
+        the API Gateway.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
