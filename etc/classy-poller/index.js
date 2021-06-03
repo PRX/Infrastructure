@@ -97,6 +97,7 @@ exports.handler = async (event) => {
     336384: '#radiotopia-donations',
     330330: '#radiotopia-donations',
     330245: '#radiotopia-donations',
+    342678: '#radiotopia-donations',
     326353: '#earhustle-donations',
   };
 
@@ -104,6 +105,7 @@ exports.handler = async (event) => {
     if (activity.type === 'donation_created') {
       const tx = activity.transaction;
       const camp = activity.campaign;
+      const mem = activity.member;
 
       const ts = Date.parse(activity.created_at);
 
@@ -111,10 +113,10 @@ exports.handler = async (event) => {
         const comment = tx.comment.length ? `\n> ${tx.comment}` : '';
 
         // const fullTx = await httpGet(`/transactions/${tx.id}`);
-        // console.log(fullTx);
+        // console.log(tx);
 
         let text;
-        const name = tx.member_name;
+        const name = `${mem?.first_name} ${mem?.last_name.charAt(0)}.`;
         const amt = tx.raw_donation_gross_amount;
         const campUrl = `https://www.classy.org/manage/event/${camp.id}/overview`;
         const txUrl = `https://www.classy.org/admin/72482/transactions/${tx.id}`;
