@@ -19,6 +19,7 @@ function cleanName(alarmName) {
     .replace(/\>/g, '&gt;')
     .replace(/\</g, '&lt;')
     .replace(/\([A-Za-z0-9_\-]+\)$/, '')
+    .replace(/^(FATAL|ERROR|WARN|INFO|CRITICAL|MAJOR|MINOR)/, '')
     .trim();
 }
 
