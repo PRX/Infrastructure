@@ -1,7 +1,10 @@
 # stacks/apps/dovetail-router.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
-Description: metrics.prx.org application running in Docker # TODO
+Description: >-
+  Creates a dedicated load balancer and the ECS service for Dovetail Router
+  (i.e., Dovetail version 3). Also creates the stack for Dovetail version 2
+  resources, which run on the same ALB.
 
 Mappings:
   Domains:
@@ -316,9 +319,11 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[][ALB][Error] LB 5XX" # TODO
-      AlarmDescription: | # TODO
-        5XX load balancer errors originating from the load balancer
+      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail's dedicated application load balancer (ALB)
+        is returning 5XX errors to clients. The errors may or may not be
+        originating from applications behind the ALB.
       Dimensions:
         - Name: LoadBalancer
           Value: !GetAtt Alb.LoadBalancerFullName
@@ -334,10 +339,11 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[][ALB][TargetResponseTime] P95 extremely slow" # TODO
-      AlarmDescription: | # TODO
-        Target response time value for ___ load balancer targets at 95th
-        percentile higher than expected
+      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RESPONDING SLOWLY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail's dedicated application load balancer (ALB)
+        is seeing very slow response times for a significant percent of the
+        traffic it's handling.
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: LoadBalancer
@@ -400,7 +406,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
       TargetType: instance
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
@@ -452,7 +458,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
       TaskDefinition: !Ref TaskDefinition
 
   TaskLogGroup:
@@ -479,7 +485,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -501,7 +507,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -544,7 +550,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
   LegacyStack:
@@ -572,7 +578,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router } # TODO
+        - { Key: prx:dev:application, Value: Router }
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-legacy.yml
       TimeoutInMinutes: 20
 
