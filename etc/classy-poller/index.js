@@ -117,15 +117,25 @@ exports.handler = async (event) => {
 
         let text;
         const name = `${mem?.first_name} ${mem?.last_name.charAt(0)}.`;
-        const amt = tx.raw_donation_gross_amount;
         const campUrl = `https://www.classy.org/manage/event/${camp.id}/overview`;
         const txUrl = `https://www.classy.org/admin/72482/transactions/${tx.id}`;
         // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
 
-        if (tx.frequency === 'one-time') {
-          text = `*${name}* made a <${txUrl}|$${amt}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
+        let amt;
+        if (tx.currency_code === 'USD') {
+          amt = `$${tx.raw_donation_gross_amount}`;
+        } else if (tx.currency_code === 'GBP') {
+          amt = `£${tx.raw_donation_gross_amount}`;
+        } else if (tx.currency_code === 'CAD') {
+          amt = `CA$${tx.raw_donation_gross_amount}`;
         } else {
-          text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|$${amt}>${comment}`;
+          amt = `${tx.raw_donation_gross_amount} ${tx.currency_code}`;
+        }
+
+        if (tx.frequency === 'one-time') {
+          text = `*${name}* made a <${txUrl}|${amt}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
+        } else {
+          text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${amt}>${comment}`;
         }
 
         await sns
