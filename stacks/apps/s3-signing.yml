@@ -126,11 +126,13 @@ Resources:
 
   # Lambda Alarms
   UploadLambdaElevatedErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Elevated error volume"
-      AlarmDescription: Signing function has encountered an invocation error
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is failing, which likely
+        means uploads to Publish are also failing.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -143,16 +145,18 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
   UploadLambdaDangerousErrorAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Dangerous error volume"
-      AlarmDescription: Signing function has encountered several invocation errors
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is failing a lot, which
+        likely means uploads to Publish are also failing.
       ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 2
       Dimensions:
         - Name: FunctionName
           Value: !Ref UploadHttpLambdaFunction
-      DatapointsToAlarm: 2
       EvaluationPeriods: 10
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -161,11 +165,13 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
   UploadLambdaElevatedThrottleAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Elevated invocation throttling"
-      AlarmDescription: Signing function invocations are being throttled
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is being throttled. This
+        likely means uploads to Publish are failing.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -177,31 +183,15 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
-  UploadLambdaElevatedMaxDurationAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Condition: IsProduction
-    Properties:
-      AlarmName: "[Upload][Lambda] Elevated maximum duration"
-      AlarmDescription: Several signing function invocations were unusually slow
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref UploadHttpLambdaFunction
-      DatapointsToAlarm: 2
-      EvaluationPeriods: 3
-      MetricName: Duration
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Maximum
-      Threshold: 225
-      TreatMissingData: notBreaching
   UploadLambdaElevatedVolumeAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Elevated invocation volume"
-      AlarmDescription: The number of signing function invocations has been unusually high for
-        several periods
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> SUSPICIOUSLY HIGH INVOCATIONS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is being invoked a
+        suspiciously high amount. This could indicate a misbehaving client
+        (e.g., Publish frontend), attack attempt, or could be legitimate.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -215,7 +205,7 @@ Resources:
       Threshold: 500
       TreatMissingData: notBreaching
   UploadLambdaDangerousErrorRateAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
       AlarmName: "[Upload][Lambda] Dangerous error rate"
@@ -252,7 +242,7 @@ Resources:
       Threshold: 0.3
       TreatMissingData: notBreaching
   UploadLambdaCriticalErrorRateAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
       AlarmName: "[Upload][Lambda] Critical error rate"
