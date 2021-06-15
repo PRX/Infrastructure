@@ -700,15 +700,6 @@ Resources:
       LogGroupName: !Ref DovetailRouterLogGroup
       RoleArn: !GetAtt DovetailRouterSubscriptionRole.Arn
   # Autoscaling
-  DovetailAutoScaling:
-    Type: "AWS::ApplicationAutoScaling::ScalableTarget"
-    Properties:
-      MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMinCount]
-      MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMaxCount]
-      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !Sub "${AWS::StackName}-DovetailApp"]]
-      RoleARN: !GetAtt DovetailAutoScalingIamRole.Arn
-      ScalableDimension: "ecs:service:DesiredCount"
-      ServiceNamespace: "ecs"
   DovetailAutoScalingIamRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -731,79 +722,28 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-  DovetailAutoScalingInPolicy:
-    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
+  DovetailScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      PolicyName: ScaleIn
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref DovetailAutoScaling
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 300
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalUpperBound: 0
-            ScalingAdjustment: -1
-  DovetailAutoScalingScaleInAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+      MinCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMinCount]
+      MaxCapacity: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, DovetailMaxCount]
+      ResourceId: !Join ["/", ["service", !Ref ECSCluster, !GetAtt DovetailApplicationService.Name]]
+      RoleARN: !GetAtt DovetailAutoScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  DovetailScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      ActionsEnabled: true
-      AlarmName: !If [CreateProductionResources, "[Dovetail][AS:In] Production Low CPU Usage", "[Dovetail][AS:In] Staging Low CPU Usage"]
-      AlarmActions:
-        - !Ref DovetailAutoScalingInPolicy
-      AlarmDescription: >
-        Too many dovetails running
-      ComparisonOperator: LessThanOrEqualToThreshold
-      EvaluationPeriods: 2
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      Period: 60
-      Statistic: Average
-      Threshold: 30
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: ServiceName
-          Value: !Sub ${AWS::StackName}-DovetailApp
-        - Name: ClusterName
-          Value: !Ref ECSCluster
-  DovetailAutoScalingOutPolicy:
-    Type: "AWS::ApplicationAutoScaling::ScalingPolicy"
-    Properties:
-      PolicyName: ScaleOut
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref DovetailAutoScaling
-      StepScalingPolicyConfiguration:
-        AdjustmentType: ChangeInCapacity
-        Cooldown: 120
-        MetricAggregationType: Average
-        StepAdjustments:
-          - MetricIntervalLowerBound: 0
-            MetricIntervalUpperBound: 5
-            ScalingAdjustment: 1
-          - MetricIntervalLowerBound: 5
-            ScalingAdjustment: 2
-  DovetailAutoScalingScaleOutAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !If [CreateProductionResources, "[Dovetail][AS:Out] Production High CPU Usage", "[Dovetail][AS:Out] Staging High CPU Usage"]
-      AlarmActions:
-        - !Ref DovetailAutoScalingOutPolicy
-      AlarmDescription: >
-        Not enough dovetails running
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: CPUUtilization
-      Namespace: AWS/ECS
-      Period: 60
-      Statistic: Average
-      Threshold: 50
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: ServiceName
-          Value: !Sub ${AWS::StackName}-DovetailApp
-        - Name: ClusterName
-          Value: !Ref ECSCluster
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref DovetailScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Join ["/", [!GetAtt DovetailALB.LoadBalancerFullName, !GetAtt DovetailApplicationALBTargetGroup.TargetGroupFullName]]
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+        TargetValue: 200
   # Dovetail Elixir Autoscaling
   DovetailRouterScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
