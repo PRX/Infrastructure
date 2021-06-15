@@ -28,6 +28,7 @@ Description: >-
   Creates a CloudFront distribution with a single origin (either web or S3) and
   an optional failover origin. The primary and failover origin share an
   identical configuration, aside from the domain.
+
 Conditions:
   HasCloudFrontDefaultRootObject: !Not [!Equals [!Ref CloudFrontDefaultRootObject, ""]]
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
@@ -54,6 +55,7 @@ Conditions:
   UseCertificate: !Or
     - !Condition CreateCertificate
     - !Condition HasAcmCertificateArn
+
 Mappings:
   FailoverCriteriaStatusCodesQuantity:
     "403-404":
@@ -62,6 +64,7 @@ Mappings:
       Quantity: 4
     "403-404-500-502-503-504":
       Quantity: 6
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -165,6 +168,7 @@ Metadata:
         default: AWS WAF web ACL ID
       AcmCertificateArn:
         default: Certificate ARN
+
 Parameters:
   ProjectTag:
     Type: String
@@ -422,6 +426,7 @@ Resources:
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
+
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -458,6 +463,7 @@ Resources:
         QueryStringsConfig:
           QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
           QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
+
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -576,12 +582,14 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+
   CloudFrontOriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Condition: HasCloudFrontOriginAccess
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Ref CloudFrontComment
+
 Outputs:
   CloudFrontDomainName:
     Value: !GetAtt CloudFrontDistribution.DomainName
