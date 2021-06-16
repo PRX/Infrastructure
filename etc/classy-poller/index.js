@@ -121,21 +121,48 @@ exports.handler = async (event) => {
         const txUrl = `https://www.classy.org/admin/72482/transactions/${tx.id}`;
         // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
 
-        let amt;
-        if (tx.currency_code === 'USD') {
-          amt = `$${tx.raw_donation_gross_amount}`;
-        } else if (tx.currency_code === 'GBP') {
-          amt = `£${tx.raw_donation_gross_amount}`;
-        } else if (tx.currency_code === 'CAD') {
-          amt = `CA$${tx.raw_donation_gross_amount}`;
+        const currency =
+          tx?.metadata?.['_classy_pay']?.transaction?.currency ||
+          tx.currency_code;
+        const rawAmount =
+          tx?.metadata?.['_classy_pay']?.transaction?.amount ||
+          tx.raw_donation_gross_amount;
+        const amount = (+rawAmount).toFixed(2);
+
+        let money;
+        if (currency === 'USD') {
+          money = `$${amount}`;
+        } else if (currency === 'GBP') {
+          money = `£${amount}`;
+        } else if (currency === 'CAD') {
+          money = `CA$${amount}`;
+        } else if (currency === 'EUR') {
+          money = `€${amount}`;
         } else {
-          amt = `${tx.raw_donation_gross_amount} ${tx.currency_code}`;
+          money = `${amount} ${currency}`;
+        }
+
+        if (
+          tx?.metadata?.['_classy_pay']?.transaction?.chargeCurrency &&
+          tx?.metadata?.['_classy_pay']?.transaction?.chargeAmount &&
+          tx?.metadata?.['_classy_pay']?.transaction?.chargeCurrency !==
+            currency
+        ) {
+          const t = tx?.metadata?.['_classy_pay']?.transaction;
+          const ca = +t?.chargeAmount;
+          const cc = t?.chargeCurrency;
+
+          if (cc === 'USD') {
+            money = `${money} ($${ca.toFixed(2)})`;
+          } else {
+            money = `${money} (${ca.toFixed(2)} ${cc})`;
+          }
         }
 
         if (tx.frequency === 'one-time') {
-          text = `*${name}* made a <${txUrl}|${amt}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
+          text = `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
         } else {
-          text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${amt}>${comment}`;
+          text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`;
         }
 
         await sns
