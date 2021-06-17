@@ -44,7 +44,6 @@ def s3_post_policy(signing_time, ttl=60):
             {"x-amz-algorithm": AMZ_ALGORITHM},
             {"x-amz-credential": signing_credentials(signing_time)},
             {"x-amz-date": signing_time.strftime("%Y%m%dT%H%M%SZ")},
-            ["starts-with", "$success_action_redirect", ""],
             ["starts-with", "$key", "upload/"],
             ["starts-with", "$Content-Type", "audio/"],
         ],
