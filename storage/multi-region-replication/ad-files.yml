@@ -88,28 +88,6 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       BucketName: !Sub prx-mrr-${AWS::Region}-ad-files
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Ad Files }
-      ReplicationConfiguration: !If
-        - HasDestinationBucketArn
-        - Role: !GetAtt ReplicationRole.Arn
-          Rules:
-            - Destination:
-                Bucket: !Ref DestinationBucketArn
-              Status: Enabled
-        - !Ref AWS::NoValue
-      VersioningConfiguration:
-        Status: Enabled # Required for replication
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders:
@@ -120,6 +98,28 @@ Resources:
               - POST
             AllowedOrigins:
               - "*"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      ReplicationConfiguration: !If
+        - HasDestinationBucketArn
+        - Role: !GetAtt ReplicationRole.Arn
+          Rules:
+            - Destination:
+                Bucket: !Ref DestinationBucketArn
+              Status: Enabled
+        - !Ref AWS::NoValue
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Ad Files }
+      VersioningConfiguration:
+        Status: Enabled # Required for replication
   AdFilesBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Condition: HasCloudFrontOai
