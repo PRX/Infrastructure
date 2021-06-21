@@ -1,0 +1,167 @@
+# storage/multi-region-replication/mediajoint.yml
+
+################################################################################
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+# Changes to this template must be deployed to all regions immediately!
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+################################################################################
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates an S3 bucket to be used for Exchange. Contents will be replicated to
+  a second region. Buckets in both regions are created using this template.
+  Once both buckets have been created, the destination bucket parameter should
+  be set on the stack that is serving as the source region.
+
+Parameters:
+  BucketNameOverride:
+    Type: String
+  DestinationBucketArn:
+    Type: String
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  PorterWriterRoleArn:
+    Type: String
+
+Conditions:
+  HasDestinationBucketArn: !Not [!Equals [!Ref DestinationBucketArn, ""]]
+  HasBucketNameOverride: !Not [!Equals [!Ref BucketNameOverride, ""]]
+
+Mappings:
+  EnvironmentTypeMap:
+    Staging:
+      abbreviation: stag
+    Production:
+      abbreviation: prod
+
+Resources:
+  ReplicationRole:
+    Type: AWS::IAM::Role
+    Condition: HasDestinationBucketArn
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  ReplicationSourcePolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasDestinationBucketArn
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetReplicationConfiguration
+              - s3:ListBucket
+            Effect: Allow
+            Resource: !GetAtt MediajointBucket.Arn
+          - Action:
+              - s3:GetObjectVersionForReplication
+              - s3:GetObjectVersionAcl
+              - s3:GetObjectVersionTagging
+            Effect: Allow
+            Resource: !Sub ${MediajointBucket.Arn}/*
+        Version: "2012-10-17"
+      PolicyName: ReplicationSourcePolicy
+      Roles:
+        - !Ref ReplicationRole
+  ReplicationDestinationPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasDestinationBucketArn
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:ReplicateObject
+              - s3:ReplicateDelete
+              - s3:ReplicateTags
+            Effect: Allow
+            Resource: !Sub ${DestinationBucketArn}/*
+        Version: "2012-10-17"
+      PolicyName: ReplicationDestinationPolicy
+      Roles:
+        - !Ref ReplicationRole
+
+  MediajointBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !If
+        - HasBucketNameOverride
+        - !Ref BucketNameOverride
+        - Fn::Sub:
+            - prx-mrr-${AWS::Region}-mediajoint-${env}
+            - env: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [PUT, POST, DELETE, GET, HEAD]
+            AllowedOrigins: ["*"]
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+              - Date
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: IA after 30 days
+            Status: Enabled
+            Transitions:
+              - StorageClass: STANDARD_IA
+                TransitionInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      ReplicationConfiguration: !If
+        - HasDestinationBucketArn
+        - Role: !GetAtt ReplicationRole.Arn
+          Rules:
+            - Destination:
+                Bucket: !Ref DestinationBucketArn
+              Status: Enabled
+        - !Ref AWS::NoValue
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VersioningConfiguration:
+        Status: Enabled # Required for replication
+  MediajointBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediajointBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: s3:ListBucketMultipartUploads
+            Effect: Allow
+            Principal:
+              AWS: !Ref PorterWriterRoleArn
+            Resource: !GetAtt MediajointBucket.Arn
+            Sid: Grant bucket-level list access to Porter
+          - Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Effect: Allow
+            Principal:
+              AWS: !Ref PorterWriterRoleArn
+            Resource: !Sub ${MediajointBucket.Arn}/*
+            Sid: Grant object-level write access to Porter
