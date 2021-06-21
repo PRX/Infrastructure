@@ -300,7 +300,37 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
-
+  UploadHttpSigningUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Augury S3 Uploads }
+  UploadHttpSigningAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref UploadHttpSigningUser
+  UploadHttpSigningS3AccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Resource:
+              - arn:aws:s3:::prx-mrr-us-east-1-ad-files/upload/*
+      PolicyName: ExternalS3BucketAccess
+      Users:
+        - !Ref UploadHttpSigningUser
   WorkerTaskLogImpressionsFetchJobMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -369,6 +399,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: UPLOAD_ADFILE_SECRET_ACCESS_KEY
+              Value: !GetAtt UploadHttpSigningAccessKey.SecretAccessKey
+            - Name: UPLOAD_ADFILE_ACCESS_KEY_ID
+              Value: !GetAtt UploadHttpSigningAccessKey
+            - Name: UPLOAD_ADFILE_AWS_REGION: "us-east-1"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
