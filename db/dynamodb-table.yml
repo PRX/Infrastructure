@@ -379,6 +379,32 @@ Resources:
           Value: !Ref DynamoDBTable
         - Name: Operation
           Value: BatchWriteItem
+  UpdateItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ${AWS::StackName} UpdateItem throttling
+      AlarmActions:
+        - !Ref WarnMessagesSnsTopicArn
+      InsufficientDataActions:
+        - !Ref WarnMessagesSnsTopicArn
+      OKActions:
+        - !Ref WarnMessagesSnsTopicArn
+      AlarmDescription: UpdateItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: TableName
+          Value: !Ref DynamoDBTable
+        - Name: Operation
+          Value: UpdateItem
 Outputs:
   RoleArn:
     Condition: HasForeignAccount
