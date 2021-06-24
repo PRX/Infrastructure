@@ -88,6 +88,36 @@ Parameters:
     Type: String
     Default: /api/v1
 Resources:
+  S3SigningUser:
+    Type: AWS::IAM::User
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Augury }
+  S3SigningAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref S3SigningUser
+  S3SigningAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+            Resource:
+              # TODO, handle this better for multi-region
+              - arn:aws:s3:::prx-mrr-us-east-1-ad-files/upload/*
+      PolicyName: ExternalS3BucketAccess
+      Users:
+        - !Ref S3SigningUser
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
     Properties:
@@ -202,6 +232,12 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: UPLOAD_ADFILE_SECRET_ACCESS_KEY
+              Value: !GetAtt S3SigningAccessKey.SecretAccessKey
+            - Name: UPLOAD_ADFILE_ACCESS_KEY_ID
+              Value: !Ref S3SigningAccessKey
+            - Name: UPLOAD_ADFILE_AWS_REGION
+              Value: "us-east-1"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
