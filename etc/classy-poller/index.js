@@ -5,6 +5,7 @@ const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
+const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 const CLASSY_API_CLIENT_ID = process.env.CLASSY_API_CLIENT_ID;
 const CLASSY_API_CLIENT_SECRET = process.env.CLASSY_API_CLIENT_SECRET;
@@ -80,6 +81,24 @@ function httpGet(token, path) {
 
     // Generic request error handling
     req.on('error', (e) => reject(e));
+  });
+}
+
+function getCount() {
+  return new Promise((resolve, reject) => {
+    s3.getObject(
+      {
+        Bucket: process.env.COUNTER_BUCKET,
+        Key: process.env.COUNTER_OBJECT,
+      },
+      (err, data) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(+data.Body.toString('utf8'));
+        }
+      },
+    );
   });
 }
 
@@ -163,6 +182,19 @@ exports.handler = async (event) => {
           text = `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
         } else {
           text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`;
+        }
+
+        if (mapping[camp.id] === '#radiotopia-donations') {
+          const count = await getCount();
+          await s3
+            .putObject({
+              Body: `${count + 1}`,
+              Bucket: process.env.COUNTER_BUCKET,
+              Key: process.env.COUNTER_OBJECT,
+            })
+            .promise();
+
+          text = `${text} (#${count})`;
         }
 
         await sns

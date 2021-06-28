@@ -17,6 +17,10 @@ Parameters:
     Type: String
     Description: In minutes, greater than 1
     Default: 2
+  CounterBucket:
+    Type: String
+  CounterObject:
+    Type: String
 
 Resources:
   PollerFunction:
@@ -31,6 +35,8 @@ Resources:
           CLASSY_API_CLIENT_SECRET: !Ref ClassyApiClientSecret
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
           POLLING_FREQUENCY: !Ref Frequency
+          COUNTER_BUCKET: !Ref CounterBucket
+          COUNTER_OBJECT: !Ref CounterObject
       Events:
         Poller:
           Properties:
@@ -46,6 +52,16 @@ Resources:
               Effect: Allow
               Resource: !Ref SlackMessageRelayTopicArn
           Version: "2012-10-17"
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+            - Action:
+                - s3:getObject
+                - s3:putObject
+              Effect: Allow
+              Resource: !Sub arn:aws:s3:::${CounterBucket}/${CounterObject}
+          Version: "2012-10-17"
       Runtime: nodejs14.x
       # Tags:
       #   Project: Misc
@@ -57,20 +73,20 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${PollerFunction}
       RetentionInDays: 30
-  # PollerFunctionErrorAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     AlarmName: "[Classy] Elevated error volume"
-  #     AlarmDescription: >-
-  #       The error rate on the Classy app has exceeded 0.
-  #     ComparisonOperator: GreaterThanThreshold
-  #     Dimensions:
-  #       - Name: FunctionName
-  #         Value: !Ref PollerFunction
-  #     EvaluationPeriods: 1
-  #     MetricName: Errors
-  #     Namespace: AWS/Lambda
-  #     Period: 60
-  #     Statistic: Sum
-  #     Threshold: 0
-  #     TreatMissingData: notBreaching
+  PollerFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "MINOR [Classy] Activity Poller <prod> EXPERIENCING ERRORS"
+      AlarmDescription: >-
+        The error rate on the Classy app has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PollerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
