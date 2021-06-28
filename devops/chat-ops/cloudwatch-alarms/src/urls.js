@@ -17,7 +17,12 @@ function cwmEncode(inp) {
   } else if (typeof inp === 'string') {
     // Strings are URL encoded, but then % is replaced with *
     // Also they get a ' prefix
-    str = str.concat(`'${encodeURIComponent(inp).replace(/\%/g, '*')}`);
+    str = str.concat(
+      `'${encodeURIComponent(inp)
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/\%/g, '*')}`,
+    );
   } else if (typeof inp === 'boolean') {
     str = str.concat(inp ? 'true' : 'false');
   } else if (typeof inp === 'number') {
