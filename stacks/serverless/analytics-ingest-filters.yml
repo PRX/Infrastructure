@@ -22,6 +22,8 @@ Parameters:
     Type: String
   RedisFunctionName:
     Type: String
+  MetricsKinesisStreamArn:
+    Type: AWS::SSM::Parameter::Value<String>
 Resources:
   # bigquery metrics
   AnalyticsBigqueryLogGroup:
@@ -203,6 +205,46 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  # connect dynamodb impressions to kinesis
+  AnalyticsDynamodbSubscriptionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - !Sub "logs.${AWS::Region}.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: AnalyticsDynamodbSubscriptionKinesisPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "kinesis:DescribeStream"
+                  - "kinesis:PutRecord"
+                  - "kinesis:PutRecords"
+                Resource:
+                  - !Ref MetricsKinesisStreamArn
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: "prx:cloudformation:stack-name"
+          Value: !Ref AWS::StackName
+        - Key: "prx:cloudformation:stack-id"
+          Value: !Ref AWS::StackId
+  AnalyticsDynamodbSubscriptionFilter:
+    Type: "AWS::Logs::SubscriptionFilter"
+    Properties:
+      DestinationArn: !Ref MetricsKinesisStreamArn
+      FilterPattern: "{$.msg = impression}"
+      LogGroupName: !Ref AnalyticsDynamodbLogGroup
+      RoleArn: !GetAtt AnalyticsDynamodbSubscriptionRole.Arn
   # pingbacks metrics
   AnalyticsPingbacksLogGroup:
     Type: "AWS::Logs::LogGroup"
