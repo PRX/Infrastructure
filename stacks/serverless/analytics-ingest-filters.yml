@@ -147,15 +147,6 @@ Resources:
         - MetricName: !Sub "analytics_dynamodb_retries_${EnvironmentTypeAbbreviation}"
           MetricNamespace: LogMetrics
           MetricValue: "1"
-  AnalyticsDynamodbMissingMetric:
-    Type: "AWS::Logs::MetricFilter"
-    Properties:
-      FilterPattern: '{ $.ddb = "missing" }'
-      LogGroupName: !Ref AnalyticsDynamodbLogGroup
-      MetricTransformations:
-        - MetricName: !Sub "analytics_dynamodb_missing_${EnvironmentTypeAbbreviation}"
-          MetricNamespace: LogMetrics
-          MetricValue: "1"
   AnalyticsDynamodbErrorsMetric:
     Type: "AWS::Logs::MetricFilter"
     Properties:
@@ -165,26 +156,6 @@ Resources:
         - MetricName: !Sub "analytics_dynamodb_errors_${EnvironmentTypeAbbreviation}"
           MetricNamespace: LogMetrics
           MetricValue: "1"
-  AnalyticsDynamodbMissingAlarm:
-    Type: "AWS::CloudWatch::Alarm"
-    Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Analytics][DynamoDB][Missing] ${EnvironmentType}"
-      AlarmActions:
-        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      InsufficientDataActions:
-        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      OKActions:
-        - !If [IsProduction, !Ref OpsErrorMessagesSnsTopicArn, !Ref OpsWarnMessagesSnsTopicArn]
-      AlarmDescription: Missing DDB redirect-data on the analytics dynamodb function
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 5
-      MetricName: !Sub "analytics_dynamodb_missing_${EnvironmentTypeAbbreviation}"
-      Namespace: LogMetrics
-      Period: 60
-      Statistic: Sum
-      Threshold: 100
-      TreatMissingData: notBreaching
   AnalyticsDynamodbErrorsAlarm:
     Type: "AWS::CloudWatch::Alarm"
     Properties:
