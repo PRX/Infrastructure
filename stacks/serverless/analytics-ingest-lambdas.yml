@@ -61,19 +61,6 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
-        # TODO: no longer needed after CW log subscription
-        - PolicyName: KinesisWritePolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - "kinesis:DescribeStream"
-                  - "kinesis:PutRecord"
-                  - "kinesis:PutRecords"
-                Resource:
-                  - !Ref MetricsKinesisStream
-                  - !Ref DynamodbKinesisStream
         - PolicyName: DynamodbAssumeRolePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -119,7 +106,7 @@ Resources:
           PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-bigquery"
           BQ_PROJECT_ID: "prx-metrics"
       Handler: index.handler
-      MemorySize: 384
+      MemorySize: 512
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs12.x
       Tags:
@@ -145,9 +132,6 @@ Resources:
           DDB_TABLE: !Ref DynamodbTableName
           DDB_ROLE: !Ref DynamodbAccessRole
           DDB_TTL: !Ref DynamodbTTL
-          # TODO: no longer needed after CW log subscription
-          KINESIS_STREAM: !Ref MetricsKinesisStream
-          KINESIS_RETRY_STREAM: !Ref DynamodbKinesisStream
       Handler: index.handler
       MemorySize: 512
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
@@ -173,7 +157,7 @@ Resources:
         Variables:
           PINGBACKS: "true"
       Handler: index.handler
-      MemorySize: 1600
+      MemorySize: 2048
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs12.x
       Tags:
@@ -185,7 +169,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
-      Timeout: 30
+      Timeout: 60
   AnalyticsRedisLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
@@ -200,7 +184,7 @@ Resources:
           REDIS_IMPRESSIONS_HOST: !Ref RedisImpressionsHost
           REDIS_IMPRESSIONS_TTL: "90000"
       Handler: index.handler
-      MemorySize: 256
+      MemorySize: 512
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
       Runtime: nodejs12.x
       Tags:
@@ -224,7 +208,7 @@ Resources:
   AnalyticsBigqueryKinesisTrigger:
     Type: "AWS::Lambda::EventSourceMapping"
     Properties:
-      BatchSize: 400
+      BatchSize: 100
       Enabled: true
       EventSourceArn: !Ref MetricsKinesisStream
       FunctionName: !Ref AnalyticsBigqueryLambdaFunction
@@ -240,7 +224,7 @@ Resources:
   AnalyticsPingbacksKinesisTrigger:
     Type: "AWS::Lambda::EventSourceMapping"
     Properties:
-      BatchSize: 50
+      BatchSize: 25
       Enabled: true
       EventSourceArn: !Ref MetricsKinesisStream
       FunctionName: !Ref AnalyticsPingbacksLambdaFunction
@@ -248,7 +232,7 @@ Resources:
   AnalyticsRedisKinesisTrigger:
     Type: "AWS::Lambda::EventSourceMapping"
     Properties:
-      BatchSize: 400
+      BatchSize: 100
       Enabled: true
       EventSourceArn: !Ref MetricsKinesisStream
       FunctionName: !Ref AnalyticsRedisLambdaFunction
