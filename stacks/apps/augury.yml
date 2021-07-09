@@ -39,6 +39,7 @@ Parameters:
   SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
@@ -156,7 +157,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasAuroraEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -182,7 +183,7 @@ Resources:
       TaskDefinition: !Ref WebTaskDefinition
   WorkerEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasAuroraEndpoint
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -225,6 +226,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -274,6 +280,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -414,6 +425,11 @@ Resources:
               Value: "prx-mrr-us-east-1-ad-files.s3.us-east-1.amazonaws.com"
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: "a.prxu.org"
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:

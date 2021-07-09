@@ -4,6 +4,7 @@ Description: >
   Docker web application with optional worker, using the shared platform ALB
 Conditions:
   CreateWorkerResources: !Equals [!Ref CreateWorker, true]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
@@ -87,6 +88,8 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
+  SharedAuroraPostgresqlEndpoint:
+    Type: String
 Resources:
   S3SigningUser:
     Type: AWS::IAM::User
@@ -244,6 +247,11 @@ Resources:
               Value: "prx-mrr-us-east-1-ad-files.s3.us-east-1.amazonaws.com"
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: "a.prxu.org"
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -331,6 +339,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:

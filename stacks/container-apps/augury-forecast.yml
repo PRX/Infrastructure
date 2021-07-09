@@ -3,6 +3,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
   Augury Forecast FARGATE execution
+Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # Configuration ##############################################################
   ECSCluster:
@@ -31,6 +33,8 @@ Parameters:
     Type: "AWS::EC2::Subnet::Id"
   VPCSubnet3:
     Type: "AWS::EC2::Subnet::Id"
+  SharedAuroraPostgresqlEndpoint:
+    Type: String
   # Monitoring #################################################################
   OpsErrorMessagesSnsTopicArn:
     Type: String
@@ -103,6 +107,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: POSTGRES_HOST
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
