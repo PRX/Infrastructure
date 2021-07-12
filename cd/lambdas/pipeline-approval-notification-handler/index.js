@@ -159,7 +159,12 @@ function parameterDeltasListArrow(parameterDelta) {
     return `<${url}|➡>`;
   }
 
-  if (/EcrImageTag/.test(parameterDelta[0])) {
+  if (
+    /EcrImageTag/.test(parameterDelta[0]) &&
+    parameterDelta[0] &&
+    parameterDelta[1] &&
+    parameterDelta[2]
+  ) {
     const slug = parameterDelta[0].replace('EcrImageTag', '');
     const sha1 = parameterDelta[1].split(':')[1];
     const sha2 = parameterDelta[2].split(':')[1];

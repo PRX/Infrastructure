@@ -160,11 +160,15 @@ function parameterDeltasListArrow(parameterDelta) {
   }
 
   if (/EcrImageTag/.test(parameterDelta[0])) {
-    const slug = parameterDelta[0].replace('EcrImageTag', '');
-    const sha1 = parameterDelta[1].split(':')[1];
-    const sha2 = parameterDelta[2].split(':')[1];
-    const url = `https://github.com/PRX/${slug}.prx.org/compare/${sha1}...${sha2}`;
-    return `<${url}|➡>`;
+    if (parameterDelta[0] && parameterDelta[1] && parameterDelta[2]) {
+      const slug = parameterDelta[0].replace('EcrImageTag', '');
+      const sha1 = parameterDelta[1].split(':')[1];
+      const sha2 = parameterDelta[2].split(':')[1];
+      const url = `https://github.com/PRX/${slug}.prx.org/compare/${sha1}...${sha2}`;
+      return `<${url}|➡>`;
+    } else {
+      return `➡`;
+    }
   }
 
   // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
