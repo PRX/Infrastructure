@@ -481,20 +481,20 @@ Resources:
                   JSON="[{\"InstanceId\": \"${AWSINSTANCEID}\",\"CpuCredits\": \"unlimited\"}]"
                   aws --region=$AWSREGION ec2 modify-instance-credit-specification --instance-credit-specification "${JSON}"
                 fi
-            # 05_check_redis_connectivity:
-            #   # Resolve the Dovetail Redis host and check all IPs returned for
-            #   # connectivity. If any can't connect, the instance is marked as
-            #   # unhealthy
-            #   command: !Sub |-
-            #     #!/bin/bash
-            #     for IP in $(getent hosts ${DovetailRedisHostname} | awk '{ print $1 }')
-            #     do
-            #       if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/6379"; then
-            #         echo "Unhealthy; Failed to connect to Redis: $IP"
-            #         INSTANCE_ID=`ec2-metadata -i`
-            #         aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy
-            #       fi
-            #     done
+            05_check_redis_connectivity:
+              # Resolve the Dovetail Redis host and check all IPs returned for
+              # connectivity. If any can't connect, the instance is marked as
+              # unhealthy
+              command: !Sub |-
+                #!/bin/bash
+                for IP in $(getent hosts ${DovetailRedisHostname} | awk '{ print $1 }')
+                do
+                  if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/6379"; then
+                    echo "Unhealthy; Failed to connect to Redis: $IP"
+                    INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
+                    aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
+                  fi
+                done
           services:
             sysvinit:
               cfn-hup:
@@ -537,7 +537,7 @@ Resources:
               cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS} --storage-opt dm.basesize=${BaseSize}G"' >> /etc/sysconfig/docker
               --==BOUNDARY==
               Content-Type: text/x-shellscript; charset="us-ascii"
-              yum install -y aws-cfn-bootstrap
+              yum install -y aws-cfn-bootstrap aws-cli
               /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource ECSClusterASGLaunchConfiguration --region ${AWS::Region}
               /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSClusterASG --region ${AWS::Region}
               --==BOUNDARY==--
