@@ -101,10 +101,16 @@ module.exports = {
       })
       .promise();
 
-    const lines = [];
+    // Title link block
+    blox.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `*<${urls.alarmConsole(event)}|${title(event)}>*`,
+      },
+    });
 
-    const titleLine = `*<${urls.alarmConsole(event)}|${title(event)}>*`;
-    lines.push(titleLine);
+    const lines = [];
 
     lines.push(...detailLines(event, desc, history));
 
@@ -129,6 +135,18 @@ module.exports = {
         text,
       },
     });
+
+    if (event.detail.state.value === 'ALARM') {
+      blox.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: event.detail.configuration.description,
+        },
+      });
+    }
+
+    blox.push({ type: 'divider' });
 
     return blox;
   },

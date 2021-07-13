@@ -235,7 +235,6 @@ module.exports = {
    */
   detailLines(event, desc, history) {
     return [
-      event.detail.configuration.description,
       ...cause(event, desc, history),
       ...started(event, desc, history),
       ...datapoints(event, desc),
