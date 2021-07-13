@@ -34,6 +34,7 @@ Parameters:
   SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
@@ -200,6 +201,16 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_ADDR
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_PORT
+                  Value: "3306" # TODO Make this a root stack parameter
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -248,6 +259,16 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_ADDR
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_PORT
+                  Value: "3306" # TODO Make this a root stack parameter
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
