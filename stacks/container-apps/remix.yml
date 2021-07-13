@@ -8,6 +8,7 @@ Conditions:
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -87,6 +88,10 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
+  SharedRdsPostgresqlEndpoint:
+    Type: String
+  SharedAuroraPostgresqlEndpoint:
+    Type: String
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -201,6 +206,16 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_ADDR
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_PORT
+                  Value: "3306" # TODO Make this a root stack parameter
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -288,6 +303,16 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_ADDR
+                  Value: !Ref SharedAuroraPostgresqlEndpoint
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_5432_TCP_PORT
+                  Value: "3306" # TODO Make this a root stack parameter
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
