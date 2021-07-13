@@ -146,8 +146,6 @@ module.exports = {
       });
     }
 
-    blox.push({ type: 'divider' });
-
     return blox;
   },
 };
