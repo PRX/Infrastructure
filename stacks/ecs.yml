@@ -251,6 +251,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - "cloudwatch:PutMetricData"
+                  - "events:PutEvents"
                 Resource: "*"
               - Effect: Allow
                 Action:
@@ -493,6 +494,7 @@ Resources:
                     echo "Unhealthy; Failed to connect to Redis: $IP"
                     INSTANCE_ID=`/opt/aws/bin/ec2-metadata -i | cut -d " " -f 2`
                     aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
+                    aws events put-events --entries '[{"Source": "prx.ec2", "Resources": ["arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/$INSTANCE_ID"], "DetailType": "EC2 Instance Unhealthy Redis Connection", "Detail": "{ \"instance-id\": \"$INSTANCE_ID\", \"redis-ip\": \"$IP\", \"redis-hostname\": \"${DovetailRedisHostname}\" }"}]'
                   fi
                 done
           services:
