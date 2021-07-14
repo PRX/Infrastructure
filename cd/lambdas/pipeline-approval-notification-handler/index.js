@@ -124,7 +124,7 @@ function parameterDeltasListValue(key, value) {
 
   if (key === 'InfrastructureGitCommit') {
     const url = `https://github.com/PRX/Infrastructure/commit/${value}`;
-    return `\`<${url}|${value.slice(0, 6)}>\``;
+    return `\`<${url}|${value.slice(0, 7)}>\``;
   }
 
   if (/dkr\.ecr/.test(value)) {
@@ -132,7 +132,7 @@ function parameterDeltasListValue(key, value) {
     const commit = value.match(/:([0-9a-f]{40})$/)[1];
 
     const url = `https://github.com/${repo}/commit/${commit}`;
-    return `\`<${url}|${commit.slice(0, 6)}>\``;
+    return `\`<${url}|${commit.slice(0, 7)}>\``;
   }
 
   // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
@@ -141,7 +141,7 @@ function parameterDeltasListValue(key, value) {
     const commit = value.match(/\/([0-9a-f]{40})/)[1];
 
     const url = `https://github.com/${repo}/commit/${commit}`;
-    return `\`<${url}|${commit.slice(0, 6)}>\``;
+    return `\`<${url}|${commit.slice(0, 7)}>\``;
   }
 
   return `\`${value}\``;
