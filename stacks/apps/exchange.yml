@@ -27,6 +27,7 @@ Parameters:
   EcsClusterName: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -45,8 +46,10 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsMysqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  EnableWorkers: !And [!Condition HasRdsEndpoint, !Condition IsPrimaryRegion]
 
 Resources:
   ExchangeWildcardHostHeaderListenerRule:
@@ -211,7 +214,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasRdsEndpoint # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -304,7 +307,7 @@ Resources:
 
   WorkerEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: EnableWorkers # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -471,7 +474,7 @@ Resources:
 
   SayWhenEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: EnableWorkers # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:

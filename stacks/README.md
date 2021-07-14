@@ -1,5 +1,11 @@
 # Setup
 
+## Databases
+
+Resources that depend on external databases, such as ECS tasks, must be conditional on the database being available. Because of the order of operations when spinning up a new region (i.e., stack is launched to create the VPC, database is created in the VPC, applications can be launched using the database), it must be possible to launch the stack without the database.
+
+The root stack parameters for database endpoints are used as the flag for when the database is available. If the endpoint is not defined, the dependant services should be disabled. This could be done with conditional template resources, or, for example, setting the desired task count of an ECS service to `0`. Conditional template resources is generally advised.
+
 ## VPC Peerings
 
 - After the shared VPC has been created, but before the application stacks are created, the shared VPC needs to get peered with all external VPCs that the apps depend on, such as those containing databases. Only enable application stack creation once you have confirmed that VPC peering is established and configured correctly, including DNS resolution options.

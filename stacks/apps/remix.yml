@@ -22,6 +22,7 @@ Parameters:
   EcsClusterArn: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -36,8 +37,10 @@ Parameters:
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
+  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
 
 Resources:
   WildcardHostHeaderListenerRule:
@@ -155,7 +158,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasAuroraEndpoint # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -316,7 +319,7 @@ Resources:
         - { Key: prx:dev:application, Value: Remix }
   WorkerScheduledRule:
     Type: AWS::Events::Rule
-    Condition: HasRdsEndpoint
+    Condition: EnableWorkers # See README
     Properties:
       Description: !Sub Periodically loads ${EnvironmentType} Remix episodes
       ScheduleExpression: rate(1 hour)
