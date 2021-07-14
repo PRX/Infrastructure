@@ -27,11 +27,15 @@ Parameters:
     Type: "AWS::EC2::Subnet::Id"
   VPCSubnet3:
     Type: "AWS::EC2::Subnet::Id"
+  ArrangementsDynamodbAccessRole:
+    Type: AWS::SSM::Parameter::Value<String>
+  ArrangementsDynamodbRegion:
+    Type: AWS::SSM::Parameter::Value<String>
+  ArrangementsDynamodbTable:
+    Type: AWS::SSM::Parameter::Value<String>
   KinesisIn:
     Type: AWS::SSM::Parameter::Value<String>
   KinesisOut:
-    Type: AWS::SSM::Parameter::Value<String>
-  Kinesis404:
     Type: AWS::SSM::Parameter::Value<String>
   # RedisBackupUrl:
   #   Type: AWS::SSM::Parameter::Value<String>
@@ -56,6 +60,23 @@ Resources:
               - "sts:AssumeRole"
       Path: "/"
       Policies:
+        - PolicyName: DynamodbAssumeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Ref ArrangementsDynamodbAccessRole
+        - PolicyName: DynamoDBReadPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                Resource:
+                  - !Sub arn:aws:dynamodb:*:*:table/${ArrangementsDynamodbTable}
         - PolicyName: KinesisWritePolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -67,7 +88,6 @@ Resources:
                   - "kinesis:PutRecords"
                 Resource:
                   - !Ref KinesisOut
-                  - !Ref Kinesis404
       ManagedPolicyArns:
         - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
         - "arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
@@ -91,7 +111,9 @@ Resources:
       Description: Dovetail bytes sent counter
       Environment:
         Variables:
-          KINESIS_ARRANGEMENT_STREAM: !Ref Kinesis404
+          ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRole
+          ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
+          ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTable
           KINESIS_IMPRESSION_STREAM: !Ref KinesisOut
           # REDIS_BACKUP_URL: !If [HasRedisBackupUrl, !Ref RedisBackupUrl, !Ref "AWS::NoValue"]
           REDIS_URL: !Ref RedisUrl
