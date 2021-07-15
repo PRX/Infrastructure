@@ -129,7 +129,7 @@ exports.handler = async (event) => {
       const ts = Date.parse(activity.created_at);
 
       if (mapping[camp.id] && ts >= threshold) {
-        const comment = tx.comment.length ? `\n> ${tx.comment}` : '';
+        const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
 
         // const fullTx = await httpGet(`/transactions/${tx.id}`);
         // console.log(tx);
