@@ -1,6 +1,7 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 
 const operators = require('./operators');
+const logGroups = require('./log-groups');
 
 /**
  * Serializes the input to a URL string component compatible with the
@@ -8,12 +9,12 @@ const operators = require('./operators');
  * @param {*} inp
  * @returns {String}
  */
-function cwmEncode(inp) {
+function cwUrlEncode(inp) {
   let str = '';
 
   if (Array.isArray(inp)) {
     // Arrays elements get a ~ prefix and are enclosed in (…)
-    str = str.concat(`(${inp.map((e) => `~${cwmEncode(e)}`).join('')})`);
+    str = str.concat(`(${inp.map((e) => `~${cwUrlEncode(e)}`).join('')})`);
   } else if (typeof inp === 'string') {
     // Strings are URL encoded, but then % is replaced with *
     // Also they get a ' prefix
@@ -36,7 +37,7 @@ function cwmEncode(inp) {
       str = str.concat(i === 0 ? '' : '~');
       str = str.concat(k);
       // The key and value are separated by ~
-      str = str.concat(`~${cwmEncode(inp[k])}`);
+      str = str.concat(`~${cwUrlEncode(inp[k])}`);
     });
 
     str = str.concat(')');
@@ -116,7 +117,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
     'https://console.aws.amazon.com/cloudwatch/home?',
     `region=${event.region}`,
     '#metricsV2:graph=',
-    cwmEncode({
+    cwUrlEncode({
       region: event.region,
       title: event.detail.alarmName,
       view: 'timeSeries',
@@ -153,6 +154,71 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
   ].join('');
 }
 
+/**
+ *
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+ * @returns {String}
+ */
+function logsInsightsConsole(event, desc) {
+  const logGroup = logGroups.logGroup(event, desc);
+
+  if (!logGroup) {
+    return;
+  }
+
+  // Default the start time for the logs to when the message gets sent, but use
+  // the time when the problem began if it's available.
+  let start = new Date().toISOString();
+  if (event.detail?.state?.reasonData) {
+    const stateData = JSON.parse(event.detail.state.reasonData);
+    if (stateData?.startDate) {
+      const alarmTime = new Date(Date.parse(stateData.startDate));
+      start = alarmTime.toISOString();
+    }
+  }
+
+  // This is the raw, structured query payload
+  const queryPayload = {
+    timeType: 'ABSOLUTE',
+    tz: 'UTC',
+    isLiveTail: false,
+    start,
+    // Include logs up to when this message gets sent
+    end: new Date().toISOString(),
+    editorString: 'fields @timestamp, @message | sort @timestamp desc',
+    source: [logGroup],
+  };
+
+  // The payload is CloudWatch URL encoded
+  const encodedPayload = cwUrlEncode(queryPayload);
+
+  // The encoded payload is URL encoded. Non-text characters used in CloudWatch
+  // encoding must be encoded.
+  const queryParamValue = encodeURIComponent(encodedPayload)
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29')
+    .replace(/\~/g, '%7E')
+    .replace(/\'/g, '%27')
+    .replace(/\*/g, '%2A');
+
+  // The query string is built using the envoded parameter value
+  const query = `?queryDetail=${queryParamValue}`;
+
+  // The entire querystring (?foo=bar) is URL encoded, and all % are replaced
+  // with $
+  const encodedQuery = encodeURIComponent(query).replace(/\%/g, '$');
+
+  // Everything after #logsV2:logs-insights is escaped, and the value of
+  // `queryDetail` is escaped again
+  return [
+    `https://${event.region}.console.aws.amazon.com/cloudwatch/home?`,
+    `region=${event.region}`,
+    '#logsV2:logs-insights',
+    encodedQuery,
+  ].join('');
+}
+
 module.exports = {
   /**
    * Returns a URL to CloudWatch Alarms console for the alarm that triggered
@@ -176,5 +242,13 @@ module.exports = {
     if (event.detail.configuration.metrics.length === 1) {
       return singleMetricAlarmMetricsConsole(event, desc, history);
     }
+  },
+  /**
+   * @param {EventBridgeCloudWatchAlarmsEvent} event
+   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+   * @returns {String}
+   */
+  logsConsole(event, desc) {
+    return logsInsightsConsole(event, desc);
   },
 };

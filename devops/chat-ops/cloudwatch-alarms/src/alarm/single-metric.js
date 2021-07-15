@@ -53,9 +53,14 @@ function started(event, desc, history) {
 
       const metricsUrl = urls.metricsConsole(event, desc, history);
 
-      return [
-        `*Started:* ${duration} ${durationUnit} ago | *View in:* <${metricsUrl}|CloudWatch Metrics>`,
-      ];
+      let console = `*View in:* <${metricsUrl}|CloudWatch Metrics>`;
+
+      const logsUrl = urls.logsConsole(event, desc);
+      if (logsUrl) {
+        console = console.concat(`, <${logsUrl}|Logs>`);
+      }
+
+      return [`*Started:* ${duration} ${durationUnit} ago | ${console}`];
     }
   }
 
