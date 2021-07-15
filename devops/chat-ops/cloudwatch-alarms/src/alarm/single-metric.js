@@ -108,7 +108,16 @@ function datapoints(event, desc) {
           })
           .reverse();
 
-        return [`*Datapoints:* ${points.join(', ')}`];
+        // Add a unit label if it's anything other than Count
+        let unit = '';
+        if (
+          desc.MetricAlarms[0].Unit &&
+          desc.MetricAlarms[0].Unit !== 'Count' &&
+          desc.MetricAlarms[0].Unit !== 'None'
+        ) {
+          unit = ` ${desc.MetricAlarms[0].Unit.toLowerCase()}`;
+        }
+        return [`*Datapoints:* ${points.join(', ')}${unit}`];
       }
     }
   }
