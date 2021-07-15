@@ -30,11 +30,16 @@ module.exports = {
           durationUnit = 'minutes';
         }
 
-        const url = urls.metricsConsole(event, desc, history);
+        const metricsUrl = urls.metricsConsole(event, desc, history);
 
-        return [
-          `*Alarm duration:* ${duration} ${durationUnit} | *View in:* <${url}|CloudWatch Metrics>`,
-        ];
+        let console = `*View in:* <${metricsUrl}|CloudWatch Metrics>`;
+
+        const logsUrl = urls.logsConsole(event, desc);
+        if (logsUrl) {
+          console = console.concat(`, <${logsUrl}|Logs>`);
+        }
+
+        return [`*Alarm duration:* ${duration} ${durationUnit} | ${console}`];
       }
     }
 

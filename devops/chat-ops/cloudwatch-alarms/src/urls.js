@@ -170,10 +170,22 @@ function logsInsightsConsole(event, desc) {
   // Default the start time for the logs to when the message gets sent, but use
   // the time when the problem began if it's available.
   let start = new Date().toISOString();
-  if (event.detail?.state?.reasonData) {
+  if (
+    event?.detail?.state?.value === 'ALARM' &&
+    event?.detail?.state?.reasonData
+  ) {
     const stateData = JSON.parse(event.detail.state.reasonData);
     if (stateData?.startDate) {
       const alarmTime = new Date(Date.parse(stateData.startDate));
+      start = alarmTime.toISOString();
+    }
+  } else if (
+    event?.detail?.state?.value === 'OK' &&
+    event?.detail?.previousState?.reasonData
+  ) {
+    const previousData = JSON.parse(event.detail.previousState.reasonData);
+    if (previousData?.startDate) {
+      const alarmTime = new Date(Date.parse(previousData.startDate));
       start = alarmTime.toISOString();
     }
   }
