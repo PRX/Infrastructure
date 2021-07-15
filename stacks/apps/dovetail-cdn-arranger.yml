@@ -1,0 +1,167 @@
+# stacks/apps/dovetail-cdn-arranger.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that can generate complete, stitched, transcoded
+  audio files based on arrangement data used to determine ads and other dynamic
+  content. The function also transcoded component audio files (ads, etc) used
+  for stitching. Also creates an S3 bucket to hold the files, which acts as a
+  CDN origin for the complete files.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  CloudFrontOai: { Type: String }
+  DovetailRouterHostname: { Type: String }
+  DovetailRouterToken: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbTtl: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  DtCdnArrangerWorkspaceBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 30
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DtCdnArrangerWorkspaceBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetObject
+            Effect: Allow
+            Principal:
+              AWS: !Ref CloudFrontOai
+            Resource: !Sub ${DtCdnArrangerWorkspaceBucket.Arn}/*
+            Sid: Grant read access to a CloudFront Origin Identity
+        Version: "2012-10-17"
+
+  # TODO Is this multi-region safe?
+  FfmpegBinaryLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs14.x
+      Content:
+        S3Bucket: prx-tech
+        S3Key: archives/ffmpeg-4.3.1-lambda-layer.zip
+      Description: FFmpeg binaries for Dovetail CDN Arranger
+      LicenseInfo: MIT
+
+  ArrangerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} tktktk # TODO
+      Environment:
+        Variables:
+          ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
+          ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
+          ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
+          ARRANGEMENTS_DDB_TTL: !Ref ArrangementsDynamodbTtl
+          DOVETAIL_HOST: !Ref DovetailRouterHostname
+          DOVETAIL_TOKEN: !Ref DovetailRouterToken
+          WORKSPACE_S3_BUCKET: !Ref DtCdnArrangerWorkspaceBucket
+      Handler: index.handler
+      Layers:
+        - !Ref FfmpegBinaryLayer
+        - !If
+          - IsProduction
+          - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14
+          - !Ref AWS::NoValue
+      MemorySize: 8000
+      Runtime: nodejs14.x
+      Policies:
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - Statement:
+            - Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Effect: Allow
+              Resource: !Sub arn:aws:dynamodb:*:*:table/${ArrangementsDynamodbTableName}
+          Version: "2012-10-17"
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Ref ArrangementsDynamodbAccessRoleArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action: s3:ListBucket
+              Effect: Allow
+              Resource: !GetAtt DtCdnArrangerWorkspaceBucket.Arn
+            - Action:
+                - s3:GetObject
+                - s3:GetObjectAcl
+                - s3:GetObjectTagging
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:PutObjectTagging
+              Effect: Allow
+              Resource: !Sub ${DtCdnArrangerWorkspaceBucket.Arn}/*
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN Arranger
+      Timeout: 900
+  ArrangerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ArrangerFunction}
+      RetentionInDays: 14
+  ArrangerFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail CDN Arranger Lambda function is failing, so
+        some stitch requests or downloads may be impacted.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ArrangerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
