@@ -22,9 +22,12 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  DeploymentPackageBucketName: { Type: String }
   EchoServiceToken: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   CastleHostname: { Type: String }
+  CorporateHostname: { Type: String }
+  ExchangeHostname: { Type: String }
   IdHostname: { Type: String }
 
   DovetailRouterEcrImageTag: { Type: String }
@@ -35,6 +38,8 @@ Parameters:
   MetricsEcrImageTag: { Type: String }
   MetricsSecretsVersion: { Type: String }
   MetricsSharedAlbListenerRulePriorityPrefix: { Type: String }
+
+  ProxyLambdaCodeS3ObjectKey: { Type: String }
 
 Resources:
   DovetailRouterStack:
@@ -108,6 +113,30 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/metrics.yml
       TimeoutInMinutes: 20
 
+  ProxyStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        CodeS3ObjectKey: !Ref ProxyLambdaCodeS3ObjectKey
+        CorporateHostname: !Ref CorporateHostname
+        ExchangeHostname: !Ref ExchangeHostname
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Proxy }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/proxy.yml
+      TimeoutInMinutes: 20
 Outputs:
   StackName:
     Value: !Ref AWS::StackName

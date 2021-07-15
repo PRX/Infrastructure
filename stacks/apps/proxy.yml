@@ -1,0 +1,208 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a serverless app to handle traffic to various domains that needs to
+  be proxied or redirected based on rule sets. In staging, it only handles
+  proxy.staging.prx.org. In production, the API is also mapped to the domains
+  it's designed to proxy, such as prx.org and pri.org.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  CorporateHostname: { Type: String }
+  ExchangeHostname: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !If [IsProduction, www.prx.org, proxy.staging.prx.tech]
+      SubjectAlternativeNames: !If
+        - IsProduction
+        - - prx.org
+          - proxy.prx.tech
+        - !Ref AWS::NoValue
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_proxy" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Proxy }
+      ValidationMethod: DNS
+
+  ProxyHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: !Sub ${EnvironmentType} proxy service
+      DisableExecuteApiEndpoint: false
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
+  ProxyHttpLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} proxy server
+      Environment:
+        Variables:
+          CORPORATE_HOST: !Ref CorporateHostname
+          EXCHANGE_HOST: !Ref ExchangeHostname
+          PRX_SESSION_KEY: !If [IsProduction, _prx_session, _prx_session_staging]
+      Events:
+        ApiRootRequest:
+          Properties:
+            ApiId: !Ref ProxyHttpApi
+            Method: any
+            Path: /
+            PayloadFormatVersion: "1.0"
+          Type: HttpApi
+        ApiDeepRequest:
+          Properties:
+            ApiId: !Ref ProxyHttpApi
+            Method: any
+            Path: /{proxy+}
+            PayloadFormatVersion: "1.0"
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 192
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Proxy
+      Timeout: 30
+  ProxyHttpLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProxyHttpLambdaFunction}
+      RetentionInDays: 60
+  ProxyHttpLambdaElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Proxy Lambda function is failing, which likely
+        means requests to prx.org are also failing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProxyHttpLambdaFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  # TODO
+  # # Create an association between proxy.prx.tech (or staging.proxy.prx.tech)
+  # # and the API Gateway. The API is a regional API, so the domain can be
+  # # associated with one API in each AWS region. DNS records are also created in
+  # # each region, which creates a latency-based routing policy for DNS queries
+  # # of the domain.
+  # UtilityDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Properties:
+  #     DomainName: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # UtilityApiMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: !Ref UtilityDomainName
+  #     Stage: $default
+  # UtilityDomainNameRecordSetGroup:
+  #   Type: AWS::Route53::RecordSetGroup
+  #   Properties:
+  #     Comment: Record sets for proxy server API
+  #     HostedZoneName: prx.tech.
+  #     RecordSets:
+  #       - AliasTarget:
+  #           DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+  #           EvaluateTargetHealth: true # TODO Add health check
+  #           HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
+  #         Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+  #         Region: !Ref AWS::Region
+  #         SetIdentifier: !Ref AWS::StackName
+  #         Type: A
+  #       - AliasTarget:
+  #           DNSName: !GetAtt UtilityDomainName.RegionalDomainName
+  #           EvaluateTargetHealth: true
+  #           HostedZoneId: !GetAtt UtilityDomainName.RegionalHostedZoneId
+  #         Name: !If [CreateProductionResources, proxy.prx.tech, proxy.staging.prx.tech]
+  #         Region: !Ref AWS::Region
+  #         SetIdentifier: !Ref AWS::StackName
+  #         Type: AAAA
+
+  # # In production, create associations between prx.org and www.prx.org and the
+  # # API Gateway. These are also regional, and need to exist in each region the
+  # # API is deployed to. There will only be a single DNS record for each domain,
+  # # though, which will point to proxy.prx.tech.
+  # # There are no counterparts to these domains in staging.
+  # PrxOrgDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     DomainName: prx.org
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # PrxOrgApiMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: !Ref PrxOrgDomainName
+  #     Stage: $default
+  # WwwPrxOrgDomainName:
+  #   Type: AWS::ApiGatewayV2::DomainName
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     DomainName: www.prx.org
+  #     DomainNameConfigurations:
+  #       - CertificateArn: !Ref Certificate
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: !Ref EnvironmentType
+  #       prx:dev:application: Proxy
+  # WwwPrxOrgApiMapping:
+  #   Type: AWS::ApiGatewayV2::ApiMapping
+  #   Condition: CreateProductionResources
+  #   Properties:
+  #     ApiId: !Ref ProxyHttpApi
+  #     DomainName: !Ref WwwPrxOrgDomainName
+  #     Stage: $default
