@@ -32,11 +32,11 @@ module.exports = {
 
         const metricsUrl = urls.metricsConsole(event, desc, history);
 
-        let console = `*View in:* <${metricsUrl}|CloudWatch Metrics>`;
+        let console = `*CloudWatch:* <${metricsUrl}|Metrics>`;
 
         const logsUrl = urls.logsConsole(event, desc);
         if (logsUrl) {
-          console = console.concat(`, <${logsUrl}|Logs>`);
+          console = console.concat(` • <${logsUrl}|Logs>`);
         }
 
         return [`*Alarm duration:* ${duration} ${durationUnit} | ${console}`];
