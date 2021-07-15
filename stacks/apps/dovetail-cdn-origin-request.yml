@@ -1,0 +1,97 @@
+# stacks/apps/dovetail-cdn-arranger.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that will used as the source function for a
+  CloudFront Edge function on origin requests for the Dovetail CDN.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  ArrangerFunctionArn: { Type: String }
+  ArrangerWorkspaceBucketArn: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  OriginRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - edgelambda.amazonaws.com
+                - lambda.amazonaws.com
+        Version: "2012-10-17"
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail CDN origin request Edge Lambda
+        function sources
+      Handler: !If [IsProduction, index-production.handler, index-staging.handler]
+      MemorySize: 256
+      Runtime: nodejs14.x
+      Policies:
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - Statement:
+            - Action:
+                - lambda:GetFunction
+                - lambda:EnableReplication*
+                - iam:CreateServiceLinkedRole
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+        - Statement:
+            - Action: lambda:InvokeFunction
+              Effect: Allow
+              Resource: !Ref ArrangerFunctionArn # TODO multiple region arrangers
+          Version: "2012-10-17"
+        - Statement:
+            - Action: s3:GetObject
+              Effect: Allow
+              Resource: !Ref ArrangerWorkspaceBucketArn # TODO multiple region arrangers
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN Origin Request
+      Timeout: 30
+  OriginRequestFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${OriginRequestFunction}
+      RetentionInDays: 14
+  OriginRequestFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail CDN Arranger Lambda function is failing, so
+        some stitch requests or downloads may be impacted.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref OriginRequestFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching

@@ -86,6 +86,9 @@ Parameters:
   RemixSecretsVersion: { Type: String }
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
 
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+
 Resources:
   AuguryStack:
     Type: AWS::CloudFormation::Stack
@@ -184,6 +187,35 @@ Resources:
         - { Key: prx:dev:application, Value: Castle }
       TemplateURL: !Sub ${TemplateUrlPrefix}/castle.yml
       TimeoutInMinutes: 40
+
+  DovetailCdnOriginRequestStack:
+    Type: AWS::CloudFormation::Stack
+    # CloudFront Edge Lambdas can only be created from Lambda functions in
+    # us-east-1, so this doesn't need to be created elsewhere.
+    Condition: IsUsEast1
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        CodeS3ObjectKey: !Ref DovetailCdnOriginRequestLambdaCodeS3ObjectKey
+        ArrangerFunctionArn: !Ref DovetailCdnArrangerFunctionArn
+        ArrangerWorkspaceBucketArn: !Ref DovetailCdnArrangerFunctionArn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Origin Request }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-cdn-origin-request.yml
+      TimeoutInMinutes: 10
 
   ExchangeStack:
     Type: AWS::CloudFormation::Stack
