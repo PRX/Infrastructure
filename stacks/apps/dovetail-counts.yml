@@ -182,6 +182,24 @@ Resources:
         - MetricName: !Sub warns_${CountsFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
+  CountsFunctionLoggedWarnAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function has logged some
+        warnings, which count indicate invalid input data or less important
+        operations that can't be retried.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      MetricName: !Sub warns_${CountsFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0 # TODO Confirm
+      TreatMissingData: notBreaching
+
   CountsFunctionErrorLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -198,7 +216,9 @@ Resources:
       ActionsEnabled: true
       AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
       AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail Counts Lambda function has
+        ${EnvironmentType} Dovetail Counts Lambda function has logged some
+        errors during execution, which likely indicate operations that failed
+        and won't be retried.
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 3
       MetricName: !Sub errors_${CountsFunction}
