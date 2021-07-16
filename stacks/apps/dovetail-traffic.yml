@@ -1,0 +1,116 @@
+# stacks/apps/dovetail-traffic.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that generates realistic-looking downloads for a
+  podcast feed.
+
+Parameters:
+  kDownloaderBatchSize:
+    Type: String
+    Default: 20
+  kScheduleIntervalMinutes:
+    Type: String
+    Default: 5
+  ######
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+
+Resources:
+  TrafficSqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 7200
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Traffic }
+
+  TrafficFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} Dovetail Traffic generator
+      Environment:
+        Variables:
+          DOWNLOADER_BATCH_SIZE: !Ref kDownloaderBatchSize
+          SCHEDULE_INTERVAL_MINUTES: !Ref kScheduleIntervalMinutes
+          SQS_QUEUE_URL: !Ref TrafficSqsQueue
+          SQS_QUEUE_REGION: !Ref AWS::Region
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 1000
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+        SqsTrigger:
+          Properties:
+            Queue: !GetAtt TrafficSqsQueue.Arn
+            BatchSize: 1
+            Enabled: false # TODO
+          Type: SQS
+        ScheduleTrigger:
+          Type: Schedule
+          Properties:
+            Schedule: !Sub rate(${kScheduleIntervalMinutes} minutes)
+            Enabled: false # TODO
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs14.x
+      Policies:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+        - Statement:
+            - Action: sqs:SendMessage
+              Effect: Allow
+              Resource: !GetAtt TrafficSqsQueue.Arn
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Traffic
+      Timeout: 30
+  TrafficFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TrafficFunction}
+      RetentionInDays: 14
+  TrafficFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub WARN [Dovetail-Traffic] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Traffic Lambda function is failing, so it
+        may not be generating as much fake traffic as expected.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TrafficFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
