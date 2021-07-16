@@ -138,6 +138,41 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-cdn-arranger.yml
       TimeoutInMinutes: 10
 
+  DovetailCountsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        CodeS3ObjectKey: !Ref DovetailCountsLambdaCodeS3ObjectKey
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
+        ArrangementsDynamodbRegion: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_REGION
+        ArrangementsDynamodbTableName: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_TABLE
+        ArrangementsDynamodbAccessRoleArn: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_ACCESS_ROLE
+        DovetailRedisHostname: !Ref DovetailRedisHostname
+        DovetailS3Bucket: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_BUCKET
+        DovetailS3ObjectStitchPrefix: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/S3_PREFIX
+        DovetailCdnLogsKinesisArn: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_IN
+        DovetailCountedBytesKinesisArn: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-counts-lambda/KINESIS_OUT
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Counts }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-counts.yml
+      TimeoutInMinutes: 10
+
   IdStack:
     Type: AWS::CloudFormation::Stack
     Properties:

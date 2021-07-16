@@ -1,0 +1,264 @@
+# stacks/apps/dovetail-counts.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that processes Dovetail CDN log data from a Kinesis
+  stream and sends the results (i.e., the counted traffic data) to another
+  Kinesis stream. Also creates a number of CloudWatch log metric filters for
+  monitoring the Lambda's operation.
+
+Parameters:
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/Counts
+  #######
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailRedisHostname: { Type: String }
+  DovetailS3Bucket: { Type: String }
+  DovetailS3ObjectStitchPrefix: { Type: String }
+  DovetailCdnLogsKinesisArn: { Type: String }
+  DovetailCountedBytesKinesisArn: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  CountsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Counts processes Dovetail CDN log data from
+        a Kinesis stream and sends the results to another Kinesis stream
+      Environment:
+        Variables:
+          ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
+          ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
+          ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
+          KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedBytesKinesisArn
+          # REDIS_BACKUP_URL: !If [HasRedisBackupUrl, !Ref RedisBackupUrl, !Ref "AWS::NoValue"]
+          REDIS_URL: !Sub cluster://${DovetailRedisHostname}:6379
+          S3_BUCKET: !Ref DovetailS3Bucket
+          S3_PREFIX: !Ref DovetailS3ObjectStitchPrefix
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCdnLogsKinesisArn
+          Type: Kinesis
+      Handler: index.handler
+      Layers:
+        - Fn::If:
+            - IsProduction
+            - !Sub arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14
+            - !Ref AWS::NoValue
+      MemorySize: 2000
+      Runtime: nodejs14.x
+      Policies:
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Ref ArrangementsDynamodbAccessRoleArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action:
+                - kinesis:DescribeStream
+                - kinesis:PutRecord
+                - kinesis:PutRecords
+              Effect: Allow
+              Resource: !Ref DovetailCountedBytesKinesisArn
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Counts
+      Timeout: 30
+      # TODO
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !Ref VPCSecurityGroup
+      #   SubnetIds:
+      #     - !Ref VpcPrivateSubnet1Id
+      #     - !Ref VpcPrivateSubnet2Id
+      #     - !Ref VpcPrivateSubnet3Id
+  CountsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CountsFunction}
+      RetentionInDays: 14
+  CountsFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function is failing, which
+        could delay metrics, pingbacks, etc.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CountsFunction
+      EvaluationPeriods: 3
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  CountsFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub WARN [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function's Kinesis iterator
+        age is higher than normal, which likely means some CDN logs are having
+        trouble processing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CountsFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  CountsFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub FATAL [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function's Kinesis iterator
+        is significantly delayed, and is likely to continue to fall behind
+        without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CountsFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching
+
+  CountsFunctionWarnLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "warn" }'
+      LogGroupName: !Ref CountsFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub warns_${CountsFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  CountsFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref CountsFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub errors_${CountsFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  CountsFunctionLoggedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function has
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 3
+      MetricName: !Sub errors_${CountsFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  CountsFunctionMissingArrangementLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.errorName = "ArrangementNotFoundError" }'
+      LogGroupName: !Ref CountsFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub missing_arrangement_${CountsFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  CountsFunctionMissingArrangementAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> MISSING ARRANGEMENTS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function is trying to process
+        data for downloads but cannot find the associated arrangement data.
+        This is unusual.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub missing_arrangement_${CountsFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
+
+  CountsFunctionKinesisFailureLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.errorName = "KinesisPutError" }'
+      LogGroupName: !Ref CountsFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub kinesis_failure_${CountsFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "$.count"
+  CountsFunctionKinesisFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS PUT FAILURES
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Counts Lambda function is experiencing
+        a significant number of PUT failures when trying to send records to the
+        counted bytes Kinesis stream. No data has been lost, and the PUTs will
+        retry.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 5
+      MetricName: !Sub kinesis_failure_${CountsFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
