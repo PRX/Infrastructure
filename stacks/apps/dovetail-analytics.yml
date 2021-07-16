@@ -1,0 +1,755 @@
+# stacks/apps/dovetail-analytics.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a number of Lambda functions that collect Dovetail metrics data
+  from Kinesis streams, and process and forward that data to various
+  destinations, like BigQuery and third-parties as pingback.
+
+Parameters:
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/Analytics
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  CastleRedisCachePrimaryEndPointAddress: { Type: String }
+  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbTtl: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailRedisHostname: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  ParameterStoreReadPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ssm:DescribeParameters
+              - ssm:GetParameters
+              - ssm:GetParametersByPath
+            Effect: Allow
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/analytics-*
+        Version: "2012-10-17"
+
+  # BigQuery
+  AnalyticsBigqueryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Analytics sending data to BigQuery
+      Environment:
+        Variables:
+          BQ_PROJECT_ID: prx-metrics
+          # TODO: get these out of the code and into CFN somehow
+          PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 512
+      Runtime: nodejs12.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 30
+  AnalyticsBigqueryFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsBigqueryFunction}
+      RetentionInDays: 14
+  AnalyticsBigqueryFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
+        failing, but BigQuery records can safely be re-inserted, so these can
+        be retried.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsBigqueryFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function's
+        Kinesis iterator age is higher than normal, tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  AnalyticsBigqueryFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function's
+        Kinesis iterator is significantly delayed, and is likely to continue to
+        fall behind without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsBigqueryFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching
+
+  AnalyticsBigqueryFunctionDownloadsMetricFilter:
+    # Counts the total number of downloads sent to BigQuery?
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "dt_downloads" }'
+      LogGroupName: !Ref AnalyticsBigqueryFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub bigquery_downloads_${AnalyticsBigqueryFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+  AnalyticsBigqueryFunctionLowDownloadsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW DOWNLOADS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
+        sending a suspiciously low number of downloads to BigQuery, which could
+        mean that input data is not reaching the function.
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub bigquery_downloads_${AnalyticsBigqueryFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 2000
+      TreatMissingData: breaching
+
+  AnalyticsBigqueryFunctionImpressionsMetricFilter:
+    # Counts the total number of impressions sent to BigQuery?
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "dt_impressions" }'
+      LogGroupName: !Ref AnalyticsBigqueryFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub bigquery_impressions_${AnalyticsBigqueryFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+  AnalyticsBigqueryFunctionImpressionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW IMPRESSIONS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
+        sending a suspiciously low number of impressions to BigQuery, which
+        could mean that input data is not reaching the function.
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub bigquery_impressions_${AnalyticsBigqueryFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 4000
+      TreatMissingData: breaching
+
+  AnalyticsBigqueryFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref AnalyticsBigqueryFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub bigquery_errors_${AnalyticsBigqueryFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AnalyticsBigqueryFunctionLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics BigQuery Lambda function has
+        logged some errors during execution.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub bigquery_errors_${AnalyticsBigqueryFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  # DynamoDB
+  AnalyticsDynamoDbFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Analytics sending data to DynamoDB
+      Environment:
+        Variables:
+          DYNAMODB: "true" # set function mode = dynamodb
+          DDB_TABLE: !Ref DynamoDbTableName
+          DDB_ROLE: !Ref DynamoDbAccessRoleArn
+          DDB_TTL: !Ref DynamoDbTtl
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 50
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref DynamoDbKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 512
+      Runtime: nodejs12.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Ref DynamoDbAccessRoleArn
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 30
+  AnalyticsDynamoDbFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsDynamoDbFunction}
+      RetentionInDays: 14
+  AnalyticsDynamoDbFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function is
+        failing, but tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsDynamoDbFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsDynamoDbFunctionLogGroupToKinesisSubscriptionFilterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyName: AnalyticsDynamodbSubscriptionKinesisPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource: !Ref MetricsKinesisStreamArn
+            Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+  AnalyticsDynamoDbFunctionLogGroupImpressionsToKinesisSubscriptionFilter:
+    # Send impression data from DynamoDB Lambda function's logs to Kinesis
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      DestinationArn: !Ref MetricsKinesisStreamArn
+      FilterPattern: "{$.msg = impression}"
+      LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
+      RoleArn: !GetAtt AnalyticsDynamoDbFunctionLogGroupToKinesisSubscriptionFilterRole.Arn
+
+  AnalyticsDynamoDbFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function's
+        Kinesis iterator age is higher than normal, tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsDynamoDbFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  AnalyticsDynamoDbFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function's
+        Kinesis iterator is significantly delayed, and is likely to continue to
+        fall behind without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsDynamoDbFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching
+
+  AnalyticsDynamoDbFunctionErrorLevelLogMetricFilter:
+    # Counts the number of logged errors
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub dynamodb_errors_${AnalyticsDynamoDbFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AnalyticsDynamoDbFunctionLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function has
+        logged some errors during execution.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: !Sub dynamodb_errors_${AnalyticsDynamoDbFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsDynamoDbFunctionInsertsMetricFilter:
+    # Counts the number of rows inserted to DynamoDB
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "dynamodb" }'
+      LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub dynamodb_inserts_${AnalyticsDynamoDbFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+
+  AnalyticsDynamoDbFunctionLookupsMetricFilter:
+    # I don't know what this one does
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "kinesis*" }'
+      LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub dynamodb_lookups_${AnalyticsDynamoDbFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+
+  AnalyticsDynamoDbFunctionRetriesMetricFilter:
+    # Counts the number of retried DynamoDB operations
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.ddb = "retrying" }'
+      LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub dynamodb_retries_${AnalyticsDynamoDbFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+
+  # Pingbacks
+  AnalyticsPingbacksFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Analytics sending HTTP pingbacks
+      Environment:
+        Variables:
+          PINGBACKS: "true"
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 25
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 2048
+      Runtime: nodejs12.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 60
+  AnalyticsPingbacksFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsPingbacksFunction}
+      RetentionInDays: 14
+  AnalyticsPingbacksFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics pingbacks Lambda function is
+        failing, and some pingbacks may be getting dropped because it's not
+        safe to resend them.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsPingbacksFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsPingbacksFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function's
+        Kinesis iterator age is higher than normal, tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsPingbacksFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  AnalyticsPingbacksFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function's
+        Kinesis iterator is significantly delayed, and is likely to continue to
+        fall behind without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsPingbacksFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching
+
+  AnalyticsPingbacksFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub pingbacks_errors_${AnalyticsPingbacksFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AnalyticsPingbacksFunctionLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function has
+        logged some errors during execution.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub pingbacks_errors_${AnalyticsPingbacksFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsPingbacksFunctionAdzerkMetricFilter:
+    # Counts the number of pingbacks sent to Adzerk
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "*.adzerk.net" }'
+      LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "pingbacks_adzerk_${AnalyticsPingbacksFunction}"
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+  AnalyticsPingbacksFunctionAdzerkTrafficLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> FEW ADZERK PINGBACKS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Pingback Lambda function is
+        sending a suspiciously low amount of traffic to Adzerk, which could
+        mean that input data is not reaching the function.
+      ComparisonOperator: LessThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "pingbacks_adzerk_${AnalyticsPingbacksFunction}"
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 4000
+      TreatMissingData: breaching
+
+  AnalyticsPingbacksFunctionNotAdzerkMetricFilter:
+    # Counts the number of pingbacks sent everywhere except Adzerk
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest != "*.adzerk.net" }'
+      LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub pingbacks_other_${AnalyticsPingbacksFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+
+  AnalyticsPingbacksFunctionFailMetricFilter:
+    # Counts the number of failed pingbacks
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "PINGFAIL*" }'
+      LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub pingbacks_fails_${AnalyticsPingbacksFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+
+  # Redis
+  AnalyticsRedisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Analytics sending INCRs to Redis
+      Environment:
+        Variables:
+          REDIS_HOST: !Ref CastleRedisCachePrimaryEndPointAddress
+          REDIS_TTL: "7200"
+          REDIS_IMPRESSIONS_HOST: !Sub cluster://${DovetailRedisHostname}:6379
+          REDIS_IMPRESSIONS_TTL: "90000"
+      Events:
+        KinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: false # TODO
+            StartingPosition: LATEST
+            Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 512
+      Runtime: nodejs12.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 30
+      # TODO
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !Ref VPCSecurityGroup
+      #   SubnetIds:
+      #     - !Ref VPCSubnet1
+      #     - !Ref VPCSubnet2
+      #     - !Ref VPCSubnet3
+  AnalyticsRedisFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsRedisFunction}
+      RetentionInDays: 14
+  AnalyticsRedisFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Redis Lambda function is
+        failing, and some INCR commands may be getting dropped because it's
+        not safe to resend them.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsRedisFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsRedisFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Redis Lambda function's
+        Kinesis iterator age is higher than normal, tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsRedisFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  AnalyticsRedisFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Redis Lambda function's
+        Kinesis iterator is significantly delayed, and is likely to continue to
+        fall behind without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsRedisFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching
+
+  AnalyticsRedisFunctionInsertsMetricFilter:
+    # TODO Does this get used for anything?
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "redis*" }'
+      LogGroupName: !Ref AnalyticsRedisFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub redis_inserts_${AnalyticsRedisFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+  AnalyticsRedisFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref AnalyticsRedisFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub redis_errors_${AnalyticsRedisFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AnalyticsRedisFunctionLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Redis Lambda function has logged
+        some errors during execution.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub redis_errors_${AnalyticsRedisFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 4
+      TreatMissingData: notBreaching
