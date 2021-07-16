@@ -43,6 +43,6 @@ module.exports = {
       }
     }
 
-    return [];
+    return ['No data.'];
   },
 };
