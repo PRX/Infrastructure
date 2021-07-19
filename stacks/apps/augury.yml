@@ -27,6 +27,7 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   EchoServiceToken: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
@@ -113,6 +114,22 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  TargetGroupHttp5xxAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt TargetGroupHttp5xxAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   TaskRole:
     Type: AWS::IAM::Role
@@ -404,6 +421,22 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: breaching
+  AuguryActualsAreBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AuguryActualsAreBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   ForecastTaskLogGroup:
     Type: AWS::Logs::LogGroup

@@ -71,6 +71,7 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   EchoServiceToken: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -438,6 +439,22 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  TargetGroupHttp5xxAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt TargetGroupHttp5xxAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
 
   EcsService:
     Type: AWS::ECS::Service
@@ -574,7 +591,9 @@ Resources:
         SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackId: !Ref RootStackId
         RootStackName: !Ref RootStackName
+        CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
         AlbLoadBalancerFullName: !GetAtt Alb.LoadBalancerFullName
         AlbHttpsListenerArn: !Ref HttpsListener
       Tags:
