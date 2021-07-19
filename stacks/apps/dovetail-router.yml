@@ -603,6 +603,70 @@ Resources:
         - { Key: prx:dev:application, Value: Router }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  LogDownloadsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Downloads${EnvironmentType}
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+  LogImpressionsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Impressions${EnvironmentType}
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: $.download.adCount
+  LogDepressionsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "depression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "Depressions${EnvironmentType}"
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+  LogRepressionsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "repression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "Repressions${EnvironmentType}"
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+  LogVanillasMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" && $.download.adCount = 0 }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "Vanillas${EnvironmentType}"
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+  LogWarnsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.level = "warn" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "Warnings${EnvironmentType}"
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+  LogErrorsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.level = "error" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub "Errors${EnvironmentType}"
+          MetricNamespace: PRX/DovetailRouter
+          MetricValue: "1"
+
   LegacyStack:
     Type: AWS::CloudFormation::Stack
     Properties:
