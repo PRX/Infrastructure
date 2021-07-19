@@ -283,6 +283,92 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${EchoFunction}
       RetentionInDays: 14
 
+  CloudWatchAlarmTaggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: >-
+        tktktk
+      Handler: index.lambda_handler
+      InlineCode: |
+        const response = require('cfn-response');
+        const AWS = require('aws-sdk');
+        const cloudwatch = new AWS.CloudWatch();
+
+        exports.handler = async (event, context) => {
+          try {
+            const tags = event.ResourceProperties.Tags;
+            const arn = event.ResourceProperties.AlarmArn;
+
+            if (!tags || !tags.length || !arn) {
+              console.error('AlarmArn and Tags properties must be defined');
+              await response.send(event, context, response.FAILED, {});
+            }
+
+            if (event.RequestType === 'Create') {
+              // All all tags on the custom resource
+              await cloudwatch.tagResource({
+                ResourceARN: arn,
+                Tags: tags,
+              }).promise();
+            } else if (event.RequestType === 'Update') {
+              // Remove tags that were present in the old resource properties, but are
+              // no longer present
+              const previousTags = event.OldResourceProperties.Tags;
+              const currentTagKeys = tags.map(t => t.Key);
+
+              const staleTags = previousTags.filter(p => !currentTagKeys.includes(p.Key));
+
+              if (staleTags.length) {
+                  await cloudwatch.untagResource({
+                    ResourceARN: arn,
+                    TagKeys: staleTags.map(t => t.Key),
+                  }).promise();
+              }
+
+              // Create/update all values present in the current resource properties
+              await cloudwatch.tagResource({
+                ResourceARN: arn,
+                Tags: tags,
+              }).promise();
+            } else if (event.RequestType === 'Delete') {
+              // Remove all tags on the custom resource
+              await cloudwatch.untagResource({
+                ResourceARN: arn,
+                TagKeys: tags.map(t => t.Key),
+              }).promise();
+            }
+
+            await response.send(event, context, response.SUCCESS, {});
+          } catch (error) {
+            console.error(error);
+            await response.send(event, context, response.FAILED, {});
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action:
+                - cloudwatch:TagResource
+                - cloudwatch:UntagResource
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs12.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Infrastructure
+      Timeout: 8
+  CloudWatchAlarmTaggerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmTaggerFunction}
+      RetentionInDays: 14
+
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
     Description: Service token for the SES SMTP credentials generator
@@ -296,3 +382,6 @@ Outputs:
   EchoServiceToken:
     Description: Service token for echo
     Value: !GetAtt EchoFunction.Arn
+  CloudWatchAlarmTaggerServiceToken:
+    Description: Service token for CloudWatch Alarm tagger
+    Value: !GetAtt CloudWatchAlarmTaggerFunction.Arn
