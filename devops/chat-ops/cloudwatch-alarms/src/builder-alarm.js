@@ -7,11 +7,11 @@ module.exports = {
    * @param {EventBridgeCloudWatchAlarmsEvent} event
    * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
    * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
-   * @returns {String[]}
+   * @returns {Promise<String[]>}
    */
-  detailLines(event, desc, history) {
+  async detailLines(event, desc, history) {
     if (event.detail.configuration.metrics.length === 1) {
-      return singleMetric.detailLines(event, desc, history);
+      return await singleMetric.detailLines(event, desc, history);
     } else {
       return ['Unknown alarm metric type!'];
     }

@@ -24,15 +24,21 @@ function precision(a) {
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
  * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
- * * @returns {String[]}
+ * * @returns {Promise<String[]>}
  */
-function started(event, desc, history) {
+async function started(event, desc, history) {
   if (event.detail.state.reasonData) {
     const data = JSON.parse(event.detail.state.reasonData);
 
-    if (data?.startDate) {
+    if (data?.startDate || data?.evaluatedDatapoints?.length) {
       const now = +new Date();
-      const startTime = Date.parse(data.startDate);
+
+      const startedAt =
+        data.startDate ||
+        data.evaluatedDatapoints
+          .map((d) => d.timestamp)
+          .sort((a, b) => b - a)[0];
+      const startTime = Date.parse(startedAt);
 
       const dif = now - startTime;
       const difSec = dif / 1000;
@@ -55,7 +61,7 @@ function started(event, desc, history) {
 
       let console = `*CloudWatch:* <${metricsUrl}| Metrics>`;
 
-      const logsUrl = urls.logsConsole(event, desc);
+      const logsUrl = await urls.logsConsole(event, desc);
       if (logsUrl) {
         console = console.concat(` • <${logsUrl}|Logs>`);
       }
@@ -245,12 +251,12 @@ module.exports = {
    * @param {EventBridgeCloudWatchAlarmsEvent} event
    * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
    * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
-   * @returns {String[]}
+   * @returns {Promise<String[]>}
    */
-  detailLines(event, desc, history) {
+  async detailLines(event, desc, history) {
     return [
       ...cause(event, desc, history),
-      ...started(event, desc, history),
+      ...(await started(event, desc, history)),
       ...datapoints(event, desc),
       ...last24Hours(history),
     ];

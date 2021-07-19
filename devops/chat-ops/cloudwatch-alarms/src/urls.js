@@ -58,6 +58,8 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
   const verticals = [];
 
+  console.log(JSON.stringify(history));
+
   if (history?.AlarmHistoryItems?.length) {
     history.AlarmHistoryItems.forEach((i) => {
       // Find all state changes to OK, and create a range from the beginning
@@ -67,10 +69,16 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
         const data = JSON.parse(i.HistoryData);
 
         if (
-          data?.newState?.stateReasonData?.startDate &&
-          data?.oldState?.stateReasonData?.startDate
+          data?.newState?.stateReasonData?.evaluatedDatapoints?.length &&
+          (data?.oldState?.stateReasonData?.startDate ||
+            data?.oldState?.stateReasonData?.evaluatedDatapoints?.length)
         ) {
-          const startTs = Date.parse(data.oldState.stateReasonData.startDate);
+          const startTs = Date.parse(
+            data.oldState.stateReasonData.startDate ||
+              data.oldState.stateReasonData.evaluatedDatapoints
+                .map((d) => d.timestamp)
+                .sort()[0],
+          );
 
           const firstOkDatapoint = data.newState.stateReasonData.evaluatedDatapoints.sort(
             (a, b) => a.timestamp.localeCompare(b.timestamp),
@@ -97,8 +105,17 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
       const data = JSON.parse(i.HistoryData);
 
-      if (data?.newState?.stateReasonData?.startDate) {
-        const startTs = Date.parse(data.newState.stateReasonData.startDate);
+      if (
+        data?.newState?.stateReasonData?.startDate ||
+        data?.newState?.stateReasonData?.evaluatedDatapoints?.length
+      ) {
+        const startedAt =
+          data.newState.stateReasonData.startDate ||
+          data.newState.stateReasonData.evaluatedDatapoints
+            .map((d) => d.timestamp)
+            .sort()[0];
+
+        const startTs = Date.parse(startedAt);
 
         verticals.push({
           value: new Date(startTs).toISOString(),
@@ -158,10 +175,10 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
  *
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @returns {String}
+ * @returns {Promise<String>}
  */
-function logsInsightsConsole(event, desc) {
-  const logGroup = logGroups.logGroup(event, desc);
+async function logsInsightsConsole(event, desc) {
+  const logGroup = await logGroups.logGroup(event, desc);
 
   if (!logGroup) {
     return;
@@ -175,8 +192,12 @@ function logsInsightsConsole(event, desc) {
     event?.detail?.state?.reasonData
   ) {
     const stateData = JSON.parse(event.detail.state.reasonData);
-    if (stateData?.startDate) {
-      const alarmTime = new Date(Date.parse(stateData.startDate));
+    if (stateData?.startDate || stateData?.evaluatedDatapoints?.length) {
+      const startedAt =
+        stateData.startDate ||
+        stateData.evaluatedDatapoints.map((d) => d.timestamp).sort()[0];
+
+      const alarmTime = new Date(Date.parse(startedAt));
       start = alarmTime.toISOString();
     }
   } else if (
@@ -184,8 +205,12 @@ function logsInsightsConsole(event, desc) {
     event?.detail?.previousState?.reasonData
   ) {
     const previousData = JSON.parse(event.detail.previousState.reasonData);
-    if (previousData?.startDate) {
-      const alarmTime = new Date(Date.parse(previousData.startDate));
+    if (previousData?.startDate || previousData?.evaluatedDatapoints?.length) {
+      const startedAt =
+        previousData.startDate ||
+        previousData.evaluatedDatapoints.map((d) => d.timestamp).sort()[0];
+
+      const alarmTime = new Date(Date.parse(startedAt));
       start = alarmTime.toISOString();
     }
   }
@@ -241,7 +266,6 @@ module.exports = {
   alarmConsole(event) {
     const name = event.detail.alarmName;
     const encoded = encodeURI(name.replace(/\ /g, '+')).replace(/%/g, '$');
-    console.log(encoded);
     return `https://console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
   },
   /**
@@ -258,9 +282,9 @@ module.exports = {
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
    * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
-   * @returns {String}
+   * @returns {Promise<String>}
    */
-  logsConsole(event, desc) {
-    return logsInsightsConsole(event, desc);
+  async logsConsole(event, desc) {
+    return await logsInsightsConsole(event, desc);
   },
 };

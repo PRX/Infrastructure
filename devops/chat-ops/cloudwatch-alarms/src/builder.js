@@ -62,14 +62,14 @@ async function cloudWatchClient(event) {
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
  * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
- * @returns {String[]}
+ * @returns {Promise<String[]>}
  */
-function detailLines(event, desc, history) {
+async function detailLines(event, desc, history) {
   switch (event.detail.state.value) {
     case 'OK':
-      return ok.detailLines(event, desc, history);
+      return await ok.detailLines(event, desc, history);
     case 'ALARM':
-      return alarm.detailLines(event, desc, history);
+      return await alarm.detailLines(event, desc, history);
     default:
       return [];
   }
@@ -112,7 +112,7 @@ module.exports = {
 
     const lines = [];
 
-    lines.push(...detailLines(event, desc, history));
+    lines.push(...(await detailLines(event, desc, history)));
 
     let text = lines.join('\n');
 
