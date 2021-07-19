@@ -23,13 +23,26 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
   AlbLoadBalancerFullName: { Type: String }
+  AlbHttpListenerArn: { Type: String }
   AlbHttpsListenerArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  HostHeaderListenerRule:
+  HttpHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail.*
+      ListenerArn: !Ref AlbHttpListenerArn
+      Priority: 100
+  HttpsHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:

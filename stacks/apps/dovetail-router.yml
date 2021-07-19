@@ -364,18 +364,11 @@ Resources:
       TreatMissingData: notBreaching
 
   HttpListener:
-    # Generally all HTTP traffic is redirected to HTTPS
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - RedirectConfig:
-            Host: "#{host}"
-            Path: "/#{path}"
-            Port: "443"
-            Protocol: HTTPS
-            Query: "#{query}"
-            StatusCode: HTTP_301
-          Type: redirect
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref Alb
       Port: 80
       Protocol: HTTP
@@ -390,6 +383,57 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 443
       Protocol: HTTPS
+
+  # NOTE: eventually, dt-router will also get the non-underscored default path
+  HttpPathListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /_/*
+      ListenerArn: !Ref HttpListener
+      Priority: 50
+  HttpsPathListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /_/*
+      ListenerArn: !Ref HttpsListener
+      Priority: 50
+
+  HttpHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail-router.*
+      ListenerArn: !Ref HttpListener
+      Priority: 150
+  HttpsHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail-router.*
+      ListenerArn: !Ref HttpsListener
+      Priority: 150
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -423,7 +467,7 @@ Resources:
     Properties:
       AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
       AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail Router's Elixer server is returning 5XX
+        ${EnvironmentType} Dovetail Router's Elixir server is returning 5XX
         errors from the ECS service to the load balancer.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
@@ -449,7 +493,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: 3
       EnableECSManagedTags: true
       LaunchType: EC2
       LoadBalancers:
@@ -542,7 +586,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 1000, 400]
-          MemoryReservation: !If [IsProduction, 600, 200]
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
@@ -576,6 +619,7 @@ Resources:
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
         AlbLoadBalancerFullName: !GetAtt Alb.LoadBalancerFullName
+        AlbHttpListenerArn: !Ref HttpListener
         AlbHttpsListenerArn: !Ref HttpsListener
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
