@@ -628,7 +628,7 @@ Resources:
       FilterPattern: '{ $.msg = "depression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Depressions${EnvironmentType}"
+        - MetricName: !Sub Depressions${EnvironmentType}
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
   LogRepressionsMetric:
@@ -637,7 +637,7 @@ Resources:
       FilterPattern: '{ $.msg = "repression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Repressions${EnvironmentType}"
+        - MetricName: !Sub Repressions${EnvironmentType}
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
   LogVanillasMetric:
@@ -646,7 +646,7 @@ Resources:
       FilterPattern: '{ $.msg = "impression" && $.download.adCount = 0 }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Vanillas${EnvironmentType}"
+        - MetricName: !Sub Vanillas${EnvironmentType}
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
   LogWarnsMetric:
@@ -655,7 +655,7 @@ Resources:
       FilterPattern: '{ $.level = "warn" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Warns${EnvironmentType}"
+        - MetricName: !Sub Warns${EnvironmentType}
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
   LogErrorsMetric:
@@ -664,37 +664,78 @@ Resources:
       FilterPattern: '{ $.level = "error" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Errors${EnvironmentType}"
+        - MetricName: !Sub Errors${EnvironmentType}
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
 
   # log alarms
   LogWarnsAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub WARN [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging warnings
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
-      MetricName: !Sub "Warns${EnvironmentType}"
+      MetricName: !Sub Warns${EnvironmentType}
       Namespace: PRX/DovetailRouter
       Period: 60
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
   LogErrorsAlarm:
-    Type: "AWS::CloudWatch::Alarm"
+    Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging errors
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
-      MetricName: !Sub "Errors${EnvironmentType}"
+      MetricName: !Sub Errors${EnvironmentType}
       Namespace: PRX/DovetailRouter
       Period: 60
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+
+  # subscription filter (send logged impression data to kinesis)
+  SubscriptionFilterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - !Sub logs.${AWS::Region}.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: DovetailRouterSubscriptionFilterPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource:
+                  - !Ref KinesisStream
+      Tags:
+        - Key: Project
+          Value: Dovetail
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+  SubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      DestinationArn: !Ref KinesisStream
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      RoleArn: !GetAtt SubscriptionFilterRole.Arn
 
   LegacyStack:
     Type: AWS::CloudFormation::Stack
