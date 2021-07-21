@@ -59,6 +59,9 @@ Parameters:
   kApplicationPort:
     Type: Number
     Default: 4000
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/Router
   #######
   EcsClusterArn: { Type: String }
   EcsClusterName: { Type: String }
@@ -607,20 +610,17 @@ Resources:
         - { Key: prx:dev:application, Value: Router }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
-  # autoscaling
+  # Autoscaling
   ScalingIamRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - application-autoscaling.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
       Tags:
@@ -655,72 +655,72 @@ Resources:
         ScaleOutCooldown: 60
         TargetValue: 1000
 
-  # log metric filters
-  LogDownloadsMetric:
+  # Log metric filters
+  LogDownloadsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "impression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Downloads${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogImpressionsMetric:
+  LogImpressionsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "impression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Impressions${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.download.adCount
-  LogDepressionsMetric:
+  LogDepressionsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "depression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Depressions${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogRepressionsMetric:
+  LogRepressionsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "repression" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Repressions${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogVanillasMetric:
+  LogVanillasMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "impression" && $.download.adCount = 0 }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Vanillas${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogWarnsMetric:
+  LogWarnsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.level = "warn" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Warns${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogErrorsMetric:
+  LogErrorsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.level = "error" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Errors${EnvironmentType}
-          MetricNamespace: PRX/DovetailRouter
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
 
-  # log alarms
+  # Log alarms
   LogWarnsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -729,7 +729,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: !Sub Warns${EnvironmentType}
-      Namespace: PRX/DovetailRouter
+      Namespace: !Ref kMetricFilterNamespace
       Period: 60
       Statistic: Sum
       Threshold: 0
@@ -742,38 +742,34 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: !Sub Errors${EnvironmentType}
-      Namespace: PRX/DovetailRouter
+      Namespace: !Ref kMetricFilterNamespace
       Period: 60
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
 
-  # subscription filter (send logged impression data to kinesis)
+  # Subscription filter (send logged impression data to Kinesis)
   SubscriptionFilterRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - !Sub logs.${AWS::Region}.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: DovetailRouterSubscriptionFilterPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - kinesis:DescribeStream
                   - kinesis:PutRecord
                   - kinesis:PutRecords
-                Resource:
-                  - !Ref DynamoDbKinesisStreamArn
+                Effect: Allow
+                Resource: !Ref DynamoDbKinesisStreamArn
+            Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
