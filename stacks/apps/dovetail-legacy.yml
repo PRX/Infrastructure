@@ -12,6 +12,9 @@ Parameters:
   kApplicationPort:
     Type: Number
     Default: 8080
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/Legacy
   #######
   EcsClusterArn: { Type: String }
   EcsClusterName: { Type: String }
@@ -215,20 +218,17 @@ Resources:
         - { Key: prx:dev:application, Value: Node.js }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
-  # autoscaling
+  # Autoscaling
   ScalingIamRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - application-autoscaling.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
       Tags:
@@ -261,72 +261,72 @@ Resources:
         ScaleOutCooldown: 60
         TargetValue: 200
 
-  # log metric filters
-  LogAdzerkCachedMetric:
+  # Log metric filters
+  LogAdzerkCachedMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "Adzerk cached" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub AdzerkCached${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogAdzerkRetryMetric:
+  LogAdzerkRetryMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "Adzerk retry" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub AdzerkRetry${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogAdzerkRemoteErrorMetric:
+  LogAdzerkRemoteErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.err = "RemoteError:*adzerk*" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub AdzerkRemoteError${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogAdzerkTimeoutErrorMetric:
+  LogAdzerkTimeoutErrorMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.err = "TimeoutError:*adzerk*" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub AdzerkTimeoutError${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogInfrequentHitMetric:
+  LogInfrequentHitMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.msg = "Infrequent HIT" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub InfrequentHit${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogWarnsMetric:
+  LogWarnsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: "{ $.level = 40 }"
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Warns${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
-  LogErrorsMetric:
+  LogErrorsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: "{ $.level > 40 }"
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
         - MetricName: !Sub Errors${EnvironmentType}
-          MetricNamespace: PRX/DovetailLegacy
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
 
-  # log alarms
+  # Log alarms
   LogWarnsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -335,7 +335,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 3
       MetricName: !Sub Warns${EnvironmentType}
-      Namespace: PRX/DovetailLegacy
+      Namespace: !Ref kMetricFilterNamespace
       Period: 60
       Statistic: Sum
       Threshold: 200
@@ -348,39 +348,36 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
       MetricName: !Sub Errors${EnvironmentType}
-      Namespace: PRX/DovetailLegacy
+      Namespace: !Ref kMetricFilterNamespace
       Period: 60
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
 
-  # subscription filter (send logged impression data to kinesis)
+  # Subscription filter (send logged impression data to Kinesis)
   SubscriptionFilterRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
-              Service:
-                - !Sub logs.${AWS::Region}.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+        Version: "2012-10-17"
       Policies:
         - PolicyName: DovetailLegacySubscriptionFilterPolicy
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
+              - Action:
                   - kinesis:DescribeStream
                   - kinesis:PutRecord
                   - kinesis:PutRecords
+                Effect: Allow
                 Resource:
                   - !Ref MetricsKinesisStreamArn
                   - !Ref DynamoDbKinesisStreamArn
+            Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -388,7 +385,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Node.js }
-  # pre-IAB2 impressions
+  # Pre-IAB2 impressions
   MetricsSubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
     Properties:
