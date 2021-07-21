@@ -75,6 +75,9 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  DovetailRedisHostname: { Type: String }
+  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   # For legacy stack
   CloudFormationNotificationArn: { Type: String }
   TemplateUrlPrefix: { Type: String }
@@ -721,7 +724,7 @@ Resources:
                   - kinesis:PutRecord
                   - kinesis:PutRecords
                 Resource:
-                  - !Ref KinesisStream
+                  - !Ref DynamoDbKinesisStreamArn
       Tags:
         - Key: Project
           Value: Dovetail
@@ -732,7 +735,7 @@ Resources:
   SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
     Properties:
-      DestinationArn: !Ref KinesisStream
+      DestinationArn: !Ref DynamoDbKinesisStreamArn
       FilterPattern: '{ $.msg = "impression" }'
       LogGroupName: !Ref TaskLogGroup
       RoleArn: !GetAtt SubscriptionFilterRole.Arn
@@ -755,6 +758,9 @@ Resources:
         AlbLoadBalancerFullName: !GetAtt Alb.LoadBalancerFullName
         AlbHttpListenerArn: !Ref HttpListener
         AlbHttpsListenerArn: !Ref HttpsListener
+        DovetailRedisHostname: !Ref DovetailRedisHostname
+        MetricsKinesisStreamArn: !Ref MetricsKinesisStreamArn
+        DynamoDbKinesisStreamArn: !Ref DynamoDbKinesisStreamArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
