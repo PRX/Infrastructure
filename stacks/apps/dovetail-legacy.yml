@@ -14,6 +14,7 @@ Parameters:
     Default: 8080
   #######
   EcsClusterArn: { Type: String }
+  EcsClusterName: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -213,6 +214,52 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Node.js }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # autoscaling
+  ScalingIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Node.js }
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !If [IsProduction, 8, 2]
+      MaxCapacity: !If [IsProduction, 30, 4]
+      ResourceId: !Join ["/", ["service", !Ref EcsClusterName, !GetAtt EcsService.Name]]
+      RoleARN: !GetAtt ScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Join ["/", [!Ref AlbLoadBalancerFullName, !GetAtt TargetGroup.TargetGroupFullName]]
+        ScaleInCooldown: 300
+        ScaleOutCooldown: 60
+        TargetValue: 200
 
   # log metric filters
   LogAdzerkCachedMetric:
