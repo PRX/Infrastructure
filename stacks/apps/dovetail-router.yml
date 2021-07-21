@@ -603,6 +603,7 @@ Resources:
         - { Key: prx:dev:application, Value: Router }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  # log metric filters
   LogDownloadsMetric:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -654,7 +655,7 @@ Resources:
       FilterPattern: '{ $.level = "warn" }'
       LogGroupName: !Ref TaskLogGroup
       MetricTransformations:
-        - MetricName: !Sub "Warnings${EnvironmentType}"
+        - MetricName: !Sub "Warns${EnvironmentType}"
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
   LogErrorsMetric:
@@ -666,6 +667,34 @@ Resources:
         - MetricName: !Sub "Errors${EnvironmentType}"
           MetricNamespace: PRX/DovetailRouter
           MetricValue: "1"
+
+  # log alarms
+  LogWarnsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging warnings
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "Warns${EnvironmentType}"
+      Namespace: PRX/DovetailRouter
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  LogErrorsAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub "Errors${EnvironmentType}"
+      Namespace: PRX/DovetailRouter
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
 
   LegacyStack:
     Type: AWS::CloudFormation::Stack
