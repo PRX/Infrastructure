@@ -59,8 +59,12 @@ Parameters:
   kApplicationPort:
     Type: Number
     Default: 4000
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/Router
   #######
   EcsClusterArn: { Type: String }
+  EcsClusterName: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -76,6 +80,9 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  DovetailRedisHostname: { Type: String }
+  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   # For legacy stack
   CloudFormationNotificationArn: { Type: String }
   TemplateUrlPrefix: { Type: String }
@@ -366,18 +373,11 @@ Resources:
       TreatMissingData: notBreaching
 
   HttpListener:
-    # Generally all HTTP traffic is redirected to HTTPS
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
-        - RedirectConfig:
-            Host: "#{host}"
-            Path: "/#{path}"
-            Port: "443"
-            Protocol: HTTPS
-            Query: "#{query}"
-            StatusCode: HTTP_301
-          Type: redirect
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref Alb
       Port: 80
       Protocol: HTTP
@@ -392,6 +392,57 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 443
       Protocol: HTTPS
+
+  # NOTE: eventually, dt-router will also get the non-underscored default path
+  HttpPathListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /_/*
+      ListenerArn: !Ref HttpListener
+      Priority: 50
+  HttpsPathListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /_/*
+      ListenerArn: !Ref HttpsListener
+      Priority: 50
+
+  HttpHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail-router.*
+      ListenerArn: !Ref HttpListener
+      Priority: 150
+  HttpsHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - dovetail-router.*
+      ListenerArn: !Ref HttpsListener
+      Priority: 150
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -425,7 +476,7 @@ Resources:
     Properties:
       AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
       AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail Router's Elixer server is returning 5XX
+        ${EnvironmentType} Dovetail Router's Elixir server is returning 5XX
         errors from the ECS service to the load balancer.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
@@ -467,7 +518,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: 3
       EnableECSManagedTags: true
       LaunchType: EC2
       LoadBalancers:
@@ -560,7 +611,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 1000, 400]
-          MemoryReservation: !If [IsProduction, 600, 200]
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
@@ -578,6 +628,183 @@ Resources:
         - { Key: prx:dev:application, Value: Router }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  # Autoscaling
+  ScalingIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MinCapacity: !If [IsProduction, 3, 2]
+      MaxCapacity: !If [IsProduction, 10, 4]
+      ResourceId: !Join ["/", ["service", !Ref EcsClusterName, !GetAtt EcsService.Name]]
+      RoleARN: !GetAtt ScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Join ["/", [!GetAtt Alb.LoadBalancerFullName, !GetAtt TargetGroup.TargetGroupFullName]]
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 1000
+
+  # Log metric filters
+  LogDownloadsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Downloads${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  LogImpressionsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Impressions${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.download.adCount
+  LogDepressionsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "depression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Depressions${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  LogRepressionsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "repression" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Repressions${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  LogVanillasMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "impression" && $.download.adCount = 0 }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Vanillas${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  LogWarnsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.level = "warn" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Warns${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  LogErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.level = "error" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Errors${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+
+  # Log alarms
+  LogWarnsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging warnings
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub Warns${EnvironmentType}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  LogErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub Errors${EnvironmentType}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  # Subscription filter (send logged impression data to Kinesis)
+  SubscriptionFilterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyName: DovetailRouterSubscriptionFilterPolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Effect: Allow
+                Resource: !Ref DynamoDbKinesisStreamArn
+            Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
+  SubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      DestinationArn: !Ref DynamoDbKinesisStreamArn
+      FilterPattern: '{ $.msg = "impression" }'
+      LogGroupName: !Ref TaskLogGroup
+      RoleArn: !GetAtt SubscriptionFilterRole.Arn
+
   LegacyStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -585,6 +812,7 @@ Resources:
         - !Ref CloudFormationNotificationArn
       Parameters:
         EcsClusterArn: !Ref EcsClusterArn
+        EcsClusterName: !Ref EcsClusterName
         VpcId: !Ref VpcId
         SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref DovetailLegacyEcrImageTag
@@ -596,7 +824,11 @@ Resources:
         RootStackName: !Ref RootStackName
         CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
         AlbLoadBalancerFullName: !GetAtt Alb.LoadBalancerFullName
+        AlbHttpListenerArn: !Ref HttpListener
         AlbHttpsListenerArn: !Ref HttpsListener
+        DovetailRedisHostname: !Ref DovetailRedisHostname
+        MetricsKinesisStreamArn: !Ref MetricsKinesisStreamArn
+        DynamoDbKinesisStreamArn: !Ref DynamoDbKinesisStreamArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
