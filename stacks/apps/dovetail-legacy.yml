@@ -197,7 +197,6 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 1000, 400]
-          MemoryReservation: !If [IsProduction, 600, 200]
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
@@ -212,3 +211,68 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Node.js }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # log metric filters
+  LogAdzerkCachedMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "Adzerk cached" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub AdzerkCached${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogAdzerkRetryMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "Adzerk retry" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub AdzerkRetry${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogAdzerkRemoteErrorMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.err = "RemoteError:*adzerk*" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub AdzerkRemoteError${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogAdzerkTimeoutErrorMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.err = "TimeoutError:*adzerk*" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub AdzerkTimeoutError${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogInfrequentHitMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.msg = "Infrequent HIT" }'
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub InfrequentHit${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogWarnsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: "{ $.level = 40 }"
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Warns${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
+  LogErrorsMetric:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: "{ $.level > 40 }"
+      LogGroupName: !Ref TaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Errors${EnvironmentType}
+          MetricNamespace: PRX/DovetailLegacy
+          MetricValue: "1"
