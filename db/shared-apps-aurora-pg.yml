@@ -2,9 +2,34 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
-  Creates a Aurora database cluster, in an existing VPC. If the cluster is a
-  primary cluster, it also creates the Aurora global cluster, which secondary
-  clusters can be added to.
+  Creates a Aurora database cluster, in an existing VPC. The cluster can be
+  added to an existing Aurora global cluster. If it's not being added to an
+  existing global cluster, a new global cluster will be created using the
+  database cluster as its source cluster.
+
+# When creating a stack without a GlobalClusterIdentifier parameter defined,
+# both the database cluster and global cluster will be created, and the
+# database cluster will be used as the source cluster for the global cluster.
+# This stack is considered the "source cluster stack".
+#
+# The source cluster will be the initial primary cluster for the global
+# cluster, but may become a secondary cluster at any time, depending on
+# operational needs and AWS region availability.
+#
+# Stacks created with a GlobalClusterIdentifier parameter will create database
+# clusters which are added to an existing global cluster. These stacks are
+# considered "auxiliary cluster stacks", and will create secondary clusters
+# within the global cluster. A secondary cluster can be promoted to become
+# a primary cluster at any time, depending on operational needs and AWS region
+# availability.
+#
+# A database cluster having been created as part of a source or auxiliary is
+# not an indication that the cluster is a primary or secondary cluster.
+#
+# While an Aurora global cluster is created through CloudFormation in a
+# specific region, it is a global resource. If the creation region becomes
+# unavailable, the global cluster entity is unaffected. There is no meaningful
+# configuration on the global cluster.
 
 Parameters:
   GlobalClusterIdentifier:
@@ -37,16 +62,20 @@ Parameters:
   Subnet3Id:
     Type: AWS::EC2::Subnet::Id
   InstanceSecurityGroupId:
+    Description: >-
+      The ID for a security group that EC2 instances which should have access
+      to the database belong to
     Type: String
 
 Conditions:
-  IsSecondaryCluster: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
-  IsPrimaryCluster: !Not [Condition: IsSecondaryCluster]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsAuxiliaryClusterStack: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
+  IsSourceClusterStack: !Not [Condition: IsAuxiliaryClusterStack]
 
 Resources:
   GlobalCluster:
     Type: AWS::RDS::GlobalCluster
-    Condition: IsPrimaryCluster
+    Condition: IsSourceClusterStack
     Properties:
       DeletionProtection: true
       SourceDBClusterIdentifier: !Ref DbCluster
@@ -63,15 +92,15 @@ Resources:
       Engine: aurora-postgresql
       EngineVersion: "12.4"
       GlobalClusterIdentifier: !If
-        - IsSecondaryCluster
+        - IsAuxiliaryClusterStack
         - !Ref GlobalClusterIdentifier
         - !Ref AWS::NoValue
       MasterUsername: !If
-        - IsPrimaryCluster
+        - IsSourceClusterStack
         - !Ref DbClusterMasterUsername
         - !Ref AWS::NoValue
       MasterUserPassword: !If
-        - IsPrimaryCluster
+        - IsSourceClusterStack
         - !Ref DbClusterMasterUserPassword
         - !Ref AWS::NoValue
       # PreferredBackupWindow
@@ -153,5 +182,5 @@ Resources:
 
 Outputs:
   GlobalClusterIdentifier:
-    Condition: IsPrimaryCluster
+    Condition: IsSourceClusterStack
     Value: !Ref GlobalCluster
