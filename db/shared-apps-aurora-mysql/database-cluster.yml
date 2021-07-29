@@ -1,0 +1,223 @@
+# db/shared-apps-aurora-mysql/database-cluster.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a Aurora database cluster for the shared MySQL application
+  database, in an existing VPC. The cluster can be added to an existing Aurora
+  global cluster as a secondary cluster.
+
+# When creating a stack without a GlobalClusterIdentifier parameter defined,
+# the resulting database cluster will be not added to a global database. It is
+# expected that a global database will subsequently be created using the
+# database cluster as its source cluster.
+#
+# Stacks created with a GlobalClusterIdentifier parameter will create database
+# clusters which are added to an existing global cluster. These stacks are
+# considered "auxiliary cluster stacks", and will create secondary clusters
+# within the global cluster.
+#
+# The configuration of stacks created with this template can be updated to
+# handle failover scenarios. For example, if the GlobalClusterIdentifier
+# parameter is removed, the database cluster will be detached from its global
+# database. The cluster could then be used as the source cluster for a new
+# global database.
+
+Parameters:
+  GlobalClusterIdentifier:
+    Type: String
+    Description: >-
+      (optional) The global cluster identifier that this DB cluster will belong
+      to. If this parameter is excluded, this will be treated as the primary
+      cluser, and won't be added to a global database.
+  DbClusterMasterUsername:
+    Type: String
+    Description: >-
+      (optional) This value is required when creating fresh primary clusters.
+  DbClusterMasterUserPassword:
+    Type: String
+    Description: >-
+      (optional) This value is required when creating fresh primary clusters.
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  SharedVpcId:
+    Type: AWS::EC2::VPC::Id
+  Subnet1Id:
+    Type: AWS::EC2::Subnet::Id
+  Subnet2Id:
+    Type: AWS::EC2::Subnet::Id
+  Subnet3Id:
+    Type: AWS::EC2::Subnet::Id
+  InstanceSecurityGroupId:
+    Description: >-
+      The ID for a security group that EC2 instances which should have access
+      to the database belong to
+    Type: String
+
+Mappings:
+  EnvironmentTypeMap:
+    Staging:
+      abbreviation: stag
+    Production:
+      abbreviation: prod
+
+Conditions:
+  # IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasGlobalClusterIdentifier: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
+  HasMasterUsername: !Not [!Equals [!Ref DbClusterMasterUsername, ""]]
+  HasMasterUserPassword: !Not [!Equals [!Ref DbClusterMasterUserPassword, ""]]
+  HasMasterUserCredentials: !And [!Condition HasMasterUsername, !Condition HasMasterUserPassword]
+
+Resources:
+  DbCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      # BackupRetentionPeriod
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      DeletionProtection: true
+      # EnableCloudwatchLogsExports:
+      #   - postgresql
+      #   - upgrade
+      Engine: aurora-mysql
+      EngineVersion: "5.7.mysql_aurora.2.10.0"
+      GlobalClusterIdentifier: !If
+        - HasGlobalClusterIdentifier
+        - !Ref GlobalClusterIdentifier
+        - !Ref AWS::NoValue
+      MasterUsername: !If
+        - HasMasterUserCredentials
+        - !Ref DbClusterMasterUsername
+        - !Ref AWS::NoValue
+      MasterUserPassword: !If
+        - HasMasterUserCredentials
+        - !Ref DbClusterMasterUserPassword
+        - !Ref AWS::NoValue
+      # PreferredBackupWindow
+      # PreferredMaintenanceWindow
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcSecurityGroupIds:
+        - !Ref DbClusterSecurityGroup
+
+  # TODO This is a placeholder
+  DbClusterConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - WARN [Shared MySQL] DB Cluster <${abbr}> TOO MANY CONNECTIONS
+        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Aurora MySQL database cluster has a very
+        high number of connections, which could mean a client is behaving
+        improperly.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DbCluster
+      EvaluationPeriods: 1
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref DbCluster
+      # DBParameterGroupName: default.aurora-mysql5.7
+      # PubliclyAccessible: 'true'
+      DBInstanceClass: db.r6g.large
+      # EnablePerformanceInsights
+      # MonitoringInterval
+      # MonitoringRoleArn
+      # PerformanceInsightsRetentionPeriod
+      # PreferredMaintenanceWindow
+      # PubliclyAccessible
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
+  # TODO This is a placeholder
+  DbInstanceConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - WARN [Shared MySQL] DB Instance <${abbr}> TOO MANY CONNECTIONS
+        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Aurora MySQL instance has a very high
+        number of connections, which could mean a client is behaving improperly.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstance
+      EvaluationPeriods: 1
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: tktktk # TODO
+      SubnetIds:
+        - !Ref Subnet1Id
+        - !Ref Subnet2Id
+        - !Ref Subnet3Id
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
+  DbClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Primary security group for the shared ${EnvironmentType} Aurora
+        MySQL database
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref SharedVpcId
+  DbClusterInstanceIngressIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allows ingress traffic from the shared ALB ASG instance security group
+      FromPort: 3306
+      GroupId: !GetAtt DbClusterSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref InstanceSecurityGroupId
+      ToPort: 3306
+
+Outputs:
+  DbClusterIdentifier:
+    Value: !Ref DbCluster
