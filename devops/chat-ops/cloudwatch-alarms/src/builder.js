@@ -136,7 +136,10 @@ module.exports = {
       },
     });
 
-    if (event.detail.state.value === 'ALARM') {
+    if (
+      event.detail.state.value === 'ALARM' &&
+      event?.detail?.configuration?.description
+    ) {
       blox.push({
         type: 'section',
         text: {
