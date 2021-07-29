@@ -428,43 +428,6 @@ Resources:
           Value: !Ref AWS::StackId
       ValidationMethod: DNS
 
-  CloudFrontCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, 86400]
-        MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, 31536000]
-        MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, 0]
-        Name: !Sub ${AWS::StackName}-CachePolicy
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
-            Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
-            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-          QueryStringsConfig:
-            QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
-            QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
-  CloudFrontOriginRequestPolicy:
-    Type: AWS::CloudFront::OriginRequestPolicy
-    Properties:
-      OriginRequestPolicyConfig:
-        Comment: !Sub Policy for ${AWS::StackName}
-        CookiesConfig:
-          CookieBehavior: !If [HasCloudFrontForwardedCookies, whitelist, none]
-          Cookies: !If [HasCloudFrontForwardedCookies, !Ref CloudFrontForwardedCookies, !Ref "AWS::NoValue"]
-        HeadersConfig:
-          HeaderBehavior: !If [HasCloudFrontForwardedHeaders, whitelist, none]
-          Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
-        QueryStringsConfig:
-          QueryStringBehavior: !If [HasCloudFrontForwardedQueryStrings, whitelist, none]
-          QueryStrings: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
-
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
     Properties:
@@ -481,10 +444,17 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: !Ref CloudFrontAllowedMethods
           CachedMethods: !Ref CloudFrontCachedMethods
-          CachePolicyId: !Ref CloudFrontCachePolicy
           Compress: !If [HasCloudFrontCompress, true, false]
+          DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, !Ref "AWS::NoValue"]
+          ForwardedValues:
+            # Cookies:
+            #   Cookies
+            Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+            QueryString: false
+            # QueryStringCacheKeys:
           # LambdaFunctionAssociations:
-          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+          MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
+          MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, !Ref "AWS::NoValue"]
           # SmoothStreaming: Boolean
           TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
           # TrustedSigners:
