@@ -1,35 +1,26 @@
-# db/shared-apps-aurora-pg.yml
+# db/shared-apps-aurora-pg/database-cluster.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
-  Creates a Aurora database cluster, in an existing VPC. The cluster can be
-  added to an existing Aurora global cluster. If it's not being added to an
-  existing global cluster, a new global cluster will be created using the
-  database cluster as its source cluster.
+  Creates a Aurora database cluster for the shared PostgreSQL application
+  database, in an existing VPC. The cluster can be added to an existing Aurora
+  global cluster as a secondary cluster.
 
 # When creating a stack without a GlobalClusterIdentifier parameter defined,
-# both the database cluster and global cluster will be created, and the
-# database cluster will be used as the source cluster for the global cluster.
-# This stack is considered the "source cluster stack".
-#
-# The source cluster will be the initial primary cluster for the global
-# cluster, but may become a secondary cluster at any time, depending on
-# operational needs and AWS region availability.
+# the resulting database cluster will be not added to a global database. It is
+# expected that a global database will subsequently be created using the
+# database cluster as its source cluster.
 #
 # Stacks created with a GlobalClusterIdentifier parameter will create database
 # clusters which are added to an existing global cluster. These stacks are
 # considered "auxiliary cluster stacks", and will create secondary clusters
-# within the global cluster. A secondary cluster can be promoted to become
-# a primary cluster at any time, depending on operational needs and AWS region
-# availability.
+# within the global cluster.
 #
-# A database cluster having been created as part of a source or auxiliary is
-# not an indication that the cluster is a primary or secondary cluster.
-#
-# While an Aurora global cluster is created through CloudFormation in a
-# specific region, it is a global resource. If the creation region becomes
-# unavailable, the global cluster entity is unaffected. There is no meaningful
-# configuration on the global cluster.
+# The configuration of stacks created with this template can be updated to
+# handle failover scenarios. For example, if the GlobalClusterIdentifier
+# parameter is removed, the database cluster will be detached from its global
+# database. The cluster could then be used as the source cluster for a new
+# global database.
 
 Parameters:
   GlobalClusterIdentifier:
@@ -37,17 +28,15 @@ Parameters:
     Description: >-
       (optional) The global cluster identifier that this DB cluster will belong
       to. If this parameter is excluded, this will be treated as the primary
-      cluser, and a new global cluster will be created.
+      cluser, and won't be added to a global database.
   DbClusterMasterUsername:
     Type: String
     Description: >-
-      This value is required for primary clusters, and ignored for secondary
-      clusters
+      (optional) This value is required when creating fresh primary clusters.
   DbClusterMasterUserPassword:
     Type: String
     Description: >-
-      This value is required for primary clusters, and ignored for secondary
-      clusters
+      (optional) This value is required when creating fresh primary clusters.
   EnvironmentType:
     Type: String
     AllowedValues:
@@ -67,21 +56,25 @@ Parameters:
       to the database belong to
     Type: String
 
+Mappings:
+  EnvironmentTypeMap:
+    Staging:
+      abbreviation: stag
+    Production:
+      abbreviation: prod
+
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsAuxiliaryClusterStack: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
-  IsSourceClusterStack: !Not [Condition: IsAuxiliaryClusterStack]
+  # IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasGlobalClusterIdentifier: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
+  HasMasterUsername: !Not [!Equals [!Ref DbClusterMasterUsername, ""]]
+  HasMasterUserPassword: !Not [!Equals [!Ref DbClusterMasterUserPassword, ""]]
+  HasMasterUserCredentials: !And [!Condition HasMasterUsername, !Condition HasMasterUserPassword]
 
 Resources:
-  GlobalCluster:
-    Type: AWS::RDS::GlobalCluster
-    Condition: IsSourceClusterStack
-    Properties:
-      DeletionProtection: true
-      SourceDBClusterIdentifier: !Ref DbCluster
-
   DbCluster:
     Type: AWS::RDS::DBCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       # BackupRetentionPeriod
       DBSubnetGroupName: !Ref DbSubnetGroup
@@ -92,15 +85,15 @@ Resources:
       Engine: aurora-postgresql
       EngineVersion: "12.4"
       GlobalClusterIdentifier: !If
-        - IsAuxiliaryClusterStack
+        - HasGlobalClusterIdentifier
         - !Ref GlobalClusterIdentifier
         - !Ref AWS::NoValue
       MasterUsername: !If
-        - IsSourceClusterStack
+        - HasMasterUserCredentials
         - !Ref DbClusterMasterUsername
         - !Ref AWS::NoValue
       MasterUserPassword: !If
-        - IsSourceClusterStack
+        - HasMasterUserCredentials
         - !Ref DbClusterMasterUserPassword
         - !Ref AWS::NoValue
       # PreferredBackupWindow
@@ -114,6 +107,29 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       VpcSecurityGroupIds:
         - !Ref DbClusterSecurityGroup
+
+  # TODO This is a placeholder
+  DbClusterConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - WARN [Shared PostgreSQL] DB Cluster <${abbr}> TOO MANY CONNECTIONS
+        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Aurora PostgreSQL database cluster has a very
+        high number of connections, which could mean a client is behaving
+        improperly.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DbCluster
+      EvaluationPeriods: 1
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
 
   DbInstance:
     Type: AWS::RDS::DBInstance
@@ -138,6 +154,28 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+
+  # TODO This is a placeholder
+  DbInstanceConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub
+        - WARN [Shared PostgreSQL] DB Instance <${abbr}> TOO MANY CONNECTIONS
+        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Aurora PostgreSQL instance has a very high
+        number of connections, which could mean a client is behaving improperly.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref DbInstance
+      EvaluationPeriods: 1
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Sum
+      Threshold: 100
+      TreatMissingData: notBreaching
 
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
@@ -181,6 +219,5 @@ Resources:
       ToPort: 3306
 
 Outputs:
-  GlobalClusterIdentifier:
-    Condition: IsSourceClusterStack
-    Value: !Ref GlobalCluster
+  DbClusterIdentifier:
+    Value: !Ref DbCluster
