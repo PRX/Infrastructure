@@ -1,0 +1,29 @@
+# db/shared-apps-aurora-pg/global-database.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an Aurora global database cluster, with an existing database cluster
+  as the source database cluster. This stack should be launched in the same
+  region as the source database cluster.
+
+# While an Aurora global cluster is created through CloudFormation in a
+# specific region, it is a global resource. If the creation region becomes
+# unavailable, the global cluster entity is unaffected. There is no meaningful
+# configuration on the global cluster.
+
+Parameters:
+  GlobalClusterSourceDBClusterIdentifier:
+    Type: String
+
+Resources:
+  GlobalCluster:
+    Type: AWS::RDS::GlobalCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DeletionProtection: true
+      SourceDBClusterIdentifier: !Ref GlobalClusterSourceDBClusterIdentifier
+
+Outputs:
+  GlobalClusterIdentifier:
+    Value: !Ref GlobalCluster
