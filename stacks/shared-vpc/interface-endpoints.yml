@@ -1,4 +1,25 @@
 # stacks/shared-vpc/interface-endpoints.yml
+#
+# This template creates a number of security groups that are intended to be
+# used in other templates. They provide access to the various VPC Endpoints
+# also defined in the template. These security groups (named *endpoint access
+# security groups*) may provide access to a single endpoint (such as STS), or
+# to a group of related endpoints (such as those required for launching ECS
+# tasks). To make use of these security groups, a resource (like an EC2
+# instance or a Lambda function) would be added one or more of the groups. For
+# example, an EC2 instance that is added to the StsEndpointAccessSecurityGroup
+# would be able to access the STS service.
+#
+# Endpoint access security groups are not directly associated with endpoints.
+# Instead, endpoints are associated with *inbound access security groups*,
+# which allow inbound traffic from endpoint access security groups. Endpoints
+# may be associated with multiple inbound access groups. For example, the
+# CloudWatch Logs endpoint is associated with a service-specific
+# CloudWatchLogsEndpointInboundTrafficSecurityGroup as well as the
+# multi-resource EcsLaunchEndpointsInboundTrafficSecurityGroup. In this way,
+# some resources can be granted access strictly to CloudWatch Logs, and others
+# can be granted to all ECS-related services, including CloudWatch Logs, with a
+# single security group.
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
@@ -34,15 +55,99 @@ Parameters:
 
 # https://docs.aws.amazon.com/vpc/latest/userguide/vpce-interface.html
 Resources:
+  # Each XxxEndpointsAccessSecurityGroup is designed so that resources, such as
+  # EC2 instances, ECS tasks, Lambda functions, etc, can be added to the group
+  # and have access to the associated VPC Endpoint service or services.
+  StsEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to STS VPC Endpoints in
+        ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt StsEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_sts-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  CloudWatchLogsEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to CloudWatch Logs VPC Endpoints
+        in ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt CloudWatchLogsEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_cw-logs-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  KmsEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to KMS VPC Endpoints in
+        ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt KmsEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kms-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  KinesisStreamsEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to Kinesis Streams VPC Endpoints
+        in ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt KinesisStreamsEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kinesis-streams-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
   EcsLaunchEndpointsAccessSecurityGroup:
     # This security group is intented to be used by EC2 instances, ECS
     # services, etc. Resources that belong to this group will be able to send
     # traffic to the services needed to launch tasks in ECS (via the egress
     # rule for EcsLaunchEndpointsInboundTrafficSecurityGroup, since that
     # security group is associated with the necessary VPC Endpoints).
-    #
-    # The security group for each ECS-related VPC Encpoint should include an
-    # ingress rule with this group as it's source group.
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
@@ -64,14 +169,14 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       VpcId: !Ref VpcId
 
+  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/vpc-endpoints.html#ecs-vpc-endpoint-considerations
+  # This security group should be added to any VPC Endpoints that are
+  # necessary when launching ECS tasks and services in an environment that
+  # does not have internet access, such as private subnets and Fargate. This
+  # includes services like ECR, ECS, CloudWatch Logs, and S3.
+  # Other security groups can create egress rules to this group to allow
+  # traffic to those Endpoints.
   EcsLaunchEndpointsInboundTrafficSecurityGroup:
-    # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/vpc-endpoints.html#ecs-vpc-endpoint-considerations
-    # This security group should be added to any VPC Endpoints that are
-    # necessary when launching ECS tasks and services in an environment that
-    # does not have internet access, such as private subnets and Fargate. This
-    # includes services like ECR, ECS, CloudWatch Logs, and S3.
-    # Other security groups can create egress rules to this group to allow
-    # traffic to those Endpoints.
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: !Sub >-
@@ -97,110 +202,12 @@ Resources:
       SourceSecurityGroupId: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
       ToPort: 443
 
-  KmsEndpointAccessSecurityGroup:
-    # This security group is intended to be used by EC2 instances, ECS
-    # services, etc. Resources that belong to this group will be able to send
-    # traffic to the KMS service.
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Allows outbound HTTPS traffic to flow to KMS VPC Endpoints in
-        ${EnvironmentType}
-      SecurityGroupEgress: # TODO Is this necessary? Why is it here?
-        - DestinationSecurityGroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kms-interface-access" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-
-  KmsEndpointInboundTrafficSecurityGroup:
-    # This security group is associated with the KMS VPC Endpoint. Other
-    # security group that have egress rules to this group will have KMS access.
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Allows HTTPS traffic from the KmsEndpointAccessSecurityGroup
-        to flow into the KMS VPC Endpoint in ${EnvironmentType}
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kms-interface-inbound" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-  KmsEndpointInboundTrafficSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      FromPort: 443
-      GroupId: !GetAtt KmsEndpointInboundTrafficSecurityGroup.GroupId
-      IpProtocol: tcp
-      SourceSecurityGroupId: !GetAtt KmsEndpointAccessSecurityGroup.GroupId
-      ToPort: 443
-
-  StsEndpointAccessSecurityGroup:
-    # This security group is intented to be used by EC2 instances, ECS
-    # services, etc. Resources that belong to this group will be able to send
-    # traffic to the STS service.
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Allows outbound HTTPS traffic to flow to STS VPC Endpoints in
-        ${EnvironmentType}
-      # SecurityGroupEgress: # TODO Is this necessary? Why is it here?
-      #   - DestinationSecurityGroupId: !GetAtt EcsLaunchEndpointsInboundTrafficSecurityGroup.GroupId
-      #     FromPort: 443
-      #     IpProtocol: tcp
-      #     ToPort: 443
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_sts-interface-access" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-
-  StsEndpointInboundTrafficSecurityGroup:
-    # This security group is associated with the STS VPC Endpoint. Other
-    # security group that have egress rules to this group will have STS access.
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Allows HTTPS traffic from the StsEndpointAccessSecurityGroup
-        to flow into the STS VPC Endpoint in ${EnvironmentType}
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_sts-interface-inbound" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-  STSEndpointInboundTrafficSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      FromPort: 443
-      GroupId: !GetAtt StsEndpointInboundTrafficSecurityGroup.GroupId
-      IpProtocol: tcp
-      SourceSecurityGroupId: !GetAtt StsEndpointAccessSecurityGroup.GroupId
-      ToPort: 443
-
+  # NOTE: The following ECR and ECS Endpoints generally are all required when
+  # any are required, which is why the don't currently have individual _access_
+  # or _inbound traffic_ security groups. If a resource did need access to only
+  # specific ECR or ECS endpoints, those security groups could be created in a
+  # similar fashion to the other endpoints in this template (such as CloudWatch
+  # Logs).
   EcrDockerVpcEndpoint:
     # https://docs.aws.amazon.com/AmazonECR/latest/userguide/vpc-endpoints.html#ecr-vpc-endpoint-considerations
     Type: AWS::EC2::VPCEndpoint
@@ -270,6 +277,33 @@ Resources:
       VpcEndpointType: Interface
       VpcId: !Ref VpcId
 
+  CloudWatchLogsEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the STS VPC Endpoint. Other
+    # security group that have egress rules to this group will have CloudWatch
+    # Logs access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the CloudWatchLogsEndpointAccessSecurityGroup
+        to flow into the STS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_cw-logs-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  CloudWatchLogsEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt CloudWatchLogsEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt CloudWatchLogsEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
   CloudWatchLogsVpcEndpoint:
     # https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/cloudwatch-logs-and-interface-VPC.html#create-VPC-endpoint-for-CloudWatchLogs
     Type: AWS::EC2::VPCEndpoint
@@ -277,6 +311,7 @@ Resources:
       PrivateDnsEnabled: true
       SecurityGroupIds:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+        - !Ref CloudWatchLogsEndpointInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
       SubnetIds:
         - !Ref PublicSubnet1Id
@@ -285,6 +320,32 @@ Resources:
       VpcEndpointType: Interface
       VpcId: !Ref VpcId
 
+  KmsEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the KMS VPC Endpoint. Other
+    # security group that have egress rules to this group will have KMS access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the KmsEndpointAccessSecurityGroup
+        to flow into the KMS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kms-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  KmsEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt KmsEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt KmsEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
   KmsVpcEndpoint:
     # https://docs.aws.amazon.com/kms/latest/developerguide/kms-vpc-endpoint.html
     Type: AWS::EC2::VPCEndpoint
@@ -300,6 +361,32 @@ Resources:
       VpcEndpointType: Interface
       VpcId: !Ref VpcId
 
+  StsEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the STS VPC Endpoint. Other
+    # security group that have egress rules to this group will have STS access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the StsEndpointAccessSecurityGroup
+        to flow into the STS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_sts-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  StsEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt StsEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt StsEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
   StsVpcEndpoint:
     # https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_sts_vpce.html
     Type: AWS::EC2::VPCEndpoint
@@ -315,6 +402,48 @@ Resources:
       VpcEndpointType: Interface
       VpcId: !Ref VpcId
 
+  KinesisStreamsEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the Kinesis Streams VPC Endpoint.
+    # Other security group that have egress rules to this group will have
+    # Kinesis Streams access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the KinesisStreamsEndpointAccessSecurityGroup
+        to flow into the STS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kinesis-streams-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  KinesisStreamsEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt KinesisStreamsEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt KinesisStreamsEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
+  KinesisStreamsVpcEndpoint:
+    # https://docs.aws.amazon.com/streams/latest/dev/vpc.html
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref KinesisStreamsEndpointInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.kinesis-streams
+      SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
 Outputs:
   EcsLaunchEndpointsAccessSecurityGroupId:
     Value: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
@@ -322,3 +451,7 @@ Outputs:
     Value: !GetAtt KmsEndpointAccessSecurityGroup.GroupId
   StsEndpointAccessSecurityGroupId:
     Value: !GetAtt StsEndpointAccessSecurityGroup.GroupId
+  CloudWatchLogsEndpointAccessSecurityGroupId:
+    Value: !GetAtt CloudWatchLogsEndpointAccessSecurityGroup.GroupId
+  KinesisStreamsEndpointAccessSecurityGroupId:
+    Value: !GetAtt KinesisStreamsEndpointAccessSecurityGroup.GroupId
