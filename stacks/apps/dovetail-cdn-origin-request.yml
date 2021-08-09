@@ -1,4 +1,4 @@
-# stacks/apps/dovetail-cdn-arranger.yml
+# stacks/apps/dovetail-cdn-origin-request.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -8,7 +8,6 @@ Description: >-
 
 Parameters:
   EnvironmentType: { Type: String }
-  EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
@@ -76,21 +75,3 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${OriginRequestFunction}
       RetentionInDays: 14
-  OriginRequestFunctionElevatedErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ERROR [Dovetail-CDN Origin Request] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail CDN Origin Request function is failing, so
-        some stitch requests or downloads may be impacted.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref OriginRequestFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 0
-      TreatMissingData: notBreaching
