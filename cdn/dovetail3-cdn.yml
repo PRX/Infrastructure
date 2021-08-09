@@ -331,7 +331,7 @@ Resources:
       Namespace: AWS/CloudFront
       Period: 300
       Statistic: Average
-      Threshold: 30
+      Threshold: 40
       TreatMissingData: notBreaching
       Unit: Percent
   CloudFrontDistribution500Alarm:
@@ -358,7 +358,7 @@ Resources:
       Namespace: AWS/CloudFront
       Period: 60
       Statistic: Average
-      Threshold: 0.5
+      Threshold: 1
       TreatMissingData: notBreaching
       Unit: Percent
   CloudFrontDistributionFatal500Alarm:
@@ -385,9 +385,36 @@ Resources:
       Namespace: AWS/CloudFront
       Period: 60
       Statistic: Average
-      Threshold: 2.0
+      Threshold: 2
       TreatMissingData: notBreaching
       Unit: Percent
+  CloudFrontDistributionLambdaExecutionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][Lambda] Execution Errors"]]
+      AlarmActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      InsufficientDataActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      OKActions:
+        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
+      AlarmDescription: >
+        Edge lambdas on the Dovetail 3 CDN are failing
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 1
+      MetricName: LambdaExecutionError
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Unit: Count
 
 Outputs:
   CloudFrontDomainName:

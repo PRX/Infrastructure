@@ -10,6 +10,10 @@ Description: >-
   CDN origin for the complete files.
 
 Parameters:
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/CdnArranger
+  #######
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -150,9 +154,8 @@ Resources:
       RetentionInDays: 14
   ArrangerFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail CDN Arranger Lambda function is failing, so
         some stitch requests or downloads may be impacted.
@@ -163,6 +166,56 @@ Resources:
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  ArrangerFunctionWarnLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "warn" }'
+      LogGroupName: !Ref ArrangerFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub warns_${ArrangerFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  ArrangerFunctionLoggedWarnAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Cdn Arranger Lambda function has logged some warnings.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub warns_${ArrangerFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  ArrangerFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref ArrangerFunctionLogGroup
+      MetricTransformations:
+        # TODO Add dimensions
+        - MetricName: !Sub errors_${ArrangerFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  ArrangerFunctionLoggedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Cdn Arranger Lambda function has logged some errors.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub errors_${ArrangerFunction}
+      Namespace: !Ref kMetricFilterNamespace
       Period: 60
       Statistic: Sum
       Threshold: 0
