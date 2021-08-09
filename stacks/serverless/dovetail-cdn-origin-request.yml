@@ -4,6 +4,8 @@ Description: Dovetail CDN Origin-Request Lambda
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
+  OpsErrorMessagesSnsTopicArn:
+    Type: String
   CodeS3Bucket:
     Type: String
   CodeS3ObjectKey:
@@ -95,3 +97,24 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+  DovetailCdnOriginRequestErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "[Dovetail][CdnOriginRequest][Errors] ${EnvironmentType}"
+      AlarmActions: [!Ref OpsErrorMessagesSnsTopicArn]
+      InsufficientDataActions: [!Ref OpsErrorMessagesSnsTopicArn]
+      OKActions: [!Ref OpsErrorMessagesSnsTopicArn]
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail CDN Origin Request function is failing, so
+        some stitch requests or downloads may be impacted.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DovetailCdnOriginRequestFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
