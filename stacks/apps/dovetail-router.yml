@@ -83,6 +83,7 @@ Parameters:
   DovetailRedisHostname: { Type: String }
   MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  SharedGlueDatabaseName: { Type: String }
   # For legacy stack
   CloudFormationNotificationArn: { Type: String }
   TemplateUrlPrefix: { Type: String }
@@ -239,6 +240,103 @@ Resources:
                 - ElbAccountId: !FindInMap [ElbService, !Ref "AWS::Region", AccountId]
             Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
         Version: "2012-10-17"
+  AccessLogsGlueTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref SharedGlueDatabaseName
+      TableInput:
+        Description: !Sub >-
+          ${EnvironmentType} Dovetail Router ALB logs
+        Name: dovetail-router-alb
+        Parameters:
+          projection.enabled: "true"
+          projection.date.type: "date"
+          projection.date.range: "2021/01/01NOW"
+          projection.date.format: "yyyy/MM/dd"
+          projection.date.interval: "1"
+          projection.date.interval.unit: "DAYS"
+        PartitionKeys:
+          - Name: date
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: type
+              Type: string
+            - Name: time
+              Type: string
+            - Name: elb
+              Type: string
+            - Name: client_ip
+              Type: string
+            - Name: client_port
+              Type: int
+            - Name: target_ip
+              Type: string
+            - Name: target_port
+              Type: int
+            - Name: request_processing_time
+              Type: double
+            - Name: target_processing_time
+              Type: double
+            - Name: response_processing_time
+              Type: double
+            - Name: elb_status_code
+              Type: string
+            - Name: target_status_code
+              Type: string
+            - Name: received_bytes
+              Type: bigint
+            - Name: sent_bytes
+              Type: bigint
+            - Name: request_method
+              Type: string
+            - Name: request_uri
+              Type: string
+            - Name: request_http_version
+              Type: string
+            - Name: user_agent
+              Type: string
+            - Name: ssl_cipher
+              Type: string
+            - Name: ssl_protocol
+              Type: string
+            - Name: target_group_arn
+              Type: string
+            - Name: trace_id
+              Type: string
+            - Name: domain_name
+              Type: string
+            - Name: chosen_cert_arn
+              Type: string
+            - Name: matched_rule_priority
+              Type: string
+            - Name: request_creation_time
+              Type: string
+            - Name: actions_executed
+              Type: string
+            - Name: redirect_url
+              Type: string
+            - Name: lambda_error_reason
+              Type: string
+            - Name: target_port_list
+              Type: string
+            - Name: target_status_code_list
+              Type: string
+            - Name: classification
+              Type: string
+            - Name: classification_reason
+              Type: string
+          InputFormat: TextInputFormat
+          Location: !Sub s3://${AccessLogsBucket}/AWSLogs/${AWS::AccountId}/elasticloadbalancing/${AWS::Region}/
+          OutputFormat: IgnoreKeyTextOutputFormat
+          SerdeInfo:
+            Parameters:
+              input.regex: >-
+                ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*):([0-9]*) ([^ ]*)[:-]([0-9]*) ([-.0-9]*) ([-.0-9]*) ([-.0-9]*) (|[-0-9]*) (-|[-0-9]*) ([-0-9]*) ([-0-9]*) \"([^ ]*) ([^ ]*) (- |[^ ]*)\" \"([^\"]*)\" ([A-Z0-9-]+) ([A-Za-z0-9.-]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^\"]*)\" ([-.0-9]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^ ]*)\" \"([^\s]+?)\" \"([^\s]+)\" \"([^ ]*)\" \"([^ ]*)\"
+              serialization.format: "1"
+            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
+        TableType: EXTERNAL_TABLE
 
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
