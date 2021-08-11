@@ -117,6 +117,7 @@ exports.handler = async (event) => {
     330330: '#radiotopia-donations',
     330245: '#radiotopia-donations',
     342678: '#radiotopia-donations',
+    327574: '#radiotopia-donations',
     326353: '#earhustle-donations',
   };
 
@@ -128,13 +129,48 @@ exports.handler = async (event) => {
 
       const ts = Date.parse(activity.created_at);
 
+      // Only process transactions from the campaigns we care about, since
+      // the last time the the poller ran
       if (mapping[camp.id] && ts >= threshold) {
         const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
+        let text = '';
+
+        // For transactions that are part of the recurring donation plan,
+        // if the transaction date is after the plan's start date, we ignore
+        // the activity. We only care about the initial transaction for
+        // recurring plans.
+        if (tx?.metadata?._classy_pay?.transaction?.metaData?.planId) {
+          const rdpId = tx.metadata._classy_pay.transaction.metaData.planId;
+          const recPlan = await httpGet(
+            token,
+            `/recurring-donation-plans/${rdpId}`,
+          );
+          console.log(JSON.stringify(recPlan));
+
+          // This is when the transaction actually started, which could be days
+          // before the activity showed up (like with ACH transactions).
+          const txCreatedDate =
+            tx?.metadata?._classy_pay?.transaction?.createdDate;
+
+          // This is midnight of the day the plan started
+          const recPlanStartedDate = recPlan?.started_at;
+
+          if (txCreatedDate && recPlanStartedDate) {
+            const txDate = txCreatedDate.slice(0, 10);
+            const planDate = recPlanStartedDate.slice(0, 10);
+
+            // Compare the YYYY-MM-DD dates
+            if (txDate > planDate) {
+              console.log('Skipping recurring donation plan activity');
+              text = text.concat(':recycle:');
+              // continue;
+            }
+          }
+        }
 
         // const fullTx = await httpGet(`/transactions/${tx.id}`);
         // console.log(tx);
 
-        let text;
         const name = `${mem?.first_name} ${mem?.last_name.charAt(0)}.`;
         const campUrl = `https://www.classy.org/manage/event/${camp.id}/overview`;
         const txUrl = `https://www.classy.org/admin/72482/transactions/${tx.id}`;
@@ -179,23 +215,27 @@ exports.handler = async (event) => {
         }
 
         if (tx.frequency === 'one-time') {
-          text = `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`;
+          text = text.concat(
+            `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`,
+          );
         } else {
-          text = `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`;
+          text = text.concat(
+            `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`,
+          );
         }
 
-        if (mapping[camp.id] === '#radiotopia-donations') {
-          const count = await getCount();
-          await s3
-            .putObject({
-              Body: `${count + 1}`,
-              Bucket: process.env.COUNTER_BUCKET,
-              Key: process.env.COUNTER_OBJECT,
-            })
-            .promise();
+        // if (mapping[camp.id] === '#radiotopia-donations') {
+        //   const count = await getCount();
+        //   await s3
+        //     .putObject({
+        //       Body: `${count + 1}`,
+        //       Bucket: process.env.COUNTER_BUCKET,
+        //       Key: process.env.COUNTER_OBJECT,
+        //     })
+        //     .promise();
 
-          text = `${text} (#${count})`;
-        }
+        //   text = `${text} (#${count})`;
+        // }
 
         await sns
           .publish({
