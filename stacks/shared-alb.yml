@@ -285,6 +285,18 @@ Resources:
               serialization.format: "1"
             SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
         TableType: EXTERNAL_TABLE
+  AccessLogsRecentQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref SharedGlueDatabaseName
+      Description: >-
+        View recent ALB requests using the table's date partitions
+      Name: !Sub ${EnvironmentType} Shared ALB Recent Requests
+      QueryString: !Sub >-
+        SELECT *
+        FROM "${SharedGlueDatabaseName}"."${AccessLogsGlueTable}"
+        WHERE "date" > date_format(current_date - interval '1' day, '%Y/%m/%d')
+        ORDER BY time ASC
 
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
