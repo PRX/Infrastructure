@@ -145,7 +145,6 @@ exports.handler = async (event) => {
             token,
             `/recurring-donation-plans/${rdpId}`,
           );
-          console.log(JSON.stringify(recPlan));
 
           // This is when the transaction actually started, which could be days
           // before the activity showed up (like with ACH transactions).
@@ -163,7 +162,7 @@ exports.handler = async (event) => {
             if (txDate > planDate) {
               console.log('Skipping recurring donation plan activity');
               text = text.concat(':recycle:');
-              // continue;
+              continue;
             }
           }
         }
