@@ -17,6 +17,10 @@ Parameters:
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   CastleRedisCachePrimaryEndPointAddress: { Type: String }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
@@ -608,6 +612,28 @@ Resources:
           MetricValue: "1"
 
   # Redis
+  AnalyticsRedisFunctionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} Dovetail Analytics Redis
+        Lambda function that allows all outbound traffic
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+        - CidrIpv6: ::/0
+          IpProtocol: "-1"
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_dovetail-analytics_redis-function" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      VpcId: !Ref VpcId
   AnalyticsRedisFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -646,14 +672,13 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Analytics
       Timeout: 30
-      # TODO
-      # VpcConfig:
-      #   SecurityGroupIds:
-      #     - !Ref VPCSecurityGroup
-      #   SubnetIds:
-      #     - !Ref VPCSubnet1
-      #     - !Ref VPCSubnet2
-      #     - !Ref VPCSubnet3
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt AnalyticsRedisFunctionSecurityGroup.GroupId
+        SubnetIds:
+          - !Ref VpcPrivateSubnet1Id
+          - !Ref VpcPrivateSubnet2Id
+          - !Ref VpcPrivateSubnet3Id
   AnalyticsRedisFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
