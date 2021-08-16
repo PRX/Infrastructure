@@ -181,8 +181,20 @@ Resources:
         };
       MemorySize: 512
       Policies:
-        - !Ref LogBucketReadPolicy
-        - !Ref DestinationBucketWritePolicy
+        - Statement:
+            - Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Effect: Allow
+              Resource: !Sub arn:aws:s3:::${LogBucket}/${LogPrefix}/*
+          Version: "2012-10-17"
+        - Statement:
+            - Action:
+                - s3:PutObject
+                - s3:PutObjectTagging
+              Effect: Allow
+              Resource: !Sub arn:aws:s3:::${DestinationBucket}/${DestinationPrefix}/*
+          Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -192,26 +204,4 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Log Shipper
       Timeout: 30
-  LogBucketReadPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - s3:GetObject
-              - s3:GetObjectVersion
-            Effect: Allow
-            Resource: !Sub arn:aws:s3:::${LogBucket}/${LogPrefix}/*
-        Version: "2012-10-17"
-  DestinationBucketWritePolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - s3:PutObject
-              - s3:PutObjectTagging
-            Effect: Allow
-            Resource: !Sub arn:aws:s3:::${DestinationBucket}/${DestinationPrefix}/*
-        Version: "2012-10-17"
   # TODO s3 trigger
