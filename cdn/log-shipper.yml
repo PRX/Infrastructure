@@ -52,13 +52,19 @@ Parameters:
     Description: eg. some-bucket-name
   DestinationPrefix:
     Type: String
-    Description: eg. some/path/here
+    Description: eg. some/path/here (a trailing slash is always added)
   EnvironmentType:
     Type: String
     AllowedValues:
       - Testing
       - Staging
       - Production
+  EnvironmentTypeAbbreviation:
+    Type: String
+    AllowedValues:
+      - test
+      - stag
+      - prod
   PodcastIds:
     Type: String
     Description: eg. 32,85,158,99
@@ -209,3 +215,26 @@ Resources:
         prx:dev:application: Log Shipper
       Timeout: 30
   # TODO s3 trigger
+  ShipperFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ShipperFunction}
+      RetentionInDays: 30
+  ShipperFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Log Shipper] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Log Shipper Lambda function is failing, so
+        Magellan may not be receiving log data
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ShipperFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
