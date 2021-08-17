@@ -24,7 +24,7 @@ Resources:
       Name: !Ref Domain
 
   Text:
-    Type: "AWS::Route53::RecordSetGroup"
+    Type: AWS::Route53::RecordSetGroup
     Properties:
       # Route53 expects TXT record values to be enclosed in double quotes, so in
       # the YAML they need to be double-quoted.
@@ -34,19 +34,39 @@ Resources:
       Comment: TXT Records
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
-            - '"status-page-domain-verification=6n18jv5h9b5d"'
-            - '"google-site-verification=j5qsGbnU-E37T9lsaAYL1967H0ej6iZAeX_vEWcOA-w"'
-            - '"google-site-verification=NgVnyJeUZ7gbeAr4l2BeDMfDonC-U6W2VONkOMxb4IM"'
-            - '"v=spf1 include:servers.mcsv.net include:_spf.invoicesherpa.com include:mail.zendesk.com include:_spf.google.com include:amazonses.com -all"'
-            - '"MS=ms48604406"'
+        - Name: !Ref Domain
+          ResourceRecords:
+            # SPF
+            - '"v=spf1 include:_spf.google.com include:amazonses.com include:mail.zendesk.com include:servers.mcsv.net include:_spf.invoicesherpa.com -all"'
+            # Domain verification
+            - '"amazon-business-verification=ad3856864cdfe75089169fd3d7be80c0bbfa6773e6a80757d107a98de027534b"'
             - '"apple-domain-verification=nd7ZcKMYeWFpLWd1"'
             - '"atlassian-domain-verification=0qLmYvyPRQa/uMaLKELb6Gb81mdCG09UaOQa2alPjlZpFl6W1LHIFqQZA5WXDfq/"'
+            - '"google-site-verification=j5qsGbnU-E37T9lsaAYL1967H0ej6iZAeX_vEWcOA-w"'
+            - '"google-site-verification=NgVnyJeUZ7gbeAr4l2BeDMfDonC-U6W2VONkOMxb4IM"'
             - '"google-site-verification=j6DW4DZxyKz5eX_UEMJ2zft2FcZquM6DLZCYzKkOeSs"'
-            - '"amazon-business-verification=ad3856864cdfe75089169fd3d7be80c0bbfa6773e6a80757d107a98de027534b"'
+            - '"status-page-domain-verification=6n18jv5h9b5d"'
+            # Other
+            - '"MS=ms48604406"'
           TTL: "300"
           Type: TXT
-          Name: !Ref Domain
+        # BEGIN APEX DKIM RECORDS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+        - Name: !Sub cm._domainkey.${Domain} # Campaign Monitor
+          ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGekjRBpJt4pFq65ZNr8SV8+XPiZ+hjkkBToUAeEqGoZCyXFKVDfCEWbdPnp9W8VGf0o5ZBay5z4sGkkhUSGyCBlp8CvCFw7PQqjb9HfC+PrVVQgIRxMyh0Ea6FvMISPADBHj8mSYS+G6E1CMvXm76OaTIruo3/VRUfHhnTR4lnQIDAQAB"'
+          TTL: "300"
+          Type: TXT
+        - Name: !Sub google._domainkey.${Domain} # Google Workspace
+          ResourceRecords:
+            - '"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYbt8bCjEvkdbTiYthVqEtFVySGUqThs+Agsbz7nU2BybHIqo9DCD7xMy9wVfaQOr0uPiKkahvpRVZAFgbYK4o2T7q4tibwb0UoD2LD0X6y+aKN8KWh07vyr17/fq6fiYTeeCIKyz8bufJcEZ1ZatLhlSp5gvUs2CUNWJjwSxh3wIDAQAB"'
+          TTL: "300"
+          Type: TXT
+        - Name: !Sub smtp._domainkey.${Domain}
+          ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDhbR6vE/h4/KEg6lvClOh1PhgDM83LC90coBFLeDhrp5O92VOViTmHbckO+L9fZCvJzIY8ZM1xbY+o1Rlh0ap7afOze2oIdFZC9yaG3Vs3prl0vI2sbLISZqb3pYG9q33Sy3yavI8Hc0LUbYtnSwlzANhgggDX9EMDWjvDE97B3QIDAQAB"'
+          TTL: "300"
+          Type: TXT
+        # END APEX DKIM RECORDS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         # BEGIN NOTIFICATIONS SUBDOMAIN RECORDS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
         - ResourceRecords:
             - '"v=spf1 include:stspg-customer.com ~all"'
@@ -70,11 +90,6 @@ Resources:
           Type: TXT
           Name: !Sub _amazonses.${Domain}
         - ResourceRecords:
-            - '"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYbt8bCjEvkdbTiYthVqEtFVySGUqThs+Agsbz7nU2BybHIqo9DCD7xMy9wVfaQOr0uPiKkahvpRVZAFgbYK4o2T7q4tibwb0UoD2LD0X6y+aKN8KWh07vyr17/fq6fiYTeeCIKyz8bufJcEZ1ZatLhlSp5gvUs2CUNWJjwSxh3wIDAQAB"'
-          TTL: "300"
-          Type: TXT
-          Name: !Sub google._domainkey.${Domain}
-        - ResourceRecords:
             - '"72a959b7c3"'
           TTL: "300"
           Type: TXT
@@ -84,16 +99,6 @@ Resources:
           TTL: "300"
           Type: TXT
           Name: !Sub _github-challenge-PRX.www.${Domain}
-        - ResourceRecords:
-            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDhbR6vE/h4/KEg6lvClOh1PhgDM83LC90coBFLeDhrp5O92VOViTmHbckO+L9fZCvJzIY8ZM1xbY+o1Rlh0ap7afOze2oIdFZC9yaG3Vs3prl0vI2sbLISZqb3pYG9q33Sy3yavI8Hc0LUbYtnSwlzANhgggDX9EMDWjvDE97B3QIDAQAB"'
-          TTL: "300"
-          Type: TXT
-          Name: !Sub smtp._domainkey.${Domain}
-        - ResourceRecords:
-            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGekjRBpJt4pFq65ZNr8SV8+XPiZ+hjkkBToUAeEqGoZCyXFKVDfCEWbdPnp9W8VGf0o5ZBay5z4sGkkhUSGyCBlp8CvCFw7PQqjb9HfC+PrVVQgIRxMyh0Ea6FvMISPADBHj8mSYS+G6E1CMvXm76OaTIruo3/VRUfHhnTR4lnQIDAQAB"'
-          TTL: "300"
-          Type: TXT
-          Name: !Sub cm._domainkey.${Domain}
         - ResourceRecords:
             - '"k=rsa; t=s; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDPtW5iwpXVPiH5FzJ7Nrl8USzuY9zqqzjE0D1r04xDN6qwziDnmgcFNNfMewVKN2D1O+2J9N14hRprzByFwfQW76yojh54Xu3uSbQ3JP0A7k8o8GutRF8zbFUA8n0ZH2y0cIEjMliXY4W4LwPA7m4q0ObmvSjhd63O9d8z1XkUBwIDAQAB"'
           TTL: "300"
