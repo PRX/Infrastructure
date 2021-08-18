@@ -34,29 +34,34 @@ Resources:
       Comment: TXT Records
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
-            - '"google-site-verification=zFRPkYoCbmLhpl-z3WCBzd0uUXdlP50m39evhsNZHKQ"'
+        - Name: !Ref Domain
+          ResourceRecords:
+            # SPF
             - '"v=spf1 include:mail.zendesk.com include:servers.mcsv.net ?all"'
+            # DMARC
+            - '"v=DMARC1; p=none;pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
+            # Domain verification
+            - '"google-site-verification=zFRPkYoCbmLhpl-z3WCBzd0uUXdlP50m39evhsNZHKQ"'
           TTL: "300"
           Type: TXT
-          Name: !Ref Domain
-        - ResourceRecords:
+        - Name: !Sub zendesk_verification.${Domain}
+          ResourceRecords:
             - '"26777e86e5712a38"'
           TTL: "300"
           Type: TXT
-          Name: !Sub zendesk_verification.${Domain}
-        - ResourceRecords:
+        - Name: !Sub cm._domainkey.${Domain}
+          ResourceRecords:
             - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDYge8wksKTUDp27iGsOvkwkTSaO7iXVwMPiHqG8x9JH/Pi9YBwQ8Ld1laKERFi7JSMR0VAr7BCBF935LRPrNuTtE7p3E1EAbjn7ZO5ZpWE0cvBEAYOXDh2RLTWZnW294CvvzhWhg77Oe43rNl0+0duHSCbM4/q2BT8Y4voea3nIwIDAQAB"'
           TTL: "300"
           Type: TXT
-          Name: !Sub cm._domainkey.${Domain}
   GSuite:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: G Suite
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        - Name: !Ref Domain
+          ResourceRecords:
             - 1 ASPMX.L.GOOGLE.COM.
             - 5 ALT1.ASPMX.L.GOOGLE.COM.
             - 5 ALT2.ASPMX.L.GOOGLE.COM.
@@ -64,163 +69,163 @@ Resources:
             - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "300"
           Type: MX
-          Name: !Ref Domain
   Squarespace:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Squarespace
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        - Name: !Ref Domain
+          ResourceRecords:
             - "198.185.159.144"
             - "198.185.159.145"
             - "198.49.23.144"
             - "198.49.23.145"
           TTL: "300"
           Type: A
-          Name: !Ref Domain
-        - ResourceRecords:
+        - Name: !Sub www.${Domain}
+          ResourceRecords:
             - ext-cust.squarespace.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub www.${Domain}
-        - ResourceRecords:
+        - Name: !Sub 8k7w47c5y878fddxzmfk.${Domain}
+          ResourceRecords:
             - verify.squarespace.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub 8k7w47c5y878fddxzmfk.${Domain}
   MailChimp:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: MailChimp
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        - Name: !Sub k1._domainkey.${Domain}
+          ResourceRecords:
             - dkim.mcsv.net.
           TTL: "300"
           Type: CNAME
-          Name: !Sub k1._domainkey.${Domain}
   Zendesk:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Zendesk
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        - Name: !Sub zendesk1.${Domain}
+          ResourceRecords:
             - mail1.zendesk.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub zendesk1.${Domain}
-        - ResourceRecords:
+        - Name: !Sub zendesk2.${Domain}
+          ResourceRecords:
             - mail2.zendesk.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub zendesk2.${Domain}
-        - ResourceRecords:
+        - Name: !Sub zendesk3.${Domain}
+          ResourceRecords:
             - mail3.zendesk.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub zendesk3.${Domain}
-        - ResourceRecords:
+        - Name: !Sub zendesk4.${Domain}
+          ResourceRecords:
             - mail4.zendesk.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub zendesk4.${Domain}
   Feedburner:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: MailChimp
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - ResourceRecords:
+        - Name: !Sub feeds.${Domain}
+          ResourceRecords:
             - io25k.feedproxy.ghs.google.com.
           TTL: "300"
           Type: CNAME
-          Name: !Sub feeds.${Domain}
   Media:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Media server
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - Type: A
-          Name: !Sub media.${Domain}
-          AliasTarget:
+        - AliasTarget:
             DNSName: d3i8nuey03grxr.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
           Name: !Sub media.${Domain}
-          AliasTarget:
+          Type: A
+        - AliasTarget:
             DNSName: d3i8nuey03grxr.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
+          Name: !Sub media.${Domain}
+          Type: AAAA
   RadiotopiaRadio:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Radio and API
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - Type: A
-          Name: !Sub radio.${Domain}
-          AliasTarget:
+        - AliasTarget:
             DNSName: d2gwgeb8jpdvt1.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
           Name: !Sub radio.${Domain}
-          AliasTarget:
+          Type: A
+        - AliasTarget:
             DNSName: d2gwgeb8jpdvt1.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: A
-          Name: !Sub tower.${Domain}
-          AliasTarget:
+          Name: !Sub radio.${Domain}
+          Type: AAAA
+        - AliasTarget:
             DNSName: dp74e6w5oogxj.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
           Name: !Sub tower.${Domain}
-          AliasTarget:
+          Type: A
+        - AliasTarget:
             DNSName: dp74e6w5oogxj.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
+          Name: !Sub tower.${Domain}
+          Type: AAAA
   Legacy:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Radio and API
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - Type: A
-          Name: !Sub v1.${Domain}
-          AliasTarget:
+        - AliasTarget:
             DNSName: d1r9u0eotsa1l1.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
           Name: !Sub v1.${Domain}
-          AliasTarget:
+          Type: A
+        - AliasTarget:
             DNSName: d1r9u0eotsa1l1.cloudfront.net
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
+          Name: !Sub v1.${Domain}
+          Type: AAAA
+
   Plus:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Radiotopia Plus
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        - Type: A
-          Name: !Sub plus.${Domain}
-          AliasTarget:
+        - AliasTarget:
             DNSName: dlbhchudv5ekb.cloudfront.net.
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
-        - Type: AAAA
           Name: !Sub plus.${Domain}
-          AliasTarget:
+          Type: A
+        - AliasTarget:
             DNSName: dlbhchudv5ekb.cloudfront.net.
             # Global CloudFront hosted zone ID
             HostedZoneId: Z2FDTNDATAQYW2
+          Name: !Sub plus.${Domain}
+          Type: AAAA
 
   AwsAcmLegacyUsEast1:
     Type: AWS::Route53::RecordSetGroup
