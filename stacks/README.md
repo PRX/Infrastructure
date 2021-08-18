@@ -1,5 +1,9 @@
 # Setup
 
+## Amazon SES
+
+All necessary Amazon SES identities (i.e., domains that apps and services will be sending mail from) must be set up before the stacks are created.
+
 ## Databases
 
 Resources that depend on external databases, such as ECS tasks, must be conditional on the database being available. Because of the order of operations when spinning up a new region (i.e., stack is launched to create the VPC, database is created in the VPC, applications can be launched using the database), it must be possible to launch the stack without the database.
