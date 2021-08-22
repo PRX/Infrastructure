@@ -923,6 +923,44 @@ Resources:
       LogGroupName: !Ref TaskLogGroup
       RoleArn: !GetAtt SubscriptionFilterRole.Arn
 
+  StackOverviewDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody: !Sub |-
+        {
+          "widgets": [
+            {
+              "height": 2,
+              "width": 24,
+              "y": 0,
+              "x": 0,
+              "type": "text",
+              "properties": {
+                "markdown": "# Dovetail Router\n## **${EnvironmentType}**\n"
+              }
+            },
+            {
+              "height": 6,
+              "width": 12,
+              "y": 2,
+              "x": 0,
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApplicationELB", "HTTPCode_Target_3XX_Count", "TargetGroup", "${TargetGroup.TargetGroupFullName}", "LoadBalancer", "${Alb.LoadBalancerFullName}", { "label": "3XX Count" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": true,
+                "region": "${AWS::Region}",
+                "stat": "Sum",
+                "period": 300,
+                "title": "HTTP Redirects"
+              }
+            }
+          ]
+        }
+      DashboardName: !Sub ${RootStackName}-${AWS::Region}-DovetailRouter
+
   LegacyStack:
     Type: AWS::CloudFormation::Stack
     Properties:
