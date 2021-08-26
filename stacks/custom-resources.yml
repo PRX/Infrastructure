@@ -5,6 +5,7 @@ Description: Provides services to be used as CloudFormation custom resources
 
 Parameters:
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   StorageStackName: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -68,6 +69,42 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${AmazonSesSmtpCredentialsGeneratorFunction}
       RetentionInDays: 14
+  AmazonSesSmtpCredentialsGeneratorFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] SES Cred. Generator <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource function for generating SES
+        SMTP credentials is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AmazonSesSmtpCredentialsGeneratorFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AmazonSesSmtpCredentialsGeneratorFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt AmazonSesSmtpCredentialsGeneratorFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
   S3StaticSiteDeployFunction:
     Type: AWS::Serverless::Function
@@ -169,6 +206,42 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${S3StaticSiteDeployFunction}
       RetentionInDays: 14
+  S3StaticSiteDeployFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] S3 Deploy <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource function for static S3
+        website deployment is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref S3StaticSiteDeployFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  S3StaticSiteDeployFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt S3StaticSiteDeployFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
   AvailabilityZoneSelectorFunction:
     Type: AWS::Serverless::Function
@@ -239,6 +312,42 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${AvailabilityZoneSelectorFunction}
       RetentionInDays: 14
+  AvailabilityZoneSelectorFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] AZ Selector <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource function for selecting
+        availability zones is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AvailabilityZoneSelectorFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AvailabilityZoneSelectorFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt AvailabilityZoneSelectorFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
   EchoFunction:
     Type: AWS::Serverless::Function
@@ -282,6 +391,42 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${EchoFunction}
       RetentionInDays: 14
+  EchoFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] Echo <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource echo function is failing. This
+        could mean that a stack update is stalled, waiting for an HTTP callback
+        from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EchoFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  EchoFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt EchoFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
   CloudWatchAlarmTaggerFunction:
     Type: AWS::Serverless::Function
@@ -370,6 +515,42 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmTaggerFunction}
       RetentionInDays: 14
+  CloudWatchAlarmTaggerFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] Alarm Tagger <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource function for tagging
+        CloudWatch alarms is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudWatchAlarmTaggerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  CloudWatchAlarmTaggerFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunctionErrorAlarm.Arn
+      AlarmArn: !GetAtt CloudWatchAlarmTaggerFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
