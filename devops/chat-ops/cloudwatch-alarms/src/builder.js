@@ -24,6 +24,8 @@ function cleanName(alarmName) {
 }
 
 /**
+ * Returns the standard message title format for an alarm
+ * e.g., OK | Ohio » Cleaned_alarm_name
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @returns {String}
  */
@@ -34,6 +36,8 @@ function title(event) {
 }
 
 /**
+ * Returns a CloudWatch SDK client with credentials for the account where an
+ * alarm originated
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  */
 async function cloudWatchClient(event) {
@@ -77,6 +81,11 @@ async function detailLines(event, desc, history) {
 
 module.exports = {
   /**
+   * Returns all the Slack message blocks that will make up the content of the
+   * alarm notification being sent to Slack. The structure is roughly:
+   * - Linked title
+   * - Details about the new alarm state (cause, duration, etc)
+   * - (For ALARM only) The full text description of the alarm
    * @param {EventBridgeCloudWatchAlarmsEvent} event
    * @returns {Promise<any[]>}
    */
@@ -84,13 +93,15 @@ module.exports = {
     const blox = [];
 
     const cloudwatch = await cloudWatchClient(event);
+
+    // Fetch the full description of the alarm
     const desc = await cloudwatch
       .describeAlarms({ AlarmNames: [event.detail.alarmName] })
       .promise();
 
+    // Fetch all state transitions from the last 24 hours
     const historyStart = new Date();
     historyStart.setUTCHours(-24);
-
     const history = await cloudwatch
       .describeAlarmHistory({
         AlarmName: event.detail.alarmName,
@@ -101,7 +112,7 @@ module.exports = {
       })
       .promise();
 
-    // Title link block
+    // Linked title block
     blox.push({
       type: 'section',
       text: {
@@ -136,9 +147,10 @@ module.exports = {
       },
     });
 
+    // Include a block with the alarm's full text description for ALARM states
     if (
       event.detail.state.value === 'ALARM' &&
-      event?.detail?.configuration?.description
+      event.detail.configuration?.description
     ) {
       blox.push({
         type: 'section',

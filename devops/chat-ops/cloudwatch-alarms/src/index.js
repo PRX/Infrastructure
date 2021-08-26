@@ -11,10 +11,10 @@
 
 /**
  * @typedef {Object} EventBridgeCloudWatchAlarmsEventDetailState
- * @property {String} reason
- * @property {JSONString} reasonData
- * @property {String} timestamp
- * @property {('OK'|'ALARM'|'INSUFFICIENT_DATA')} value
+ * @property {!String} reason
+ * @property {!JSONString} [reasonData]
+ * @property {!String} timestamp
+ * @property {!('OK'|'ALARM'|'INSUFFICIENT_DATA')} value
  */
 
 /**
@@ -101,7 +101,13 @@ exports.handler = async (event) => {
           username: 'Amazon CloudWatch Alarms',
           icon_emoji: ':ops-cloudwatch-alarm:',
           channel: '#sandbox2',
-          text: `The following CloudWatch Alarm event was not handled successfully: ${event}`,
+          text: [
+            'The following CloudWatch alarm event was not handled successfully:',
+            `\n\n*Event ID:* \`${event.id}\`\n\n`,
+            '```',
+            JSON.stringify(event),
+            '```',
+          ].join(''),
         }),
       })
       .promise();
