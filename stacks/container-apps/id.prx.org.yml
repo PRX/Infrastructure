@@ -6,6 +6,7 @@ Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -64,6 +65,10 @@ Parameters:
     Type: String
     Default: 128
   AmazonSesSmtpCredentialsGeneratorServiceToken:
+    Type: String
+  SharedRdsMysqlEndpoint:
+    Type: String
+  SharedAuroraMysqlEndpoint:
     Type: String
 Resources:
   ALBTargetGroup:
@@ -166,6 +171,11 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_3306_TCP_ADDR
+                  Value: !Ref SharedAuroraMysqlEndpoint
+                - !Ref AWS::NoValue
             - Name: SMTP_ADDRESS
               Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
             - Name: SMTP_AUTHENTICATION
