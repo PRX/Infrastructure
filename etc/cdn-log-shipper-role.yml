@@ -1,0 +1,97 @@
+# etc/cloudwatch-data-sharing-role.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates a role to be used by all Dovetail CDN log shipper Lambda functions.
+  It should be used as the execution role for the funtions, and will provide
+  access to third-party S3 buckets where logs are being sent.
+
+Parameters:
+  LogSourceBucketNamesAndPrefixes:
+    Description: >-
+      A comma-separated list of S3 buckets with optional prefixes that the role
+      will have read-only access to. Do not include trailing slashes.
+      e.g., "myBucket,myOtherBucket/myPrefix"
+    Type: CommaDelimitedList
+  DestinationBucketNames:
+    Description: >-
+      A comma-separated list of S3 bucket names that the role will have limited
+      write access to. These will generally be buckets owned by third parties.
+      Do not include object prefixes or trailing slashes.
+      e.g., "acmeLogBucket,bobcoLogIngestBucket"
+    Type: CommaDelimitedList
+
+Resources:
+  IamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Effect: Allow
+                # Wrap each item in the list in: arn:aws:s3:::${item}/*
+                Resource: !Split
+                  - ","
+                  - !Sub
+                    - "arn:aws:s3:::${inner}/*"
+                    - inner: !Join
+                        - "/*,arn:aws:s3:::"
+                        - Ref: LogSourceBucketNamesAndPrefixes
+            Version: "2012-10-17"
+          PolicyName: LogSourceBucketReadPolicy
+        - PolicyDocument:
+            Statement:
+              - Action: s3:ListBucketMultipartUploads
+                Effect: Allow
+                Resource: !Split
+                  - ","
+                  - !Sub
+                    - "arn:aws:s3:::${inner}"
+                    - inner: !Join
+                        - ",arn:aws:s3:::"
+                        - Ref: DestinationBucketNames
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject*
+                Effect: Allow
+                Resource: !Split
+                  - ","
+                  - !Sub
+                    - "arn:aws:s3:::${inner}/*"
+                    - inner: !Join
+                        - "/*,arn:aws:s3:::"
+                        - Ref: DestinationBucketNames
+            Version: "2012-10-17"
+          PolicyName: LogDestinationBucketPolicy
+      RoleName: PRX-CdnLogDeliveryRole
+      Tags:
+        - Key: prx:meta:tagging-version
+          Value: "2021-04-07"
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+        - Key: prx:ops:environment
+          Value: Production
+        - Key: prx:dev:family
+          Value: Dovetail
+        - Key: prx:dev:application
+          Value: Log Shipper
+
+Outputs:
+  RoleName:
+    Value: !Ref IamRole
+  RoleArn:
+    Value: !GetAtt IamRole.Arn
