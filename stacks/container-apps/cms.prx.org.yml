@@ -6,6 +6,7 @@ Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -82,6 +83,10 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   ImageSqsCallbackName:
     Type: AWS::SSM::Parameter::Value<String>
+  SharedRdsMysqlEndpoint:
+    Type: String
+  SharedAuroraMysqlEndpoint:
+    Type: String
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -186,6 +191,11 @@ Resources:
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_3306_TCP_ADDR
+                  Value: !Ref SharedAuroraMysqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -273,6 +283,11 @@ Resources:
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_3306_TCP_ADDR
+                  Value: !Ref SharedAuroraMysqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
