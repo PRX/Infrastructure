@@ -109,16 +109,10 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_HOST
-                  Value: !Ref SharedAuroraPostgresqlEndpoint
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_PORT
-                  Value: "3306" # TODO Make this a root stack parameter
-                - !Ref AWS::NoValue
+            - Name: POSTGRES_HOST
+              Value: !If [IsStaging, !Ref SharedAuroraPostgresqlEndpoint, !Ref SharedRdsPostgresqlEndpoint]
+            - Name: POSTGRES_PORT
+              Value: !If [IsStaging, "3306", "5432"]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
