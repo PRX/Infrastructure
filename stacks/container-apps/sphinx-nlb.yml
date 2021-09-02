@@ -5,6 +5,7 @@ Description: >
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -66,6 +67,10 @@ Parameters:
   ContainerCpu:
     Type: String
     Default: 128
+  SharedRdsMysqlEndpoint:
+    Type: String
+  SharedAuroraMysqlEndpoint:
+    Type: String
 Resources:
   SphinxInboundSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -425,6 +430,11 @@ Resources:
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: MEMCACHED_PORT_11211_TCP_PORT
               Value: !Ref SharedMemcachedEndpointPort
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_3306_TCP_ADDR
+                  Value: !Ref SharedAuroraMysqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
