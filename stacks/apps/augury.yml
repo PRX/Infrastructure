@@ -41,7 +41,6 @@ Parameters:
   SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
@@ -246,16 +245,10 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_HOST
-                  Value: !Ref SharedAuroraPostgresqlEndpoint
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_PORT
-                  Value: "3306" # TODO Make this a root stack parameter
-                - !Ref AWS::NoValue
+            - Name: POSTGRES_HOST
+              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+            - Name: POSTGRES_PORT
+              Value: !If [IsProduction, "5432", "3306"]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -305,16 +298,10 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_HOST
-                  Value: !Ref SharedAuroraPostgresqlEndpoint
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_PORT
-                  Value: "3306" # TODO Make this a root stack parameter
-                - !Ref AWS::NoValue
+            - Name: POSTGRES_HOST
+              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+            - Name: POSTGRES_PORT
+              Value: !If [IsProduction, "5432", "3306"]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -471,16 +458,10 @@ Resources:
               Value: "prx-mrr-us-east-1-ad-files.s3.us-east-1.amazonaws.com"
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: "a.prxu.org"
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_HOST
-                  Value: !Ref SharedAuroraPostgresqlEndpoint
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsStaging
-                - Name: POSTGRES_PORT
-                  Value: "3306" # TODO Make this a root stack parameter
-                - !Ref AWS::NoValue
+            - Name: POSTGRES_HOST
+              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+            - Name: POSTGRES_PORT
+              Value: !If [IsProduction, "5432", "3306"]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
