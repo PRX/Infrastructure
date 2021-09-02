@@ -8,6 +8,7 @@ Conditions:
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   UploadSigningEndpointUrl:
     Type: String
@@ -97,6 +98,10 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
+  SharedRdsMysqlEndpoint:
+    Type: String
+  SharedAuroraMysqlEndpoint:
+    Type: String
 Resources:
   ALBTargetGroup:
     Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
@@ -259,6 +264,11 @@ Resources:
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: MEMCACHED_PORT_11211_TCP_PORT
               Value: !Ref SharedMemcachedEndpointPort
+            - Fn::If:
+                - IsStaging
+                - Name: DB_PORT_3306_TCP_ADDR
+                  Value: !Ref SharedAuroraMysqlEndpoint
+                - !Ref AWS::NoValue
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
