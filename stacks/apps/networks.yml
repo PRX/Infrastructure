@@ -146,7 +146,7 @@ Resources:
   # HTTPS traffic via the shared application load balancer.
   PublicWebEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasAuroraEndpoint # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -249,6 +249,8 @@ Resources:
               Value: !GetAtt Constants.SphinxBaseUrl
             - Name: DB_PORT_3306_TCP_ADDR
               Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+            - Name: DB_PORT_3306_TCP_PORT
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -443,7 +445,7 @@ Resources:
   # the image act as a Sphinx server.
   SphinxServerEcsService:
     Type: AWS::ECS::Service
-    Condition: HasRdsEndpoint
+    Condition: HasAuroraEndpoint # See README
     DependsOn:
       - SphinxServerSearchdNlbListener
       - SphinxServerWebNlbListener
@@ -564,6 +566,8 @@ Resources:
               Value: "true"
             - Name: DB_PORT_3306_TCP_ADDR
               Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+            - Name: DB_PORT_3306_TCP_PORT
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
