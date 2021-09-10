@@ -566,10 +566,10 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     DependsOn: Alb
     Properties:
-      HealthCheckIntervalSeconds: 15
+      HealthCheckIntervalSeconds: 30
       HealthCheckPath: /
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 3
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
       Port: 80
       Protocol: HTTP
       TargetGroupAttributes:
@@ -586,7 +586,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Router }
       TargetType: instance
-      UnhealthyThresholdCount: 3
+      UnhealthyThresholdCount: 4
       VpcId: !Ref VpcId
   TargetGroupHttp5xxAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -771,7 +771,7 @@ Resources:
   ScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MinCapacity: !If [IsProduction, 3, 2]
+      MinCapacity: !If [IsProduction, 4, 2]
       MaxCapacity: !If [IsProduction, 10, 4]
       ResourceId: !Join ["/", ["service", !Ref EcsClusterName, !GetAtt EcsService.Name]]
       RoleARN: !GetAtt ScalingIamRole.Arn
@@ -789,7 +789,7 @@ Resources:
           ResourceLabel: !Join ["/", [!GetAtt Alb.LoadBalancerFullName, !GetAtt TargetGroup.TargetGroupFullName]]
         ScaleInCooldown: 60
         ScaleOutCooldown: 60
-        TargetValue: 1000
+        TargetValue: 800
 
   # Log metric filters
   LogDownloadsMetricFilter:
