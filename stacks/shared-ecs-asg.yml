@@ -34,6 +34,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   InstanceProfile:
@@ -297,6 +298,7 @@ Resources:
   # arguments of cfn-signal in the launch template's user data
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: IsStaging # TODO
     CreationPolicy:
       AutoScalingCreationPolicy:
         MinSuccessfulInstancesPercent: 100
@@ -328,7 +330,7 @@ Resources:
       MaxSize: !If [IsProduction, "50", "20"]
       MetricsCollection:
         - Granularity: 1Minute
-      MinSize: !If [IsProduction, "0", "0"] # TODO Increase min in prod
+      MinSize: !If [IsProduction, "7", "0"]
       NewInstancesProtectedFromScaleIn: true
       # TODO NotificationConfigurations
       Tags:
@@ -349,6 +351,7 @@ Resources:
 
   DefaultCapacityProvider:
     Type: AWS::ECS::CapacityProvider
+    Condition: IsStaging # TODO
     Properties:
       AutoScalingGroupProvider:
         AutoScalingGroupArn: !Ref Asg
@@ -371,6 +374,7 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
   ClusterCapacityProviderAssociation:
     Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Condition: IsStaging # TODO
     Properties:
       Cluster: !Ref EcsClusterName
       CapacityProviders:
@@ -384,6 +388,7 @@ Resources:
 
   EventsNotificationsFunction:
     Type: AWS::Serverless::Function
+    Condition: IsStaging # TODO
     Properties:
       Description: !Sub >-
         Handles auto scaling events from the ${EnvironmentType} shared ASG
@@ -486,4 +491,5 @@ Outputs:
       the shared ASG
     Value: !GetAtt InstanceSecurityGroup.GroupId
   AsgName:
+    Condition: IsStaging # TODO
     Value: !Ref Asg
