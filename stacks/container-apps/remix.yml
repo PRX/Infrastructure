@@ -8,7 +8,6 @@ Conditions:
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
   HasExplicitHostHeader: !Not [!Equals [!Ref ExplicitHostHeader, ""]]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -37,8 +36,6 @@ Parameters:
   EnvironmentTypeAbbreviation:
     Type: String
   SecretsBase:
-    Type: String
-  EcrRegion:
     Type: String
   EcrImageTag:
     Type: String
@@ -88,8 +85,6 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
-  SharedRdsPostgresqlEndpoint:
-    Type: String
   SharedAuroraPostgresqlEndpoint:
     Type: String
 Resources:
@@ -207,9 +202,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: DB_PORT_5432_TCP_ADDR
-              Value: !If [IsStaging, !Ref SharedAuroraPostgresqlEndpoint, !Ref SharedRdsPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: DB_PORT_5432_TCP_PORT
-              Value: !If [IsStaging, "3306", "5432"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -298,9 +293,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: DB_PORT_5432_TCP_ADDR
-              Value: !If [IsStaging, !Ref SharedAuroraPostgresqlEndpoint, !Ref SharedRdsPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: DB_PORT_5432_TCP_PORT
-              Value: !If [IsStaging, "3306", "5432"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
