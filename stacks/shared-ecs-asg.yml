@@ -64,7 +64,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
   InstanceRoleSetHealthPolicy:
     Type: AWS::IAM::Policy
-    Condition: IsStaging # TODO
     Properties:
       PolicyName: AutoscalingSetInstanceHealth
       PolicyDocument:
@@ -299,7 +298,6 @@ Resources:
   # arguments of cfn-signal in the launch template's user data
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
-    Condition: IsStaging # TODO
     CreationPolicy:
       AutoScalingCreationPolicy:
         MinSuccessfulInstancesPercent: 0 # TODO Set to 100
@@ -352,7 +350,6 @@ Resources:
 
   DefaultCapacityProvider:
     Type: AWS::ECS::CapacityProvider
-    Condition: IsStaging # TODO
     Properties:
       AutoScalingGroupProvider:
         AutoScalingGroupArn: !Ref Asg
@@ -375,7 +372,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
   ClusterCapacityProviderAssociation:
     Type: AWS::ECS::ClusterCapacityProviderAssociations
-    Condition: IsStaging # TODO
     Properties:
       Cluster: !Ref EcsClusterName
       CapacityProviders:
@@ -389,7 +385,6 @@ Resources:
 
   EventsNotificationsFunction:
     Type: AWS::Serverless::Function
-    Condition: IsStaging # TODO
     Properties:
       Description: !Sub >-
         Handles auto scaling events from the ${EnvironmentType} shared ASG
@@ -481,7 +476,6 @@ Resources:
       Timeout: 10
   EventsNotificationsFunctionLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: IsStaging # TODO
     Properties:
       LogGroupName: !Sub /aws/lambda/${EventsNotificationsFunction}
       RetentionInDays: 7
@@ -493,5 +487,4 @@ Outputs:
       the shared ASG
     Value: !GetAtt InstanceSecurityGroup.GroupId
   AsgName:
-    Condition: IsStaging # TODO
     Value: !Ref Asg
