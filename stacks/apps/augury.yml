@@ -37,13 +37,11 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  SharedRdsPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
-  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsPostgresqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
 
@@ -246,9 +244,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
-              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
-              Value: !If [IsProduction, "5432", "3306"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -299,9 +297,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
-              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
-              Value: !If [IsProduction, "5432", "3306"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -459,9 +457,9 @@ Resources:
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: "a.prxu.org"
             - Name: POSTGRES_HOST
-              Value: !If [IsProduction, !Ref SharedRdsPostgresqlEndpoint, !Ref SharedAuroraPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
-              Value: !If [IsProduction, "5432", "3306"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
