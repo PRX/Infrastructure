@@ -110,29 +110,6 @@ Resources:
       VpcSecurityGroupIds:
         - !Ref DbClusterSecurityGroup
 
-  # TODO This is a placeholder
-  DbClusterConnectionsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub
-        - WARN [Shared MySQL] DB Cluster <${abbr}> TOO MANY CONNECTIONS (${AWS::StackName})
-        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} shared Aurora MySQL database cluster has a very
-        high number of connections, which could mean a client is behaving
-        improperly.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: DBClusterIdentifier
-          Value: !Ref DbCluster
-      EvaluationPeriods: 1
-      MetricName: DatabaseConnections
-      Namespace: AWS/RDS
-      Period: 60
-      Statistic: Sum
-      Threshold: 100
-      TreatMissingData: notBreaching
-
   DbInstance:
     Type: AWS::RDS::DBInstance
     DependsOn: DbSubnetGroup
@@ -157,28 +134,6 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-
-  # TODO This is a placeholder
-  DbInstanceConnectionsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub
-        - WARN [Shared MySQL] DB Instance <${abbr}> TOO MANY CONNECTIONS (${AWS::StackName})
-        - abbr: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} shared Aurora MySQL instance has a very high
-        number of connections, which could mean a client is behaving improperly.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: DBInstanceIdentifier
-          Value: !Ref DbInstance
-      EvaluationPeriods: 1
-      MetricName: DatabaseConnections
-      Namespace: AWS/RDS
-      Period: 60
-      Statistic: Sum
-      Threshold: 100
-      TreatMissingData: notBreaching
 
   DbSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
