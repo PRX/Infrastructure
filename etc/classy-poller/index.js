@@ -119,6 +119,7 @@ exports.handler = async (event) => {
     342678: '#radiotopia-donations',
     327574: '#radiotopia-donations',
     326353: '#earhustle-donations',
+    // 999999: '#tw-fall-2021-donations',
   };
 
   for (const activity of payload.data) {
