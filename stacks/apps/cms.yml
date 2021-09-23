@@ -401,7 +401,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
   AudioCallbackDeadletterQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -415,6 +415,41 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  AudioCallbackDeadletterQueueMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Audio dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's dead-letter queue for the audio callback
+        queue is not empty, which means some job callbacks were not
+        successfully processed.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt AudioCallbackDeadletterQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AudioCallbackDeadletterQueueMessageAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AudioCallbackDeadletterQueue.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
 
   ImageCallbackQueue:
     Type: AWS::SQS::Queue # TODO Alarms?
@@ -435,7 +470,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
   ImageCallbackDeadletterQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -449,6 +484,41 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  ImageCallbackDeadletterQueueMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Image dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's dead-letter queue for the image callback
+        queue is not empty, which means some job callbacks were not
+        successfully processed.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ImageCallbackDeadletterQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 0
+      TreatMissingData: notBreaching
+  ImageCallbackDeadletterQueueMessageAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ImageCallbackDeadletterQueue.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
 
   PodcastImportQueue:
     Type: AWS::SQS::Queue # TODO Alarms?
@@ -469,7 +539,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
   PodcastImportDeadletterQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -483,6 +553,41 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  PodcastImportDeadletterQueueMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Import dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's dead-letter queue for the podcast import
+        callback queue is not empty, which means some imports were not
+        successfully.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt PodcastImportDeadletterQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 0
+      TreatMissingData: notBreaching
+  PodcastImportDeadletterQueueMessageAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt PodcastImportDeadletterQueue.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
 
   SearchIndexerQueue:
     Type: AWS::SQS::Queue # TODO Alarms?
@@ -503,7 +608,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
   SearchIndexerDeadletterQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -517,6 +622,40 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  SearchIndexerDeadletterQueueMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Search index dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's dead-letter queue for the search index
+        queue is not empty, which means some indexing jobs were not successful.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SearchIndexerDeadletterQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 0
+      TreatMissingData: notBreaching
+  SearchIndexerDeadletterQueueMessageAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt SearchIndexerDeadletterQueue.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
 
   DefaultJobQueue:
     Type: AWS::SQS::Queue # TODO Alarms?
@@ -537,7 +676,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
   DefaultJobDeadletterQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -551,6 +690,40 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  DefaultJobDeadletterQueueMessageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Default dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's dead-letter queue for the default
+        queue is not empty, which means some jobs were not successful.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DefaultJobDeadletterQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 0
+      TreatMissingData: notBreaching
+  DefaultJobDeadletterQueueMessageAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt DefaultJobDeadletterQueue.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
 
   # TODO
   # # callback queues are being slow
