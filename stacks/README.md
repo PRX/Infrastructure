@@ -4,19 +4,11 @@
 
 All necessary Amazon SES identities (i.e., domains that apps and services will be sending mail from) must be set up before the stacks are created.
 
-## Databases
+## External Dependencies
 
 Resources that depend on external databases, such as ECS tasks, must be conditional on the database being available. Because of the order of operations when spinning up a new region (i.e., stack is launched to create the VPC, database is created in the VPC, applications can be launched using the database), it must be possible to launch the stack without the database.
 
 The root stack parameters for database endpoints are used as the flag for when the database is available. If the endpoint is not defined, the dependant services should be disabled. This could be done with conditional template resources, or, for example, setting the desired task count of an ECS service to `0`. Conditional template resources is generally advised.
-
-## VPC Peerings
-
-- After the shared VPC has been created, but before the application stacks are created, the shared VPC needs to get peered with all external VPCs that the apps depend on, such as those containing databases. Only enable application stack creation once you have confirmed that VPC peering is established and configured correctly, including DNS resolution options.
-- Ensure that NACLs and security groups for the external resource allow traffic from the application instances and tasks.
-- VPC peering needs to happen for both the public and private route tables (I think).
-- It doesn't matter which side is the accepter or requester.
-- The "DNS resolution from accepter/requester VPC to private IP" needs to be **Enabled** for the database side of the peering connection, regardless of if it's the accepter or requester. (This allows apps to query the public hostnames of databases/etc, and have those resolve to the private IPs that are routed over the peering connection.)
 
 ## TLS Certificates
 
@@ -24,7 +16,7 @@ The root stack parameters for database endpoints are used as the flag for when t
 
 ## Elasticsearch Service-linked Role
 
-- Before an Elasticsearch domain can be created via CloudFormation, the service-linked role for Elasticsearch must be created elsewhere. The easiest way I've found to do this is create a ES domain via Console. You can delete it before it even finishes launching, and the role will continue to exist.
+- Before an Elasticsearch domain can be created via CloudFormation, the service-linked role for Elasticsearch must be created elsewhere. The easiest way I've found to do this is create a ES domain via Console. You can delete it before it even finishes launching, and the role will continue to exist. This needs to be done once for each region.
 
 # Tear Down
 
