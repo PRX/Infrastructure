@@ -1,0 +1,158 @@
+# dns/radiotopia.com-hosted_zone.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Hosted zone and record sets for earhustlesq.com
+
+Parameters:
+  Domain:
+    Default: earhustlesq.com
+    Description: The domain name and hosted zone
+    Type: String
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Primary Ear Hustle domain
+      HostedZoneTags:
+        - Key: Project
+          Value: Ear Hustle
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      Name: !Ref Domain
+
+  Text:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - '"google-site-verification=qBcbUuEZX8GBf_AFigI3GUqiA6s4qAHygubo0-XC7wA"'
+            - '"v=spf1 include:_spf.google.com include:mail.zendesk.com ~all"'
+          TTL: "300"
+          Type: TXT
+
+  GSuite:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: G Suite
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
+          TTL: "3600"
+          Type: MX
+
+  Web:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Website
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - 198.185.159.144
+            - 198.185.159.145
+            - 198.49.23.144
+            - 198.49.23.145
+          TTL: "300"
+          Type: A
+        - Name: !Sub www.${Domain}
+          ResourceRecords:
+            - ext-cust.squarespace.com.
+          TTL: "300"
+          Type: CNAME
+
+  Podcast:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Podcast feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub feeds.${Domain}
+          ResourceRecords:
+            - ree9fi.feedproxy.ghs.google.com.
+          TTL: "300"
+          Type: CNAME
+
+  Squarespace:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Squarespace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub fk5ysnc2slwbmsbh754t.${Domain}
+          ResourceRecords:
+            - verify.squarespace.com.
+          TTL: "86400"
+          Type: CNAME
+
+  ZenDesk:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: ZenDesk
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub zendeskverification.${Domain}
+          ResourceRecords:
+            - '"a7c5123bd499406f"'
+          TTL: "3600"
+          Type: TXT
+        # Domain Validation
+        - Name: !Sub zendesk1.${Domain}
+          ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2.${Domain}
+          ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk3.${Domain}
+          ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk4.${Domain}
+          ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        # DKIM
+        - Name: !Sub zendesk1._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk1._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk2._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+
+  CampaignMonitor:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Campaign Monitor
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub cm._domainkey.${Domain}
+          ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC5NPl7a6iXEqMnXp0zAmBuooTuZVOfI++lXBG4sEq17eZ1+p4EQlHsDE69xHqkCgrI2wH+/wsTR85H4g48FRMIsP7tci6Ld/fBpPozRYkr3Y32/MXmhaEQJ2v9AtXziVgxMjvEP/PB8Pxmc1MjZC4xeqo7cojl3snmVLntQIyTXwIDAQAB"'
+          TTL: "3600"
+          Type: TXT
