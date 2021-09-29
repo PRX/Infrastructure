@@ -4,7 +4,6 @@ Description: >
   Docker web application with optional worker, using the shared platform ALB
 Conditions:
   CreateWorkerResources: !Equals [!Ref CreateWorker, true]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
   HasAltName: !Not [!Equals [!Ref AltName, ""]]
@@ -37,8 +36,6 @@ Parameters:
   EnvironmentTypeAbbreviation:
     Type: String
   SecretsBase:
-    Type: String
-  EcrRegion:
     Type: String
   EcrImageTag:
     Type: String
@@ -88,8 +85,6 @@ Parameters:
   HealthCheckPath:
     Type: String
     Default: /api/v1
-  SharedRdsPostgresqlEndpoint:
-    Type: String
   SharedAuroraPostgresqlEndpoint:
     Type: String
 Resources:
@@ -250,9 +245,9 @@ Resources:
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: "a.prxu.org"
             - Name: POSTGRES_HOST
-              Value: !If [IsStaging, !Ref SharedAuroraPostgresqlEndpoint, !Ref SharedRdsPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
-              Value: !If [IsStaging, "3306", "5432"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -341,9 +336,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
-              Value: !If [IsStaging, !Ref SharedAuroraPostgresqlEndpoint, !Ref SharedRdsPostgresqlEndpoint]
+              Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
-              Value: !If [IsStaging, "3306", "5432"]
+              Value: "3306"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
