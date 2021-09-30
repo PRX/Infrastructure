@@ -1,0 +1,122 @@
+# dns/radiotopia.com-hosted_zone.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Hosted zone and record sets for theworld.org
+
+Parameters:
+  Domain:
+    Default: theworld.org.
+    Description: The domain name and hosted zone
+    Type: String
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Primary The World domain
+      HostedZoneTags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: The World }
+      Name: !Ref Domain
+
+  Text:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - '"google-site-verification=H6g01JYxody2U98gTwUZVFY1kDz1miktW9DIEDh_f1I"'
+          TTL: "300"
+          Type: TXT
+        - Name: !Sub _dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub _now.${Domain}
+          ResourceRecords:
+            - '"6rwhcyQMNc"'
+          TTL: "3600"
+          Type: TXT
+
+  GoogleWorkspace:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Google Workspace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
+          TTL: "3600"
+          Type: MX
+
+  ZenDesk:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: ZenDesk
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub zendeskverification.${Domain}
+          ResourceRecords:
+            - '"851bfb1d01b29671"'
+          TTL: "3600"
+          Type: TXT
+        # Domain Validation
+        - Name: !Sub zendesk1.${Domain}
+          ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2.${Domain}
+          ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk3.${Domain}
+          ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk4.${Domain}
+          ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        # DKIM
+        - Name: !Sub zendesk1._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk1._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk2._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+
+  CampaignMonitor:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Campaign Monitor
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub cm._domainkey.${Domain}
+          ResourceRecords:
+            - '"k=rsa;" "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDDKR0wcyrPwiQgq5AIQlsKXr7tISyJ+krcI+2gtz4VuaPgtDKLI7V95MAzoMyBNebG+Gi80Pk6Of8+RbVPHawK6x5xcKi+93X08m/SkT2uSKx6TT7WCn9AqhGYpkoveZdDhcjBbS3vxjQo8ZDmkB7UuzSCBFda6HRBNkudi1393wIDAQAB"'
+          TTL: "3600"
+          Type: TXT
