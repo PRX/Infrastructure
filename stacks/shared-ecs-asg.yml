@@ -22,7 +22,6 @@ Parameters:
   RootStackId: { Type: String }
   NotificationsStackName: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
-  VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -31,7 +30,8 @@ Parameters:
   LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
-  DovetailRedisHostname: { Type: String }
+  SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -76,70 +76,6 @@ Resources:
       Roles:
         - !Ref InstanceRole
 
-  InstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        The primary security group for ${EnvironmentType} EC2 instances used in
-        the shared ASG and ECS cluster (i.e., ECS container instances).
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared-ecs-asg_instance" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-  InstanceSecurityGroupAlbDynamicPortIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      Description: >-
-        Allow ingress traffic from the LB SG to the instance SG on ports used
-        by ECS task dynamic port mapping.
-      FromPort: 32768
-      GroupId: !GetAtt InstanceSecurityGroup.GroupId
-      IpProtocol: tcp
-      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
-      ToPort: 60999
-  InstanceSecurityGroupSshIpv4Ingress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      CidrIp: 0.0.0.0/0
-      Description: !Sub >-
-        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
-      FromPort: 22
-      GroupId: !GetAtt InstanceSecurityGroup.GroupId
-      IpProtocol: tcp
-      ToPort: 22
-  InstanceSecurityGroupSshIpv6Ingress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      CidrIpv6: ::/0
-      Description: !Sub >-
-        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
-      FromPort: 22
-      GroupId: !GetAtt InstanceSecurityGroup.GroupId
-      IpProtocol: tcp
-      ToPort: 22
-  InstanceSecurityGroupAllIpv4Egress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      CidrIp: 0.0.0.0/0
-      Description: !Sub >-
-        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
-      GroupId: !GetAtt InstanceSecurityGroup.GroupId
-      IpProtocol: "-1"
-  InstanceSecurityGroupAllIpv6Egress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      CidrIpv6: ::/0
-      Description: !Sub >-
-        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
-      GroupId: !GetAtt InstanceSecurityGroup.GroupId
-      IpProtocol: "-1"
-
   # This adds a rule to the load balancer security group defined in
   # shared-alb.yml. It allows all TCP egress traffic from the load balancer
   # security group to the instance security group (i.e., allows traffic from
@@ -147,18 +83,6 @@ Resources:
   # from the load balancer to the EC2 instances; that is handled by a rule on
   # the instance security group.
   LoadBalancerSecurityGroupInstanceEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      Description: >-
-        Allow all egress traffic from the LB SG to the instance SG.
-      # Based on the following recommednation
-      # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
-      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
-      FromPort: 0
-      GroupId: !Ref LoadBalancerSecurityGroupId
-      IpProtocol: tcp
-      ToPort: 65535
-  LoadBalancerSecurityGroupInstanceEgress2:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       Description: >-
@@ -288,9 +212,9 @@ Resources:
               # unhealthy
               command: !Sub |-
                 #!/bin/bash
-                for IP in $(getent hosts ${DovetailRedisHostname} | awk '{ print $1 }')
+                for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
                 do
-                  if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/6379"; then
+                  if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
                     echo "Unhealthy; Failed to connect to Redis: $IP"
                     INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
                     aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
