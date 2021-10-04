@@ -1,0 +1,86 @@
+# stacks/shared-ecs-asg.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates the primary security group for the shared ECS ASG instances. It is
+  created here in a discrete stack to prevent some circular dependencies.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The primary security group for ${EnvironmentType} EC2 instances used in
+        the shared ASG and ECS cluster (i.e., ECS container instances).
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-ecs-asg_instance" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  InstanceSecurityGroupAlbDynamicPortIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow ingress traffic from the LB SG to the instance SG on ports used
+        by ECS task dynamic port mapping.
+      FromPort: 32768
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
+      ToPort: 60999
+  InstanceSecurityGroupSshIpv4Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
+        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
+      FromPort: 22
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  InstanceSecurityGroupSshIpv6Ingress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows inbound SSH traffic to ${EnvironmentType} ASG instances
+      FromPort: 22
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  InstanceSecurityGroupAllIpv4Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: "-1"
+  InstanceSecurityGroupAllIpv6Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} ECS ASG instances
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: "-1"
+
+Outputs:
+  InstanceSecurityGroupId:
+    Description: >-
+      The group ID of the primary security group for EC2 instances belonging to
+      the shared ASG
+    Value: !GetAtt InstanceSecurityGroup.GroupId
