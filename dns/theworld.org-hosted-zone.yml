@@ -35,13 +35,9 @@ Resources:
       RecordSets:
         - Name: !Ref Domain
           ResourceRecords:
-            - '"google-site-verification=H6g01JYxody2U98gTwUZVFY1kDz1miktW9DIEDh_f1I"'
+            - '"google-site-verification=AmP3tjFXQJg12mB6BkeWWipzwEOl1ZYlyjVSxTmzKbw"'
+            - '"v=spf1 include:_spf.createsend.com include:_spf.google.com include:mail.zendesk.com -all"'
           TTL: "300"
-          Type: TXT
-        - Name: !Sub _dmarc.${Domain}
-          ResourceRecords:
-            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
-          TTL: "3600"
           Type: TXT
         - Name: !Sub _now.${Domain}
           ResourceRecords:
@@ -49,10 +45,10 @@ Resources:
           TTL: "3600"
           Type: TXT
 
-  GoogleWorkspace:
+  Email:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: Google Workspace
+      Comment: Email, DMARC, etc
       HostedZoneId: !Ref HostedZone
       RecordSets:
         - Name: !Ref Domain
@@ -64,6 +60,150 @@ Resources:
             - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "3600"
           Type: MX
+        - Name: !Sub bounce.${Domain}
+          ResourceRecords:
+            - 5 mx20.inbound.createsend.com.
+            - 5 mx21.inbound.createsend.com.
+          TTL: "3600"
+          Type: MX
+        - Name: !Sub bounce.${Domain}
+          ResourceRecords:
+            - '"v=spf1 include:_spf.createsend.com -all"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub _dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub tw._domainkey.${Domain}
+          ResourceRecords:
+            - '"v=DKIM1;" "k=rsa;" "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC0G0xkC9q99G/ckuWkxyHwZ3NKyvmqRYjfvO0GdEoQHg1Vmzgziuf5gEJJDeJlSB7YcmUfi3XG18mI4L4m5p3WlUCKCMQ04V+o3Cc4Rxg4JVqkd8qEQ31kEZV8GXhStbPCEhDPU1hlrOV3aS03fLE5mXMBrfnxYj8PMH70GRJgVQIDAQAB"'
+          TTL: "3600"
+          Type: TXT
+
+  Web:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Website
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # Apex
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "300"
+          Type: A
+          Name: !Ref Domain
+        - ResourceRecords:
+            - 2620:12a:8000::3
+            - 2620:12a:8001::3
+          TTL: "300"
+          Type: AAAA
+          Name: !Ref Domain
+
+        # WWW
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "300"
+          Type: A
+          Name: !Sub www.${Domain}
+        - ResourceRecords:
+            - 2620:12a:8000::3
+            - 2620:12a:8001::3
+          TTL: "300"
+          Type: AAAA
+          Name: !Sub www.${Domain}
+
+        # Admin
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "3600"
+          Type: A
+          Name: !Sub admin.${Domain}
+        - ResourceRecords:
+            - 2620:12a:8000::3
+            - 2620:12a:8001::3
+          TTL: "3600"
+          Type: AAAA
+          Name: !Sub admin.${Domain}
+
+        # Projects
+        - Name: !Sub projects.${Domain}
+          ResourceRecords:
+            - alias.zeit.co.
+          TTL: "300"
+          Type: CNAME
+
+        # Preview
+        - Name: !Sub preview.${Domain}
+          ResourceRecords:
+            - cname.vercel-dns.com.
+          TTL: "3600"
+          Type: CNAME
+
+  LetsEncrypt:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Lets Encrypt
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub _acme-challenge.admin.${Domain}
+          ResourceRecords:
+            - '"KMh9zENybgfkDH9qJ2mLJ_bOhlWItDy8uR0t_rJ-Ae8"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub _acme-challenge.feeds.${Domain}
+          ResourceRecords:
+            - '"2rg3UO5RD2nl-b1tb_E5_c80EXzLKSU7STitgYV1rT0"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub _acme-challenge.files.${Domain}
+          ResourceRecords:
+            - '"x5VSDL-trt717dO4NeoA14OUehY4iJ2Njm8qVTsarEk"'
+          TTL: "3600"
+          Type: TXT
+
+  Files:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Files
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "3600"
+          Type: A
+          Name: !Sub files.${Domain}
+        - ResourceRecords:
+            - 2620:12a:8000::3
+            - 2620:12a:8001::3
+          TTL: "3600"
+          Type: AAAA
+          Name: !Sub files.${Domain}
+
+  Feeds:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # TNITN feed
+        - Name: !Sub feed.${Domain}
+          ResourceRecords:
+            - pf78e6d33db02b.publicfeeds.net.
+          TTL: "3600"
+          Type: CNAME
+        - ResourceRecords:
+            - "23.185.0.3"
+          TTL: "300"
+          Type: A
+          Name: !Sub feeds.${Domain}
+        - ResourceRecords:
+            - 2620:12a:8000::3
+            - 2620:12a:8001::3
+          TTL: "300"
+          Type: AAAA
+          Name: !Sub feeds.${Domain}
 
   ZenDesk:
     Type: AWS::Route53::RecordSetGroup
@@ -115,8 +255,28 @@ Resources:
       Comment: Campaign Monitor
       HostedZoneId: !Ref HostedZone
       RecordSets:
+        # DKIM
         - Name: !Sub cm._domainkey.${Domain}
           ResourceRecords:
             - '"k=rsa;" "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDDKR0wcyrPwiQgq5AIQlsKXr7tISyJ+krcI+2gtz4VuaPgtDKLI7V95MAzoMyBNebG+Gi80Pk6Of8+RbVPHawK6x5xcKi+93X08m/SkT2uSKx6TT7WCn9AqhGYpkoveZdDhcjBbS3vxjQo8ZDmkB7UuzSCBFda6HRBNkudi1393wIDAQAB"'
           TTL: "3600"
           Type: TXT
+        # Custom backend domain
+        - Name: !Sub totw.${Domain}
+          ResourceRecords:
+            - cname.createsend.com.
+          TTL: "3600"
+          Type: CNAME
+
+  AwsAcmFeedCdnProdUsEast1:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for feed-cdn-production in us-east-1
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        #  feed.theworld.org
+        - Name: !Sub _69e3012e6d990b8b21c001001e70b2a0.feed.${Domain}
+          ResourceRecords:
+            - _1fcc43a42474af1ec05a29f236ca68a3.olprtlswtu.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
