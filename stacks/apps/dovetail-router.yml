@@ -453,7 +453,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
+      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail's dedicated application load balancer (ALB)
         is returning 5XX errors to clients. The errors may or may not be
@@ -469,11 +469,27 @@ Resources:
       Statistic: Sum
       Threshold: 2
       TreatMissingData: notBreaching
+  Alb5xxAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt Alb5xxAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
   AlbResponseTimeP95Alarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RESPONDING SLOWLY
+      AlarmName: !Sub ERROR [Dovetail] Load balancer <${EnvironmentTypeAbbreviation}> RESPONDING SLOWLY (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail's dedicated application load balancer (ALB)
         is seeing very slow response times for a significant percent of the
@@ -489,6 +505,22 @@ Resources:
       Period: 300
       Threshold: 0.2
       TreatMissingData: notBreaching
+  AlbResponseTimeP95AlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AlbResponseTimeP95Alarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
 
   HttpListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -592,7 +624,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Router's Elixir server is returning 5XX
         errors from the ECS service to the load balancer.
@@ -860,7 +892,7 @@ Resources:
   LogWarnsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS
+      AlarmName: !Sub WARN [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging warnings
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
@@ -870,10 +902,27 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  LogWarnsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt LogWarnsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
+
   LogErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Router] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Router's Elixir server logging errors
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
@@ -883,6 +932,22 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  LogErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt LogErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
 
   # Subscription filter (send logged impression data to Kinesis)
   SubscriptionFilterRole:

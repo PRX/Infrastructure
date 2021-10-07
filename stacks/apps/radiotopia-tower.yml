@@ -13,6 +13,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
 
@@ -73,11 +74,12 @@ Resources:
         prx:dev:family: Radiotopia
         prx:dev:application: Tower
       Timeout: 16
+
   TowerEndpointFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> ELEVATED FUNCTION ERRORS
+      AlarmName: !Sub WARN [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> ELEVATED FUNCTION ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Radiotopia Tower endpoint Lambda function is
         experiencing function errors, thrown by the code or runtime. The
@@ -94,11 +96,26 @@ Resources:
       Statistic: Sum
       Threshold: 2
       TreatMissingData: notBreaching
+  TowerEndpointFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt TowerEndpointFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Radiotopia }
+        - { Key: prx:dev:application, Value: Tower }
   TowerEndpointFunctionThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub INFO [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED
+      AlarmName: !Sub INFO [Radiotopia-Tower] API Handler <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Radiotopia Tower endpoint Lambda function has
         reached maximum concurrency and requests are failing. This is a 429
@@ -115,6 +132,22 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  TowerEndpointFunctionThrottleAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt TowerEndpointFunctionThrottleAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Radiotopia }
+        - { Key: prx:dev:application, Value: Tower }
+
   TowerEndpointFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

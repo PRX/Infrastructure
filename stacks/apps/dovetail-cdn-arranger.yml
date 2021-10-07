@@ -18,6 +18,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
   CloudFrontOai: { Type: String }
@@ -156,7 +157,7 @@ Resources:
   ArrangerFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail CDN Arranger Lambda function is failing, so
         some stitch requests or downloads may be impacted.
@@ -171,6 +172,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  ArrangerFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ArrangerFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   ArrangerFunctionWarnLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -185,7 +201,7 @@ Resources:
   ArrangerFunctionLoggedWarnAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS
+      AlarmName: !Sub WARN [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Cdn Arranger Lambda function has logged some warnings.
       ComparisonOperator: GreaterThanThreshold
@@ -196,6 +212,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  ArrangerFunctionLoggedWarnAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ArrangerFunctionLoggedWarnAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   ArrangerFunctionErrorLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -210,7 +241,7 @@ Resources:
   ArrangerFunctionLoggedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-CDN Arranger] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Cdn Arranger Lambda function has logged some errors.
       ComparisonOperator: GreaterThanThreshold
@@ -221,6 +252,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  ArrangerFunctionLoggedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ArrangerFunctionLoggedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
 Outputs:
   ArrangerFunctionArn:

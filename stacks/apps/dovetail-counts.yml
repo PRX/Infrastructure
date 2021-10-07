@@ -17,6 +17,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -136,7 +137,7 @@ Resources:
   CountsFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function is failing, which
         could delay metrics, pingbacks, etc.
@@ -151,11 +152,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  CountsFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   CountsFunctionKinesisIteratorBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmName: !Sub WARN [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function's Kinesis iterator
         age is higher than normal, which likely means some CDN logs are having
@@ -171,10 +187,25 @@ Resources:
       Statistic: Maximum
       Threshold: 900000 # milliseconds
       TreatMissingData: notBreaching
+  CountsFunctionKinesisIteratorBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionKinesisIteratorBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
   CountsFunctionKinesisIteratorStalledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmName: !Sub FATAL [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function's Kinesis iterator
         is significantly delayed, and is likely to continue to fall behind
@@ -190,6 +221,21 @@ Resources:
       Statistic: Maximum
       Threshold: 3600000 # milliseconds
       TreatMissingData: notBreaching
+  CountsFunctionKinesisIteratorStalledAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionKinesisIteratorStalledAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   CountsFunctionWarnLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -204,7 +250,7 @@ Resources:
   CountsFunctionLoggedWarnAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function has logged some
         warnings, which count indicate invalid input data or less important
@@ -217,6 +263,21 @@ Resources:
       Statistic: Sum
       Threshold: 0 # TODO Confirm
       TreatMissingData: notBreaching
+  CountsFunctionLoggedWarnAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionLoggedWarnAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   CountsFunctionErrorLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -231,7 +292,7 @@ Resources:
   CountsFunctionLoggedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function has logged some
         errors during execution, which likely indicate operations that failed
@@ -244,6 +305,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  CountsFunctionLoggedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionLoggedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   CountsFunctionMissingArrangementLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -258,7 +334,7 @@ Resources:
   CountsFunctionMissingArrangementAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> MISSING ARRANGEMENTS
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> MISSING ARRANGEMENTS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function is trying to process
         data for downloads but cannot find the associated arrangement data.
@@ -271,6 +347,21 @@ Resources:
       Statistic: Sum
       Threshold: 100
       TreatMissingData: notBreaching
+  CountsFunctionMissingArrangementAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionMissingArrangementAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }
 
   CountsFunctionKinesisFailureLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -285,7 +376,7 @@ Resources:
   CountsFunctionKinesisFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS PUT FAILURES
+      AlarmName: !Sub ERROR [Dovetail-Counts] Lambda function <${EnvironmentTypeAbbreviation}> KINESIS PUT FAILURES (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Counts Lambda function is experiencing
         a significant number of PUT failures when trying to send records to the
@@ -299,3 +390,18 @@ Resources:
       Statistic: Sum
       Threshold: 100
       TreatMissingData: notBreaching
+  CountsFunctionKinesisFailureAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt CountsFunctionKinesisFailureAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Arranger }

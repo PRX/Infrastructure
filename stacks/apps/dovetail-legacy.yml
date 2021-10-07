@@ -93,7 +93,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
+      AlarmName: !Sub ERROR [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail V2's Restify server is returning 5XX
         errors from the ECS service to the load balancer.
@@ -359,7 +359,7 @@ Resources:
   LogWarnsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS
+      AlarmName: !Sub WARN [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> LOGGING WARNS (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail V2's Restify server logging warnings
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 3
@@ -369,10 +369,26 @@ Resources:
       Statistic: Sum
       Threshold: 200
       TreatMissingData: notBreaching
+  LogWarnsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt LogWarnsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Node.js }
   LogErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS
+      AlarmName: !Sub ERROR [Dovetail-V2] Web server <${EnvironmentTypeAbbreviation}> LOGGING ERRORS (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail V2's Restify server logging errors
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
@@ -382,6 +398,22 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  LogErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt LogErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Node.js }
 
   # Subscription filter (send logged impression data to Kinesis)
   SubscriptionFilterRole:

@@ -158,7 +158,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [Exchange] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS
+      AlarmName: !Sub ERROR [Exchange] Web server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Exchange's Rails server is returning 5XX errors from
         the ECS service to the load balancer.
@@ -473,6 +473,20 @@ Resources:
       Statistic: Average
       Threshold: 10
       TreatMissingData: notBreaching
+  WorkerEcsServiceStepScaleInAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt WorkerEcsServiceStepScaleInAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
   WorkerEcsServiceStepScaleOutPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
@@ -510,6 +524,20 @@ Resources:
       Statistic: Average
       Threshold: 20
       TreatMissingData: notBreaching
+  WorkerEcsServiceStepScaleOutAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt WorkerEcsServiceStepScaleOutAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
 
   SayWhenEcsService:
     Type: AWS::ECS::Service
@@ -603,7 +631,7 @@ Resources:
   SayWhenHighVisibleMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing" # TODO Fatal for prod, warn for stag
+      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing  (${RootStackName})" # TODO Fatal for prod, warn for stag
       AlarmDescription: SayWhen is very behind
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
@@ -616,11 +644,25 @@ Resources:
       Statistic: Average
       Threshold: 50
       TreatMissingData: notBreaching
+  SayWhenHighVisibleMessagesAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt SayWhenHighVisibleMessagesAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
 
   ExchangeDeliveryUpdateAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing" # TODO  Fatal for prod, warn for stag
+      AlarmName: !Sub "3 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing  (${RootStackName})" # TODO  Fatal for prod, warn for stag
       AlarmDescription: Deliveries are very behind
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
@@ -633,3 +675,17 @@ Resources:
       Statistic: Average
       Threshold: 100
       TreatMissingData: notBreaching
+  ExchangeDeliveryUpdateAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ExchangeDeliveryUpdateAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }

@@ -15,6 +15,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -93,7 +94,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
         failing, but BigQuery records can safely be re-inserted, so these can
@@ -109,11 +110,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsBigqueryFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsBigqueryFunctionKinesisIteratorBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmName: !Sub WARN [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function's
         Kinesis iterator age is higher than normal, tktktk.
@@ -128,10 +144,26 @@ Resources:
       Statistic: Maximum
       Threshold: 900000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsBigqueryFunctionKinesisIteratorBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionKinesisIteratorBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
   AnalyticsBigqueryFunctionKinesisIteratorStalledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function's
         Kinesis iterator is significantly delayed, and is likely to continue to
@@ -147,6 +179,21 @@ Resources:
       Statistic: Maximum
       Threshold: 3600000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsBigqueryFunctionKinesisIteratorStalledAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionKinesisIteratorStalledAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsBigqueryFunctionDownloadsMetricFilter:
     # Counts the total number of downloads sent to BigQuery?
@@ -162,7 +209,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW DOWNLOADS
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW DOWNLOADS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
         sending a suspiciously low number of downloads to BigQuery, which could
@@ -175,6 +222,21 @@ Resources:
       Statistic: Sum
       Threshold: 2000
       TreatMissingData: breaching
+  AnalyticsBigqueryFunctionLowDownloadsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionLowDownloadsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsBigqueryFunctionImpressionsMetricFilter:
     # Counts the total number of impressions sent to BigQuery?
@@ -190,7 +252,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW IMPRESSIONS
+      AlarmName: !Sub FATAL [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> FEW IMPRESSIONS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function is
         sending a suspiciously low number of impressions to BigQuery, which
@@ -203,6 +265,21 @@ Resources:
       Statistic: Sum
       Threshold: 4000
       TreatMissingData: breaching
+  AnalyticsBigqueryFunctionImpressionsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionImpressionsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsBigqueryFunctionErrorLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -216,7 +293,7 @@ Resources:
   AnalyticsBigqueryFunctionLoggedErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Analytics] BigQuery Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics BigQuery Lambda function has
         logged some errors during execution.
@@ -228,6 +305,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsBigqueryFunctionLoggedErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsBigqueryFunctionLoggedErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   # DynamoDB
   AnalyticsDynamoDbFunction:
@@ -283,7 +375,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function is
         failing, but tktktk.
@@ -298,6 +390,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsDynamoDbFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamoDbFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsDynamoDbFunctionLogGroupToKinesisSubscriptionFilterRole:
     Type: AWS::IAM::Role
@@ -341,7 +448,7 @@ Resources:
   AnalyticsDynamoDbFunctionKinesisIteratorBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function's
         Kinesis iterator age is higher than normal, tktktk.
@@ -356,10 +463,25 @@ Resources:
       Statistic: Maximum
       Threshold: 900000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsDynamoDbFunctionKinesisIteratorBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamoDbFunctionKinesisIteratorBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
   AnalyticsDynamoDbFunctionKinesisIteratorStalledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmName: !Sub FATAL [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function's
         Kinesis iterator is significantly delayed, and is likely to continue to
@@ -375,6 +497,21 @@ Resources:
       Statistic: Maximum
       Threshold: 3600000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsDynamoDbFunctionKinesisIteratorStalledAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamoDbFunctionKinesisIteratorStalledAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsDynamoDbFunctionErrorLevelLogMetricFilter:
     # Counts the number of logged errors
@@ -389,7 +526,7 @@ Resources:
   AnalyticsDynamoDbFunctionLoggedErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Analytics] DynamoDB Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics DynamoDB Lambda function has
         logged some errors during execution.
@@ -401,6 +538,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsDynamoDbFunctionLoggedErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamoDbFunctionLoggedErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsDynamoDbFunctionInsertsMetricFilter:
     # Counts the number of rows inserted to DynamoDB
@@ -480,7 +632,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics pingbacks Lambda function is
         failing, and some pingbacks may be getting dropped because it's not
@@ -496,11 +648,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsPingbacksFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsPingbacksFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsPingbacksFunctionKinesisIteratorBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmName: !Sub WARN [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function's
         Kinesis iterator age is higher than normal, tktktk.
@@ -515,10 +682,25 @@ Resources:
       Statistic: Maximum
       Threshold: 900000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsPingbacksFunctionKinesisIteratorBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsPingbacksFunctionKinesisIteratorBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
   AnalyticsPingbacksFunctionKinesisIteratorStalledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function's
         Kinesis iterator is significantly delayed, and is likely to continue to
@@ -534,6 +716,21 @@ Resources:
       Statistic: Maximum
       Threshold: 3600000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsPingbacksFunctionKinesisIteratorStalledAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsPingbacksFunctionKinesisIteratorStalledAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsPingbacksFunctionErrorLevelLogMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -548,7 +745,7 @@ Resources:
   AnalyticsPingbacksFunctionLoggedErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Pingbacks Lambda function has
         logged some errors during execution.
@@ -560,6 +757,21 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsPingbacksFunctionLoggedErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsPingbacksFunctionLoggedErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsPingbacksFunctionAdzerkMetricFilter:
     # Counts the number of pingbacks sent to Adzerk
@@ -575,7 +787,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> FEW ADZERK PINGBACKS
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> FEW ADZERK PINGBACKS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Pingback Lambda function is
         sending a suspiciously low amount of traffic to Adzerk, which could
@@ -588,6 +800,21 @@ Resources:
       Statistic: Sum
       Threshold: 4000
       TreatMissingData: breaching
+  AnalyticsPingbacksFunctionAdzerkTrafficLowAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsPingbacksFunctionAdzerkTrafficLowAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsPingbacksFunctionNotAdzerkMetricFilter:
     # Counts the number of pingbacks sent everywhere except Adzerk
@@ -688,7 +915,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Redis Lambda function is
         failing, and some INCR commands may be getting dropped because it's
@@ -704,11 +931,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  AnalyticsRedisFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsRedisFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsRedisFunctionKinesisIteratorBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND
+      AlarmName: !Sub WARN [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Redis Lambda function's
         Kinesis iterator age is higher than normal, tktktk.
@@ -723,10 +965,25 @@ Resources:
       Statistic: Maximum
       Threshold: 900000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsRedisFunctionKinesisIteratorBehindAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsRedisFunctionKinesisIteratorBehindAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
   AnalyticsRedisFunctionKinesisIteratorStalledAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Redis Lambda function's
         Kinesis iterator is significantly delayed, and is likely to continue to
@@ -742,6 +999,21 @@ Resources:
       Statistic: Maximum
       Threshold: 3600000 # milliseconds
       TreatMissingData: notBreaching
+  AnalyticsRedisFunctionKinesisIteratorStalledAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsRedisFunctionKinesisIteratorStalledAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
 
   AnalyticsRedisFunctionInsertsMetricFilter:
     # TODO Does this get used for anything?
@@ -767,7 +1039,7 @@ Resources:
   AnalyticsRedisFunctionLoggedErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub ERROR [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS
+      AlarmName: !Sub ERROR [Dovetail-Analytics] Redis Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Redis Lambda function has logged
         some errors during execution.
@@ -779,3 +1051,18 @@ Resources:
       Statistic: Sum
       Threshold: 4
       TreatMissingData: notBreaching
+  AnalyticsRedisFunctionLoggedErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsRedisFunctionLoggedErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }

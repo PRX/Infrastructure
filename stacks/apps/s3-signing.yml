@@ -12,6 +12,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
 
@@ -131,7 +132,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} S3 signing Lambda function is failing, which likely
         means uploads to Publish are also failing.
@@ -146,11 +147,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  UploadLambdaElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadLambdaDangerousErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} S3 signing Lambda function is failing a lot, which
         likely means uploads to Publish are also failing.
@@ -166,11 +182,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  UploadLambdaDangerousErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaDangerousErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadLambdaElevatedThrottleAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} S3 signing Lambda function is being throttled. This
         likely means uploads to Publish are failing.
@@ -185,11 +216,26 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+  UploadLambdaElevatedThrottleAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaElevatedThrottleAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadLambdaElevatedVolumeAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> SUSPICIOUSLY HIGH INVOCATIONS
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> SUSPICIOUSLY HIGH INVOCATIONS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} S3 signing Lambda function is being invoked a
         suspiciously high amount. This could indicate a misbehaving client
@@ -206,12 +252,30 @@ Resources:
       Statistic: Sum
       Threshold: 500
       TreatMissingData: notBreaching
+  UploadLambdaElevatedVolumeAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaElevatedVolumeAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadLambdaDangerousErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Dangerous error rate"
-      AlarmDescription: Short-term error rate has reached a dangerous level
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> DANGEROUS ERROR RATE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function short-term error rate
+        has reached a dangerous level, meaning a significant number of
+        signatures may be failing, preventing files from being uploaded.
       ComparisonOperator: GreaterThanOrEqualToThreshold
       DatapointsToAlarm: 2
       EvaluationPeriods: 3
@@ -243,12 +307,30 @@ Resources:
           ReturnData: true
       Threshold: 0.3
       TreatMissingData: notBreaching
+  UploadLambdaDangerousErrorRateAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaDangerousErrorRateAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadLambdaCriticalErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: "[Upload][Lambda] Critical error rate"
-      AlarmDescription: Short-term error rate has reached a critical level
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> CRITICAL ERROR RATE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function short-term error rate
+        has reached a crital level, meaning most signatures are likely failing,
+        preventing files from being uploaded.
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: 2
       Metrics:
@@ -279,6 +361,20 @@ Resources:
           ReturnData: true
       Threshold: 0.6
       TreatMissingData: notBreaching
+  UploadLambdaCriticalErrorRateAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt UploadLambdaCriticalErrorRateAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: S3 Signing Service }
 
 Outputs:
   SigningAccessKeyId:
