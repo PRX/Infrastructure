@@ -432,6 +432,7 @@ Resources:
 
   WorkerEcsServiceScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: EnableWorkers # See README
     Properties:
       MinCapacity: !If [IsProduction, 2, 1]
       MaxCapacity: !If [IsProduction, 20, 4]
@@ -441,6 +442,7 @@ Resources:
       ServiceNamespace: ecs
   WorkerEcsServiceStepScaleInPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: EnableWorkers # See README
     Properties:
       PolicyName: ExchangeWorkerScaleIn
       PolicyType: StepScaling
@@ -457,6 +459,7 @@ Resources:
             ScalingAdjustment: -2
   WorkerEcsServiceStepScaleInAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: EnableWorkers # See README
     Properties:
       ActionsEnabled: true
       AlarmActions:
@@ -475,7 +478,7 @@ Resources:
       TreatMissingData: notBreaching
   WorkerEcsServiceStepScaleInAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
+    Condition: EnableWorkers # See README
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt WorkerEcsServiceStepScaleInAlarm.Arn
@@ -489,6 +492,7 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
   WorkerEcsServiceStepScaleOutPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: EnableWorkers # See README
     Properties:
       PolicyName: ExchangeWorkerScaleOut
       PolicyType: StepScaling
@@ -508,6 +512,7 @@ Resources:
             ScalingAdjustment: 6
   WorkerEcsServiceStepScaleOutAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: EnableWorkers # See README
     Properties:
       ActionsEnabled: true
       AlarmActions:
@@ -526,7 +531,7 @@ Resources:
       TreatMissingData: notBreaching
   WorkerEcsServiceStepScaleOutAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
+    Condition: EnableWorkers # See README
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt WorkerEcsServiceStepScaleOutAlarm.Arn
@@ -646,7 +651,6 @@ Resources:
       TreatMissingData: notBreaching
   SayWhenHighVisibleMessagesAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt SayWhenHighVisibleMessagesAlarm.Arn
