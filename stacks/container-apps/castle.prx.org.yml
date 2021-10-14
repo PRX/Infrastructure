@@ -8,6 +8,7 @@ Mappings:
     Container:
       name: castle-phoenix
 Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
   HasMemoryReservation: !Not [!Equals [!Ref ContainerMemoryReservation, ""]]
 Parameters:
@@ -63,6 +64,10 @@ Parameters:
   ContainerCpu:
     Type: String
   # Shared ENV #################################################################
+  SharedRedisReplicationGroupEndpointAddress:
+    Type: String
+  SharedRedisReplicationGroupEndpointPort:
+    Type: String
   # Castle ECS #################################################################
   CastleEcrImageTag:
     Type: String
@@ -136,6 +141,26 @@ Resources:
               Value: !GetAtt CastleRedisReplicationGroup.PrimaryEndPoint.Address
             - Name: REDIS_PORT
               Value: !GetAtt CastleRedisReplicationGroup.PrimaryEndPoint.Port
+            - Fn::If:
+              - IsStaging
+              - Name: REDIS_CLONE_HOST
+                Value: !Ref SharedRedisReplicationGroupEndpointAddress
+              - !Ref AWS::NoValue
+            - Fn::If:
+              - IsStaging
+              - Name: REDIS_CLONE_PORT
+                Value: !Ref SharedRedisReplicationGroupEndpointPort
+              - !Ref AWS::NoValue
+            - Fn::If:
+              - IsStaging
+              - Name: REDIS_CLONE_NAMESPACE
+                Value: castle
+              - !Ref AWS::NoValue
+            - Fn::If:
+              - IsStaging
+              - Name: REDIS_CLONE_POOL_SIZE
+                Value: "2"
+              - !Ref AWS::NoValue
           Essential: true
           Image: !Ref CastleEcrImageTag
           LogConfiguration:
