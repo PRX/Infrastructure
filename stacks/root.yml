@@ -632,39 +632,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/id.prx.org.yml"]]
       TimeoutInMinutes: 5
-  MetricsStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Metrics, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-        MetricsEcrImageTag: !Ref MetricsEcrImageTag
-        MetricsSecretsVersion: !Ref MetricsSecretsVersion
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
-        CastleHostname: !GetAtt Constants.CastleHostname
-        IdHostname: !GetAtt Constants.IdHostname
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/metrics.prx.org.yml"]]
-      TimeoutInMinutes: 5
   DovetailStitchLambdaStack:
     Type: AWS::CloudFormation::Stack
     Properties:
