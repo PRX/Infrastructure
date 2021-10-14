@@ -8,7 +8,15 @@ const sts = new AWS.STS({ apiVersion: '2011-06-15' });
 // tags, when there's no way to infer the log group from the alarm's
 // configuration. This could include any namespaces, but it's limited to only
 // those actively employing this strategy, to limit unnecessary API requests.
-const TAGGED = ['AWS/ApplicationELB'];
+const TAGGED = [
+  // AWS/Lambda included by default
+  // AWS/States included by default
+  'AWS/ApplicationELB',
+  'PRX/Dovetail/Router',
+  'PRX/Dovetail/Legacy',
+  'PRX/Dovetail/Counts',
+  'PRX/Dovetail/Analytics',
+];
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
