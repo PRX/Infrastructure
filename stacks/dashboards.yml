@@ -6,30 +6,51 @@ Description: >-
 
 Parameters:
   EnvironmentType: { Type: String }
+
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+
+  InfrastructureGitCommit: { Type: String }
+
   SharedEcsClusterName: { Type: String }
+
   SharedVpcId: { Type: AWS::EC2::VPC::Id }
   SharedVpcCidrBlock: { Type: String }
+
   SharedEcsAsgName: { Type: String }
+
   SharedAlbName: { Type: String }
-  FeederAlbName: { Type: String }
-  DovetailAlbName: { Type: String }
+  SharedAlbFullName: { Type: String }
+  SharedAlbVanityDomain: { Type: String }
+
   SharedVpcFlowLogsLogGroupName: { Type: String }
+
   SharedMemcachedCacheName: { Type: String }
   SharedRedisReplicationGroupName: { Type: String }
-  CastleRedisCacheName: { Type: String }
-  CmsElasticsearchDomainName: { Type: String }
-  SharedAlbVanityDomain: { Type: String }
-  FeederVanityAlbDomain: { Type: String }
-  DovetailVanityAlbDomain: { Type: String }
-  InfrastructureGitCommit: { Type: String }
+
   StackResourceGroupName: { Type: String }
-  BetaDeployBucketRegionalDomainName: { Type: String }
+
   BacksawDeployBucketRegionalDomainName: { Type: String }
 
-# Conditions:
-#   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  BetaDeployBucketRegionalDomainName: { Type: String }
+
+  CastleRedisCacheName: { Type: String }
+  CastleTargetGroupFullName: { Type: String }
+
+  CmsElasticsearchDomainName: { Type: String }
+
+  DovetailAlbName: { Type: String }
+  DovetailVanityAlbDomain: { Type: String }
+
+  FeederAlbName: { Type: String }
+  FeederVanityAlbDomain: { Type: String }
+
+  MetricsTargetGroupFullName: { Type: String }
+
+  PlayProxyTargetGroupFullName: { Type: String }
+  PlayWebTargetGroupFullName: { Type: String }
+
+  PublishTargetGroupFullName: { Type: String }
 
 Resources:
   StackOverviewDashboard:
@@ -76,7 +97,29 @@ Resources:
                         "period": 300,
                         "title": "Shared ASG"
                     }
-                }
+                },
+                {
+                  "type": "metric",
+                  "x": 12,
+                  "y": 7,
+                  "width": 12,
+                  "height": 9,
+                  "properties": {
+                      "metrics": [
+                          [ "AWS/ApplicationELB", "RequestCount", "TargetGroup", "${CastleTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "Castle" } ],
+                          [ ".", ".", ".", "${MetricsTargetGroupFullName}", ".", "${SharedAlbFullName}", { "label": "Metrics" } ],
+                          [ ".", ".", ".", "${PlayProxyTargetGroupFullName}", ".", "${SharedAlbFullName}", { "label": "Play::Proxy" } ],
+                          [ ".", ".", ".", "${PlayWebTargetGroupFullName}", ".", "${SharedAlbFullName}", { "label": "Play::Web" } ],
+                          [ ".", ".", ".", "${PublishTargetGroupFullName}", ".", "${SharedAlbFullName}", { "label": "Publish" } ]
+                      ],
+                      "view": "timeSeries",
+                      "stacked": false,
+                      "region": "${AWS::Region}",
+                      "period": 300,
+                      "title": "ALB Target Group Requests",
+                      "stat": "Sum"
+                  }
+              }
             ]
         }
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-Overview
