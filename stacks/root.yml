@@ -236,26 +236,6 @@ Resources:
       PlayHostname: !If [IsProduction, play.prx.org, play.staging.prx.tech]
 
   # Root stacks
-  StaticSitesRootStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
-        InfrastructureStorageStackName: !Ref InfrastructureStorageStackName
-        InfrastructureNotificationsStackName: !Ref NotificationsStackName
-        TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/static-sites/"]]
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        BetaPrxOrgArchiveS3ObjectKey: !Ref BetaPrxOrgArchiveS3ObjectKey
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/static-sites.yml"]]
-      TimeoutInMinutes: 5
   ServerlessRootStack:
     Type: AWS::CloudFormation::Stack
     Properties:
