@@ -514,39 +514,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/castle.prx.org.yml"]]
       TimeoutInMinutes: 5
-  PlayStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Play, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-        PlayEcrImageTag: !Ref PlayEcrImageTag
-        PlaySecretsVersion: !Ref PlaySecretsVersion
-        PlayProxyEcrImageTag: !Ref PlayProxyEcrImageTag
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendMemory]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, FrontendCpu]
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/play.prx.org.yml"]]
-      TimeoutInMinutes: 5
   FeederStack:
     Type: AWS::CloudFormation::Stack
     Properties:
