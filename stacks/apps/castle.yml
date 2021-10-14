@@ -22,16 +22,14 @@ Parameters:
   RootStackId: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
   SecretsStackName: { Type: String }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   CastleRdsPostgresqlEndpoint: { Type: String }
+  SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -208,9 +206,9 @@ Resources:
             - Name: PG_HOST
               Value: !Ref CastleRdsPostgresqlEndpoint
             - Name: REDIS_HOST
-              Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
+              Value: !Ref SharedRedisReplicationGroupEndpointAddress
             - Name: REDIS_PORT
-              Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Port
+              Value: !Ref SharedRedisReplicationGroupEndpointPort
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -238,147 +236,6 @@ Resources:
         - { Key: prx:dev:application, Value: Castle }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: !Sub Castle ${EnvironmentType} Redis subnet group
-      SubnetIds:
-        - !Ref VpcPrivateSubnet1Id
-        - !Ref VpcPrivateSubnet2Id
-        - !Ref VpcPrivateSubnet3Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Castle }
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: !Sub Castle ${EnvironmentType} Redis security group
-      SecurityGroupIngress:
-        - FromPort: 6379
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-          ToPort: 6379
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_castle_redis" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Castle }
-  RedisReplicationGroup:
-    Type: AWS::ElastiCache::ReplicationGroup
-    Properties:
-      AtRestEncryptionEnabled: false
-      AutomaticFailoverEnabled: true
-      AutoMinorVersionUpgrade: false
-      CacheNodeType: !If
-        - IsProduction
-        - cache.t3.medium
-        - cache.t3.micro
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      Engine: Redis
-      EngineVersion: 6.x
-      MultiAZEnabled: true
-      NumNodeGroups: 1 # 1 = cluster mode disabled, NodeGroups are Shards
-      ReplicasPerNodeGroup: 1 # Replicas are nodes. N replicas will result in N+1 Nodes Per Shard
-      ReplicationGroupDescription: !Sub Castle ${EnvironmentType} Redis
-      SecurityGroupIds:
-        - !GetAtt RedisSecurityGroup.GroupId
-      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Castle }
-  RedisMemoryLowAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub WARN [Castle] Redis <${EnvironmentTypeAbbreviation}> HIGH MEMORY USAGE (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Castle Redis's database memory usage has exceeded
-        the recommended safe level
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
-      EvaluationPeriods: 2
-      MetricName: DatabaseMemoryUsagePercentage
-      Namespace: AWS/ElastiCache
-      Period: 120
-      Statistic: Maximum
-      Threshold: 0.85
-      TreatMissingData: notBreaching
-  RedisMemoryLowAlarmTags:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
-    Properties:
-      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt RedisMemoryLowAlarm.Arn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Castle }
-  RedisMemoryVeryLowAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub ERROR [Castle] Redis <${EnvironmentTypeAbbreviation}> VERY HIGH MEMORY USAGE (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Castle Redis's database memory usage has reached a
-        critically high level
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
-      EvaluationPeriods: 2
-      MetricName: DatabaseMemoryUsagePercentage
-      Namespace: AWS/ElastiCache
-      Period: 120
-      Statistic: Maximum
-      Threshold: 0.93
-      TreatMissingData: notBreaching
-  RedisMemoryVeryLowAlarmTags:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
-    Properties:
-      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt RedisMemoryVeryLowAlarm.Arn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref TaskLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Castle }
-
 Outputs:
-  RedisCacheName:
-    Value: !Ref RedisReplicationGroup
-  RedisCachePrimaryEndPointAddress:
-    Value: !GetAtt RedisReplicationGroup.PrimaryEndPoint.Address
   TargetGroupFullName:
     Value: !GetAtt TargetGroup.TargetGroupFullName
