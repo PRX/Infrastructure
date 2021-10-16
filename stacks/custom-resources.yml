@@ -591,7 +591,7 @@ Resources:
               await response.send(event, context, response.FAILED, {});
             }
 
-            const tagsObj = tags.reduce((p, c) => Object.assign(p, { [c.Name]: c.Value }), {});
+            const tagsObj = tags.reduce((p, c) => Object.assign(p, { [c.Key]: c.Value }), {});
 
             if (event.RequestType === 'Create') {
               // Create all tags on the custom resource
@@ -657,6 +657,19 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${CloudWatchLogGroupTaggerFunction}
       RetentionInDays: 14
+  CloudWatchLogGroupTaggerFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchLogGroupTaggerFunction.Arn
+      LogGroupName: !Ref CloudWatchLogGroupTaggerFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
   CloudWatchLogGroupTaggerFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -788,19 +801,6 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${Ec2ResourceTaggerFunction}
       RetentionInDays: 14
-  Ec2ResourceTaggerFunctionLogGroupTags:
-    Type: Custom::CloudWatchLogGroupTags
-    Properties:
-      ServiceToken: !GetAtt CloudWatchLogGroupTaggerFunction.Arn
-      LogGroupName: !Ref Ec2ResourceTaggerFunctionLogGroup
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Infrastructure }
   Ec2ResourceTaggerFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
