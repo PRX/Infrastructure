@@ -30,13 +30,12 @@ Parameters:
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
-  SharedRdsMysqlEndpoint: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  # HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
 
 Resources:
   HostHeaderListenerRule:
@@ -213,9 +212,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: DB_PORT_3306_TCP_ADDR
-              Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+              Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
-              Value: "3306" # TODO
+              Value: !Ref SharedAuroraMysqlPort
             - Name: SMTP_ADDRESS
               Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
             - Name: SMTP_AUTHENTICATION
