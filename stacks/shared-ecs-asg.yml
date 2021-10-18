@@ -21,6 +21,7 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   NotificationsStackName: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -415,6 +416,19 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${EventsNotificationsFunction}
       RetentionInDays: 7
+  EventsNotificationsFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref EventsNotificationsFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
 
 Outputs:
   AsgName:
