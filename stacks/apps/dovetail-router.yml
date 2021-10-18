@@ -81,15 +81,10 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  DovetailRedisHostname: { Type: String }
-  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedGlueDatabaseName: { Type: String }
-  # For legacy stack
-  CloudFormationNotificationArn: { Type: String }
-  TemplateUrlPrefix: { Type: String }
-  DovetailLegacyEcrImageTag: { Type: String }
-  DovetailLegacySecretsVersion: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -766,6 +761,14 @@ Resources:
               Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: REDIS_HOST
+              Value: !Ref SharedRedisReplicationGroupEndpointAddress
+            - Name: REDIS_PORT
+              Value: !Ref SharedRedisReplicationGroupEndpointPort
+            - Name: REDIS_NAMESPACE
+              Value: dovetail
+            - Name: REDIS_POOL_SIZE
+              Value: "4"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -1040,42 +1043,6 @@ Resources:
           ]
         }
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-DovetailRouter
-
-  LegacyStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        EcsClusterArn: !Ref EcsClusterArn
-        EcsClusterName: !Ref EcsClusterName
-        VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
-        EcrImageTag: !Ref DovetailLegacyEcrImageTag
-        SecretsVersion: !Ref DovetailLegacySecretsVersion
-        SecretsStackName: !Ref SecretsStackName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackId: !Ref RootStackId
-        RootStackName: !Ref RootStackName
-        CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-        AlbLoadBalancerFullName: !GetAtt Alb.LoadBalancerFullName
-        AlbHttpListenerArn: !Ref HttpListener
-        AlbHttpsListenerArn: !Ref HttpsListener
-        DovetailRedisHostname: !Ref DovetailRedisHostname
-        MetricsKinesisStreamArn: !Ref MetricsKinesisStreamArn
-        DynamoDbKinesisStreamArn: !Ref DynamoDbKinesisStreamArn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Router }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-legacy.yml
-      TimeoutInMinutes: 20
 
 Outputs:
   VanityAlbDomain:

@@ -26,11 +26,11 @@ Parameters:
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbTtl: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailRedisHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -921,9 +921,9 @@ Resources:
         ${EnvironmentType} Dovetail Analytics sending INCRs to Redis
       Environment:
         Variables:
-          REDIS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:6379
+          REDIS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_TTL: "7200"
-          REDIS_IMPRESSIONS_HOST: !Sub cluster://${DovetailRedisHostname}:6379
+          REDIS_IMPRESSIONS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_IMPRESSIONS_TTL: "90000"
       Events:
         KinesisTrigger:
