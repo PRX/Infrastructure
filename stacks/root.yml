@@ -251,7 +251,7 @@ Resources:
         TemplateUrlPrefix: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/serverless/"]]
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        CastleRedisPrimaryEndPointAddress: !GetAtt CastleStack.Outputs.RedisPrimaryEndPointAddress
+        CastleRedisPrimaryEndPointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
         UploadLambdaCodeS3ObjectKey: !Ref UploadLambdaCodeS3ObjectKey
         DovetailBytesLambdaCodeS3ObjectKey: !Ref DovetailBytesLambdaCodeS3ObjectKey
         DovetailCountsLambdaCodeS3ObjectKey: !Ref DovetailCountsLambdaCodeS3ObjectKey
@@ -437,49 +437,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/load-balancers.yml"]]
       TimeoutInMinutes: 5
-  CastleStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
-        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        VPCSecurityGroup: !GetAtt VPCStack.Outputs.SecurityGroup
-        PlatformALBDNSName: !GetAtt LoadBalancersStack.Outputs.PlatformALBDualstackDNSName
-        PlatformALBFullName: !GetAtt LoadBalancersStack.Outputs.PlatformALBFullName
-        PlatformALBCanonicalHostedZoneID: !GetAtt LoadBalancersStack.Outputs.PlatformALBCanonicalHostedZoneID
-        PlatformALBHTTPListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPListenerArn
-        PlatformALBHTTPSListenerArn: !GetAtt LoadBalancersStack.Outputs.PlatformALBHTTPSListenerArn
-        PlatformALBListenerPriorityPrefix: !FindInMap [ALBListenerRulePriorityMap, Castle, prefix]
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        RedisSecurityGroupSourceSecurityGroupId: !GetAtt ECSClusterStack.Outputs.ECSInstanceOutboundSecurityGroupId
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-        CastleEcrImageTag: !Ref CastleEcrImageTag
-        CastleSecretsVersion: !Ref CastleSecretsVersion
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-        SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
-        SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/castle.prx.org.yml"]]
-      TimeoutInMinutes: 5
   FeederStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -657,6 +614,8 @@ Resources:
         RootStackId: !GetAtt Constants.RootStackId
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc
         CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
+        Ec2ResourceTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.Ec2ResourceTaggerServiceToken
         SharedVpcCidrBlock: !Ref SharedVpcCidrBlock
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
