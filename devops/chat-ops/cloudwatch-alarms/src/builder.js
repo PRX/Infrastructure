@@ -70,6 +70,8 @@ async function cloudWatchClient(event) {
  */
 async function detailLines(event, desc, history) {
   switch (event.detail.state.value) {
+    case 'INSUFFICIENT_DATA':
+      return ['Details not implemented for `INSUFFICIENT_DATA`'];
     case 'OK':
       return await ok.detailLines(event, desc, history);
     case 'ALARM':
