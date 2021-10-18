@@ -14,6 +14,7 @@ Parameters:
   CodeS3ObjectKey: { Type: String }
   ArrangerFunctionArn: { Type: String }
   ArrangerWorkspaceBucketArn: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -75,3 +76,17 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${OriginRequestFunction}
       RetentionInDays: 14
+  OriginRequestFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref OriginRequestFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Origin Request }
