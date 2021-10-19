@@ -37,14 +37,12 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
-  SharedRdsMysqlEndpoint: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
-  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsMysqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   # TODO: re-enable when we move off the old stacks
   # EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
@@ -253,9 +251,9 @@ Resources:
             - Name: ELASTICSEARCH_URL
               Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
             - Name: DB_PORT_3306_TCP_ADDR
-              Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+              Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
-              Value: "3306"
+              Value: !Ref SharedAuroraMysqlPort
             - Name: AUDIO_CALLBACK_QUEUE_NAME
               Value: !GetAtt AudioCallbackQueue.QueueName
             - Name: IMAGE_CALLBACK_QUEUE_NAME
@@ -332,9 +330,9 @@ Resources:
             - Name: ELASTICSEARCH_URL
               Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
             - Name: DB_PORT_3306_TCP_ADDR
-              Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+              Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
-              Value: "3306"
+              Value: !Ref SharedAuroraMysqlPort
             - Name: AUDIO_CALLBACK_QUEUE_NAME
               Value: !GetAtt AudioCallbackQueue.QueueName
             - Name: IMAGE_CALLBACK_QUEUE_NAME
