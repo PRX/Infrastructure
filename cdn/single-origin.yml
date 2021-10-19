@@ -44,6 +44,7 @@ Conditions:
   HasCloudFrontCustom403ErrorResponseCode: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponseCode, ""]]
   # HasCloudFrontCustom403ErrorResponsePagePath: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponsePagePath, ""]]
   HasCloudFrontWebACLId: !Not [!Equals [!Ref CloudFrontWebACLId, ""]]
+  HasCloudFrontOriginCustomHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontOriginCustomHeaders], ""]]
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
@@ -100,6 +101,7 @@ Metadata:
           - CloudFrontDefaultTtl
           - CloudFrontMinTtl
           - CloudFrontMaxTtl
+          - CloudFrontOriginCustomHeaders
           - CloudFrontLoggingBucket
           - CloudFrontLoggingBucketPrefix
           - CloudFrontOriginAccess
@@ -154,6 +156,8 @@ Metadata:
         default: Compress objects automatically
       CloudFrontOriginAccess:
         default: Origin access identity
+      CloudFrontOriginCustomHeaders:
+        default: Custom headers
       CloudFrontOriginProtocolPolicy:
         default: Origin protocol policy
       CloudFrontViewerProtocolPolicy:
@@ -355,6 +359,12 @@ Parameters:
     AllowedValues:
       - "Yes"
       - "No"
+  CloudFrontOriginCustomHeaders:
+    Type: CommaDelimitedList
+    Description: >-
+      (optional) A list of HTTP header names and values that CloudFront adds to
+      the requests that it sends to the origin. Uses the format
+      "name1,value1,name2,value2". Currently supports up to 1 name-value pairs.
   CloudFrontOriginProtocolPolicy:
     Type: String
     Description: >-
@@ -502,8 +512,11 @@ Resources:
                   - TLSv1
             DomainName: !Ref OriginDomain
             Id: primary-origin
-            # OriginCustomHeaders:
-            #   - OriginCustomHeader
+            OriginCustomHeaders: !If
+              - HasCloudFrontOriginCustomHeaders
+              - - HeaderName: !Select [0, !Ref CloudFrontOriginCustomHeaders]
+                  HeaderValue: !Select [1, !Ref CloudFrontOriginCustomHeaders]
+              - !Ref AWS::NoValue
             OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
             S3OriginConfig: !If
               - HasCloudFrontOriginAccess
@@ -526,8 +539,11 @@ Resources:
                       - TLSv1
                 DomainName: !Ref FailoverOriginDomain
                 Id: failover-origin
-                # OriginCustomHeaders:
-                #   - OriginCustomHeader
+                OriginCustomHeaders: !If
+                  - HasCloudFrontOriginCustomHeaders
+                  - - HeaderName: !Select [0, !Ref CloudFrontOriginCustomHeaders]
+                      HeaderValue: !Select [1, !Ref CloudFrontOriginCustomHeaders]
+                  - !Ref AWS::NoValue
                 OriginPath: !If [HasOriginPath, !Ref OriginPath, !Ref "AWS::NoValue"]
                 S3OriginConfig: !If
                   - HasCloudFrontOriginAccess
