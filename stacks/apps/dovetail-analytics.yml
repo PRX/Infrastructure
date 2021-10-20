@@ -34,6 +34,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   ParameterStoreReadPolicy:
@@ -63,11 +64,12 @@ Resources:
           BQ_PROJECT_ID: prx-metrics
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
+          PROCESS_AFTER: !If [IsStaging, "1634764500", ""]
       Events:
         KinesisTrigger:
           Properties:
             BatchSize: 100
-            Enabled: false # TODO
+            Enabled: !If [IsStaging, true, false] # TODO
             StartingPosition: LATEST
             Stream: !Ref MetricsKinesisStreamArn
           Type: Kinesis

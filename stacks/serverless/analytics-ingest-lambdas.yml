@@ -45,6 +45,8 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   CastleRedisPrimaryEndPointAddress:
     Type: String
+Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 Resources:
   # Shared IAM Role
   AnalyticsLambdaExecutionIAMRole:
@@ -105,6 +107,7 @@ Resources:
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub "/prx/${EnvironmentTypeAbbreviation}/analytics-bigquery"
           BQ_PROJECT_ID: "prx-metrics"
+          PROCESS_UNTIL: !If [IsStaging, "1634764500", ""]
       Handler: index.handler
       MemorySize: 512
       Role: !GetAtt AnalyticsLambdaExecutionIAMRole.Arn
