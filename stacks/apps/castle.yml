@@ -23,6 +23,9 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
@@ -31,6 +34,7 @@ Parameters:
   CastleRdsPostgresqlEndpoint: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -254,6 +258,110 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Castle }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  PostgresParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: !Sub Castle ${EnvironmentType} Parameter Group
+      Family: postgres13
+      Parameters:
+        shared_preload_libraries: pg_stat_statements,auto_explain
+        auto_explain.log_min_duration: "10000"
+        auto_explain.log_timing: "1"
+        pg_stat_statements.track: ALL
+        track_activity_query_size: "4096"
+        track_io_timing: "1"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
+  PostgresSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DBSubnetGroupDescription: !Sub Castle ${EnvironmentType} Postgres13 Subnet Group
+      SubnetIds:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
+
+  PostgresSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: !Sub Castle ${EnvironmentType} Security Group
+      SecurityGroupIngress:
+        - FromPort: 5432
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+          ToPort: 5432
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
+      VpcId: !Ref VpcId
+
+  # PostgresInstance:
+  #   Type: AWS::RDS::DBInstance
+  #   DeletionPolicy: Retain
+  #   UpdateReplacePolicy: Retain
+  #   Properties:
+  #     AllocatedStorage: "300"
+  #     AllowMajorVersionUpgrade: false
+  #     AutoMinorVersionUpgrade: false
+  #     BackupRetentionPeriod: 7
+  #     CopyTagsToSnapshot: true
+  #     DBInstanceClass: !If [IsProduction, db.r5.xlarge, tktk]
+  #     DBName: !If [IsProduction, castle_production, castle_staging]
+  #     DBParameterGroupName: !Ref PostgresParameterGroup
+  #     DBSubnetGroupName: !Ref PostgresSubnetGroup
+  #     DeleteAutomatedBackups: true
+  #     DeletionProtection: true
+  #     EnablePerformanceInsights: !If [IsProduction, true, false]
+  #     Engine: postgres
+  #     EngineVersion: "13.4"
+  #     MasterUsername: !Ref DBUser
+  #     MasterUserPassword: !Ref DBPassword
+  #     MultiAZ: false
+  #     PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref "AWS::NoValue"]
+  #     PreferredBackupWindow: 08:00-08:30
+  #     PreferredMaintenanceWindow: tue:06:15-tue:06:45
+  #     PubliclyAccessible: true
+  #     StorageType: gp2
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+  #       - { Key: prx:dev:family, Value: Dovetail }
+  #       - { Key: prx:dev:application, Value: Castle }
+  #     VPCSecurityGroups:
+  #       - !GetAtt PostgresSecurityGroup.GroupId
 
 Outputs:
   TargetGroupFullName:
