@@ -41,9 +41,9 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<String>
   DynamodbTTL:
     Type: AWS::SSM::Parameter::Value<String>
-  RedisImpressionsHost:
-    Type: AWS::SSM::Parameter::Value<String>
-  CastleRedisPrimaryEndPointAddress:
+  SharedRedisReplicationGroupEndpointAddress:
+    Type: String
+  SharedRedisReplicationGroupEndpointPort:
     Type: String
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
@@ -185,9 +185,9 @@ Resources:
       Description: Dovetail analytics redis increments
       Environment:
         Variables:
-          REDIS_HOST: !Sub cluster://${CastleRedisPrimaryEndPointAddress}:6379
+          REDIS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_TTL: "7200"
-          REDIS_IMPRESSIONS_HOST: !Ref RedisImpressionsHost
+          REDIS_IMPRESSIONS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_IMPRESSIONS_TTL: "90000"
           PROCESS_UNTIL: !If [IsStaging, "1634768100", ""]
       Handler: index.handler
