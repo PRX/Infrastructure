@@ -326,44 +326,44 @@ Resources:
         - { Key: prx:dev:application, Value: Castle }
       VpcId: !Ref VpcId
 
-  # PostgresInstance:
-  #   Type: AWS::RDS::DBInstance
-  #   DeletionPolicy: Retain
-  #   UpdateReplacePolicy: Retain
-  #   Properties:
-  #     AllocatedStorage: "300"
-  #     AllowMajorVersionUpgrade: false
-  #     AutoMinorVersionUpgrade: false
-  #     BackupRetentionPeriod: 7
-  #     CopyTagsToSnapshot: true
-  #     DBInstanceClass: !If [IsProduction, db.r5.xlarge, tktk]
-  #     DBName: !If [IsProduction, castle_production, castle_staging]
-  #     DBParameterGroupName: !Ref PostgresParameterGroup
-  #     DBSubnetGroupName: !Ref PostgresSubnetGroup
-  #     DeleteAutomatedBackups: true
-  #     DeletionProtection: true
-  #     EnablePerformanceInsights: !If [IsProduction, true, false]
-  #     Engine: postgres
-  #     EngineVersion: "13.4"
-  #     MasterUsername: !Ref DBUser
-  #     MasterUserPassword: !Ref DBPassword
-  #     MultiAZ: false
-  #     PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref "AWS::NoValue"]
-  #     PreferredBackupWindow: 08:00-08:30
-  #     PreferredMaintenanceWindow: tue:06:15-tue:06:45
-  #     PubliclyAccessible: true
-  #     StorageType: gp2
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:family, Value: Dovetail }
-  #       - { Key: prx:dev:application, Value: Castle }
-  #     VPCSecurityGroups:
-  #       - !GetAtt PostgresSecurityGroup.GroupId
+  PostgresInstance:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AllocatedStorage: !If [IsProduction, "300", "100"]
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: false
+      BackupRetentionPeriod: 7
+      CopyTagsToSnapshot: true
+      DBInstanceClass: !If [IsProduction, db.r5.xlarge, db.t3.medium]
+      DBName: !If [IsProduction, castle_production, castle_staging]
+      DBParameterGroupName: !Ref PostgresParameterGroup
+      DBSubnetGroupName: !Ref PostgresSubnetGroup
+      DeleteAutomatedBackups: true
+      DeletionProtection: true
+      EnablePerformanceInsights: !If [IsProduction, true, false]
+      Engine: postgres
+      EngineVersion: "13.4"
+      MasterUsername: !Ref CastlePostgresUsername # Must be 1 to 63 letters or numbers
+      MasterUserPassword: !Ref CastlePostgresUserPassword # Must contain from 8 to 128 characters
+      MultiAZ: false
+      PerformanceInsightsRetentionPeriod: !If [IsProduction, 7, !Ref "AWS::NoValue"]
+      PreferredBackupWindow: 08:00-08:30
+      PreferredMaintenanceWindow: tue:06:15-tue:06:45
+      PubliclyAccessible: true
+      StorageType: gp2
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
+      VPCSecurityGroups:
+        - !GetAtt PostgresSecurityGroup.GroupId
 
 Outputs:
   TargetGroupFullName:
