@@ -8,10 +8,11 @@ module.exports = {
   channel(event) {
     const name = event.detail.alarmName;
 
-    // if (name.startsWith('FATAL')) {
-    //   return '#ops-fatal';
-    // } else if (name.startsWith('ERROR')) {
-    //   return '#ops-error';
+    if (name.startsWith('FATAL')) {
+      return '#ops-fatal';
+    } else if (name.startsWith('ERROR')) {
+      return '#ops-error';
+    }
     // } else if (name.startsWith('WARN')) {
     //   return '#ops-warn';
     // } else if (name.startsWith('INFO')) {
