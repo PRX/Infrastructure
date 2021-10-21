@@ -291,7 +291,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       Description: !Sub Castle ${EnvironmentType} Parameter Group
-      Family: postgres13
+      Family: postgres13 # aws rds describe-db-engine-versions --query "DBEngineVersions[].DBParameterGroupFamily"
       Parameters:
         shared_preload_libraries: pg_stat_statements,auto_explain
         auto_explain.log_min_duration: "10000"
@@ -360,7 +360,7 @@ Resources:
       AutoMinorVersionUpgrade: false
       BackupRetentionPeriod: 7
       CopyTagsToSnapshot: true
-      DBInstanceClass: !If [IsProduction, db.r6g.2xlarge, db.t4g.medium]
+      DBInstanceClass: !If [IsProduction, db.r6g.2xlarge, db.t4g.medium] # NOTE Changing classes will cause ~10 minutes of downtime
       DBName: !If [IsProduction, castle_production, castle_staging]
       DBParameterGroupName: !Ref PostgresParameterGroup
       DBSubnetGroupName: !Ref PostgresSubnetGroup
@@ -368,7 +368,7 @@ Resources:
       DeletionProtection: true
       EnablePerformanceInsights: !If [IsProduction, true, false]
       Engine: postgres
-      EngineVersion: "13.4"
+      EngineVersion: "13.4" # aws rds describe-db-engine-versions --engine postgres --query "DBEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
       MasterUsername: !Ref CastlePostgresUsername # Must be 1 to 63 letters or numbers
       MasterUserPassword: !Ref CastlePostgresUserPassword # Must contain from 8 to 128 characters
       MultiAZ: false
