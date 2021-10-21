@@ -50,13 +50,11 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
-  SharedRdsMysqlEndpoint: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  HasRdsEndpoint: !Not [!Equals [!Ref SharedRdsMysqlEndpoint, ""]]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
 
 Resources:
@@ -262,9 +260,9 @@ Resources:
             - Name: SPHINX_BASE_URL
               Value: !GetAtt Constants.SphinxBaseUrl
             - Name: DB_PORT_3306_TCP_ADDR
-              Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+              Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
-              Value: "3306"
+              Value: !Ref SharedAuroraMysqlPort
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -592,9 +590,9 @@ Resources:
             - Name: LOCAL_SPHINX
               Value: "true"
             - Name: DB_PORT_3306_TCP_ADDR
-              Value: !If [IsProduction, !Ref SharedRdsMysqlEndpoint, !Ref SharedAuroraMysqlEndpoint]
+              Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
-              Value: "3306"
+              Value: !Ref SharedAuroraMysqlPort
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
