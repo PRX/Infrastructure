@@ -226,6 +226,7 @@ Resources:
               Value: !Ref AWS::Region
             - Name: PG_HOST
               Value: !Ref CastleRdsPostgresqlEndpoint
+              # TODO Value: !GetAtt PostgresInstance.Endpoint.Address
             - Name: REDIS_HOST
               Value: !Ref SharedRedisReplicationGroupEndpointAddress
             - Name: REDIS_PORT
@@ -364,6 +365,28 @@ Resources:
         - { Key: prx:dev:application, Value: Castle }
       VPCSecurityGroups:
         - !GetAtt PostgresSecurityGroup.GroupId
+  PostgresInstanceDiskSpaceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      ActionsEnabled: true
+      AlarmName: !Sub ERROR [Castle] Database <${EnvironmentTypeAbbreviation}> DISK SPACE LOW (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Castle's RDS Postgres database instance is running
+        low on free storage space. If it runs out of space, the Castle app
+        may encounter operational issues.
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Dimensions:
+        - Name: DBInstanceIdentifier
+          Value: !Ref PostgresInstance
+      EvaluationPeriods: 1
+      MetricName: FreeStorageSpace
+      Namespace: AWS/RDS
+      Period: 300
+      Statistic: Average
+      Threshold: 50000000000
+      Unit: Bytes
+      TreatMissingData: notBreaching
 
 Outputs:
   TargetGroupFullName:
