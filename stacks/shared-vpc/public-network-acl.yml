@@ -26,61 +26,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
-  # INGRESS 120
-  # Allows inbound user traffic for standard HTTPS web requests from all IPs
-  InboundIpV4HttpsNetworkAclEntry:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: false
-      NetworkAclId: !Ref PublicNetworkAcl
-      PortRange:
-        From: 443
-        To: 443
-      Protocol: 6 # TCP
-      RuleAction: allow
-      RuleNumber: 120
-  InboundIpV6HttpsNetworkAclEntry:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      Egress: false
-      Ipv6CidrBlock: ::/0
-      NetworkAclId: !Ref PublicNetworkAcl
-      PortRange:
-        From: 443
-        To: 443
-      Protocol: 6 # TCP
-      RuleAction: allow
-      RuleNumber: 121
-
-  # INGRESS 130
-  # Allows inbound user traffic for insecure HTTP web requests from all IPs
-  InboundIpV4HttpNetworkAclEntry:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      CidrBlock: 0.0.0.0/0
-      Egress: false
-      NetworkAclId: !Ref PublicNetworkAcl
-      PortRange:
-        From: 80
-        To: 80
-      Protocol: 6 # TCP
-      RuleAction: allow
-      RuleNumber: 130
-  InboundIpV6HttpNetworkAclEntry:
-    Type: AWS::EC2::NetworkAclEntry
-    Properties:
-      Egress: false
-      Ipv6CidrBlock: ::/0
-      NetworkAclId: !Ref PublicNetworkAcl
-      PortRange:
-        From: 80
-        To: 80
-      Protocol: 6 # TCP
-      RuleAction: allow
-      RuleNumber: 131
-
-  # INGRESS 140
+  # INGRESS 60
   # Allows inbound traffic on ephemeral and dynamic ports, such as for traffic
   # to ECS tasks with dynamic port mapping, load balancer traffic, and return
   # traffic for requests made from instances within the VPC.
@@ -96,7 +42,7 @@ Resources:
         To: 65535
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 140
+      RuleNumber: 60
   InboudIpV6TcpEphemeralPortsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -108,7 +54,61 @@ Resources:
         To: 65535
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 141
+      RuleNumber: 61
+
+  # INGRESS 220
+  # Allows inbound user traffic for standard HTTPS web requests from all IPs
+  InboundIpV4HttpsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 220
+  InboundIpV6HttpsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 221
+
+  # INGRESS 230
+  # Allows inbound user traffic for insecure HTTP web requests from all IPs
+  InboundIpV4HttpNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 230
+  InboundIpV6HttpNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 80
+        To: 80
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 231
 
   # INGRESS 530
   # Allows inbound echo reply ICMP traffic, mainly to allow PING traffic back
@@ -179,7 +179,7 @@ Resources:
         To: 22
       Protocol: 6 # TPC
       RuleAction: allow
-      RuleNumber: 170
+      RuleNumber: 570
   InboundIpV6SshNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -197,7 +197,7 @@ Resources:
   ##############################################################################
   ##############################################################################
 
-  # EGRESS 120
+  # EGRESS 60
   # Allows outbound traffic on high-numbered ports to all IPs. This generally
   # is for HTTP(S) return traffic to clients on ephemeral ports. Some of the
   # ports in this range may be denied by other rules. Also used to connect to
@@ -214,7 +214,7 @@ Resources:
         To: 65535
       Protocol: 6
       RuleAction: allow
-      RuleNumber: 120
+      RuleNumber: 60
   OutboudIpV6TcpEphemeralPortsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -226,11 +226,12 @@ Resources:
         To: 65535
       Protocol: 6
       RuleAction: allow
-      RuleNumber: 121
+      RuleNumber: 61
 
-  # EGRESS 130
+  # EGRESS 300
   # Allows outbound HTTPS web requests originating from hosts within the VPC
-  # to all IPs
+  # to all IPs (e.g., a program on one of our EC2 instances making an HTTPS
+  # request)
   OutboundIpV4HttpsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -242,7 +243,7 @@ Resources:
         To: 443
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 130
+      RuleNumber: 300
   OutboundIpV6HttpsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -254,11 +255,12 @@ Resources:
         To: 443
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 131
+      RuleNumber: 301
 
-  # EGRESS 140
+  # EGRESS 320
   # Allows outbound insecure HTTP web requests originating from hosts within
-  # the VPC to all IPs
+  # the VPC to all IPs (e.g., a program on one of our EC2 instances making an
+  # HTTP request)
   OutboundIpV4HttpNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -270,7 +272,7 @@ Resources:
         To: 80
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 140
+      RuleNumber: 320
   OutboundIpV6HttpNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -282,10 +284,11 @@ Resources:
         To: 80
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 141
+      RuleNumber: 321
 
-  # EGRESS 170
-  # Allows outbound SMTP traffic to all IPs
+  # EGRESS 400
+  # Allows outbound SMTP traffic to all IPs (e.g., sending an email to a user
+  # from an application running on one of our EC2 instances)
   OutboundIpV4SmtpNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -297,7 +300,7 @@ Resources:
         To: 587
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 170
+      RuleNumber: 400
   OutboundIpV6SmtpNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -309,7 +312,7 @@ Resources:
         To: 587
       Protocol: 6 # TCP
       RuleAction: allow
-      RuleNumber: 171
+      RuleNumber: 401
 
   # EGRESS 530
   # Allows outbound echo request ICMP traffic, mainly to allow PING from hosts
