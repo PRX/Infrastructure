@@ -282,6 +282,37 @@ Resources:
         - { Key: prx:dev:application, Value: Castle }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  QuicksightVpcSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: !Sub Castle ${EnvironmentType} Security Group
+      SecurityGroupIngress:
+        - FromPort: 5432
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+          ToPort: 5432
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Castle }
+      VpcId: !Ref VpcId
+  QuicksightVpcSecurityGroupPostgresEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: !Sub >-
+        Allows outbound PostgreSQL traffic from Quicksight to the
+        ${EnvironmentType} Castle DB
+      DestinationSecurityGroupId: !GetAtt PostgresSecurityGroup.GroupId
+      GroupId: !GetAtt QuicksightVpcSecurityGroup.GroupId
+      IpProtocol: tcp
+
   PostgresParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     DeletionPolicy: Retain
@@ -335,6 +366,10 @@ Resources:
         - FromPort: 5432
           IpProtocol: tcp
           SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+          ToPort: 5432
+        - FromPort: 5432
+          IpProtocol: tcp
+          SourceSecurityGroupId: !GetAtt QuicksightVpcSecurityGroup.GroupId
           ToPort: 5432
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -415,3 +450,5 @@ Outputs:
     Value: !GetAtt PostgresInstance.Endpoint.Address
   PostgresInstanceEndpointPort:
     Value: !GetAtt PostgresInstance.Endpoint.Port
+  QuicksightVpcSecurityGroupId:
+    Value: !GetAtt QuicksightVpcSecurityGroup.GroupId
