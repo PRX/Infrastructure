@@ -58,6 +58,10 @@ Resources:
       RuleAction: allow
       RuleNumber: 61
 
+  # TODO Figure out which other port ranges we're using, even if they overlap
+  # with rule 60
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+
   # INGRESS 220
   # Allows inbound user traffic for standard HTTPS web requests from all IPs
   InboundIpV4HttpsNetworkAclEntry:
@@ -111,6 +115,39 @@ Resources:
       Protocol: 6 # TCP
       RuleAction: allow
       RuleNumber: 231
+
+  # INGRESS 300
+  # Allow return path TCP traffic from all IPs on the ephemeral port range used
+  # by Amazon Linux. This is response traffic for request that originate from
+  # Amazon Linux instances in the VPC (e.g, a program running on one of our
+  # EC2 instances makes an HTTPS (443) request to Big Query, and the response
+  # is sent back on ephemeral port 50129). This is required if we have Amazon
+  # Linux instances making requests to the internet.
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  InboudIpV4TcpAmazonLinuxEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 32768
+        To: 61000
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 300
+  InboudIpV6TcpAmazonLinuxEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref PublicNetworkAcl
+      PortRange:
+        From: 32768
+        To: 61000
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 301
 
   # INGRESS 530
   # Allows inbound echo reply ICMP traffic, mainly to allow PING traffic back
@@ -199,12 +236,14 @@ Resources:
   ##############################################################################
   ##############################################################################
 
-  # EGRESS 60
-  # Allows outbound traffic on high-numbered ports to all IPs. This generally
-  # is for HTTP(S) return traffic to clients on ephemeral ports. Some of the
-  # ports in this range may be denied by other rules. Also used to connect to
-  # databases and other services within the VPC.
-  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  # EGRESS 80
+  # Allows outbound TCP traffic on a wide range of ephemeral ports. This allows
+  # for the return path of external client requests being made through a
+  # load balancer in the VPC (e.g., an HTTPS request from a user to one of our
+  # web apps). This must cover all ports that any end-user device that we want
+  # to support may choose as its ephemeral port.
+  # - Some of the ports in this range may be denied by other rules.
+  # https://docs.aws.amazon.com/elasticloadbalancing/latest/classic/elb-security-groups.html#elb-vpc-nacl
   OutboudIpV4TcpEphemeralPortsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -214,9 +253,9 @@ Resources:
       PortRange:
         From: 1024
         To: 65535
-      Protocol: 6
+      Protocol: 6 # tcp
       RuleAction: allow
-      RuleNumber: 60
+      RuleNumber: 80
   OutboudIpV6TcpEphemeralPortsNetworkAclEntry:
     Type: AWS::EC2::NetworkAclEntry
     Properties:
@@ -226,9 +265,13 @@ Resources:
       PortRange:
         From: 1024
         To: 65535
-      Protocol: 6
+      Protocol: 6 # tcp
       RuleAction: allow
-      RuleNumber: 61
+      RuleNumber: 81
+
+  # TODO Figure out which other port ranges we're using, even if they overlap
+  # with rule 80
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
 
   # EGRESS 200
   # Allows outbound MySQL and Aurora traffic to IPs within the VPC (e.g., an

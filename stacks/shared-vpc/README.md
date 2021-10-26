@@ -1,5 +1,11 @@
 # VPC DevOps
 
+## Service-specific NACL rules
+
+Both our public and private network ACLs include some rules with very wide port ranges (such as `1024` to `65535`), in order to support normal operating traffic. The ranges will likely include specific ports that we use for particular services, such as port `3306` for Aurora databases.
+
+It is a best practice to create rules for all necesary ports or port ranges, even if an existing rule would satisfy the need. This makes the traffic patterns of the network more clear. It also reduces the risk of network connectivity issues if a rule changes and it's not obvious that the rule was being used for multiple purposes. For example, if the `1024-65535` rule were removed at some point because it were no longer needed, without an explicit `3306` rule, Aurora databases would break. With both rules, even though they may overlap, future changes are unlikey to cause disruptions.
+
 ## Subnet CIDR range selection
 
 The `AWS::EC2::Subnet` resources use CloudFormation functions to determine their CIDR ranges, e.g., `!Select [0, !Cidr [!Ref VpcCidrBlock, 16, 12]]`
