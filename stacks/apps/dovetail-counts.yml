@@ -28,11 +28,12 @@ Parameters:
   ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailRedisHostname: { Type: String }
   DovetailS3Bucket: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailS3ObjectStitchPrefix: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailCdnLogsKinesisArn: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailCountedBytesKinesisArn: { Type: AWS::SSM::Parameter::Value<String> }
+  SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -75,8 +76,7 @@ Resources:
           ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
           KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedBytesKinesisArn
-          # REDIS_BACKUP_URL: !If [HasRedisBackupUrl, !Ref RedisBackupUrl, !Ref "AWS::NoValue"]
-          REDIS_URL: !Sub cluster://${DovetailRedisHostname}:6379
+          REDIS_URL: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           S3_BUCKET: !Ref DovetailS3Bucket
           S3_PREFIX: !Ref DovetailS3ObjectStitchPrefix
       Events:
