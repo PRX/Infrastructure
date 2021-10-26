@@ -343,6 +343,25 @@ Resources:
         - { Key: prx:dev:application, Value: Networks }
       ValidationMethod: DNS
 
+  VanityNlbDomainRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: !Sub >-
+        Record sets for dualstack web traffic to the Networks
+        ${EnvironmentType} NLB
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: AAAA
+          Name: !GetAtt Constants.VanityNlbDomain
+          AliasTarget:
+            DNSName: !GetAtt Nlb.DNSName
+            HostedZoneId: !GetAtt Nlb.CanonicalHostedZoneID
+        - Type: A
+          Name: !GetAtt Constants.VanityNlbDomain
+          AliasTarget:
+            DNSName: !GetAtt Nlb.DNSName
+            HostedZoneId: !GetAtt Nlb.CanonicalHostedZoneID
+
   SphinxServerSearchdTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     DependsOn: Nlb
