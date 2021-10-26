@@ -3,6 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: Dovetail counts lambda function
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   HasRedisBackupUrl: !Not [!Equals [!Ref RedisBackupUrl, ""]]
 Parameters:
   OpsWarnMessagesSnsTopicArn:
@@ -109,6 +110,7 @@ Resources:
           REDIS_URL: !Ref RedisUrl
           S3_BUCKET: !Ref S3Bucket
           S3_PREFIX: !Ref S3Prefix
+          PROCESS_UNTIL: !If [IsStaging, "1635276000", ""]
       Handler: index.handler
       Layers: !If
         - IsProduction
