@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an Amplify app for theworld.org
+
+Parameters:
+  GitHubPersonalAccessToken:
+    Type: String
+  CampaignMonitorApiKey:
+    Type: String
+  FacebookAccessToken:
+    Type: String
+  GoogleCustomSearchApiKey:
+    Type: String
+
+Resources:
+  AmplifyServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: amplify.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess-Amplify
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: theworld.org }
+
+  TheWorldApp:
+    Type: AWS::Amplify::App
+    Properties:
+      AutoBranchCreationConfig:
+        AutoBranchCreationPatterns:
+          - feat/**
+          - fix/**
+        EnableAutoBranchCreation: true
+        EnableAutoBuild: true
+        EnablePerformanceMode: false
+        EnablePullRequestPreview: true
+      CustomRules:
+        - Source: https://www.theworld.org
+          Status: "302"
+          Target: https://theworld.org
+        # - Source: /sitemap.xml
+        #   Status: "301"
+        #   Target: https://sitemap.theworld.org/sitemap.xml
+        # - Source: /rss/twiw.xml
+        #   Status: "301"
+        #   Target: https://subtitlepod.com/feed/podcast
+        # - Source: /<*>
+        #   Status: "200"
+        #   Target: https://d1mnxf4cihmwok.cloudfront.net/<*>
+        # - Source: /<*>
+        #   Status: "200"
+        #   Target: https://d1f70plbelwnug.cloudfront.net/<*>
+        # - Source: /<*>
+        #   Status: "200"
+        #   Target: https://d101eude9252xm.cloudfront.net/<*>
+        # - Source: </^[^.]+$|\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|xml)$)([^.]+$)/>
+        #   Status: "200"
+        #   Target: /index.html
+        # - Source: /<*>
+        #   Status: "404"
+        #   Target: /index.html
+      Description: >-
+        tktktk
+      EnableBranchAutoDeletion: true
+      EnvironmentVariables:
+        - Name: CM_API_KEY
+          Value: !Ref CampaignMonitorApiKey
+        - Name: CSE_API_KEY
+          Value: !Ref GoogleCustomSearchApiKey
+        - Name: FB_ACCESS_TOKEN
+          Value: !Ref FacebookAccessToken
+        - Name: NODE_OPTIONS
+          Value: --max_old_space_size=8192
+        - Name: _LIVE_UPDATES
+          Value: |
+            [{"name":"Next.js version","pkg":"next-version","type":"internal","version":"10"},"{\"pkg\":\"next-version\",\"type\":\"internal\",\"version\":\"10\"}"]
+      IAMServiceRole: !GetAtt AmplifyServiceRole.Arn
+      Name: theworld.org
+      OauthToken: !Ref GitHubPersonalAccessToken
+      Repository: https://github.com/PRX/theworld.org
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: theworld.org }
+
+  ProductionBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt TheWorldApp.AppId
+      BranchName: production
+      Description: Production branch
+      EnableAutoBuild: true
+      EnablePerformanceMode: false
+      EnablePullRequestPreview: true
+      Stage: PRODUCTION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: theworld.org }
+
+  PreviewBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt TheWorldApp.AppId
+      BranchName: preview
+      Description: Preview branch
+      EnableAutoBuild: true
+      EnablePerformanceMode: false
+      EnablePullRequestPreview: true
+      Stage: BETA
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Staging }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: theworld.org }
