@@ -172,7 +172,11 @@ function parameterDeltasListArrow(parameterDelta) {
   }
 
   // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
-  if (/GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(parameterDelta[2])) {
+  if (
+    parameterDelta[1] &&
+    parameterDelta[2] &&
+    /GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(parameterDelta[2])
+  ) {
     const repo = parameterDelta[2].match(/GitHub\/([^\/]+\/[^\/]+)/)[1];
 
     const oldCommit = parameterDelta[1]?.match(/\/([0-9a-f]{40})/)[1];
