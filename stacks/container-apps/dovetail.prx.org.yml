@@ -3,6 +3,7 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: dovetail.prx.org application running in Docker
 Conditions:
   CreateProductionResources: !Equals [!Ref EnvironmentType, Production]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 Parameters:
   # VPC ########################################################################
   VPC:
@@ -39,6 +40,7 @@ Parameters:
     Type: String
   ContainerCpu:
     Type: String
+  NewRelicApiKeyPrxLite: { Type: String }
   # Dovetail ###################################################################
   DovetailEcrImageTag:
     Type: String
@@ -594,6 +596,22 @@ Resources:
               Value: dovetail
             - Name: REDIS_POOL_SIZE
               Value: "4"
+            - Name: PORT
+              Value: "4000"
+            - Name: REDIRECT_HOST
+              Value: !If [IsProduction, dovetail3-cdn.prxu.org, dovetail3-cdn-staging.prxu.org]
+            - Name: REDIRECT_TTL
+              Value: "86400"
+            - Name: AUGURY_HOST
+              Value: !If [IsProduction, augury.prx.org, augury.staging.prx.tech]
+            - Name: FEEDER_HOST
+              Value: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
+            - Name: NEWRELIC_APP_NAME
+              Value: !If [IsProduction, Dovetail Router Production, Dovetail Router Staging]
+            - Name: NEWRELIC_LICENSE_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: AGENTS_URL
+              Value: https://raw.githubusercontent.com/PRX/prx-podagent/master/db/agents.lock.json
           Essential: true
           Image: !Ref DovetailRouterEcrImageTag
           LogConfiguration:
