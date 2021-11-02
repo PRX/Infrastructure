@@ -86,54 +86,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-bytes-lambda.yml"]]
       TimeoutInMinutes: 5
-  DovetailCdnArrangerStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        CodeS3Bucket:
-          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
-        CodeS3ObjectKey: !Ref DovetailCdnArrangerCodeS3ObjectKey
-        CloudFrontOai: !Ref DovetailCdnArrangerCloudFrontOai
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        ArrangementsDynamodbAccessRole: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_ACCESS_ROLE
-        ArrangementsDynamodbRegion: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_REGION
-        ArrangementsDynamodbTable: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_TABLE
-        ArrangementsDynamodbTTL: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/ARRANGEMENTS_DDB_TTL
-        DovetailHost: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/DOVETAIL_HOST
-        DovetailToken: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-cdn-arranger/DOVETAIL_TOKEN
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}dovetail-cdn-arranger.yml
-      TimeoutInMinutes: 5
-  DovetailCdnOriginRequestStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        CodeS3Bucket:
-          Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
-        CodeS3ObjectKey: !Ref DovetailCdnOriginRequestCodeS3ObjectKey
-        EnvironmentType: !Ref EnvironmentType
-        ArrangerFunctionArn: !GetAtt DovetailCdnArrangerStack.Outputs.ArrangerFunctionArn
-        ArrangerBucketArn: !GetAtt DovetailCdnArrangerStack.Outputs.ArrangerBucketArn
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Sub ${TemplateUrlPrefix}dovetail-cdn-origin-request.yml
-      TimeoutInMinutes: 5
 Outputs:
   UploadSigningUserName:
     Description: The user name of the IAM user whose key is used for signing
