@@ -70,6 +70,7 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
+  NewRelicApiKeyPrxLite: { Type: String }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
@@ -85,6 +86,9 @@ Parameters:
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedGlueDatabaseName: { Type: String }
+  AuguryHostname: { Type: String }
+  FeederHostname: { Type: String }
+  DovetailCdnHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -769,6 +773,20 @@ Resources:
               Value: dovetail
             - Name: REDIS_POOL_SIZE
               Value: "4"
+            - Name: PORT
+              Value: !Ref kApplicationPort
+            - Name: REDIRECT_HOST
+              Value: !Ref DovetailCdnHostname
+            - Name: REDIRECT_TTL
+              Value: "86400"
+            - Name: AUGURY_HOST
+              Value: !Ref AuguryHostname
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
+            - Name: NEWRELIC_APP_NAME
+              Value: !If [IsProduction, Dovetail Router Production, Dovetail Router Staging]
+            - Name: NEWRELIC_LICENSE_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
