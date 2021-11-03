@@ -33,6 +33,9 @@ Parameters:
   RootStackId: { Type: String }
 
 Resources:
+  ##############################################################################
+  # SNS TOPICS
+  ##############################################################################
   AudioCreateTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -279,28 +282,18 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TopicName: !Sub ${AWS::StackName}_${EnvironmentTypeAbbreviation}_announce_story_update
 
-  PlaceholderTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TopicName: !Sub ${AWS::StackName}_${EnvironmentTypeAbbreviation}_announce_mySubject_myVerb
-
-  PlaceholderQueue:
+  ##############################################################################
+  # SQS QUEUES
+  ##############################################################################
+  FeederFeedEntryCreateQueue:
     Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
       ReceiveMessageWaitTimeSeconds: 0
-      # RedrivePolicy:
-      #   deadLetterTargetArn: !GetAtt DefaultJobDeadletterQueue.Arn
-      #   maxReceiveCount: 10
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederFeedEntryCreateDeadletterQueue.Arn
+        maxReceiveCount: 10
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -308,9 +301,10 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common } # TODO App-specific
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
       VisibilityTimeout: 3600 # 1 hour
-  PlaceholderQueuePolicy:
+  FeederFeedEntryCreateQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
       PolicyDocument:
@@ -319,23 +313,38 @@ Resources:
           - Action: sqs:SendMessage
             Condition:
               ArnLike:
-                aws:SourceArn: !Ref PlaceholderTopic
+                aws:SourceArn: !Ref FeedEntryCreateTopic
             Effect: Allow
             Principal:
               Service: sns.amazonaws.com
-            Resource: !GetAtt PlaceholderQueue.Arn
+            Resource: !GetAtt FeederFeedEntryCreateQueue.Arn
             Sid: SqsSend
         Version: "2012-10-17"
       Queues:
-        - !Ref PlaceholderQueue
-
-  PlaceholderSubscription:
+        - !Ref FeederFeedEntryCreateQueue
+  FeederFeedEntryCreateQueueSubscription:
     Type: AWS::SNS::Subscription
     Properties:
-      Endpoint: !GetAtt PlaceholderQueue.Arn
+      Endpoint: !GetAtt FeederFeedEntryCreateQueue.Arn
       Protocol: sqs
       RawMessageDelivery: true
-      TopicArn: !Ref PlaceholderTopic
+      TopicArn: !Ref FeedEntryCreateTopic
+  FeederFeedEntryCreateDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
 
 Outputs:
   ResourcePrefix:
