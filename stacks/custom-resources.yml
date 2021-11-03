@@ -916,6 +916,115 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Infrastructure }
 
+  HashStringFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Architectures: [arm64]
+      Description: >-
+        Create a hash of an input string of a specified length
+      Handler: index.handler
+      InlineCode: |
+        const response = require('cfn-response');
+        const { createHash } = require('crypto');
+
+        exports.handler = async (event, context) => {
+          console.log(event);
+
+          try {
+            const inp = event.ResourceProperties.InputString;
+            const len = +event.ResourceProperties.Length;
+
+            if (!inp || !len || +len > 32) {
+              console.error('InputString and Length properties must be defined');
+              await response.send(event, context, response.FAILED, {});
+            }
+
+            const hash = createHash('sha256');
+            hash.update(inp);
+            const hex = hash.digest('hex');
+
+            await response.send(event, context, response.SUCCESS, {
+              Hash: hex.substring(0, len),
+            });
+          } catch (error) {
+            console.error(error);
+            await response.send(event, context, response.FAILED, {});
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action:
+                - ec2:CreateTags
+                - ec2:DeleteTags
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs12.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Infrastructure
+      Timeout: 60
+  HashStringFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${HashStringFunction}
+      RetentionInDays: 14
+  HashStringFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchLogGroupTaggerFunction.Arn
+      LogGroupName: !Ref HashStringFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
+  HashStringFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Infrastructure] Hash String <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS
+      AlarmDescription: !Sub |-
+        ${EnvironmentType} stack custom resource function for creating hash
+        strings is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HashStringFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  HashStringFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt HashStringFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
+
 Outputs:
   AmazonSesSmtpCredentialsGeneratorServiceToken:
     Description: Service token for the SES SMTP credentials generator
@@ -938,3 +1047,6 @@ Outputs:
   Ec2ResourceTaggerServiceToken:
     Description: Service token for EC2 Resource tagger
     Value: !GetAtt Ec2ResourceTaggerFunction.Arn
+  HashStringServiceToken:
+    Description: Service token for hash string generator
+    Value: !GetAtt HashStringFunction.Arn
