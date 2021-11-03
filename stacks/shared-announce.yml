@@ -82,24 +82,24 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common } # TODO App-specific
       VisibilityTimeout: 3600 # 1 hour
-  # PlaceholderQueuePolicy:
-  #   Type: AWS::SQS::QueuePolicy
-  #   Properties:
-  #     PolicyDocument:
-  #       Id: AnnouncePolicy
-  #       Statement:
-  #         - Action: sqs:SendMessage
-  #           Condition:
-  #             ArnEquals:
-  #               aws:SourceArn: !Ref PlaceholderTopic
-  #           Effect: Allow
-  #           Principal:
-  #             Service: sns.amazonaws.com
-  #           Resource: !GetAtt PlaceholderQueue.Arn
-  #           Sid: SqsSend
-  #       Version: "2012-10-17"
-  #     Queues:
-  #       - !GetAtt PlaceholderQueue.Arn
+  PlaceholderQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref PlaceholderTopic
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: !GetAtt PlaceholderQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !GetAtt PlaceholderQueue.Arn
 
   # PlaceholderSubscription:
   #   Type: AWS::SNS::Subscription
