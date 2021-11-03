@@ -285,14 +285,14 @@ Resources:
   ##############################################################################
   # SQS QUEUES
   ##############################################################################
-  FeederFeedEntryCreateQueue:
+  FeederSeriesCreateQueue:
     Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
       ReceiveMessageWaitTimeSeconds: 0
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt FeederFeedEntryCreateDeadletterQueue.Arn
+        deadLetterTargetArn: !GetAtt FeederSeriesCreateDeadletterQueue.Arn
         maxReceiveCount: 10
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -304,7 +304,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Feeder }
       VisibilityTimeout: 3600 # 1 hour
-  FeederFeedEntryCreateQueuePolicy:
+  FeederSeriesCreateQueuePolicy:
     Type: AWS::SQS::QueuePolicy
     Properties:
       PolicyDocument:
@@ -313,23 +313,450 @@ Resources:
           - Action: sqs:SendMessage
             Condition:
               ArnLike:
-                aws:SourceArn: !Ref FeedEntryCreateTopic
+                aws:SourceArn: !Ref SeriesCreateTopic
             Effect: Allow
             Principal:
               Service: sns.amazonaws.com
-            Resource: !GetAtt FeederFeedEntryCreateQueue.Arn
+            Resource: !GetAtt FeederSeriesCreateQueue.Arn
             Sid: SqsSend
         Version: "2012-10-17"
       Queues:
-        - !Ref FeederFeedEntryCreateQueue
-  FeederFeedEntryCreateQueueSubscription:
+        - !Ref FeederSeriesCreateQueue
+  FeederSeriesCreateQueueSubscription:
     Type: AWS::SNS::Subscription
     Properties:
-      Endpoint: !GetAtt FeederFeedEntryCreateQueue.Arn
+      Endpoint: !GetAtt FeederSeriesCreateQueue.Arn
       Protocol: sqs
       RawMessageDelivery: true
-      TopicArn: !Ref FeedEntryCreateTopic
-  FeederFeedEntryCreateDeadletterQueue:
+      TopicArn: !Ref SeriesCreateTopic
+  FeederSeriesCreateDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederSeriesDeleteQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederSeriesDeleteDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederSeriesDeleteQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref SeriesDeleteTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederSeriesDeleteQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederSeriesDeleteQueue
+  FeederSeriesDeleteQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederSeriesDeleteQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref SeriesDeleteTopic
+  FeederSeriesDeleteDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederSeriesUpdateQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederSeriesUpdateDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederSeriesUpdateQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref SeriesUpdateTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederSeriesUpdateQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederSeriesUpdateQueue
+  FeederSeriesUpdateQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederSeriesUpdateQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref SeriesUpdateTopic
+  FeederSeriesUpdateDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+  ##############################################################################
+  FeederStoryCreateQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederStoryCreateDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederStoryCreateQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref StoryCreateTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederStoryCreateQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederStoryCreateQueue
+  FeederStoryCreateQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederStoryCreateQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref StoryCreateTopic
+  FeederStoryCreateDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederStoryDeleteQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederStoryDeleteDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederStoryDeleteQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref StoryDeleteTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederStoryDeleteQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederStoryDeleteQueue
+  FeederStoryDeleteQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederStoryDeleteQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref StoryDeleteTopic
+  FeederStoryDeleteDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederStoryPublishQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederStoryPublishDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederStoryPublishQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref StoryPublishTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederStoryPublishQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederStoryPublishQueue
+  FeederStoryPublishQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederStoryPublishQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref StoryPublishTopic
+  FeederStoryPublishDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederStoryUnpublishQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederStoryUnpublishDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederStoryUnpublishQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref StoryUnpublishTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederStoryUnpublishQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederStoryUnpublishQueue
+  FeederStoryUnpublishQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederStoryUnpublishQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref StoryUnpublishTopic
+  FeederStoryUnpublishDeadletterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 30
+
+  FeederStoryUpdateQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 604800 # 7 days
+      ReceiveMessageWaitTimeSeconds: 0
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FeederStoryUpdateDeadletterQueue.Arn
+        maxReceiveCount: 10
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      VisibilityTimeout: 3600 # 1 hour
+  FeederStoryUpdateQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: Policy
+        Statement:
+          - Action: sqs:SendMessage
+            Condition:
+              ArnLike:
+                aws:SourceArn: !Ref StoryUpdateTopic
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Resource: !GetAtt FeederStoryUpdateQueue.Arn
+            Sid: SqsSend
+        Version: "2012-10-17"
+      Queues:
+        - !Ref FeederStoryUpdateQueue
+  FeederStoryUpdateQueueSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: !GetAtt FeederStoryUpdateQueue.Arn
+      Protocol: sqs
+      RawMessageDelivery: true
+      TopicArn: !Ref StoryUpdateTopic
+  FeederStoryUpdateDeadletterQueue:
     Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
