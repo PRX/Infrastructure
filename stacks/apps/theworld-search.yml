@@ -44,22 +44,6 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Search }
       ValidationMethod: DNS
-  InternalCertificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: IsProduction
-    Properties:
-      DomainName: !Ref kInteralDomain
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_the-world_search" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Search }
-      ValidationMethod: DNS
 
   # API
   HttpApi:
@@ -214,36 +198,6 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Search }
 
-  # Create an association between search.theworld.prx.tech and the production
-  # API Gateway. The API is a regional API, so the domain can be associated
-  # with one API in each AWS region. DNS records are also created in each
-  # region, which creates a latency-based routing policy for DNS queries, of
-  # the domain. This domain exists solely to support the routing policy, and
-  # search.theworld.org should CNAME this domain.
-  InternalDomainName:
-    Type: AWS::ApiGatewayV2::DomainName
-    Condition: IsProduction # Production only
-    Properties:
-      DomainName: !Ref kInteralDomain
-      DomainNameConfigurations:
-        - CertificateArn: !Ref InternalCertificate
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:cloudformation:root-stack-name: !Ref RootStackName
-        prx:cloudformation:root-stack-id: !Ref RootStackId
-        prx:ops:environment: !Ref EnvironmentType
-        prx:dev:family: The World
-        prx:dev:application: Search
-  InternalApiMapping:
-    Type: AWS::ApiGatewayV2::ApiMapping
-    Condition: IsProduction # Production only
-    Properties:
-      ApiId: !Ref HttpApi
-      DomainName: !Ref InternalDomainName
-      Stage: $default
-
   # Creates an association between search.theworld.org and the production
   # API Gateway. This association can be created once per region.
   # This association allows for a CNAME to be made between search.theworld.org
@@ -273,7 +227,14 @@ Resources:
       DomainName: !Ref ExternalDomainName
       Stage: $default
 
-  # tktkt
+  # Creates DNS records for search.theworld.prx.tech, which alias to the
+  # regional domain name for the domain association for search.theworld.org.
+  # This allows for search.theworld.org to resolve to search.theworld.prx.tech,
+  # and have search.theworld.prx.tech return the IP for an endpoint that
+  # is associated with search.theworld.org.
+  # There is no API Gateway domain association for search.theworld.prx.tech
+  # itself, so that domain is not functional, in any way other than as a DNS
+  # CNAME target.
   InternalDomainNameRecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
     Condition: IsProduction # Production only
@@ -283,9 +244,9 @@ Resources:
       RecordSets:
         - AliasTarget:
             DNSName: !GetAtt ExternalDomainName.RegionalDomainName
-            EvaluateTargetHealth: true # TODO Add health check
+            EvaluateTargetHealth: true
             HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
-          Name: !Ref InternalDomainName
+          Name: !Ref kInteralDomain
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
           Type: A
@@ -293,7 +254,7 @@ Resources:
             DNSName: !GetAtt ExternalDomainName.RegionalDomainName
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
-          Name: !Ref InternalDomainName
+          Name: !Ref kInteralDomain
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
           Type: AAAA
