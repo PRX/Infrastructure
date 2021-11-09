@@ -243,29 +243,6 @@ Resources:
       ApiId: !Ref HttpApi
       DomainName: !Ref InternalDomainName
       Stage: $default
-  InternalDomainNameRecordSetGroup:
-    Type: AWS::Route53::RecordSetGroup
-    Condition: IsProduction # Production only
-    Properties:
-      Comment: Record sets for proxy server API
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - AliasTarget:
-            DNSName: !GetAtt InternalDomainName.RegionalDomainName
-            EvaluateTargetHealth: true # TODO Add health check
-            HostedZoneId: !GetAtt InternalDomainName.RegionalHostedZoneId
-          Name: !Ref InternalDomainName
-          Region: !Ref AWS::Region
-          SetIdentifier: !Ref AWS::StackName
-          Type: A
-        - AliasTarget:
-            DNSName: !GetAtt InternalDomainName.RegionalDomainName
-            EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt InternalDomainName.RegionalHostedZoneId
-          Name: !Ref InternalDomainName
-          Region: !Ref AWS::Region
-          SetIdentifier: !Ref AWS::StackName
-          Type: AAAA
 
   # Creates an association between search.theworld.org and the production
   # API Gateway. This association can be created once per region.
@@ -295,6 +272,31 @@ Resources:
       ApiId: !Ref HttpApi
       DomainName: !Ref ExternalDomainName
       Stage: $default
+
+  # tktkt
+  InternalDomainNameRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: IsProduction # Production only
+    Properties:
+      Comment: Record sets for proxy server API
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt ExternalDomainName.RegionalDomainName
+            EvaluateTargetHealth: true # TODO Add health check
+            HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
+          Name: !Ref InternalDomainName
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: A
+        - AliasTarget:
+            DNSName: !GetAtt ExternalDomainName.RegionalDomainName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
+          Name: !Ref InternalDomainName
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: AAAA
 
 Outputs:
   ApiId:
