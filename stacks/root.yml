@@ -447,50 +447,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/load-balancers.yml"]]
       TimeoutInMinutes: 5
-  FeederStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
-        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn # TODO Give it a separate cert
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-        EcrImageTag: !Ref FeederEcrImageTag
-        SecretsVersion: !Ref FeederSecretsVersion
-        AppName: feeder
-        CreateWorker: "true"
-        DesiredWebsProduction: "6"
-        DesiredWorkersProduction: "1"
-        SecretsInstanceDecryptPolicyArn:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        SecretsInstanceAccessPolicyArn:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
-        ContainerPort: "3000"
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, BackendCpu]
-        HealthCheckPath: "/api/v1"
-        SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/feeder.prx.org.yml"]]
-      TimeoutInMinutes: 5
   DovetailStack:
     Type: AWS::CloudFormation::Stack
     Properties:
