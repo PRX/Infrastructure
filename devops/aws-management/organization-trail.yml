@@ -91,6 +91,7 @@ Resources:
       IncludeGlobalServiceEvents: true
       IsLogging: true
       IsMultiRegionTrail: true
+      IsOrganizationTrail: true
       S3BucketName: !Ref CloudTrailS3Bucket
       Tags:
         - Key: Project
@@ -99,87 +100,3 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
-  CloudTrailIsOrganizationTrailCustomResource:
-    DependsOn:
-      - CloudTrail
-      - CloudTrailS3BucketPolicy
-      - OrganizationTrailCustomFunctionLogGroup
-    Type: AWS::CloudFormation::CustomResource
-    Properties:
-      ServiceToken: !GetAtt OrganizationTrailCustomResourceFunction.Arn
-      # This property is always sent to the Lambda event as a string, even
-      # if it's a true YAML boolean value
-      IsOrganizationTrail: true
-
-  # CloudTrail IsOrganizationTrail custom resource function
-  OrganizationTrailCustomResourceFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      Description: >-
-        A CloudFormation custom resource function that provides support for
-        the IsOrganizationTrail property of trails in AWS CloudTrail.
-      Environment:
-        Variables:
-          TRAIL_ARN: !GetAtt CloudTrail.Arn
-      Handler: index.handler
-      InlineCode: |
-        const AWS = require('aws-sdk');
-        const cfnResponse = require('cfn-response');
-
-        const cloudtrail = new AWS.CloudTrail({ apiVersion: '2013-11-01' });
-
-        exports.handler = async (event, context) => {
-          try {
-            console.log(JSON.stringify(event));
-
-            // No need to update the trail when the custom resource is being
-            // deleted.
-            if (['Create', 'Update'].includes(event.RequestType)) {
-              // The custom Properties of a custom resource always come in
-              // to the event as strings
-              const flag = event.ResourceProperties.IsOrganizationTrail === 'true' ? true : false;
-
-              console.log(`Setting IsOrganizationTrail to ${flag}`);
-
-              const res = await cloudtrail.updateTrail({
-                Name: process.env.TRAIL_ARN,
-                IsOrganizationTrail: flag,
-              }).promise();
-
-              console.log(res);
-            }
-
-            await cfnResponse.send(event, context, cfnResponse.SUCCESS, {});
-          } catch (error) {
-            console.log('Sending FAILED response');
-            console.log(error);
-            await cfnResponse.send(event, context, cfnResponse.FAILED, {});
-          }
-        };
-      MemorySize: 128
-      Policies:
-        - AWSLambdaBasicExecutionRole
-        - arn:aws:iam::aws:policy/AWSCloudTrail_FullAccess
-        - Statement:
-            - Action:
-                - iam:GetRole
-                - organizations:EnableAWSServiceAccess
-                - organizations:ListAccounts
-                - iam:CreateServiceLinkedRole
-                - organizations:DisableAWSServiceAccess
-                - organizations:DescribeOrganization
-                - organizations:ListAWSServiceAccessForOrganization
-              Effect: Allow
-              Resource: "*"
-          Version: "2012-10-17"
-      Runtime: nodejs12.x
-      Tags:
-        Project: Admin
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-      Timeout: 30
-  OrganizationTrailCustomFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${OrganizationTrailCustomResourceFunction}
-      RetentionInDays: 7
