@@ -1,4 +1,10 @@
 # stacks/apps/exchange.yml
+#
+# The names of the SQS queues created by this template are intended to
+# implicitly match some configuration that exists within the CMS application.
+# The only part of the queue names that is passed to the application is the
+# prefix; if the stems change in other the template or the app config, things
+# will not function as expected.
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
@@ -45,6 +51,7 @@ Parameters:
   SharedMemcachedEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
+  AnnounceResourcePrefix: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -114,22 +121,6 @@ Resources:
       AccessKeyId: !Ref SesSendingAccessKey
       SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
       Region: !Ref AWS::Region
-
-  PorterCallbackQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
-    Properties:
-      DelaySeconds: 0
-      MessageRetentionPeriod: 345600 # 4 days
-      ReceiveMessageWaitTimeSeconds: 0
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Exchange }
-      VisibilityTimeout: 5400 # 90 minutes
 
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -673,15 +664,18 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
       TaskRoleArn: !GetAtt TaskRole.Arn
-  SayWhenHighVisibleMessagesAlarm:
+  SayWhenQueueHighVisibleMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "2 [Exchange][Worker][SQS] ${EnvironmentType} SayWhen Not Processing  (${RootStackName})" # TODO Fatal for prod, warn for stag
-      AlarmDescription: SayWhen is very behind
+      AlarmName: !Sub FATAL [Exchange] SayWhen queue <${EnvironmentTypeAbbreviation}> MANY VISIBLE MESSAGES (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Exchange's SayWhen queue contains an unusually high
+        number of messages, which likely means processing has fallen behind or
+        has stopped entirely.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}SayWhen # TODO
+          Value: !GetAtt SayWhenQueue.QueueName
       EvaluationPeriods: 12
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -689,11 +683,11 @@ Resources:
       Statistic: Average
       Threshold: 50
       TreatMissingData: notBreaching
-  SayWhenHighVisibleMessagesAlarmTags:
+  SayWhenQueueHighVisibleMessagesAlarmTags:
     Type: Custom::CloudWatchAlarmTags
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt SayWhenHighVisibleMessagesAlarm.Arn
+      AlarmArn: !GetAtt SayWhenQueueHighVisibleMessagesAlarm.Arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -703,15 +697,18 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
 
-  ExchangeDeliveryUpdateAlarm:
+  DeliveryUpdateQueueAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub "3 [Exchange][Worker][SQS] ${EnvironmentType} Deliveries Not Processing  (${RootStackName})" # TODO  Fatal for prod, warn for stag
-      AlarmDescription: Deliveries are very behind
+      AlarmName: !Sub FATAL [Exchange] Delivery update queue <${EnvironmentTypeAbbreviation}> MANY VISIBLE MESSAGES (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Exchange's delivery updates queue contains an
+        unusually high number of messages, which likely means audio file
+        deliveries to stations are falling behind.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: QueueName
-          Value: !Sub Prx3${EnvironmentType}DeliveryUpdate
+          Value: !GetAtt DeliveryUpdateQueue.QueueName
       EvaluationPeriods: 12
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -719,12 +716,12 @@ Resources:
       Statistic: Average
       Threshold: 100
       TreatMissingData: notBreaching
-  ExchangeDeliveryUpdateAlarmTags:
+  DeliveryUpdateQueueAlarmTags:
     Type: Custom::CloudWatchAlarmTags
     Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt ExchangeDeliveryUpdateAlarm.Arn
+      AlarmArn: !GetAtt DeliveryUpdateQueueAlarm.Arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -733,3 +730,292 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
+
+  FixerAudioQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}FixerAudio
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  PerformSolrSaveQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}PerformSolrSave
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  PerformSolrDestroyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}PerformSolrDestroy
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  PublishPieceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}PublishPiece
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  UnpublishPieceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}UnpublishPiece
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  PurchasePieceQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}PurchasePiece
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  DropBoxFileQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}DropBoxFile
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  UpdateUserTypeQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}UpdateUserType
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  EmailUsersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}EmailUsers
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  EmailNetworkQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}EmailNetwork
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  UpdatePieceLengthQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}UpdatePieceLength
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  EmailGroupQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}EmailGroup
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  SayWhenQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}SayWhen
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  DeliveryUpdateQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}DeliveryUpdate
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  StationPasswordQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}StationPassword
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  ApproveSubscriptionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}ApproveSubscription
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  EmailNotificationsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}EmailNotifications
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
+  PorterCallbackQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      DelaySeconds: 0
+      MessageRetentionPeriod: 345600 # 4 days
+      QueueName: !Sub ${AnnounceResourcePrefix}_exchange_porter_callback
+      ReceiveMessageWaitTimeSeconds: 0
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VisibilityTimeout: 5400 # 1.5 hour
