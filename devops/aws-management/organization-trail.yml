@@ -12,6 +12,10 @@ Parameters:
       included, the CloudTrail that is created will be a organization trail,
       and log activity from all accounts in the given organization.
     AllowedPattern: ^$|^(o-[a-z0-9]{4,32})$
+  ProjectionRegions:
+    Type: CommaDelimitedList
+  ProjectionAccounts:
+    Type: CommaDelimitedList
 
 Resources:
   CloudTrailS3Bucket:
@@ -100,3 +104,118 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Description: !Sub >-
+          Database CloudTrail organization trail
+        Name: !Ref AWS::StackName
+
+  CommonTrailTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Description: !Sub >-
+          Organization trail logs partitioned for our most-used accounts
+          and regions
+        Name: common-accounts-and-regions
+        Parameters:
+          projection.enabled: "true"
+          projection.date.type: date
+          projection.date.range: 2021/01/01,NOW
+          projection.date.format: yyyy/MM/dd
+          projection.date.interval: "1"
+          projection.date.interval.unit: DAYS
+          projection.region.type: enum
+          projection.region.values: !Join [",", !Ref ProjectionRegions]
+          projection.account.type: enum
+          projection.account.values: !Join [",", !Ref ProjectionAccounts]
+          storage.location.template: !Sub s3://${CloudTrailS3Bucket}/AWSLogs/${OrganizationId}/${!account}/CloudTrail/${!region}/${!date}
+        PartitionKeys:
+          - Name: date
+            Type: string
+          - Name: region
+            Type: string
+          - Name: account
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: eventVersion
+              Type: string
+            - Name: userIdentity
+              Type: struct<type:string,principalId:string,arn:string,accountId:string,invokedBy:string,accessKeyId:string,userName:string,sessionContext:struct<attributes:struct<mfaAuthenticated:string,creationDate:string>,sessionIssuer:struct<type:string,principalId:string,arn:string,accountId:string,userName:string>>>
+            - Name: eventTime
+              Type: string
+            - Name: eventSource
+              Type: string
+            - Name: eventName
+              Type: string
+            - Name: awsRegion
+              Type: string
+            - Name: sourceIpAddress
+              Type: string
+            - Name: userAgent
+              Type: string
+            - Name: errorCode
+              Type: string
+            - Name: errorMessage
+              Type: string
+            - Name: requestParameters
+              Type: string
+            - Name: responseElements
+              Type: string
+            - Name: additionalEventData
+              Type: string
+            - Name: requestId
+              Type: string
+            - Name: eventId
+              Type: string
+            - Name: readOnly
+              Type: string
+            - Name: resources
+              Type: array<struct<arn:string,accountId:string,type:string>>
+            - Name: eventType
+              Type: string
+            - Name: apiVersion
+              Type: string
+            - Name: recipientAccountId
+              Type: string
+            - Name: serviceEventDetails
+              Type: string
+            - Name: sharedEventID
+              Type: string
+            - Name: vpcEndpointId
+              Type: string
+          InputFormat: com.amazon.emr.cloudtrail.CloudTrailInputFormat
+          Location: !Sub s3://${CloudTrailS3Bucket}/AWSLogs/${OrganizationId}
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            SerializationLibrary: com.amazon.emr.hive.serde.CloudTrailSerde
+        TableType: EXTERNAL_TABLE
+  ErrorQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Searches for events with any error code
+      Name: Organization Trail error codes
+      QueryString: !Sub |
+        SELECT
+          awsRegion,
+          recipientAccountId,
+          eventTime,
+          eventSource,
+          eventType,
+          eventName,
+          userIdentity.arn,
+          errorCode,
+          errorMessage
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        WHERE "date" > date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND errorCode <> ''
+        ORDER BY eventTime DESC
