@@ -383,12 +383,27 @@ Resources:
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
 
-          if (!event.detail.EC2InstanceId || !event.detail.Cause) {
-            return;
-          }
-
           const asgUrl = `https://console.aws.amazon.com/ec2autoscaling/home?region=${event.region}#/details/${event.detail.AutoScalingGroupName}?view=details`;
           const instanceUrl = `https://console.aws.amazon.com/ec2/v2/home?region=${event.region}#InstanceDetails:instanceId=${event.detail.EC2InstanceId}`;
+
+          let environment = '????';
+          if (event.detail.AutoScalingGroupName.includes('prod')) {
+            environment = 'prod';
+          } else if (event.detail.AutoScalingGroupName.includes('stag')) {
+            environment = 'stag';
+          }
+
+          const lines = [];
+          let inOut = '';
+
+          lines.push(`*Instance:* <${instanceUrl}|${event.detail.EC2InstanceId}> in \`${event.detail.Details['Availability Zone']}\``);
+
+          if (/capacity from [0-9]+ to [0-9]+/.test(event.detail.Cause)) {
+            const m = event.detail.Cause.match(/capacity from ([0-9]+) to ([0-9]+)/);
+            lines.push(`*Capacity change:* \`${m[1]}\` to \`${m[2]}\``);
+
+            inOut = +m[1] > +m[2] ? ' IN' : ' OUT';
+          }
 
           await sns.publish({
             TargetArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
@@ -396,7 +411,24 @@ Resources:
               channel: '#ops-debug',
               username: 'AWS Auto Scaling',
               icon_emoji: ':ops-autoscaling:',
-              text: `${regions[event.region] || event.region} » <${asgUrl}|ASG> *<${instanceUrl}|${event.detail.EC2InstanceId}>*\n> _${event.detail.Cause}_`,
+              attachments: [{
+                color: "#53adfb",
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `*<${asgUrl}|SCALE${inOut} | ${regions[event.region]} » ASG &lt;${environment}&gt; ${event['detail-type'].toUpperCase()}>*`,
+                    }
+                  }, {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: lines.join('\n'),
+                    }
+                  }
+                ]
+              }]
             }),
           }).promise();
         };
