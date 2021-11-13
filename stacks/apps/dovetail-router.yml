@@ -669,7 +669,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 3
+      DesiredCount: !If [IsProduction, 8, 2]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
@@ -842,8 +842,8 @@ Resources:
   ScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MinCapacity: !If [IsProduction, 4, 2]
-      MaxCapacity: !If [IsProduction, 10, 4]
+      MinCapacity: !If [IsProduction, 8, 2]
+      MaxCapacity: !If [IsProduction, 16, 4]
       ResourceId: !Join ["/", ["service", !Ref EcsClusterName, !GetAtt EcsService.Name]]
       RoleARN: !GetAtt ScalingIamRole.Arn
       ScalableDimension: ecs:service:DesiredCount
@@ -860,7 +860,7 @@ Resources:
           ResourceLabel: !Join ["/", [!GetAtt Alb.LoadBalancerFullName, !GetAtt TargetGroup.TargetGroupFullName]]
         ScaleInCooldown: 60
         ScaleOutCooldown: 60
-        TargetValue: 800
+        TargetValue: 600
 
   # Log metric filters
   LogDownloadsMetricFilter:
