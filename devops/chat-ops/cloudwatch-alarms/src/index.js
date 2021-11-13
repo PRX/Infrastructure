@@ -74,6 +74,7 @@ exports.handler = async (event) => {
     }
 
     const blocks = await builder.blocks(event);
+    const fallback = await builder.fallback(event);
 
     await sns
       .publish({
@@ -85,6 +86,7 @@ exports.handler = async (event) => {
           attachments: [
             {
               color: color.value(event),
+              fallback,
               blocks,
             },
           ],
