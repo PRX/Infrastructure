@@ -186,7 +186,11 @@ Resources:
     Metadata:
       # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
       # This AWS::CloudFormation::Init metadata is queried by cfn-init, which
-      # is installed and run as part of the launch template's user data
+      # is installed and run as part of the launch template's user data.
+      #
+      # When this metadata changes, cfn-init will reload and rerun it on
+      # existing intances, so you CANNOT assume that it will only be run once
+      # for an instance in its lifetime.
       AWS::CloudFormation::Init:
         config:
           # packages:
@@ -262,6 +266,13 @@ Resources:
                     at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
                   topic: !Ref SlackMessageRelaySnsTopicArn
                   region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
+            03_add_authorized_keys:
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  echo "Adding developer public keys to authorized_keys"
+                  echo "${someUser}" >> /home/ec2-user/.ssh/authorized_keys
+                - someUser: some_key
           services:
             sysvinit:
               cfn-hup:
