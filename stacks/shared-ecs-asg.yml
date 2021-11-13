@@ -231,7 +231,7 @@ Resources:
               command: !Sub
                 - |-
                   #!/bin/bash
-                  aws sns publish --topic-arn ${relayTopicArn} --message '{ "channel": "#sandbox2", "text": "test2" }'
+                  aws sns publish --region ${region} --topic-arn ${topic} --message '{ "channel": "#sandbox2", "text": "test2" }'
                   for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
                   do
                     if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
@@ -240,8 +240,15 @@ Resources:
                       aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
                     fi
                   done
-                - relayTopicArn:
+                - topic:
                     Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+                  region:
+                    Fn::Select:
+                      - 3
+                      - Fn::Split:
+                          - ":"
+                          - Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+
           services:
             sysvinit:
               cfn-hup:
