@@ -253,9 +253,10 @@ Resources:
                   done
                 - channel: "#ops-warn"
                   # `'"$VAR"'` wraps a value in backticks for Slack formatting,
-                  # closes the single quotes from the publish command, and
-                  # opens double quotes to enclose the bash variable. The end
-                  # result in the transmitted JSON is: `some value`
+                  # closes the single quotes from message argument of the
+                  # publish command, and opens double quotes to enclose the
+                  # bash variable. The end result in the transmitted JSON is:
+                  # `some value`
                   text: !Sub >-
                     EC2 instance `'"$INSTANCE_ID"'` could not connect to `${SharedRedisReplicationGroupEndpointAddress}`
                     at `'"$IP"'`, and is being marked as *unhealthy* in its auto scaling group.
@@ -434,6 +435,8 @@ Resources:
             lines.push(`*Capacity change:* \`${m[1]}\` to \`${m[2]}\``);
 
             inOut = +m[1] > +m[2] ? ' IN' : ' OUT';
+          } else if (/an instance was taken out of service in response to a user health-check/.test(event.detail.Cause)) {
+            lines.push('Taken out of service in response to a user health-check.');
           }
 
           await sns.publish({
