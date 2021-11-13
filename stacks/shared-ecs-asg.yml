@@ -161,8 +161,8 @@ Resources:
               yum install -y aws-cfn-bootstrap aws-cli
 
               # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
-              # this template) that includes AWS::CloudFormation::Init metadata. That resource is likely the same
-              # resource where this user data script is defined.
+              # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
+              # resource where this user data script (what you're reading right now) is defined.
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
               /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
@@ -191,14 +191,21 @@ Resources:
       # When this metadata changes, cfn-init will reload and rerun it on
       # existing intances, so you CANNOT assume that it will only be run once
       # for an instance in its lifetime.
+      #
+      # Config sections are processed in this order:
+      # packages, groups, users, sources, files, commands, services
       AWS::CloudFormation::Init:
         config:
-          # packages:
-          #   yum:
-          #     aws-cli: []
-          #     bc: []
-          #     jq: []
+          packages:
+            yum:
+              #     aws-cli: []
+              #     bc: []
+              jq: []
           files:
+            /etc/ecs/ecs.config:
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
+              content: !Sub |
+                ECS_CLUSTER=${EcsClusterName}
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
@@ -220,14 +227,7 @@ Resources:
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
                 runas=root
           commands:
-            01_configure_ecs_container_agent:
-              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
-              command: !Sub |-
-                #!/bin/bash
-                echo "Configuring ECS container agent"
-                echo "Launching instance into cluster: ${EcsClusterName}"
-                echo ECS_CLUSTER=${EcsClusterName} >> /etc/ecs/ecs.config
-            02_check_redis_connectivity:
+            01_check_redis_connectivity:
               # Resolve the Dovetail Redis host and check all IPs returned for
               # connectivity. If any can't connect, the instance is marked as
               # unhealthy
@@ -266,7 +266,7 @@ Resources:
                     at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
                   topic: !Ref SlackMessageRelaySnsTopicArn
                   region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
-            03_add_authorized_keys:
+            02_add_authorized_keys:
               command: !Sub
                 - |-
                   #!/bin/bash
