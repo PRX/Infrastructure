@@ -230,20 +230,33 @@ Resources:
               command: !Sub
                 - |-
                   #!/bin/bash
-                  INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
-                  aws sns publish --region ${region} --topic-arn ${topic} --message '{ "channel": "${channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
                   for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
                   do
                     if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
                       echo "Unhealthy; Failed to connect to Redis: $IP"
+
                       INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
-                      aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
+
+                      aws sns publish \
+                        --region ${region} \
+                        --topic-arn ${topic} \
+                        --message '{ "channel": "${channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
+
+                      aws autoscaling set-instance-health \
+                        --instance-id $INSTANCE_ID \
+                        --health-status Unhealthy \
+                        --region ${AWS::Region} \
+                        --no-should-respect-grace-period
                     fi
                   done
-                - channel: "#sandbox2"
+                - channel: "#ops-warn"
+                  # `'"$VAR"'` wraps a value in backticks for Slack formatting,
+                  # closes the single quotes from the publish command, and
+                  # opens double quotes to enclose the bash variable. The end
+                  # result in the transmitted JSON is: `some value`
                   text: !Sub >-
                     EC2 instance `'"$INSTANCE_ID"'` could not connect to `${SharedRedisReplicationGroupEndpointAddress}`
-                    at '"DOLLAR_ip"', and is being marked as *unhealthy* in its auto scaling group.
+                    at `'"$IP"'`, and is being marked as *unhealthy* in its auto scaling group.
                   topic: !Ref SlackMessageRelaySnsTopicArn
                   region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
           services:
