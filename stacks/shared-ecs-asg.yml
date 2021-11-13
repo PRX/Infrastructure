@@ -138,9 +138,12 @@ Resources:
           # support configuration updates on running EC2 instance, the user
           # data should primarily be used to run cfn-init. Any further launch
           # scripts or tasks should be defined in the resource metadata that
-          # cfn-init loads, and that cfn-hup watches for changes.
+          # cfn-init loads, and that cfn-hup watches for changes. cfn-init and
+          # cfn-signal are provided as part of the CloudFormation helper that
+          # are preinstalled on Amazon Linux AMI images.
           # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
           # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
+          # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-amazon-amis
           Fn::Base64:
             Fn::Sub: |
               Content-Type: multipart/mixed; boundary="==BOUNDARY=="
@@ -158,6 +161,7 @@ Resources:
               Content-Type: text/x-shellscript; charset="us-ascii"
 
               #!/bin/bash
+              yum install -y aws-cfn-bootstrap
 
               # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
               # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
