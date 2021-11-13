@@ -231,7 +231,8 @@ Resources:
               command: !Sub
                 - |-
                   #!/bin/bash
-                  aws sns publish --region ${region} --topic-arn ${topic} --message '{ "channel": "#sandbox2", "text": "test2" }'
+                  INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
+                  aws sns publish --region ${region} --topic-arn ${topic} --message '{ "channel": "#{channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
                   for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
                   do
                     if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
@@ -240,15 +241,18 @@ Resources:
                       aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
                     fi
                   done
-                - topic:
+                - channel: "#sandbox2"
+                  text: !Sub >-
+                    EC2 instance `$INSTANCE_ID` could not connect to `${SharedRedisReplicationGroupEndpointAddress}` at
+                    DOLLAR_ip, and is being marked as *unhealthy* in its auto scaling group.
+                  topic:
                     Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
-                  region:
+                  region: # Extracts the region part of the SNS topic ARN
                     Fn::Select:
                       - 3
                       - Fn::Split:
                           - ":"
                           - Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
-
           services:
             sysvinit:
               cfn-hup:
