@@ -31,6 +31,10 @@ Parameters:
     Type: String
   DevOpsCloudWatchAlarmsBusArn:
     Type: String
+  CloudTrailProjectionRegions:
+    Type: CommaDelimitedList
+  CloudTrailProjectionAccounts:
+    Type: CommaDelimitedList
 
 Resources:
   PipelineArtifactStore:
@@ -89,8 +93,8 @@ Resources:
             Statement:
               - Action: codestar-connections:*
                 Condition:
-                  "ForAllValues:StringEquals":
-                    "codestar-connections:PassedToService": codepipeline.amazonaws.com
+                  ForAllValues:StringEquals:
+                    codestar-connections:PassedToService: codepipeline.amazonaws.com
                 Effect: Allow
                 Resource: !Ref CodeStarConnectionArn
             Version: "2012-10-17"
@@ -339,10 +343,15 @@ Resources:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
                 ChangeSetName: !Sub ${AWS::StackName}OrganizationCloudTrailStack
-                ParameterOverrides: !Sub |
-                  {
-                    "OrganizationId": "${OrganizationId}"
-                  }
+                ParameterOverrides: !Sub
+                  - >-
+                    {
+                      "OrganizationId": "${OrganizationId}",
+                      "ProjectionRegions": "${regions}",
+                      "ProjectionAccounts": "${accounts}"
+                    }
+                  - regions: !Join [",", !Ref CloudTrailProjectionRegions]
+                    accounts: !Join [",", !Ref CloudTrailProjectionAccounts]
                 RoleArn: !GetAtt OrganizationCloudTrailStackCloudFormationRole.Arn
                 StackName: organization-trail
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-trail.yml
@@ -686,6 +695,12 @@ Resources:
                 Effect: Allow
                 Resource: "*"
               - Action: lambda:*
+                Effect: Allow
+                Resource: "*"
+              - Action: glue:*
+                Effect: Allow
+                Resource: "*"
+              - Action: athena:*
                 Effect: Allow
                 Resource: "*"
               - Action: cloudformation:*

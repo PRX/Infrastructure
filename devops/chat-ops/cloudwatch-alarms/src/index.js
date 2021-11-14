@@ -74,6 +74,7 @@ exports.handler = async (event) => {
     }
 
     const blocks = await builder.blocks(event);
+    const fallback = await builder.fallback(event);
 
     await sns
       .publish({
@@ -85,6 +86,7 @@ exports.handler = async (event) => {
           attachments: [
             {
               color: color.value(event),
+              fallback,
               blocks,
             },
           ],
@@ -100,7 +102,7 @@ exports.handler = async (event) => {
         Message: JSON.stringify({
           username: 'Amazon CloudWatch Alarms',
           icon_emoji: ':ops-cloudwatch-alarm:',
-          channel: '#sandbox2',
+          channel: '#ops-warn',
           text: [
             'The following CloudWatch alarm event was not handled successfully:',
             `\n\n*Event ID:* \`${event.id}\`\n\n`,

@@ -83,6 +83,14 @@ async function detailLines(event, desc, history) {
 
 module.exports = {
   /**
+   * Returns the notification title as fallback text
+   * @param {EventBridgeCloudWatchAlarmsEvent} event
+   * @returns {Promise<String>}
+   */
+  async fallback(event) {
+    return title(event);
+  },
+  /**
    * Returns all the Slack message blocks that will make up the content of the
    * alarm notification being sent to Slack. The structure is roughly:
    * - Linked title

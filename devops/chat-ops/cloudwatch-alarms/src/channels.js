@@ -12,6 +12,8 @@ module.exports = {
       return '#ops-fatal';
     } else if (name.startsWith('ERROR')) {
       return '#ops-error';
+    } else if (name.startsWith('WARN')) {
+      return '#ops-warn';
     }
     // } else if (name.startsWith('WARN')) {
     //   return '#ops-warn';

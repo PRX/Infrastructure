@@ -124,6 +124,23 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${AppFunction}
       RetentionInDays: 14
+  AppFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Slack App] Function <prod> INVOCATION ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        Slack DevOps app has encountered several invocation errors.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppFunction
 
   RelayFunction:
     Type: AWS::Serverless::Function
@@ -171,16 +188,10 @@ Resources:
   RelayFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: "[DevOps][Slack Relay] Elevated error volume"
-      # AlarmActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
-      # InsufficientDataActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
-      # OKActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmName: !Sub ERROR [Slack Relay] Function <prod> INVOCATION ERRORS (${AWS::StackName})
       AlarmDescription: >-
-        Slack relay function has encountered several invocation errors
+        Slack relay function has encountered several invocation errors, which
+        will be retried.
       ComparisonOperator: GreaterThanOrEqualToThreshold
       EvaluationPeriods: 1
       MetricName: Errors
@@ -204,17 +215,10 @@ Resources:
   RelayFunctionFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: "[DevOps][Slack Relay] Experiencing failures"
-      # AlarmActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
-      # InsufficientDataActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
-      # OKActions:
-      #   - !Ref OpsWarnMessagesSnsTopicArn
+      AlarmName: !Sub ERROR [Slack Relay] Function <prod> INVOCATION FAILURES (${AWS::StackName})
       AlarmDescription: >-
         Slack relay function has failed to send some messages, even after
-        retrying several times
+        retrying several times.
       ComparisonOperator: GreaterThanOrEqualToThreshold
       Dimensions:
         - Name: TopicName

@@ -18,9 +18,10 @@ Parameters:
     Default: /aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20210819-x86_64-ebs/image_id
   ########
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
-  NotificationsStackName: { Type: String }
+  SlackMessageRelaySnsTopicArn: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
@@ -33,6 +34,7 @@ Parameters:
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -55,6 +57,14 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref SlackMessageRelaySnsTopicArn
+            Version: "2012-10-17"
+          PolicyName: SlackRelaySnsPublish
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -131,6 +141,7 @@ Resources:
           # cfn-init loads, and that cfn-hup watches for changes.
           # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
           # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
+          # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-amazon-amis
           Fn::Base64:
             Fn::Sub: |
               Content-Type: multipart/mixed; boundary="==BOUNDARY=="
@@ -148,11 +159,14 @@ Resources:
               Content-Type: text/x-shellscript; charset="us-ascii"
 
               #!/bin/bash
+              # Despite what the docs say, the CloudFormation helper scripts are not preinstalled, so we install them
+              # with aws-cfn-bootstrap. aws-cli fails to install as part of the cfn-init packages, so it's installed
+              # here, even though they both use yum. Other packages should be installed through cfn-init.
               yum install -y aws-cfn-bootstrap aws-cli
 
               # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
-              # this template) that includes AWS::CloudFormation::Init metadata. That resource is likely the same
-              # resource where this user data script is defined.
+              # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
+              # resource where this user data script (what you're reading right now) is defined.
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
               /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
@@ -176,15 +190,25 @@ Resources:
     Metadata:
       # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
       # This AWS::CloudFormation::Init metadata is queried by cfn-init, which
-      # is installed and run as part of the launch template's user data
+      # is installed and run as part of the launch template's user data.
+      #
+      # When this metadata changes, cfn-init will reload and rerun it on
+      # existing intances, so you CANNOT assume that it will only be run once
+      # for an instance in its lifetime.
+      #
+      # Config sections are processed in this order:
+      # packages, groups, users, sources, files, commands, services
       AWS::CloudFormation::Init:
         config:
-          # packages:
-          #   yum:
-          #     aws-cli: []
-          #     bc: []
-          #     jq: []
+          packages:
+            yum:
+              jq: []
+              bind-utils: []
           files:
+            /etc/ecs/ecs.config:
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
+              content: !Sub |
+                ECS_CLUSTER=${EcsClusterName}
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
@@ -206,27 +230,55 @@ Resources:
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
                 runas=root
           commands:
-            01_configure_ecs_container_agent:
-              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
-              command: !Sub |-
-                #!/bin/bash
-                echo "Configuring ECS container agent"
-                echo "Launching instance into cluster: ${EcsClusterName}"
-                echo ECS_CLUSTER=${EcsClusterName} >> /etc/ecs/ecs.config
-            02_check_redis_connectivity:
+            01_check_redis_connectivity:
               # Resolve the Dovetail Redis host and check all IPs returned for
               # connectivity. If any can't connect, the instance is marked as
               # unhealthy
-              command: !Sub |-
-                #!/bin/bash
-                for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
-                do
-                  if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
-                    echo "Unhealthy; Failed to connect to Redis: $IP"
-                    INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
-                    aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
-                  fi
-                done
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
+                  do
+                    if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
+                      echo "Unhealthy; Failed to connect to Redis: $IP"
+
+                      INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
+
+                      aws sns publish \
+                        --region ${region} \
+                        --topic-arn ${topic} \
+                        --message '{ "channel": "${channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
+
+                      aws autoscaling set-instance-health \
+                        --instance-id "$INSTANCE_ID" \
+                        --health-status Unhealthy \
+                        --region ${AWS::Region} \
+                        --no-should-respect-grace-period
+
+                      break
+                    fi
+                  done
+                - channel: "#ops-warn"
+                  # `'"$VAR"'` wraps a value in backticks for Slack formatting,
+                  # closes the single quotes from message argument of the
+                  # publish command, and opens double quotes to enclose the
+                  # bash variable. The end result in the transmitted JSON is:
+                  # `some value`
+                  text: !Sub >-
+                    EC2 instance `'"$INSTANCE_ID"'` could not connect to `${SharedRedisReplicationGroupEndpointAddress}`
+                    at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
+                  topic: !Ref SlackMessageRelaySnsTopicArn
+                  region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
+            02_add_authorized_keys:
+              # For more information, see:
+              # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  echo "Adding developer public keys to authorized_keys"
+                  echo "${chris_kalafarski}" >> /home/ec2-user/.ssh/authorized_keys
+                - chris_kalafarski: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj/e+5S/0tO4jqEbhcdI7SnY8IveRnv7o/K4VRgK5Ls chris.kalafarski@prx.org
+                  # someone_else: ssh-ed25519 tktkt someone.else@prx.org
           services:
             sysvinit:
               cfn-hup:
@@ -268,14 +320,12 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref Ec2LaunchTemplate
         Version: !GetAtt Ec2LaunchTemplate.LatestVersionNumber
-      # TODO LifecycleHookSpecificationList
       MaxInstanceLifetime: 1209600 # 14 days
-      MaxSize: !If [IsProduction, "50", "20"]
+      MaxSize: !If [IsProduction, "75", "20"]
       MetricsCollection:
         - Granularity: 1Minute
       MinSize: !If [IsProduction, "7", "0"]
       NewInstancesProtectedFromScaleIn: true
-      # TODO NotificationConfigurations
       Tags:
         - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
         - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -334,8 +384,7 @@ Resources:
         Handles auto scaling events from the ${EnvironmentType} shared ASG
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         AsgEventsRule:
           # https://docs.aws.amazon.com/autoscaling/ec2/userguide/cloud-watch-events.html
@@ -383,12 +432,29 @@ Resources:
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
 
-          if (!event.detail.EC2InstanceId || !event.detail.Cause) {
-            return;
-          }
-
           const asgUrl = `https://console.aws.amazon.com/ec2autoscaling/home?region=${event.region}#/details/${event.detail.AutoScalingGroupName}?view=details`;
           const instanceUrl = `https://console.aws.amazon.com/ec2/v2/home?region=${event.region}#InstanceDetails:instanceId=${event.detail.EC2InstanceId}`;
+
+          let environment = '????';
+          if (event.detail.AutoScalingGroupName.includes('prod')) {
+            environment = 'prod';
+          } else if (event.detail.AutoScalingGroupName.includes('stag')) {
+            environment = 'stag';
+          }
+
+          const lines = [];
+          let inOut = '';
+
+          lines.push(`*Instance:* <${instanceUrl}|${event.detail.EC2InstanceId}> in \`${event.detail.Details['Availability Zone']}\``);
+
+          if (/capacity from [0-9]+ to [0-9]+/.test(event.detail.Cause)) {
+            const m = event.detail.Cause.match(/capacity from ([0-9]+) to ([0-9]+)/);
+            lines.push(`*Capacity change:* \`${m[1]}\` to \`${m[2]}\``);
+
+            inOut = +m[1] > +m[2] ? ' IN' : ' OUT';
+          } else if (/an instance was taken out of service in response to a user health-check/.test(event.detail.Cause)) {
+            lines.push('Taken out of service in response to a user health-check.');
+          }
 
           await sns.publish({
             TargetArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
@@ -396,7 +462,25 @@ Resources:
               channel: '#ops-debug',
               username: 'AWS Auto Scaling',
               icon_emoji: ':ops-autoscaling:',
-              text: `${regions[event.region] || event.region} » <${asgUrl}|ASG> *<${instanceUrl}|${event.detail.EC2InstanceId}>*\n> _${event.detail.Cause}_`,
+              attachments: [{
+                color: "#53adfb",
+                fallback: `SCALE${inOut} | ${regions[event.region]} » ASG &lt;${environment}&gt; ${event['detail-type'].toUpperCase()}`,
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: `*<${asgUrl}|SCALE${inOut} | ${regions[event.region]} » ASG &lt;${environment}&gt; ${event['detail-type'].toUpperCase()}>*`,
+                    }
+                  }, {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: lines.join('\n'),
+                    }
+                  }
+                ]
+              }]
             }),
           }).promise();
         };
@@ -405,8 +489,7 @@ Resources:
         - Statement:
             - Action: sns:Publish
               Effect: Allow
-              Resource:
-                Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+              Resource: !Ref SlackMessageRelaySnsTopicArn
           Version: "2012-10-17"
       Runtime: nodejs12.x
       Tags:
@@ -436,6 +519,38 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+  EventsNotificationsFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Infrastructure] ASG Events Notifications <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        The events notification function for the ${EnvironmentType} auto
+        scaling group has experienced some errors, so notifications may not
+        be getting sent to Slack.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EventsNotificationsFunction
+  EventsNotificationsFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt EventsNotificationsFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
 Outputs:
   AsgName:
