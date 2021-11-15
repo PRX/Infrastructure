@@ -141,22 +141,28 @@ Resources:
           # cfn-init loads, and that cfn-hup watches for changes.
           # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
           # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
-          # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-amazon-amis
           Fn::Base64:
             Fn::Sub: |
+              Content-Type: multipart/mixed; boundary="==BOUNDARY=="
+              MIME-Version: 1.0
+
+              --==BOUNDARY==
+              Content-Type: text/cloud-boothook; charset="us-ascii"
+
+              # Set Docker daemon options
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#cloud-init-per
+              # At this time, only ECS Containers based on Amazon Linux AMIs (not Amazon Linux 2 AMIs) support cloud-init-per.
+              # cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS}"' >> /etc/sysconfig/docker
+
+              --==BOUNDARY==
+              Content-Type: text/x-shellscript; charset="us-ascii"
+
               #!/bin/bash
-              # The logs for this are found in: /var/log/cloud-init-output.log
-              # Except the cfn-signal seems to get logged to /var/log/cfn-init.log
-              # along with the rest of the cfn-init logs
-              #
-              # Despite what the docs say, the CloudFormation helper scripts are not preinstalled, so we install them
-              # with aws-cfn-bootstrap. aws-cli fails to install as part of the cfn-init packages, so it's installed
-              # here, even though they both use yum. Other packages should be installed through cfn-init.
               yum install -y aws-cfn-bootstrap aws-cli
 
               # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
-              # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
-              # resource where this user data script (what you're reading right now) is defined.
+              # this template) that includes AWS::CloudFormation::Init metadata. That resource is likely the same
+              # resource where this user data script is defined.
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
               /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
@@ -166,6 +172,7 @@ Resources:
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-signal.html
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
               /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource Asg
+              --==BOUNDARY==--
       TagSpecifications:
         - ResourceType: launch-template
           Tags:
@@ -179,25 +186,15 @@ Resources:
     Metadata:
       # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
       # This AWS::CloudFormation::Init metadata is queried by cfn-init, which
-      # is installed and run as part of the launch template's user data.
-      #
-      # When this metadata changes, cfn-init will reload and rerun it on
-      # existing intances, so you CANNOT assume that it will only be run once
-      # for an instance in its lifetime.
-      #
-      # Config sections are processed in this order:
-      # packages, groups, users, sources, files, commands, services
+      # is installed and run as part of the launch template's user data
       AWS::CloudFormation::Init:
         config:
-          packages:
-            yum:
-              jq: []
-              bind-utils: []
+          # packages:
+          #   yum:
+          #     aws-cli: []
+          #     bc: []
+          #     jq: []
           files:
-            /etc/ecs/ecs.config:
-              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
-              content: !Sub |
-                ECS_CLUSTER=${EcsClusterName}
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
@@ -219,55 +216,27 @@ Resources:
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource Ec2LaunchTemplate
                 runas=root
           commands:
-            01_check_redis_connectivity:
-              # Resolve the shared Redis host and check all IPs returned for
+            01_configure_ecs_container_agent:
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
+              command: !Sub |-
+                #!/bin/bash
+                echo "Configuring ECS container agent"
+                echo "Launching instance into cluster: ${EcsClusterName}"
+                echo ECS_CLUSTER=${EcsClusterName} >> /etc/ecs/ecs.config
+            02_check_redis_connectivity:
+              # Resolve the Dovetail Redis host and check all IPs returned for
               # connectivity. If any can't connect, the instance is marked as
-              # unhealthy.
-              command: !Sub
-                - |-
-                  #!/bin/bash
-                  for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
-                  do
-                    if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
-                      echo "Unhealthy; Failed to connect to Redis: $IP"
-
-                      INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
-
-                      aws sns publish \
-                        --region ${region} \
-                        --topic-arn ${topic} \
-                        --message '{ "channel": "${channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
-
-                      aws autoscaling set-instance-health \
-                        --instance-id "$INSTANCE_ID" \
-                        --health-status Unhealthy \
-                        --region ${AWS::Region} \
-                        --no-should-respect-grace-period
-
-                      break
-                    fi
-                  done
-                - channel: "#ops-warn"
-                  # `'"$VAR"'` wraps a value in backticks for Slack formatting,
-                  # closes the single quotes from message argument of the
-                  # publish command, and opens double quotes to enclose the
-                  # bash variable. The end result in the transmitted JSON is:
-                  # `some value`
-                  text: !Sub >-
-                    EC2 instance `'"$INSTANCE_ID"'` could not connect to `${SharedRedisReplicationGroupEndpointAddress}`
-                    at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
-                  topic: !Ref SlackMessageRelaySnsTopicArn
-                  region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
-            02_add_authorized_keys:
-              # For more information, see:
-              # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
-              command: !Sub
-                - |-
-                  #!/bin/bash
-                  echo "Adding developer public keys to authorized_keys"
-                  echo "${chris_kalafarski}" >> /home/ec2-user/.ssh/authorized_keys
-                - chris_kalafarski: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj/e+5S/0tO4jqEbhcdI7SnY8IveRnv7o/K4VRgK5Ls chris.kalafarski@prx.org
-                  # someone_else: ssh-ed25519 tktkt someone.else@prx.org
+              # unhealthy
+              command: !Sub |-
+                #!/bin/bash
+                for IP in $(getent hosts ${SharedRedisReplicationGroupEndpointAddress} | awk '{ print $1 }')
+                do
+                  if ! timeout 0.1 bash -c "cat < /dev/null > /dev/tcp/$IP/${SharedRedisReplicationGroupEndpointPort}"; then
+                    echo "Unhealthy; Failed to connect to Redis: $IP"
+                    INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
+                    aws autoscaling set-instance-health --instance-id $INSTANCE_ID --health-status Unhealthy --region ${AWS::Region} --no-should-respect-grace-period
+                  fi
+                done
           services:
             sysvinit:
               cfn-hup:
@@ -284,64 +253,23 @@ Resources:
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
     CreationPolicy:
-      # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
-      # Defines policies that apply when CloudFormation is creating a new ASG
-      # resource, either during initial stack launch, or if a replacing update
-      # is configured to replace the entire ASG. These policies force
-      # CloudFormation to wait for explicit signals being sent to before
-      # considering the creation complete. These signals are generaly sent by
-      # the EC2 instances being launched along side the ASG, using the
-      # cfn-signal helper script in the launch template's user data.
-      # Without such a policy, CloudFormation will generally consider the ASG
-      # creation complete without caring about what the instances are doing.
       AutoScalingCreationPolicy:
-        # The docs claim that this only applies to replacement updates (i.e.,
-        # WillReplace: true), and not to initial resource creation.
         MinSuccessfulInstancesPercent: 0 # TODO Set to 100
       ResourceSignal:
-        # The number of success signals required before the ASG resource can
-        # be considered succesfully created. This value must not be larger than
-        # the default MinSize of the ASG, or it will never succeed.
-        Count: !If [IsProduction, 5, 0] # TODO Find a good value
-        # How long to wait for signals from EC2 instances
+        Count: 0 # TODO Find a good value
         Timeout: PT5M
     UpdatePolicy:
-      # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html
-      # AutoScalingReplacingUpdate and AutoScalingRollingUpdate apply only when
-      # the LaunchTemplate (including UserData) changes.
-      # NOTE: Changes to the UpdatePolicy should be made in their own stack
-      # update. Avoiding updating the UpdatePolicy and other aspects of the
-      # AWS::AutoScaling::AutoScalingGroup in the same stack update.
       AutoScalingReplacingUpdate:
-        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-replacingupdate
-        # false: Replace only instances within the ASG
-        # true: Replace the entire ASG
         WillReplace: false
       AutoScalingRollingUpdate:
-        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-rollingupdate
-        # Applies when CloudFormation wants to update the ASG and its instances
-        # in a rolling manner (i.e., WillReplace: false).
         MaxBatchSize: 1
-        MinInstancesInService: !If [IsProduction, 3, 1]
+        MinInstancesInService: 0
         MinSuccessfulInstancesPercent: 100
-        PauseTime: PT5M
-        SuspendProcesses:
-          # https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SuspendProcesses.html
-          # https://aws.amazon.com/premiumsupport/knowledge-center/auto-scaling-group-rolling-updates/
-          - AlarmNotification
-          - AZRebalance
-          - HealthCheck
-          - ReplaceUnhealthy
-          - ScheduledActions
-        WaitOnResourceSignals: true
+        PauseTime: PT0S
+        # SuspendProcesses:
+        #   - List of processes
+        WaitOnResourceSignals: false
       AutoScalingScheduledAction:
-        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-scheduledactions
-        # Applies when a scheduled action is in effect.
-        # - true: Doesn't change min/max/desired unless one of those values
-        # changed in the template. Otherwise, a differnece between the template
-        # value and the actual value is ignored (i.e. actual value preserved).
-        # - false: Lets CloudFormation change the ASG's size values to match the
-        # template values, even if a scheduled action is in effect.
         IgnoreUnmodifiedGroupSizeProperties: true
     Properties:
       Cooldown: "240"
@@ -350,12 +278,14 @@ Resources:
       LaunchTemplate:
         LaunchTemplateId: !Ref Ec2LaunchTemplate
         Version: !GetAtt Ec2LaunchTemplate.LatestVersionNumber
+      # TODO LifecycleHookSpecificationList
       MaxInstanceLifetime: 1209600 # 14 days
-      MaxSize: !If [IsProduction, "75", "20"]
+      MaxSize: !If [IsProduction, "50", "20"]
       MetricsCollection:
         - Granularity: 1Minute
       MinSize: !If [IsProduction, "7", "0"]
       NewInstancesProtectedFromScaleIn: true
+      # TODO NotificationConfigurations
       Tags:
         - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
         - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
