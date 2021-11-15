@@ -253,23 +253,64 @@ Resources:
   Asg:
     Type: AWS::AutoScaling::AutoScalingGroup
     CreationPolicy:
+      # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
+      # Defines policies that apply when CloudFormation is creating a new ASG
+      # resource, either during initial stack launch, or if a replacing update
+      # is configured to replace the entire ASG. These policies force
+      # CloudFormation to wait for explicit signals being sent to before
+      # considering the creation complete. These signals are generaly sent by
+      # the EC2 instances being launched along side the ASG, using the
+      # cfn-signal helper script in the launch template's user data.
+      # Without such a policy, CloudFormation will generally consider the ASG
+      # creation complete without caring about what the instances are doing.
       AutoScalingCreationPolicy:
+        # The docs claim that this only applies to replacement updates (i.e.,
+        # WillReplace: true), and not to initial resource creation.
         MinSuccessfulInstancesPercent: 0 # TODO Set to 100
       ResourceSignal:
-        Count: 0 # TODO Find a good value
+        # The number of success signals required before the ASG resource can
+        # be considered succesfully created. This value must not be larger than
+        # the default MinSize of the ASG, or it will never succeed.
+        Count: !If [IsProduction, 5, 0] # TODO Find a good value
+        # How long to wait for signals from EC2 instances
         Timeout: PT5M
     UpdatePolicy:
+      # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html
+      # AutoScalingReplacingUpdate and AutoScalingRollingUpdate apply only when
+      # the LaunchTemplate (including UserData) changes.
+      # NOTE: Changes to the UpdatePolicy should be made in their own stack
+      # update. Avoiding updating the UpdatePolicy and other aspects of the
+      # AWS::AutoScaling::AutoScalingGroup in the same stack update.
       AutoScalingReplacingUpdate:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-replacingupdate
+        # false: Replace only instances within the ASG
+        # true: Replace the entire ASG
         WillReplace: false
       AutoScalingRollingUpdate:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-rollingupdate
+        # Applies when CloudFormation wants to update the ASG and its instances
+        # in a rolling manner (i.e., WillReplace: false).
         MaxBatchSize: 1
-        MinInstancesInService: 0
+        MinInstancesInService: !If [IsProduction, 3, 1]
         MinSuccessfulInstancesPercent: 100
-        PauseTime: PT0S
-        # SuspendProcesses:
-        #   - List of processes
-        WaitOnResourceSignals: false
+        PauseTime: PT5M
+        SuspendProcesses:
+          # https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SuspendProcesses.html
+          # https://aws.amazon.com/premiumsupport/knowledge-center/auto-scaling-group-rolling-updates/
+          - AlarmNotification
+          - AZRebalance
+          - HealthCheck
+          - ReplaceUnhealthy
+          - ScheduledActions
+        WaitOnResourceSignals: true
       AutoScalingScheduledAction:
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-scheduledactions
+        # Applies when a scheduled action is in effect.
+        # - true: Doesn't change min/max/desired unless one of those values
+        # changed in the template. Otherwise, a differnece between the template
+        # value and the actual value is ignored (i.e. actual value preserved).
+        # - false: Lets CloudFormation change the ASG's size values to match the
+        # template values, even if a scheduled action is in effect.
         IgnoreUnmodifiedGroupSizeProperties: true
     Properties:
       Cooldown: "240"
