@@ -208,7 +208,7 @@ function evaluationSummary(
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
  * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
- * * @returns {String[]}
+ * @returns {String[]}
  */
 function cause(event, desc, history) {
   const alarm = desc.MetricAlarms[0];

@@ -6,6 +6,7 @@
 `detail.previousState.reasonData.evaluatedDatapoints[].timestamp`: The recorded time for individual datapoints that were evaluated as creating the OK condition.
 
 `detail.previousState.timestamp`: When the alarm became in alarm, NOT when the datapoints started to breach the threshold.
+`detail.previousState.reasonData.evaluatedDatapoints[]`: These are ONLY the data points that originally evaluated to cause the alarm condition, NOT all the data points that exist for the duration of the condition.
 `detail.previousState.reasonData.evaluatedDatapoints[].timestamp`: The recorded time for individual datapoints that breached the alarm's threshold.
 `detail.previousState.reasonData.startDate`: This should be same as the timestamp of the earliest evaluated datapoint, and could be considered the start of the alarm condition (though not the start of the alarm state). When _missing data_ is treated as bad, there won't be any evaluated datapoints that explicitly contribute to the alarm evaluation, so this `startDate` could be a time that doesn't appear in the `evaluatedDatapoints` list. (I.e., the start of the problem.) Sometimes this won't exist, even when there are evaluatedDatapoints with timestamps.
 `detail.previousState.reasonData.queryDate`: Unknown

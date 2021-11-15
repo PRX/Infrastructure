@@ -18,9 +18,17 @@
  */
 
 /**
+ * @typedef {Object} EventBridgeCloudWatchAlarmsEventDetailConfigurationMetricStatMetric
+ * @property {String} name
+ * @property {String} namespace
+ * @property {Object.<string, string>} dimensions
+ */
+
+/**
  * @typedef {Object} EventBridgeCloudWatchAlarmsEventDetailConfigurationMetricStat
  * @property {Number} period
  * @property {String} stat
+ * @property {EventBridgeCloudWatchAlarmsEventDetailConfigurationMetricStatMetric} metric
  */
 
 /**

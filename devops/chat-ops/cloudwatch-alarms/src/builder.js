@@ -39,6 +39,7 @@ function title(event) {
  * Returns a CloudWatch SDK client with credentials for the account where an
  * alarm originated
  * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @returns {Promise<AWS.CloudWatch>}
  */
 async function cloudWatchClient(event) {
   const accountId = event.account;
@@ -68,12 +69,12 @@ async function cloudWatchClient(event) {
  * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
  * @returns {Promise<String[]>}
  */
-async function detailLines(event, desc, history) {
+async function detailLines(event, desc, history, cloudWatchClient) {
   switch (event.detail.state.value) {
     case 'INSUFFICIENT_DATA':
       return ['Details not implemented for `INSUFFICIENT_DATA`'];
     case 'OK':
-      return await ok.detailLines(event, desc, history);
+      return await ok.detailLines(event, desc, history, cloudWatchClient);
     case 'ALARM':
       return await alarm.detailLines(event, desc, history);
     default:
@@ -133,22 +134,22 @@ module.exports = {
 
     const lines = [];
 
-    lines.push(...(await detailLines(event, desc, history)));
+    lines.push(...(await detailLines(event, desc, history, cloudwatch)));
 
     let text = lines.join('\n');
 
     // Text blocks within attachments have a 3000 character limit. If the text
     // is too large, try removing the vertical annotations from the CloudWatch
     // Alarms URL, since they can be long if there have been many recent alarms
-    if (text.length > 3000) {
-      console.info(
-        JSON.stringify({
-          textLength: text.length,
-          msg: 'Vertical annotations being truncated',
-        }),
-      );
-      text = text.replace(/(~vertical.*?\)\)\))/, ')');
-    }
+    // if (text.length > 3000) {
+    //   console.info(
+    //     JSON.stringify({
+    //       textLength: text.length,
+    //       msg: 'Vertical annotations being truncated',
+    //     }),
+    //   );
+    //   text = text.replace(/(~vertical.*?\)\)\))/, ')');
+    // }
 
     // If the text is still too long, remove all annotations
     if (text.length > 3000) {

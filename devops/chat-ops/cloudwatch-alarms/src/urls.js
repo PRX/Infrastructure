@@ -58,8 +58,6 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 
   const verticals = [];
 
-  console.log(JSON.stringify(history));
-
   if (history?.AlarmHistoryItems?.length) {
     history.AlarmHistoryItems.forEach((i) => {
       // Find all state changes to OK, and create a range from the beginning
