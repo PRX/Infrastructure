@@ -108,6 +108,8 @@ Resources:
   # If the logical ID of this resource changes, it needs to be changed in the
   # user data and metadata as well
   # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
+  # Changing the properties of this resource will cause the ASG instances to
+  # get replaced, based on the defined UpdatePolicy.
   Ec2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -308,9 +310,9 @@ Resources:
     UpdatePolicy:
       # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html
       # AutoScalingReplacingUpdate and AutoScalingRollingUpdate apply only when
-      # the LaunchTemplate (including UserData) changes.
+      # the LaunchTemplate changes (which includes cloud-init user data).
       # NOTE: Changes to the UpdatePolicy should be made in their own stack
-      # update. Avoiding updating the UpdatePolicy and other aspects of the
+      # update. Avoid updating the UpdatePolicy and other aspects of the
       # AWS::AutoScaling::AutoScalingGroup in the same stack update.
       AutoScalingReplacingUpdate:
         # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-replacingupdate
@@ -484,6 +486,8 @@ Resources:
             inOut = +m[1] > +m[2] ? ' IN' : ' OUT';
           } else if (/an instance was taken out of service in response to a user health-check/.test(event.detail.Cause)) {
             lines.push('Taken out of service in response to a user health-check.');
+          } else if (/was taken out of service in response to a user request/.test(event.detail.Cause)) {
+            lines.push('Taken out of service in response to a user request.');
           }
 
           await sns.publish({
