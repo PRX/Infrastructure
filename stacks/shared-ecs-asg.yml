@@ -148,14 +148,7 @@ Resources:
               MIME-Version: 1.0
 
               --==BOUNDARY==
-              Content-Type: text/cloud-boothook; charset="us-ascii"
 
-              # Set Docker daemon options
-              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#cloud-init-per
-              # At this time, only ECS Containers based on Amazon Linux AMIs (not Amazon Linux 2 AMIs) support cloud-init-per.
-              # cloud-init-per once docker_options echo 'OPTIONS="${!OPTIONS}"' >> /etc/sysconfig/docker
-
-              --==BOUNDARY==
               Content-Type: text/x-shellscript; charset="us-ascii"
 
               #!/bin/bash
@@ -176,6 +169,7 @@ Resources:
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-signal.html
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-creationpolicy.html
               /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource Asg
+
               --==BOUNDARY==--
       TagSpecifications:
         - ResourceType: launch-template
@@ -313,7 +307,7 @@ Resources:
         # The number of success signals required before the ASG resource can
         # be considered succesfully created. This value must not be larger than
         # the default MinSize of the ASG, or it will never succeed.
-        Count: !If [IsProduction, 0, 0] # TODO Find a good value
+        Count: !If [IsProduction, 5, 0] # TODO Find a good value
         # How long to wait for signals from EC2 instances
         Timeout: PT5M
     UpdatePolicy:
@@ -334,17 +328,17 @@ Resources:
         # in a rolling manner (i.e., WillReplace: false).
         MaxBatchSize: 1
         MinInstancesInService: 0
-        MinSuccessfulInstancesPercent: 100 # TODO 50
-        PauseTime: PT0S # TODO PT5M
-        # SuspendProcesses: # TODO
-        # # https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SuspendProcesses.html
-        # # https://aws.amazon.com/premiumsupport/knowledge-center/auto-scaling-group-rolling-updates/
-        #   - HealthCheck
-        #   - ReplaceUnhealthy
-        #   - AZRebalance
-        #   - AlarmNotification
-        #   - ScheduledActions
-        WaitOnResourceSignals: false # TODO true
+        MinSuccessfulInstancesPercent: 50
+        PauseTime: PT5M
+        SuspendProcesses:
+          # https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_SuspendProcesses.html
+          # https://aws.amazon.com/premiumsupport/knowledge-center/auto-scaling-group-rolling-updates/
+          - AlarmNotification
+          - AZRebalance
+          - HealthCheck
+          - ReplaceUnhealthy
+          - ScheduledActions
+        WaitOnResourceSignals: true
       AutoScalingScheduledAction:
         # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-attribute-updatepolicy.html#cfn-attributes-updatepolicy-scheduledactions
         # Applies when a scheduled action is in effect.
