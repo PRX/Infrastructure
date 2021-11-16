@@ -1,5 +1,9 @@
 # Setup
 
+# Misc
+
+- The Augury stack currently assumes that the bucket referenced in AdFilesS3BucketArn is in the same region where Augury tasks are being launched
+
 ## Amazon SES
 
 All necessary Amazon SES identities (i.e., domains that apps and services will be sending mail from) must be set up before the stacks are created.
