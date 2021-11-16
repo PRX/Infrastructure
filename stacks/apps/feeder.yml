@@ -90,6 +90,7 @@ Parameters:
   SharedAuroraPostgresqlPort: { Type: String }
   SharedGlueDatabaseName: { Type: String }
   AnnounceResourcePrefix: { Type: String }
+  FeedsS3BucketArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -725,10 +726,9 @@ Resources:
                   - s3:PutObjectAcl
                   - s3:PutObjectVersionAcl
                 Effect: Allow
-                Resource: !If # TODO Better multi-region support
-                  - IsProduction
-                  - ["arn:aws:s3:::prx-feed/*", "arn:aws:s3:::prx-feed"]
-                  - ["arn:aws:s3:::staging-prx-feed/*", "arn:aws:s3:::staging-prx-feed"]
+                Resource:
+                  - !Ref FeedsS3BucketArn
+                  - !Sub ${FeedsS3BucketArn}/*
             Version: "2012-10-17"
           PolicyName: S3FeedBucketAccess
       Tags:
