@@ -24,6 +24,7 @@ Parameters:
   SlackMessageRelaySnsTopicArn: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
+  AuthorizedKeys: { Type: CommaDelimitedList }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -267,9 +268,8 @@ Resources:
                 - |-
                   #!/bin/bash
                   echo "Adding developer public keys to authorized_keys"
-                  echo "${chris_kalafarski}" >> /home/ec2-user/.ssh/authorized_keys
-                - chris_kalafarski: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFj/e+5S/0tO4jqEbhcdI7SnY8IveRnv7o/K4VRgK5Ls chris.kalafarski@prx.org
-                  # someone_else: ssh-ed25519 tktkt someone.else@prx.org
+                  echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
+                - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
           services:
             sysvinit:
               cfn-hup:
