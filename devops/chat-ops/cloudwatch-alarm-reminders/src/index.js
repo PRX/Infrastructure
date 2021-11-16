@@ -8,6 +8,8 @@
  */
 
 const AWS = require('aws-sdk');
+const regions = require('./regions');
+const urls = require('./urls');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -36,25 +38,146 @@ async function cloudWatchClient(accountId, region) {
   });
 }
 
+async function describeAllAlarms(client, nextToken) {
+  return new Promise((resolve, reject) => {
+    const params = {
+      StateValue: 'ALARM',
+      AlarmTypes: ['CompositeAlarm', 'MetricAlarm'],
+      ...(nextToken && { NextToken: nextToken }),
+    };
+
+    client.describeAlarms(params, async (error, data) => {
+      if (error) {
+        reject(error);
+      } else {
+        const results = {
+          CompositeAlarms: [],
+          MetricAlarms: [],
+        };
+
+        if (data.CompositeAlarms) {
+          results.CompositeAlarms.push(...data.CompositeAlarms);
+        }
+
+        if (data.MetricAlarms) {
+          results.MetricAlarms.push(...data.MetricAlarms);
+        }
+
+        if (data.NextToken) {
+          try {
+            const more = await describeAllAlarms(client, data.NextToken);
+
+            if (more) {
+              results.CompositeAlarms.push(...more.CompositeAlarms);
+              results.MetricAlarms.push(...more.MetricAlarms);
+            }
+          } catch (err) {
+            reject(err);
+          }
+        }
+
+        resolve(results);
+      }
+    });
+  });
+}
+
+function cleanName(alarmName) {
+  return alarmName
+    .replace(/\>/g, '&gt;')
+    .replace(/\</g, '&lt;')
+    .replace(/\([A-Za-z0-9_\-]+\)$/, '')
+    .replace(/^(FATAL|ERROR|WARN|INFO|CRITICAL|MAJOR|MINOR)/, '')
+    .trim();
+}
+
+function title(alarmDetail) {
+  const name = alarmDetail.AlarmName;
+  const region = regions.descriptor(alarmDetail.AlarmArn.split(':')[3]);
+  return `${alarmDetail.StateValue} | ${region} » ${cleanName(name)}`;
+}
+
+function started(reasonData) {
+  if (reasonData?.startDate || reasonData?.evaluatedDatapoints?.length) {
+    const now = +new Date();
+
+    const startedAt =
+      reasonData.startDate ||
+      reasonData.evaluatedDatapoints
+        .map((d) => d.timestamp)
+        .sort((a, b) => b - a)[0];
+    const startTime = Date.parse(startedAt);
+
+    const dif = now - startTime;
+    const difSec = dif / 1000;
+
+    let duration = difSec;
+    let durationUnit = 'seconds';
+
+    if (difSec >= 86400) {
+      duration = Math.round(difSec / 86400);
+      durationUnit = 'days';
+    } else if (difSec >= 3600) {
+      duration = Math.round(difSec / 3600);
+      durationUnit = 'hours';
+    } else if (difSec >= 60) {
+      duration = Math.round(difSec / 60);
+      durationUnit = 'minutes';
+    }
+
+    return `*Started:* ${duration} ${durationUnit} ago`;
+  }
+}
+
 exports.handler = async (event) => {
   console.log(JSON.stringify(event));
 
-  const alarms = [];
+  const alarms = {
+    CompositeAlarms: [],
+    MetricAlarms: [],
+  };
 
   for (const accountId of process.env.SEARCH_ACCOUNTS.split(',')) {
     for (const region of process.env.SEARCH_REGIONS.split(',')) {
       const cloudwatch = await cloudWatchClient(accountId, region);
+      console.log(accountId);
 
-      const data = await cloudwatch
-        .describeAlarms({
-          StateValue: 'ALARM',
-          AlarmTypes: ['CompositeAlarm', 'MetricAlarm'],
-        })
-        .promise();
+      const data = await describeAllAlarms(cloudwatch);
 
-      alarms.push(...data.MetricAlarms.map((a) => a.AlarmName));
+      alarms.CompositeAlarms.push(...data.CompositeAlarms);
+      alarms.MetricAlarms.push(
+        ...data.MetricAlarms.filter((a) => {
+          return !(
+            a.AlarmName.includes('AS:In') ||
+            a.AlarmName.includes('AS:Out') ||
+            a.AlarmName.includes('TargetTracking') ||
+            a.AlarmName.includes('Production Pollers Low CPU Usage')
+          );
+        }),
+      );
     }
   }
+
+  console.log(JSON.stringify(alarms));
+
+  const count = alarms.CompositeAlarms.length + alarms.MetricAlarms.length;
+
+  const blocks = alarms.MetricAlarms.map((a) => {
+    const lines = [`*<${urls.alarmConsole(a)}|${title(a)}>*`];
+
+    if (a.StateReasonData) {
+      const reasonData = JSON.parse(a.StateReasonData);
+      lines.push(started(reasonData));
+    }
+
+    return {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: lines.join('\n'),
+      },
+    };
+  });
 
   await sns
     .publish({
@@ -63,7 +186,13 @@ exports.handler = async (event) => {
         username: 'Amazon CloudWatch Alarms',
         icon_emoji: ':ops-cloudwatch-alarm:',
         channel: '#sandbox2',
-        text: alarms.join(', '),
+        attachments: [
+          {
+            color: '#a30200',
+            fallback: `There are *${count}* open alarms`,
+            blocks,
+          },
+        ],
       }),
     })
     .promise();
