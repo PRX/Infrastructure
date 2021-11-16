@@ -66,6 +66,7 @@ Resources:
     Properties:
       ServiceToken: !Ref EchoServiceToken
       ActualsIngestJobInvocationCountMetricName: !Sub ActualsIngestJobInvocationCountNewCluster${EnvironmentType}
+      AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
 
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -279,11 +280,11 @@ Resources:
             - Name: UPLOAD_ADFILE_ACCESS_KEY_ID
               Value: !Ref S3SigningAccessKey
             - Name: UPLOAD_ADFILE_AWS_REGION
-              Value: us-east-1 # TODO Multi region?
+              Value: !Ref AWS::Region
             - Name: UPLOAD_ADFILE_BUCKET
-              Value: prx-mrr-us-east-1-ad-files # TODO Multi region?
+              Value: !GetAtt Constants.AdFilesS3BucketName
             - Name: UPLOAD_ADFILE_BUCKET_DOMAIN
-              Value: prx-mrr-us-east-1-ad-files.s3.us-east-1.amazonaws.com # TODO Multi region?
+              Value: !Sub ${Constants.AdFilesS3BucketName}.s3.${AWS::Region}.amazonaws.com
             - Name: UPLOAD_ADFILE_PUBLIC_ACCESS_HOST
               Value: !Ref AdFilesHostname
             - Name: RAILS_SERVE_STATIC_FILES
