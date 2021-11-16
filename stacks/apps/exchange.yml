@@ -53,6 +53,7 @@ Parameters:
   SharedAuroraMysqlPort: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
+  MediajointS3BucketArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -217,6 +218,52 @@ Resources:
       ManagedPolicyArns:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+            Version: "2012-10-17"
+          PolicyName: PorterSnsPublish
+        - PolicyDocument:
+            Statement:
+              - Action: sqs:* # TODO Seems very permissive
+                Effect: Allow
+                Resource: !Sub arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}* # TODO Use specific queues, the ones in this template and the email on from shared-announce
+            Version: "2012-10-17"
+          PolicyName: SqsQueues
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:CreateQueue
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:ListQueues
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                  - sqs:SetQueueAttributes
+                Effect: Allow
+                Resource: "*" # TODO Seems very permissive
+            Version: "2012-10-17"
+          PolicyName: LegacySqsQueues
+        - PolicyDocument: # TODO Cleanup this policy
+            Statement:
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:Get*
+                  - s3:List*
+                  - s3:Put*
+                  - s3:RestoreObject
+                Effect: Allow
+                Resource:
+                  - !Ref MediajointS3BucketArn
+                  - !Sub ${MediajointS3BucketArn}/*
+            Version: "2012-10-17"
+          PolicyName: MediajointS3
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
