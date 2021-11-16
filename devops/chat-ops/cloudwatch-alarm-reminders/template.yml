@@ -1,0 +1,62 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >- # TODO
+  tktktk
+
+Parameters:
+  SlackMessageRelaySnsTopicArn:
+    Type: String
+  CrossAccountCloudWatchAlarmIamRoleName:
+    Type: String
+  Regions:
+    Type: CommaDelimitedList
+  AccountIds:
+    Type: CommaDelimitedList
+
+Resources:
+  CloudWatchAlarmRemindersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Description: >- # TODO
+        tktktk
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+          CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmIamRoleName
+          SEARCH_REGIONS: !Join [",", !Ref Regions]
+          SEARCH_ACCOUNTS: !Join [",", !Ref AccountIds]
+      Events:
+        HourlyPoller:
+          Properties:
+            Description: Invokes the CloudWatch Alarm reminder function
+            Enabled: true
+            Schedule: rate(1 hour)
+          Type: Schedule
+      Handler: index.handler
+      MemorySize: 192
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelaySnsTopicArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Sub arn:aws:iam::*:role/${CrossAccountCloudWatchAlarmIamRoleName}
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
+      Timeout: 60
+  CloudWatchAlarmRemindersFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmRemindersFunction}
+      RetentionInDays: 14
