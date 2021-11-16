@@ -477,7 +477,7 @@ Resources:
           - !If [IsProduction, !Ref VpcPrivateSubnet2Id, !Ref "AWS::NoValue"]
 
   AudioCallbackQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -495,6 +495,73 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  AudioCallbackQueueSlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Audio queue <${EnvironmentTypeAbbreviation}> FALLING BEHIND (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's queue for the audio callbacks has unusually
+        old messages, which could mean the callbacks are not being processed.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref AudioCallbackQueue
+      EvaluationPeriods: 3
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 60
+      TreatMissingData: notBreaching
+  AudioCallbackQueueSlowAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AudioCallbackQueueSlowAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
+  AudioCallbackQueueVerySlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [CMS] Audio queue <${EnvironmentTypeAbbreviation}> STALLED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's queue for the audio callbacks appears to be
+        stalled, as some messages are very old. This likely means processing
+        has stopped.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref AudioCallbackQueue
+      EvaluationPeriods: 1
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 300
+      TreatMissingData: notBreaching
+  AudioCallbackQueueVerySlowAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AudioCallbackQueueVerySlowAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
   AudioCallbackDeadletterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -548,7 +615,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
 
   ImageCallbackQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -566,6 +633,73 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: CMS }
       VisibilityTimeout: 3600 # 1 hour
+  ImageCallbackQueueSlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [CMS] Image queue <${EnvironmentTypeAbbreviation}> FALLING BEHIND (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's queue for the image callbacks has unusually
+        old messages, which could mean the callbacks are not being processed.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ImageCallbackQueue
+      EvaluationPeriods: 3
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 60
+      TreatMissingData: notBreaching
+  ImageCallbackQueueSlowAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ImageCallbackQueueSlowAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
+  ImageCallbackQueueVerySlowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [CMS] Image queue <${EnvironmentTypeAbbreviation}> STALLED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} CMS's queue for the image callbacks appears to be
+        stalled, as some messages are very old. This likely means processing
+        has stopped.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Ref ImageCallbackQueue
+      EvaluationPeriods: 1
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Average
+      Threshold: 300
+      TreatMissingData: notBreaching
+  ImageCallbackQueueVerySlowAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt ImageCallbackQueueVerySlowAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:application, Value: CMS }
   ImageCallbackDeadletterQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -619,7 +753,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
 
   PodcastImportQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -690,7 +824,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
 
   SearchIndexerQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -760,7 +894,7 @@ Resources:
         - { Key: prx:dev:application, Value: CMS }
 
   DefaultJobQueue:
-    Type: AWS::SQS::Queue # TODO Alarms?
+    Type: AWS::SQS::Queue
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -828,74 +962,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
         - { Key: prx:dev:application, Value: CMS }
-
-  # TODO
-  # # callback queues are being slow
-  # CmsAudioCallbackSlowAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Slow"
-  #     AlarmDescription: Audio callbacks are behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 3
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 60
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref AudioSqsCallbackName
-  # CmsImageCallbackSlowAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Image Callbacks Slow"
-  #     AlarmDescription: Image callbacks are behind
-  #     ComparisonOperator: GreaterThanThreshold
-  #     EvaluationPeriods: 3
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 60
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref ImageSqsCallbackName
-  # # callback queues likely aren't processing
-  # CmsAudioCallbackFatalAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Audio Callbacks Not Processing"
-  #     AlarmDescription: Audio callbacks are maybe not processing
-  #     ComparisonOperator: GreaterThanOrEqualToThreshold
-  #     EvaluationPeriods: 1
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 300
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref AudioSqsCallbackName
-  # CmsImageCallbackFatalAlarm:
-  #   Type: AWS::CloudWatch::Alarm
-  #   Properties:
-  #     AlarmName: !Sub "[CMS][Worker][SQS] - ${EnvironmentType} Image Callbacks Not Processing"
-  #     AlarmDescription: Image callbacks are maybe not processing
-  #     ComparisonOperator: GreaterThanOrEqualToThreshold
-  #     EvaluationPeriods: 1
-  #     MetricName: ApproximateAgeOfOldestMessage
-  #     Namespace: AWS/SQS
-  #     Period: 60
-  #     Statistic: Average
-  #     Threshold: 300
-  #     TreatMissingData: notBreaching
-  #     Dimensions:
-  #       - Name: QueueName
-  #         Value: !Ref ImageSqsCallbackName
 
 Outputs:
   ElasticsearchDomainName:
