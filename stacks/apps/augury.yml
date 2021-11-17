@@ -311,6 +311,8 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -361,7 +363,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Command:
-            - worker
+            - !If [IsProduction, worker, workfast]
           Cpu: !If [IsProduction, 2000, 128]
           Environment:
             - Name: APP_NAME
@@ -402,6 +404,8 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -524,15 +528,15 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
 
-  ForecastTaskLogGroup:
+  SlowWorkerTaskLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: 14
-  ForecastTaskLogGroupTags:
+  SlowWorkerTaskLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-      LogGroupName: !Ref ForecastTaskLogGroup
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -542,12 +546,12 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-  ForecastTaskDefinition:
+  SlowWorkerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
         - Command:
-            - forecast
+            - workslow
           Environment:
             - Name: APP_NAME
               Value: augury
@@ -587,15 +591,17 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Ref ForecastTaskLogGroup
+              awslogs-group: !Ref SlowWorkerTaskLogGroup
               awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: augury-forecast
-          Name: augury-forecast
+              awslogs-stream-prefix: fargate
+          Name: augury-workslow
       Cpu: "4096"
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       Memory: "16384"
@@ -613,7 +619,7 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
-  ForecastRelaySqsQueue:
+  SlowWorkerRelaySqsQueue:
     Type: AWS::SQS::Queue
     Properties:
       Tags:
@@ -625,25 +631,25 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-  ForecastRelayFunction:
+  SlowWorkerRelayFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Launches fargate forecast executions from SQS
+      Description: Launches fargate slow queue worker from SQS
       Environment:
         Variables:
           ECS_CLUSTER_ARN: !Ref EcsClusterArn
-          ECS_TASK_DEFINITION_ARN: !Ref ForecastTaskDefinition
+          ECS_TASK_DEFINITION_ARN: !Ref SlowWorkerTaskDefinition
           VPC_SUBNET_1: !Ref VpcPublicSubnet1Id
           VPC_SUBNET_2: !Ref VpcPublicSubnet2Id
           VPC_SUBNET_3: !Ref VpcPublicSubnet3Id
-          MAX_FARGATES: "10"
+          MAX_FARGATES: "5"
           STARTED_BY: !Ref AWS::StackName
       Events:
         SqsMessages:
           Type: SQS
           Properties:
             BatchSize: 1
-            Queue: !GetAtt ForecastRelaySqsQueue.Arn
+            Queue: !GetAtt SlowWorkerRelaySqsQueue.Arn
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
@@ -684,7 +690,7 @@ Resources:
           const listRes = await ecs.listTasks(listParams).promise();
           const running = listRes.taskArns.length;
           if (running < MAX_FARGATES) {
-            log('info', `launching 1 more fargate forecast worker (${running} running)`);
+            log('info', `launching 1 more fargate worker (${running} running)`);
             try {
               const runRes = await ecs.runTask(runParams).promise();
               log('debug', 'ran task', runRes);
@@ -704,7 +710,7 @@ Resources:
               Resource: "*"
             - Action: ecs:RunTask
               Effect: Allow
-              Resource: !Ref ForecastTaskDefinition
+              Resource: !Ref SlowWorkerTaskDefinition
             - Effect: Allow
               Action: iam:PassRole
               Resource:
@@ -728,7 +734,7 @@ Resources:
     Properties:
       FilterPattern: |-
         { $.msg = "forecast_job" }
-      LogGroupName: !Ref ForecastTaskLogGroup
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastJobElapsed${EnvironmentType}
           MetricNamespace: PRX/Augury
@@ -740,7 +746,7 @@ Resources:
     Properties:
       FilterPattern: |-
         { $.msg = "forecast_downloads" }
-      LogGroupName: !Ref ForecastTaskLogGroup
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastDownloadsElapsed${EnvironmentType}
           MetricNamespace: PRX/Augury
@@ -750,7 +756,7 @@ Resources:
     Properties:
       FilterPattern: |-
         { $.msg = "forecast_partitions" }
-      LogGroupName: !Ref ForecastTaskLogGroup
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastPartitionsElapsed${EnvironmentType}
           MetricNamespace: PRX/Augury
