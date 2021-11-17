@@ -42,6 +42,7 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   CastlePostgresInstanceEndpointAddress: { Type: String }
@@ -628,6 +629,47 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  SlowWorkerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allows web/database traffic for FARGATE executions
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIpv6: ::/0
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+        - CidrIp: 0.0.0.0/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+        - CidrIpv6: ::/0
+          FromPort: 3306
+          IpProtocol: tcp
+          ToPort: 3306
+        - CidrIp: 0.0.0.0/0
+          FromPort: 5432
+          IpProtocol: tcp
+          ToPort: 5432
+        - CidrIpv6: ::/0
+          FromPort: 5432
+          IpProtocol: tcp
+          ToPort: 5432
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_augury_workslow" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
+      VpcId: !Ref VpcId
+
   SlowWorkerRelaySqsQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -651,6 +693,8 @@ Resources:
           VPC_SUBNET_1: !Ref VpcPublicSubnet1Id
           VPC_SUBNET_2: !Ref VpcPublicSubnet2Id
           VPC_SUBNET_3: !Ref VpcPublicSubnet3Id
+          SECURITY_GROUP_1: !GetAtt SlowWorkerSecurityGroup.GroupId
+          SECURITY_GROUP_2: !Ref EcsLaunchEndpointsAccessSecurityGroupId
           MAX_FARGATES: "5"
           STARTED_BY: !Ref AWS::StackName
       Events:
@@ -682,7 +726,8 @@ Resources:
           networkConfiguration: {
             awsvpcConfiguration: {
               subnets: [process.env.VPC_SUBNET_1, process.env.VPC_SUBNET_2, process.env.VPC_SUBNET_3],
-              assignPublicIp: 'ENABLED',
+              assignPublicIp: 'DISABLED',
+              securityGroups: [process.env.SECURITY_GROUP_1, process.env.SECURITY_GROUP_2],
             },
           },
           platformVersion: '1.4.0',
