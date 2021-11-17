@@ -129,6 +129,55 @@ function started(reasonData) {
   }
 }
 
+function filterByName(alarm) {
+  return !(
+    alarm.AlarmName.includes('AS:In') ||
+    alarm.AlarmName.includes('AS:Out') ||
+    alarm.AlarmName.includes('TargetTracking') ||
+    alarm.AlarmName.includes('Production Pollers Low CPU Usage')
+  );
+}
+
+function filterByDuration(alarm) {
+  if (alarm.EstimatedDuration) {
+    return alarm.EstimatedDuration > 3600; // 1 hour
+  }
+
+  return true;
+}
+
+function injectDuration(alarm) {
+  if (alarm.StateReasonData) {
+    const reasonData = JSON.parse(alarm.StateReasonData);
+
+    if (reasonData?.startDate || reasonData?.evaluatedDatapoints?.length) {
+      const now = +new Date();
+
+      const startedAt =
+        reasonData.startDate ||
+        reasonData.evaluatedDatapoints
+          .map((d) => d.timestamp)
+          .sort((a, b) => b - a)[0];
+      const startTime = Date.parse(startedAt);
+
+      const dif = now - startTime;
+      const difSec = dif / 1000;
+
+      alarm.EstimatedDuration = difSec;
+    }
+  }
+
+  return alarm;
+}
+
+function sortByDuration(a, b) {
+  if (a.EstimatedDuration && b.EstimatedDuration) {
+    return b.EstimatedDuration - a.EstimatedDuration;
+  }
+
+  return -1;
+}
+
 exports.handler = async (event) => {
   console.log(JSON.stringify(event));
 
@@ -146,14 +195,10 @@ exports.handler = async (event) => {
 
       alarms.CompositeAlarms.push(...data.CompositeAlarms);
       alarms.MetricAlarms.push(
-        ...data.MetricAlarms.filter((a) => {
-          return !(
-            a.AlarmName.includes('AS:In') ||
-            a.AlarmName.includes('AS:Out') ||
-            a.AlarmName.includes('TargetTracking') ||
-            a.AlarmName.includes('Production Pollers Low CPU Usage')
-          );
-        }),
+        ...data.MetricAlarms.filter(filterByName)
+          .map(injectDuration)
+          .filter(filterByDuration)
+          .sort(sortByDuration),
       );
     }
   }
@@ -162,22 +207,41 @@ exports.handler = async (event) => {
 
   const count = alarms.CompositeAlarms.length + alarms.MetricAlarms.length;
 
-  const blocks = alarms.MetricAlarms.map((a) => {
-    const lines = [`*<${urls.alarmConsole(a)}|${title(a)}>*`];
+  const blocks = [];
 
-    if (a.StateReasonData) {
-      const reasonData = JSON.parse(a.StateReasonData);
-      lines.push(started(reasonData));
-    }
+  if (count === 0) {
+    return;
+  }
 
-    return {
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: lines.join('\n'),
-      },
-    };
+  blocks.push({
+    type: 'header',
+    text: {
+      type: 'plain_text',
+      text: 'Long-running Alarms',
+      emoji: true,
+    },
   });
+
+  blocks.push(
+    ...alarms.MetricAlarms.map((a) => {
+      const lines = [`*<${urls.alarmConsole(a)}|${title(a)}>*`];
+
+      if (a.StateReasonData) {
+        const reasonData = JSON.parse(a.StateReasonData);
+        lines.push(started(reasonData));
+      }
+
+      return {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: lines.join('\n'),
+        },
+      };
+    }),
+  );
+
+  console.log(blocks);
 
   await sns
     .publish({
@@ -189,7 +253,7 @@ exports.handler = async (event) => {
         attachments: [
           {
             color: '#a30200',
-            fallback: `There are *${count}* open alarms`,
+            fallback: `There are *${count}* long-running alarms`,
             blocks,
           },
         ],
