@@ -311,6 +311,8 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -361,7 +363,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Command:
-            - worker
+            - !If [IsProduction, worker, workfast]
           Cpu: !If [IsProduction, 2000, 128]
           Environment:
             - Name: APP_NAME
@@ -402,6 +404,8 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -547,7 +551,7 @@ Resources:
     Properties:
       ContainerDefinitions:
         - Command:
-            - forecast
+            - workslow
           Environment:
             - Name: APP_NAME
               Value: augury
@@ -587,6 +591,8 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: SLOW_WORKER_RELAY_SQS_URL
+              Value: !If [IsProduction, "", !Ref SlowWorkerRelaySqsQueue]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -613,7 +619,7 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
-  ForecastRelaySqsQueue:
+  SlowWorkerRelaySqsQueue:
     Type: AWS::SQS::Queue
     Properties:
       Tags:
@@ -625,10 +631,10 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-  ForecastRelayFunction:
+  SlowWorkerRelayFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Description: Launches fargate forecast executions from SQS
+      Description: Launches fargate slow queue worker from SQS
       Environment:
         Variables:
           ECS_CLUSTER_ARN: !Ref EcsClusterArn
@@ -636,14 +642,14 @@ Resources:
           VPC_SUBNET_1: !Ref VpcPublicSubnet1Id
           VPC_SUBNET_2: !Ref VpcPublicSubnet2Id
           VPC_SUBNET_3: !Ref VpcPublicSubnet3Id
-          MAX_FARGATES: "10"
+          MAX_FARGATES: "5"
           STARTED_BY: !Ref AWS::StackName
       Events:
         SqsMessages:
           Type: SQS
           Properties:
             BatchSize: 1
-            Queue: !GetAtt ForecastRelaySqsQueue.Arn
+            Queue: !GetAtt SlowWorkerRelaySqsQueue.Arn
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
