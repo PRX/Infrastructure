@@ -22,6 +22,9 @@ Parameters:
   kApplicationPort:
     Type: Number
     Default: 3000
+  kDatabasePoolSize:
+    Type: String
+    Default: "16"
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -48,6 +51,12 @@ Parameters:
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
+  CmsHostname: { Type: String }
+  FeederHostname: { Type: String }
+  IdHostname: { Type: String }
+  MetaHostname: { Type: String }
+  NewRelicApiKeyPrxLite: { Type: String }
+  BetaHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -313,14 +322,38 @@ Resources:
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
-            - Name: ELASTICSEARCH_URL
-              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
             - Name: DB_PORT_3306_TCP_ADDR
               Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
               Value: !Ref SharedAuroraMysqlPort
             - Name: ANNOUNCE_RESOURCE_PREFIX
               Value: !Ref AnnounceResourcePrefix
+            - Name: CMS_HOST
+              Value: !Ref CmsHostname
+            - Name: DATABASE_POOL_SIZE
+              Value: !Ref kDatabasePoolSize
+            - Name: ELASTICSEARCH_URL
+              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
+            - Name: ID_HOST
+              Value: !Ref IdHostname
+            - Name: META_HOST
+              Value: !Ref MetaHostname
+            - Name: NEW_RELIC_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, CMS Production, CMS Staging]
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: PRX_HOST
+              Value: !Ref BetaHostname
+            - Name: WORKER_COUNT
+              Value: !If [IsProduction, "10", "6"]
+            - Name: WORKER_DATABASE_POOL_SIZE
+              Value: !If [IsProduction, "10", "6"]
+            - Name: WORKER_PAUSE
+              Value: "30"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -384,14 +417,38 @@ Resources:
               Value: !Ref AWS::Region
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
-            - Name: ELASTICSEARCH_URL
-              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
             - Name: DB_PORT_3306_TCP_ADDR
               Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
               Value: !Ref SharedAuroraMysqlPort
             - Name: ANNOUNCE_RESOURCE_PREFIX
               Value: !Ref AnnounceResourcePrefix
+            - Name: CMS_HOST
+              Value: !Ref CmsHostname
+            - Name: DATABASE_POOL_SIZE
+              Value: !Ref kDatabasePoolSize
+            - Name: ELASTICSEARCH_URL
+              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
+            - Name: ID_HOST
+              Value: !Ref IdHostname
+            - Name: META_HOST
+              Value: !Ref MetaHostname
+            - Name: NEW_RELIC_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, CMS Production, CMS Staging]
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: PRX_HOST
+              Value: !Ref BetaHostname
+            - Name: WORKER_COUNT
+              Value: !If [IsProduction, "10", "6"]
+            - Name: WORKER_DATABASE_POOL_SIZE
+              Value: !If [IsProduction, "10", "6"]
+            - Name: WORKER_PAUSE
+              Value: "30"
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
