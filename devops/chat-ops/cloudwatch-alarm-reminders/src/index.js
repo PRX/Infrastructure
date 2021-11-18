@@ -189,7 +189,6 @@ exports.handler = async (event) => {
   for (const accountId of process.env.SEARCH_ACCOUNTS.split(',')) {
     for (const region of process.env.SEARCH_REGIONS.split(',')) {
       const cloudwatch = await cloudWatchClient(accountId, region);
-      console.log(accountId);
 
       const data = await describeAllAlarms(cloudwatch);
 
