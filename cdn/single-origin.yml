@@ -481,11 +481,14 @@ Resources:
           Compress: !If [HasCloudFrontCompress, true, false]
           DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, !Ref "AWS::NoValue"]
           ForwardedValues:
-            # Cookies:
-            #   Cookies
+            Cookies: !If
+              - HasCloudFrontForwardedCookies
+              - Forward: whitelist
+                WhitelistedNames: !Ref CloudFrontForwardedCookies
+              - !Ref AWS::NoValue
             Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-            QueryString: false
-            # QueryStringCacheKeys:
+            QueryString: !If [HasCloudFrontForwardedQueryStrings, true, false]
+            QueryStringCacheKeys: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
           # LambdaFunctionAssociations:
           MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
           MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, !Ref "AWS::NoValue"]
