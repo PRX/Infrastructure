@@ -41,6 +41,7 @@ Parameters:
   ContainerCpu:
     Type: String
   NewRelicApiKeyPrxLite: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
   # Dovetail ###################################################################
   DovetailEcrImageTag:
     Type: String
@@ -131,16 +132,12 @@ Resources:
         - !Ref VPCSubnet2
         - !Ref VPCSubnet3
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Environment
-          Value: !Ref EnvironmentType
-        - Key: Name
-          Value: !Sub Dovetail-${EnvironmentType}
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Nodejs }
   DovetailALBHTTPListener:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -431,6 +428,19 @@ Resources:
     Type: "AWS::Logs::LogGroup"
     Properties:
       RetentionInDays: 14
+  DovetailLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref DovetailLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Nodejs }
+
   DovetailTaskDefinition:
     Type: "AWS::ECS::TaskDefinition"
     Properties:
