@@ -2,24 +2,25 @@ AWSTemplateFormatVersion: "2010-09-09"
 # Report files are delivered to S3 with an object naming structure like:
 # s3://[report bucket name]/[report prefix]/[report name]/[report name]/year=2021/month=03/Athena-CUR-00001.snappy.parquet
 # A single partition projection is used to automatically partition by year and
-# month. The projection is called `date`, and is of type `date`. Using the
-# projection format `'year='yyyy'/month='MM`, queries that include the
+# month. The projection is called `report_period`, and is of type `date`. Using
+# the projection format `'year='yyyy'/month='MM`, queries that include the
 # partition column will be projected into the storage location with the
 # expected object naming structure.
-# The partition key for this `date` field is of type `string`. This is due to a
-# limitation with how the Presto engine that Athena uses handles date columns.
+# The partition key for this `report_period` field is of type `string`. This is
+# due to a limitation with how the Presto engine that Athena uses handles date
+# columns.
 # Querying a partition will look like:
-# WHERE "date" = 'year=2021/month=11'
+# WHERE report_period = 'year=2021/month=11'
 # or
-# WHERE "date" = date_format(date('2021-11-01'), 'year=%Y/month=%m')
+# WHERE report_period = date_format(date('2021-11-01'), 'year=%Y/month=%m')
 #
 # In order for date-based filters in QuickSight to function as expected, the
-# `date` field on the dataset in QuickSight must be converted from a string to
-# a date with a custom format of:
+# `report_period` field on the dataset in QuickSight must be converted from a
+# string to a date with a custom format of:
 # 'year='yyyy'/month='MM
-# Once that is done, filters can be created on the `date` field as though the
-# underlying column were a date type. QuickSight will translate the dates
-# coming out of the filters into the year=/month= string format when
+# Once that is done, filters can be created on the `date` report_period as
+# though the underlying column were a date type. QuickSight will translate the
+# dates coming out of the filters into the year=/month= string format when
 # constructing Athena queries.
 #
 # Because the object names only include year any month, filters should always
@@ -141,14 +142,14 @@ Resources:
           typeOfData: file
           compressionType: none
           projection.enabled: "true"
-          projection.date.type: date
-          projection.date.range: !Sub NOW-${kPartitionRange},NOW
-          projection.date.format: "'year='yyyy'/month='MM"
-          projection.date.interval: "1"
-          projection.date.interval.unit: MONTHS
-          storage.location.template: !Sub s3://${ReportBucket}/${kDailyPrefix}/${DailyAthenaReportDefinition}/${DailyAthenaReportDefinition}/${!date}/
+          projection.report_period.type: date
+          projection.report_period.range: !Sub NOW-${kPartitionRange},NOW
+          projection.report_period.format: "'year='yyyy'/month='MM"
+          projection.report_period.interval: "1"
+          projection.report_period.interval.unit: MONTHS
+          storage.location.template: !Sub s3://${ReportBucket}/${kDailyPrefix}/${DailyAthenaReportDefinition}/${DailyAthenaReportDefinition}/${!report_period}/
         PartitionKeys:
-          - Name: date
+          - Name: report_period
             Type: string
         StorageDescriptor:
           Columns:
