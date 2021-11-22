@@ -52,6 +52,11 @@ Parameters:
   OriginRequestFunctionArn:
     Type: String
     Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
   EnvironmentTypeAbbreviation:
     Type: String
     AllowedValues:
@@ -72,14 +77,13 @@ Resources:
     Properties:
       DomainName: !Ref DistributionDomain
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Name
-          Value: !Sub "${AWS::StackName} ${AWS::Region}"
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
       ValidationMethod: DNS
 
   CloudFrontFunctionCodeFetcherFunction:
@@ -123,6 +127,9 @@ Resources:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
         prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN
       Timeout: 60
   CloudFrontFunctionCodeFetcherFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -241,12 +248,13 @@ Resources:
           AcmCertificateArn: !Ref Certificate
           SslSupportMethod: sni-only
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
 
   RealtimeLogRole:
     Type: AWS::IAM::Role
@@ -258,7 +266,6 @@ Resources:
             Principal:
               Service: cloudfront.amazonaws.com
             Action: sts:AssumeRole
-      Path: /
       Policies:
         - PolicyName: RealtimeLogKinesisPolicy
           PolicyDocument:
@@ -272,12 +279,13 @@ Resources:
                 Effect: Allow
                 Resource: !Ref RealtimeLogKinesisStreamArn
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
   RealtimeLogConfig:
     Type: AWS::CloudFront::RealtimeLogConfig
     Properties:
