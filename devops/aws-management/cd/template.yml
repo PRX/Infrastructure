@@ -117,7 +117,6 @@ Resources:
         # Let CodePipeline describe CloudFormation stacks
         - PolicyName: CloudFormationAccess
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action: cloudformation:*
@@ -128,6 +127,7 @@ Resources:
                   # # will be both a root and wildcard resource for each.
                   # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role
                   # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role:*
+            Version: "2012-10-17"
         # Allow PassRole to the CloudFormation role
         - PolicyDocument:
             Statement:
@@ -141,17 +141,6 @@ Resources:
                   - !GetAtt OrganizationCloudTrailStackCloudFormationRole.Arn
             Version: "2012-10-17"
           PolicyName: IamPassRole
-        # Allows the pipeline to invoke custom actions
-        - PolicyName: LambdaPipelineActionPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Action: lambda:ListFunctions
-                Effect: Allow
-                Resource: "*"
-              - Action: lambda:InvokeFunction
-                Effect: Allow
-                Resource: !GetAtt DeploymentNotificationFunction.Arn
       Tags:
         - Key: Project
           Value: Infrastructure
@@ -497,17 +486,6 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
 
-        - Name: Notify
-          Actions:
-            - Name: DeploymentNotification
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref DeploymentNotificationFunction
-              RunOrder: 1
       Tags:
         - Key: Project
           Value: Infrastructure
@@ -757,29 +735,29 @@ Resources:
             Effect: Allow
             Resource: !Ref SlackMessageRelayTopicArn
         Version: "2012-10-17"
-  CodePipelineJobResultWriteAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - codepipeline:PutJobSuccessResult
-              - codepipeline:PutJobFailureResult
-            Effect: Allow
-            Resource: "*"
-        Version: "2012-10-17"
-  DeploymentNotificationFunction:
+
+  PipelineStateChangeFunction:
     Type: AWS::Serverless::Function
     Properties:
       Description: Sends a message when DevOps pipeline completes
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        PipelineState:
+          Properties:
+            Pattern:
+              detail-type:
+                - CodePipeline Pipeline Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
 
-        const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
         const sns = new AWS.SNS({
           apiVersion: '2010-03-31',
           region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
@@ -788,34 +766,42 @@ Resources:
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
 
-          const job = event['CodePipeline.job'];
+          let msg;
 
-          await sns
-            .publish({
-              TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-              Message: JSON.stringify({
-                channel: '#ops-deploys',
-                username: 'AWS CodePipeline',
-                icon_emoji: ':ops-codepipeline:',
-                text: 'The DevOps pipeline, in `prx-main`, finished deploying.'
-              }),
-            })
-            .promise();
+          if (event['detail-type'] === 'CodePipeline Pipeline Execution State Change') {
+            if (event.detail.state === 'SUCCEEDED') {
+                msg = 'The Management & DevOps pipeline, in `prx-main`, finished deploying.';
+            } else if (event.detail.state === 'FAILED') {
+                msg = ':x: The Management & DevOps pipeline, in `prx-main`, failed.'
+            }
+          }
 
-          await codepipeline.putJobSuccessResult({ jobId: job.id }).promise();
+          if (msg) {
+            await sns
+              .publish({
+                TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+                Message: JSON.stringify({
+                  channel: '#ops-deploys',
+                  username: 'AWS CodePipeline',
+                  icon_emoji: ':ops-codepipeline:',
+                  text:
+                }),
+              })
+              .promise();
+          }
         };
       MemorySize: 128
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       Tags:
         Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
       Timeout: 3
-  DeploymentNotificationLogGroup:
+
+  PipelineStateChangeFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${DeploymentNotificationFunction}
+      LogGroupName: !Sub /aws/lambda/${PipelineStateChangeFunction}
       RetentionInDays: 14
