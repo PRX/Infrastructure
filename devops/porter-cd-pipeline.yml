@@ -22,6 +22,8 @@ Parameters:
     Type: String
   TemplateConfigObject:
     Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
 
 Resources:
   FtpEcrRepository:
@@ -804,3 +806,86 @@ Resources:
                 - Name: SamBuildArtifact
                 - Name: TemplateConfigZipArtifact
               RunOrder: 2
+
+  PipelineStateChangeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Sends a message when DevOps pipeline completes
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        PipelineState:
+          Properties:
+            Pattern:
+              detail-type:
+                - CodePipeline Pipeline Execution State Change
+                - CodePipeline Action Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({
+          apiVersion: '2010-03-31',
+          region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
+        });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          let msg;
+
+          // https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html#detect-state-events-types
+          if (event['detail-type'] === 'CodePipeline Action Execution State Change') {
+            if (event.detail.action == 'Approve-Prod') {
+              if (event.detail.state === 'STARTED') {
+                msg = `:hourglass_flowing_sand: Porter deploy pipeline in ${event.region} needs approval`;
+              }
+            }
+          }
+
+          if (event['detail-type'] === 'CodePipeline Pipeline Execution State Change') {
+            if (event.detail.state === 'SUCCEEDED') {
+                msg = `Porter deploy pipeline in ${event.region} succeeded`;
+            } else if (event.detail.state === 'FAILED') {
+                msg = `:x: Porter deploy pipeline in ${event.region} failed`;
+            }
+          }
+
+          if (msg) {
+            await sns
+              .publish({
+                TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+                Message: JSON.stringify({
+                  channel: '#ops-deploys',
+                  username: 'AWS CodePipeline',
+                  icon_emoji: ':ops-codepipeline:',
+                  text: msg,
+                }),
+              })
+              .promise();
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        Project: Infrastructure
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 3
+  PipelineStateChangeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PipelineStateChangeFunction}
+      RetentionInDays: 14
