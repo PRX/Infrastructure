@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: PRX
+  FullRepoName:
+    Type: String
+    Default: PRX/Infrastructure
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DevOps-GitHubOidcFederatedRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/ReadOnlyAccess
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${FullRepoName}:*
+            Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidc
+
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      ClientIdList:
+        - !Sub https://github.com/${GitHubOrg}
+      ThumbprintList:
+        - a031c46782e6e6c662c2c87c76da9aa62ccabd8e
+      Url: https://token.actions.githubusercontent.com
+
+Outputs:
+  RoleArn:
+    Value: !GetAtt Role.Arn
