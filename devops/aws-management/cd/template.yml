@@ -7,6 +7,11 @@ Description: >-
   compliance, permissions, etc.
 
 Parameters:
+  kAllRegions:
+    Type: CommaDelimitedList
+    # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
+    Default: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
+  ######
   CodeStarConnectionArn:
     Type: String
   OrganizationId:
@@ -16,8 +21,11 @@ Parameters:
   OrganizationRootId:
     Type: String
     AllowedPattern: ^(ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}|r-[a-z0-9]{4,32})$
-  Region:
+  SingleRegion:
     Type: String
+    Description: >-
+      For stack sets that deploy to a single region in all accounts, this
+      is that region
     AllowedValues:
       - us-east-1
       - us-east-2
@@ -32,8 +40,14 @@ Parameters:
   DevOpsCloudWatchAlarmsBusArn:
     Type: String
   CloudTrailProjectionRegions:
+    Description: >-
+      A list of regions that will be included in Glue table partitions for
+      a table created for the organization trail logs
     Type: CommaDelimitedList
   CloudTrailProjectionAccounts:
+    Description: >-
+      A list of accounts that will be included in Glue table partitions for
+      a table created for the organization trail logs
     Type: CommaDelimitedList
 
 Resources:
@@ -56,6 +70,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
+
   PipelineIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -144,6 +159,7 @@ Resources:
           Value: !Ref AWS::StackName
         - Key: "prx:cloudformation:stack-id"
           Value: !Ref AWS::StackId
+
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -169,35 +185,13 @@ Resources:
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-        - Name: Deploy
+
+        - Name: Management_Account-One_Region
+          # These actions all deploy a single CloudFormation stack to the same
+          # region and account as this pipeline
           Actions:
-            # DevOps cross-account access role stack set
-            - Name: DevopsCrossAccountAccessRoleStackSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-devops-cross-account-access-role
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in one region in each account in an AWS Organization
-                  to add the DevOps-CrossAccountAccessRole IAM role to each account,
-                  which provides access to various resources for DevOps purposes.
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cross-account-access-role.yml
-                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledWithStackRetention
-                DeploymentTargets: !Ref OrganizationRootId
-                Regions: !Ref Region
-                FailureTolerancePercentage: 0
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # DevOps cross-account access role stack (for management account)
-            - Name: DevopsCrossAccountAccessRoleStack
+            # DevOps-CrossAccountAccessRole IAM role
+            - Name: DevopsCrossAcctRole
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -206,7 +200,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}DevopsCrossAccountAccessRoleStack
+                ChangeSetName: !Sub ${AWS::StackName}DevopsCrossAcctRole
                 ParameterOverrides: !Sub |
                   {
                     "OrganizationId": "${OrganizationId}"
@@ -217,60 +211,8 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # VPC peering accepter role stack set
-            # There's no management account deploy for this becasue we
-            # shouldn't have any VPC in the management account
-            - Name: VpcPeeringAccepterRoleStackSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-vpc-peering-accpter-role
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in one region in each account in an AWS Organization
-                  to add the DevOps-VpcPeeringAccepterRole IAM role to each account,
-                  which can be used to set up inter-account VPC peerings
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-vpc-peering-accepter-role.yml
-                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledWithStackRetention
-                DeploymentTargets: !Ref OrganizationRootId
-                Regions: !Ref Region
-                FailureTolerancePercentage: 0
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # CloudWatch cross-account data sharing role stack set
-            - Name: CloudWatchDataSharingRoleStackSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-cloudwatch-data-sharing-role
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in one region in each account in an AWS Organization
-                  to add the CloudWatch-CrossAccountSharingRole IAM role to each account,
-                  which provides read-only access to that account's CloudWatch data.
-                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
-                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledWithStackRetention
-                DeploymentTargets: !Ref OrganizationRootId
-                Regions: !Ref Region
-                FailureTolerancePercentage: 0
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # CloudWatch cross-account data sharing role stack for management account
-            - Name: CloudWatchDataSharingRoleStack
+            # CloudWatch-CrossAccountSharingRole IAM role
+            - Name: CloudWatchCrossAcctRole
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -279,7 +221,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}CloudWatchDataSharingRoleStack
+                ChangeSetName: !Sub ${AWS::StackName}CloudWatchCrossAcctRole
                 ParameterOverrides: !Sub |
                   {
                     "OrganizationId": "${OrganizationId}"
@@ -290,8 +232,9 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # CloudWatch cross-account sharing list accounts role stack for management account
-            - Name: CloudWatchSharingListAccountsRoleStack
+            # CloudWatch-CrossAccountSharing-ListAccountsRole IAM role
+            # This is a magagement account-only stack
+            - Name: CloudWatchListAcctRole
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -300,7 +243,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}CloudWatchSharingListAccountsRoleStack
+                ChangeSetName: !Sub ${AWS::StackName}CloudWatchListAcctRole
                 ParameterOverrides: !Sub |
                   {
                     "MonitoringAccountIds": "${CloudWatchMonitoringAccountIds}"
@@ -311,8 +254,9 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # Organization data sharing role for management account
-            - Name: OrganizationDataSharingRoleStack
+            # PRX-Oganization-CrossAccountSharingRole IAM role
+            # This is a magagement account-only stack
+            - Name: OrgDataSharingRole
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -321,7 +265,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}OrganizationDataSharingRoleStack
+                ChangeSetName: !Sub ${AWS::StackName}OrgDataSharingRole
                 ParameterOverrides: !Sub |
                   {
                     "OrganizationId": "${OrganizationId}"
@@ -332,8 +276,8 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # Organization CloudTrail
-            - Name: OrganizationCloudTrailStack
+            # CloudTrail Organization trail
+            - Name: OrgTrail
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -342,7 +286,7 @@ Resources:
               Configuration:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}OrganizationCloudTrailStack
+                ChangeSetName: !Sub ${AWS::StackName}OrgTrail
                 ParameterOverrides: !Sub
                   - >-
                     {
@@ -358,59 +302,13 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # CloudTrail monitor stack set
-            - Name: CloudTrailStackSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-cloudtrail-monitor
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in each region in each account in an AWS Organization
-                  to create a Lambda function that can monitor CloudTrails for various
-                  types of activity.
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
-                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledWithStackRetention
-                DeploymentTargets: !Ref OrganizationRootId
-                # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
-                Regions: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
-                FailureTolerancePercentage: 95
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # CloudTrail monitor stack set for management account
-            - Name: CloudTrailStackSetForManagementAccount
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-cloudtrail-monitor-mgmt
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in each region in the management account
-                  to create a Lambda function that can monitor CloudTrails for
-                  various types of activity.
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
-                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
-                PermissionModel: SELF_MANAGED
-                DeploymentTargets: !Ref AWS::AccountId
-                # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
-                Regions: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
-                FailureTolerancePercentage: 95
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # CloudWatch Alarms event bus stack set for management account
-            - Name: CloudWatchAlarmsEventBusStackSetForManagementAccount
+
+        - Name: Management_Account-All_Regions
+          # These actions all deploy a stackset to the same account as this
+          # pipeline, which creates stacks in all regions of that account
+          Actions:
+            # CloudWatch Alarms event bus
+            - Name: CloudWatchAlarmsBus
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -428,15 +326,127 @@ Resources:
                   ParameterKey=DevOpsCloudWatchAlarmsBusArn,ParameterValue=${DevOpsCloudWatchAlarmsBusArn}
                 PermissionModel: SELF_MANAGED
                 DeploymentTargets: !Ref AWS::AccountId
-                # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
-                Regions: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
-                FailureTolerancePercentage: 95
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 0
                 MaxConcurrentPercentage: 100
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # CloudWatch Alarms event bus stack set
-            - Name: CloudWatchAlarmsEventBusStackSet
+            # CloudTrail monitor
+            - Name: CloudTrailMonitor
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-cloudtrail-monitor-mgmt
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in each region in the management account
+                  to create a Lambda function that can monitor CloudTrails for
+                  various types of activity.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
+                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
+                PermissionModel: SELF_MANAGED
+                DeploymentTargets: !Ref AWS::AccountId
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 0
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+
+        - Name: Organization_Accounts-One_Region
+          # These actions all deploy a stackset to the same region as this
+          # pipeline, which creates stacks in one region in every account in
+          # the organization
+          Actions:
+            # DevOps-CrossAccountAccessRole IAM role
+            - Name: DevopsCrossAcctRole
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-devops-cross-account-access-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to add the DevOps-CrossAccountAccessRole IAM role to each account,
+                  which provides access to various resources for DevOps purposes.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cross-account-access-role.yml
+                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref SingleRegion
+                FailureTolerancePercentage: 8
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # CloudWatch-CrossAccountSharingRole IAM role
+            - Name: CloudWatchCrossAcctRole
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-cloudwatch-data-sharing-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to add the CloudWatch-CrossAccountSharingRole IAM role to each account,
+                  which provides read-only access to that account's CloudWatch data.
+                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
+                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref SingleRegion
+                FailureTolerancePercentage: 8
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # DevOps-VpcPeeringAccepterRole IAM role
+            # There's no management account deploy for this becasue we
+            # shouldn't have any VPC in the management account
+            - Name: VpcPeeringRole
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-vpc-peering-accpter-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to add the DevOps-VpcPeeringAccepterRole IAM role to each account,
+                  which can be used to set up inter-account VPC peerings
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-vpc-peering-accepter-role.yml
+                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref SingleRegion
+                FailureTolerancePercentage: 8
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+
+        - Name: Organization_Accounts-All_Regions
+          # These actions all deploy a stackset to the same region as this
+          # pipeline, which creates stacks in one region in every account in
+          # the organization
+          Actions:
+            # CloudWatch Alarms event bus
+            - Name: CloudWatchAlarmsBus
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -455,9 +465,33 @@ Resources:
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
                 DeploymentTargets: !Ref OrganizationRootId
-                # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
-                Regions: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
-                FailureTolerancePercentage: 95
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 10
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # CloudTrail monitor
+            - Name: CloudTrailMonitor
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-cloudtrail-monitor
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in each region in each account in an AWS Organization
+                  to create a Lambda function that can monitor CloudTrails for various
+                  types of activity.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cloudtrail-monitor.yml
+                Parameters: !Sub ParameterKey=SlackMessageRelayTopicArn,ParameterValue=${SlackMessageRelayTopicArn}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 10
                 MaxConcurrentPercentage: 100
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
