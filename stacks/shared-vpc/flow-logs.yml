@@ -8,6 +8,7 @@ Parameters:
   VpcId: { Type: AWS::EC2::VPC::Id }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
 
 Conditions:
   IsEnabled: !Equals [Enabled, Enabled] # TODO
@@ -18,6 +19,11 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       RetentionInDays: !If [IsProduction, 7, 3]
+  FlowLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref FlowLogGroup
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
