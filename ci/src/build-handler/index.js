@@ -6,7 +6,9 @@
  * pull requests (for repositories that are designed to work with CodeBuild).
  * Broadly, it does the following:
  * 1. Check to make sure this event should trigger a build
- * 2. Trigger a CodeBuild by copying current code to S3 (the CodeBuild source)
+ * 2. Trigger a build with the necessary details about GitHub repository and
+ *    commit for the event as overrides on the build parameters
+ *
  * This Lambda should not be considered to be entirely or even mostly
  * responsible for the configuration of CodeBuild environment. It should only
  * worry about the parts of the configuration that result from the events
@@ -69,11 +71,10 @@ function eventIsPullRequest(event) {
 /**
  * `startBuild` returns a Build object
  * https://docs.aws.amazon.com/codebuild/latest/APIReference/API_Build.html
- * @param {string} versionId - The S3 version ID of the repository zip archive
  * @param {string} ciContentsResponse - The response from the GitHub repository contents API for buildspec.yml
  * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
  */
-async function triggerBuild(versionId, ciContentsResponse, event) {
+async function triggerBuild(ciContentsResponse, event) {
   console.log('Starting CodeBuild run');
 
   // ciContentsResponse is the JSON body response from a Contents API request
@@ -113,6 +114,8 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
     // used by the build process, but needs to be passed along to the
     // callback for setting the GitHub status.
 
+    event.repository.clone_url;
+
     const num = event.pull_request.number;
     const title = event.pull_request.title;
     const branch = event.pull_request.head.ref;
@@ -148,155 +151,17 @@ async function triggerBuild(versionId, ciContentsResponse, event) {
   await codebuild
     .startBuild({
       projectName: process.env.CODEBUILD_PROJECT_NAME,
-      sourceVersion: versionId,
+      sourceTypeOverride: 'GITHUB',
+      sourceLocationOverride: event.repository.clone_url,
+      sourceVersion: eventIsPullRequest(event)
+        ? `pr/${event.pull_request.number}`
+        : event.after,
       buildspecOverride: buildspec,
       environmentVariablesOverride: environmentVariables,
     })
     .promise();
 
   console.log('CodeBuild started');
-}
-
-/**
- * Copies a repository zip archive at the given path to S3
- * @param {string} path - The path of the file to copy to S3
- * @returns {Promise<string>} The S3 version ID of the resulting object
- */
-async function copyToS3(path) {
-  console.log('Copying archive to S3');
-
-  const params = {
-    Bucket: process.env.CODEBUILD_SOURCE_ARCHIVE_BUCKET,
-    Key: process.env.CODEBUILD_SOURCE_ARCHIVE_KEY,
-    Body: fs.createReadStream(path),
-  };
-
-  const data = await s3.putObject(params).promise();
-  return data.VersionId;
-}
-
-/**
- * Requests the URL to download a repository zip archive
- * https://docs.github.com/en/free-pro-team@latest/rest/reference/repos#download-a-repository-archive-zip
- * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
- * @returns {Promise<string>} The URL of the zip archive
- */
-function getSourceArchiveLink(event) {
-  return new Promise((resolve, reject) => {
-    console.log('Getting source code archive URL');
-
-    // Get request properties
-    const repo = event.repository.full_name;
-    const sha = eventIsPullRequest(event)
-      ? event.pull_request.head.sha
-      : event.after;
-
-    // Setup request options
-    const options = {
-      host: 'api.github.com',
-      path: `/repos/${repo}/zipball/${sha}`,
-      method: 'GET',
-      headers: GITHUB_HEADERS,
-    };
-
-    options.headers['Content-Length'] = Buffer.byteLength('');
-
-    // Request with response handler
-    console.log(`Calling archive link API: ${options.path}`);
-    const req = https.request(options, (res) => {
-      res.setEncoding('utf8');
-
-      let json = '';
-      res.on('data', (chunk) => {
-        json += chunk;
-      });
-      res.on('end', () => {
-        switch (res.statusCode) {
-          case 302:
-            console.log('GitHub archive URL found');
-            resolve(res.headers.location);
-            break;
-          default:
-            console.error('GitHub archive link request failed');
-            console.error(`HTTP ${res.statusCode}`);
-            console.error(json);
-            reject(new Error('GitHub archive link request failed!'));
-        }
-      });
-    });
-
-    // Generic request error handling
-    req.on('error', (e) => reject(e));
-
-    req.write('');
-    req.end();
-  });
-}
-
-/**
- * Downloads the zip archive of a reposity to a temporary local file and
- * returns the file path
- * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
- * @returns {Promise<string>} The local file path
- */
-async function getSourceArchive(event) {
-  const location = await getSourceArchiveLink(event);
-  const q = new URL(location);
-
-  return new Promise((resolve, reject) => {
-    console.log('Fetching source archive');
-
-    // Setup request options
-    const options = {
-      host: q.host,
-      port: q.port,
-      path: `${q.pathname || ''}${q.search || ''}`,
-      method: 'GET',
-      headers: GITHUB_HEADERS,
-    };
-
-    options.headers['Content-Length'] = Buffer.byteLength('');
-
-    // Setup write stream
-    const dest = `/tmp/${Date.now()}`;
-    const file = fs.createWriteStream(dest);
-
-    // Request with response handler
-    const req = https.request(options, (res) => {
-      if (res.statusCode !== 200) {
-        console.error('Source archive request failed!');
-        reject(new Error('Could not get source archive'));
-      } else {
-        res.pipe(file);
-
-        file.on('finish', () => {
-          // TODO
-          // @ts-ignore
-          file.close(() => {
-            console.log('Finished downloading archive');
-            resolve(dest);
-          });
-        });
-      }
-    });
-
-    // Generic request error handling
-    req.on('error', (e) => reject(e));
-
-    // Generic file error handling
-    file.on('error', (e) => {
-      // Handle errors
-      fs.unlink(dest, (er) => {
-        if (er) {
-          throw er;
-        }
-      });
-      reject(e);
-    });
-
-    req.write('');
-    req.end();
-  });
 }
 
 /**
@@ -375,9 +240,7 @@ async function handleCiEvent(event) {
   const buildspecContentJson = await getBuildspecContentJson(event);
 
   if (buildspecContentJson) {
-    const filePath = await getSourceArchive(event);
-    const versionId = await copyToS3(filePath);
-    await triggerBuild(versionId, buildspecContentJson, event);
+    await triggerBuild(buildspecContentJson, event);
 
     console.log('Done');
   }
