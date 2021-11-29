@@ -34,11 +34,7 @@ The URL of the API to use for the webhook configuration is an output of the Clou
 
 Event data that are published to EventBridge by the GitHub webhook request handler function get handled immediately by another Lambda function: the build handler function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
 
-If it's determined that an event represents code that should be built and tested, this function will:
-
-- Request a zipball archive of the code from GitHub for the commit in question
-- Push that archive to [Amazon S3](https://aws.amazon.com/s3/) (so that it is available later in the process)
-- Configure and trigger a build for the code in [AWS CodeBuild](https://aws.amazon.com/codebuild/)
+If it's determined that an event represents code that should be built and tested, this function will configure and trigger a build for the code in [AWS CodeBuild](https://aws.amazon.com/codebuild/) for the GitHub repository and commit or pull request that caused the webhook.
 
 #### CodeBuild
 
@@ -49,7 +45,7 @@ CodeBuild runs all builds in a Docker environment. Often it's the case that the 
 The configuration for each build is determined by the event Lambda function. This includes properties such as:
 
 - The [build specification](http://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html) used to run the build
-- The location, in S3, of the code to be tested
+- The location, in GitHub, of the code to be tested
 - Various environment variables that help with the rest of the CI process
 
 #### Build Events
