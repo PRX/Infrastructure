@@ -1,0 +1,482 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a deployment pipeline in CodePipeline, along with CodeBuild projects
+  and other resources needed to support the pipeline, for DevOps resources.
+
+Parameters:
+  kCloudWatchAlarmsStackName:
+    Type: String
+    Default: prx-devops-cloudwatch-alarms-to-slack
+  kCloudWatchAlarmsPackagedTemplateFileName:
+    Type: String
+    Default: pkg-template-cloudwatch-alarms.yaml
+  kCloudWatchAlarmRemindersStackName:
+    Type: String
+    Default: prx-devops-cloudwatch-alarm-reminders
+  kCloudWatchAlarmRemindersPackagedTemplateFileName:
+    Type: String
+    Default: pkg-template-cloudwatch-alarm-reminders.yaml
+  kSlackAppStackName:
+    Type: String
+    Default: prx-devops-slack-app
+  kSlackAppPackagedTemplateFileName:
+    Type: String
+    Default: pkg-template-slack-app.yaml
+  ######
+  GitHubCodeStarConnectionArn: { Type: String }
+  OrganizationId:
+    Type: String
+    AllowedPattern: ^$|^(o-[a-z0-9]{4,32})$
+  CrossAccountCloudWatchAlarmIamRoleName: { Type: String }
+  AwsOrganizationCrossAccountSharingRoleArn: { Type: String }
+  DevOpsCrossAccountAccessRoleName: { Type: String }
+  DevOpsSlackUserIds: { Type: String }
+  InfrastructureConfigBucket: { Type: String }
+  InfrastructureConfigStagingKey: { Type: String }
+  LegacySlackMessageRelayTopicArn: { Type: String }
+  PrxLegacyAccountId: { Type: String }
+  SlackAccessToken: { Type: String }
+  SlackSigningSecet: { Type: String }
+  CloudWatchAlarmReminderRegions: { Type: CommaDelimitedList }
+  CloudWatchAlarmReminderAccountIds: { Type: CommaDelimitedList }
+
+Resources:
+  # Runs `sam build` and `sam package`, and outputs the resulting
+  # CloudFormation template as an artifact.
+  SamCodeBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  SamCodeBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  SamCodeBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt SamCodeBuildProjectLogGroup.Arn
+        Version: "2012-10-17"
+      PolicyName: PorterSamCodeBuildProjectPolicy
+      Roles:
+        - !Ref SamCodeBuildProjectRole
+  SamCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and packages chat ops via SAM for future deployment
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref SamCodeBuildProjectLogGroup
+          Status: ENABLED
+      ServiceRole: !GetAtt SamCodeBuildProjectRole.Arn
+      Source:
+        BuildSpec: !Sub |-
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                python: latest
+            build:
+              commands:
+                - cd devops/chat-ops/cloudwatch-alarms
+                - sam build --parallel
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudWatchAlarmsPackagedTemplateFileName}
+                - cd ../cloudwatch-alarm-reminders
+                - sam build --parallel
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+                - cd ../slack-app
+                - sam build --parallel
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kSlackAppPackagedTemplateFileName}
+          artifacts:
+            files:
+              - devops/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+              - devops/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
+              - devops/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+            name: SamBuildArtifact
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+      TimeoutInMinutes: 15
+
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:DeleteBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Effect: Deny
+                Resource: "*"
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource: "*"
+              - Action:
+                  - cloudwatch:*
+                  - events:*
+                  - iam:*
+                  - lambda:*
+                  - logs:*
+                  - s3:*
+                  - sns:*
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: ResourceManipulationPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PipelineArtifactStore:
+    # The bucket used to store artifacts generated by CodePipeline actions.
+    # This bucket is to be used exclusively by AWS; don't use it to store any
+    # app, infrastructure, or user data.
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        # CodePipeline seems to need access to special buckets
+        - PolicyDocument:
+            Statement:
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: arn:aws:s3:::codepipeline*
+            Version: "2012-10-17"
+          PolicyName: GenericCodePipelineS3PutPolicy
+        # Let CodePipeline read and write artifacts
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                Effect: Allow
+                Resource:
+                  - !GetAtt PipelineArtifactStore.Arn
+                  - !Sub ${PipelineArtifactStore.Arn}/*
+            Version: "2012-10-17"
+          PolicyName: ArtifactStoreFullAccess
+        # To allow the pipeline to use a CodeStar Connection
+        - PolicyDocument:
+            Statement:
+              - Action: codestar-connections:*
+                Condition:
+                  ForAllValues:StringEquals:
+                    codestar-connections:PassedToService: codepipeline.amazonaws.com
+                Effect: Allow
+                Resource: !Ref GitHubCodeStarConnectionArn
+            Version: "2012-10-17"
+          PolicyName: CodeStarConnectionPolicy
+        # Allow interaction with CodeBuild actions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource: !GetAtt SamCodeBuildProject.Arn
+            Version: "2012-10-17"
+          PolicyName: CodeBuildActionPolicy
+        # Let CodePipeline describe CloudFormation stacks
+        - PolicyDocument:
+            Statement:
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
+            Version: "2012-10-17"
+          PolicyName: CloudFormationAccess
+        # Allow PassRole to the CloudFormation role
+        - PolicyDocument:
+            Statement:
+              - Action: iam:PassRole
+                Effect: Allow
+                Resource: !GetAtt CloudFormationRole.Arn
+            Version: "2012-10-17"
+          PolicyName: IamPassRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref PipelineArtifactStore
+        Type: S3
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: "1"
+              Configuration:
+                ConnectionArn: !Ref GitHubCodeStarConnectionArn
+                FullRepositoryId: PRX/Infrastructure
+                BranchName: master
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts:
+                - Name: InfraRepoSourceArtifact
+              RunOrder: 1
+
+        - Name: Build
+          Actions:
+            # The output artifact is the CloudFormation template that's a
+            # result of `sam build && sam package`
+            - Name: SAM_Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref SamCodeBuildProject
+              InputArtifacts:
+                - Name: InfraRepoSourceArtifact
+              OutputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 1
+
+        - Name: Deploy
+          Actions:
+            - Name: Slack_App
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "AwsOrganizationCrossAccountSharingRoleArn": "${AwsOrganizationCrossAccountSharingRoleArn}",
+                    "DevOpsCrossAccountAccessRoleName": "${DevOpsCrossAccountAccessRoleName}",
+                    "DevOpsSlackUserIds": "${DevOpsSlackUserIds}",
+                    "InfrastructureConfigBucket": "${InfrastructureConfigBucket}",
+                    "InfrastructureConfigStagingKey": "${InfrastructureConfigStagingKey}",
+                    "LegacySlackMessageRelayTopicArn": "${LegacySlackMessageRelayTopicArn}",
+                    "PipelineStateChangeNotificationsTopicArn": "${PipelineStateChangeNotificationsTopic}",
+                    "PrxLegacyAccountId": "${PrxLegacyAccountId}",
+                    "SlackAccessToken": "${SlackAccessToken}",
+                    "SlackSigningSecet": "${SlackSigningSecet}"
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kSlackAppStackName
+                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              Namespace: slack_app_deploy
+              RunOrder: 1
+            - Name: CloudWatch_Alarms
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "OrganizationId": "${OrganizationId}",
+                    "SlackMessageRelaySnsTopicArn": "#{slack_app_deploy.SlackMessageRelaySnsTopicArn}",
+                    "CrossAccountCloudWatchAlarmIamRoleName": "${CrossAccountCloudWatchAlarmIamRoleName}"
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kCloudWatchAlarmsStackName
+                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 2
+            - Name: CloudWatch_Alarm_Reminders
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub
+                  - |-
+                    {
+                      "SlackMessageRelaySnsTopicArn": "#{slack_app_deploy.SlackMessageRelaySnsTopicArn}",
+                      "CrossAccountCloudWatchAlarmIamRoleName": "${CrossAccountCloudWatchAlarmIamRoleName}",
+                      "Regions": "${regions}",
+                      "AccountIds": "${accounts}"
+                    }
+                  - regions: !Join [",", !Ref CloudWatchAlarmReminderRegions]
+                    accounts: !Join [",", !Ref CloudWatchAlarmReminderAccountIds]
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kCloudWatchAlarmRemindersStackName
+                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 2
+
+  # This is needed because there's no way to reference the SNS topic that's
+  # created in the Slack app stack from here, so this topic is added to the
+  # Slack app as one that it listens to
+  PipelineStateChangeNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PipelineStateChangeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Sends a message when DevOps pipeline completes
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref PipelineStateChangeNotificationsTopic
+      Events:
+        PipelineState:
+          Properties:
+            Pattern:
+              detail-type:
+                - CodePipeline Pipeline Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({
+          apiVersion: '2010-03-31',
+          region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
+        });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          let msg;
+
+          // https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html#detect-state-events-types
+          if (event['detail-type'] === 'CodePipeline Pipeline Execution State Change') {
+            if (event.detail.state === 'SUCCEEDED') {
+                msg = `DevOps deploy pipeline in ${event.region} succeeded`;
+            } else if (event.detail.state === 'FAILED') {
+                msg = `:x: DevOps deploy pipeline in ${event.region} failed`;
+            }
+          }
+
+          if (msg) {
+            await sns
+              .publish({
+                TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+                Message: JSON.stringify({
+                  channel: '#ops-deploys',
+                  username: 'AWS CodePipeline',
+                  icon_emoji: ':ops-codepipeline:',
+                  text: msg,
+                }),
+              })
+              .promise();
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref PipelineStateChangeNotificationsTopic
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        Project: Infrastructure
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 3
+  PipelineStateChangeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PipelineStateChangeFunction}
+      RetentionInDays: 14

@@ -333,7 +333,7 @@ Resources:
             - Name: DATABASE_POOL_SIZE
               Value: !Ref kDatabasePoolSize
             - Name: ELASTICSEARCH_URL
-              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
+              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}
             - Name: FEEDER_HOST
               Value: !Ref FeederHostname
             - Name: ID_HOST
@@ -428,7 +428,7 @@ Resources:
             - Name: DATABASE_POOL_SIZE
               Value: !Ref kDatabasePoolSize
             - Name: ELASTICSEARCH_URL
-              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}:9200
+              Value: !Sub https://${ElasticsearchDomain.DomainEndpoint}
             - Name: FEEDER_HOST
               Value: !Ref FeederHostname
             - Name: ID_HOST
@@ -482,9 +482,13 @@ Resources:
       GroupDescription: !Sub CMS ${EnvironmentType} Elasticsearch security group
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 9200
+          FromPort: 443
           SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-          ToPort: 9200
+          ToPort: 443
+        - IpProtocol: tcp
+          FromPort: 9243
+          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+          ToPort: 9243
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_cms_elasticsearch" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -497,7 +501,14 @@ Resources:
   ElasticsearchDomain:
     Type: AWS::Elasticsearch::Domain
     Properties:
-      # AccessPolicies: Json
+      AccessPolicies:
+        Statement:
+          - Action: es:*
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: !Sub arn:${AWS::Partition}:es:${AWS::Region}:${AWS::AccountId}:domain/*
+        Version: "2012-10-17"
       AdvancedSecurityOptions:
         Enabled: false
       DomainEndpointOptions:
@@ -511,7 +522,7 @@ Resources:
         InstanceCount: !If [IsProduction, 2, 1]
         InstanceType: t3.small.elasticsearch
         ZoneAwarenessEnabled: !If [IsProduction, true, false]
-      ElasticsearchVersion: "7.9"
+      ElasticsearchVersion: "6.4"
       EncryptionAtRestOptions:
         Enabled: false
       NodeToNodeEncryptionOptions:
