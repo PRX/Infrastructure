@@ -11,52 +11,6 @@ Description: >-
   Creates a dedicated load balancer and the ECS service for the public Feeder
   web server. Also creates an ECS service for the Feeder workers.
 
-Mappings:
-  ElbService:
-    # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
-    us-east-1:
-      AccountId: "127311923021"
-    us-east-2:
-      AccountId: "033677994240"
-    us-west-1:
-      AccountId: "027434742980"
-    us-west-2:
-      AccountId: "797873946194"
-    af-south-1:
-      AccountId: "098369216593"
-    ca-central-1:
-      AccountId: "985666609251"
-    eu-central-1:
-      AccountId: "054676820928"
-    eu-west-1:
-      AccountId: "156460612806"
-    eu-west-2:
-      AccountId: "652711504416"
-    eu-south-1:
-      AccountId: "635631232127"
-    eu-west-3:
-      AccountId: "009996457667"
-    eu-north-1:
-      AccountId: "897822967062"
-    ap-east-1:
-      AccountId: "754344448648"
-    ap-northeast-1:
-      AccountId: "582318560864"
-    ap-northeast-2:
-      AccountId: "600734575887"
-    ap-northeast-3:
-      AccountId: "383597477331"
-    ap-southeast-1:
-      AccountId: "114774131450"
-    ap-southeast-2:
-      AccountId: "783225319266"
-    ap-south-1:
-      AccountId: "718504428378"
-    me-south-1:
-      AccountId: "076674570225"
-    sa-east-1:
-      AccountId: "507241528517"
-
 Parameters:
   kWebContainerName:
     Type: String
@@ -68,13 +22,14 @@ Parameters:
     Type: Number
     Default: 3000
   #######
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
   EcsClusterArn: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
-  EchoServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -82,13 +37,9 @@ Parameters:
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
-  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  AlbListenerRulePriorityPrefix: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
-  SharedGlueDatabaseName: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   FeedsS3BucketArn: { Type: String }
 
@@ -99,408 +50,18 @@ Conditions:
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
 
 Resources:
-  Constants:
-    Type: Custom::Echo
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
-      ServiceToken: !Ref EchoServiceToken
-      VanityAlbDomain: !Sub feeder.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
-
-  Certificate:
-    Type: AWS::CertificateManager::Certificate
-    Properties:
-      DomainName: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
-      SubjectAlternativeNames:
-        - !GetAtt Constants.VanityAlbDomain
-        - !If [IsProduction, feeder.prx.tech, !Ref "AWS::NoValue"]
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_feeder_${Alb.LoadBalancerName}" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-      ValidationMethod: DNS
-
-  VanityAlbDomainRecordSetGroup:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: !Sub >-
-        Record sets for dualstack traffic to the Feeder ${EnvironmentType} ALB
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: AAAA
-          Name: !GetAtt Constants.VanityAlbDomain
-          AliasTarget:
-            DNSName: !GetAtt Alb.DNSName
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-        - Type: A
-          Name: !GetAtt Constants.VanityAlbDomain
-          AliasTarget:
-            DNSName: !GetAtt Alb.DNSName
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-
-  AccessLogsBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      LifecycleConfiguration:
-        Rules:
-          - ExpirationInDays: !If
-              - IsProduction
-              - 3
-              - 1
-            Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-  AccessLogsBucketPolicy:
-    # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html#access-logging-bucket-permissions
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref AccessLogsBucket
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Resource: !GetAtt AccessLogsBucket.Arn
-          - Action: s3:PutObject
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-            Effect: Allow
-            Principal:
-              Service: delivery.logs.amazonaws.com
-            Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
-          - Action: s3:PutObject
-            Effect: Allow
-            Principal:
-              AWS: !Sub
-                - arn:aws:iam::${ElbAccountId}:root
-                - ElbAccountId: !FindInMap [ElbService, !Ref "AWS::Region", AccountId]
-            Resource: !Sub ${AccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
-        Version: "2012-10-17"
-  AccessLogsGlueTable:
-    Type: AWS::Glue::Table
-    Properties:
-      CatalogId: !Ref AWS::AccountId
-      DatabaseName: !Ref SharedGlueDatabaseName
-      TableInput:
-        Description: !Sub >-
-          ${EnvironmentType} Feeder ALB logs
-        Name: feeder-alb
-        Parameters:
-          projection.enabled: "true"
-          projection.date.type: date
-          projection.date.range: 2021/01/01,NOW
-          projection.date.format: yyyy/MM/dd
-          projection.date.interval: "1"
-          projection.date.interval.unit: DAYS
-          storage.location.template: !Sub s3://${AccessLogsBucket}/AWSLogs/${AWS::AccountId}/elasticloadbalancing/${AWS::Region}/${!date}
-        PartitionKeys:
-          - Name: date
-            Type: string
-        StorageDescriptor:
-          Columns:
-            - Name: type
-              Type: string
-            - Name: time
-              Type: string
-            - Name: elb
-              Type: string
-            - Name: client_ip
-              Type: string
-            - Name: client_port
-              Type: int
-            - Name: target_ip
-              Type: string
-            - Name: target_port
-              Type: int
-            - Name: request_processing_time
-              Type: double
-            - Name: target_processing_time
-              Type: double
-            - Name: response_processing_time
-              Type: double
-            - Name: elb_status_code
-              Type: string
-            - Name: target_status_code
-              Type: string
-            - Name: received_bytes
-              Type: bigint
-            - Name: sent_bytes
-              Type: bigint
-            - Name: request_method
-              Type: string
-            - Name: request_uri
-              Type: string
-            - Name: request_http_version
-              Type: string
-            - Name: user_agent
-              Type: string
-            - Name: ssl_cipher
-              Type: string
-            - Name: ssl_protocol
-              Type: string
-            - Name: target_group_arn
-              Type: string
-            - Name: trace_id
-              Type: string
-            - Name: domain_name
-              Type: string
-            - Name: chosen_cert_arn
-              Type: string
-            - Name: matched_rule_priority
-              Type: string
-            - Name: request_creation_time
-              Type: string
-            - Name: actions_executed
-              Type: string
-            - Name: redirect_url
-              Type: string
-            - Name: lambda_error_reason
-              Type: string
-            - Name: target_port_list
-              Type: string
-            - Name: target_status_code_list
-              Type: string
-            - Name: classification
-              Type: string
-            - Name: classification_reason
-              Type: string
-          InputFormat: org.apache.hadoop.mapred.TextInputFormat
-          Location: !Sub s3://${AccessLogsBucket}/AWSLogs/${AWS::AccountId}/elasticloadbalancing/${AWS::Region}/
-          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
-          SerdeInfo:
-            Parameters:
-              input.regex: >-
-                ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*):([0-9]*) ([^ ]*)[:-]([0-9]*) ([-.0-9]*) ([-.0-9]*) ([-.0-9]*) (|[-0-9]*) (-|[-0-9]*) ([-0-9]*) ([-0-9]*) \"([^ ]*) ([^ ]*) (- |[^ ]*)\" \"([^\"]*)\" ([A-Z0-9-]+) ([A-Za-z0-9.-]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^\"]*)\" ([-.0-9]*) ([^ ]*) \"([^\"]*)\" \"([^\"]*)\" \"([^ ]*)\" \"([^\s]+?)\" \"([^\s]+)\" \"([^ ]*)\" \"([^ ]*)\"
-              serialization.format: "1"
-            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
-        TableType: EXTERNAL_TABLE
-  AccessLogsRecentQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref SharedGlueDatabaseName
-      Description: >-
-        View recent ALB requests using the table's date partitions
-      Name: !Sub ${EnvironmentType} Feeder ALB Recent Requests
-      QueryString: !Sub >-
-        SELECT *
-        FROM "${SharedGlueDatabaseName}"."${AccessLogsGlueTable}"
-        WHERE "date" > date_format(current_date - interval '1' day, '%Y/%m/%d')
-        ORDER BY time ASC
-
-  LoadBalancerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: !Sub >-
-        Security group for the ${EnvironmentType} Feeder ALB. Only the ALB
-        should belong to it. Controls traffic into the ALB (i.e., internet) and
-        from the ALB to targets (EC2 instances, etc), By default, allows all
-        HTTP inbound traffic.
-      SecurityGroupIngress:
-        - CidrIp: 0.0.0.0/0
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-        - CidrIpv6: ::/0
-          FromPort: 80
-          IpProtocol: tcp
-          ToPort: 80
-        - CidrIp: 0.0.0.0/0
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
-        - CidrIpv6: ::/0
-          FromPort: 443
-          IpProtocol: tcp
-          ToPort: 443
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_feeder-alb_inbound_forwarding" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-      VpcId: !Ref VpcId
-  LoadBalancerSecurityGroupInstanceEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      Description: >-
-        Allow all egress traffic from the Feeder LB SG to the instance SG.
-      # Based on the following recommednation
-      # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
-      DestinationSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-      FromPort: 0
-      GroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
-      IpProtocol: tcp
-      ToPort: 65535
-
-  # This adds a rule to the instance security group defined in
-  # shared-ecs-asg.yml
-  InstanceSecurityGroupAlbDynamicPortIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      Description: >-
-        Allow ingress traffic from the Feeder LB SG to the instance SG on ports
-        used by ECS task dynamic port mapping.
-      FromPort: 32768
-      GroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-      IpProtocol: tcp
-      SourceSecurityGroupId: !GetAtt LoadBalancerSecurityGroup.GroupId
-      ToPort: 60999
-
-  Alb:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn:
-      - AccessLogsBucketPolicy # Don't try to create the ALB until the bucket grants logging permissions
-    Properties:
-      IpAddressType: dualstack
-      LoadBalancerAttributes:
-        # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html#load-balancer-attributes
-        - Key: idle_timeout.timeout_seconds
-          Value: "150"
-        - Key: access_logs.s3.enabled
-          Value: "true"
-        - Key: access_logs.s3.bucket
-          Value: !Ref AccessLogsBucket
-      Scheme: internet-facing
-      SecurityGroups:
-        - !GetAtt LoadBalancerSecurityGroup.GroupId
-      Subnets:
-        - !Ref VpcPublicSubnet1Id
-        - !Ref VpcPublicSubnet2Id
-        - !Ref VpcPublicSubnet3Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-
-  Alb5xxAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub ERROR [Feeder] Load balancer <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Feeder's dedicated application load balancer (ALB)
-        is returning 5XX errors to clients. The errors may or may not be
-        originating from applications behind the ALB.
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt Alb.LoadBalancerFullName
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 3
-      MetricName: HTTPCode_ELB_5XX_Count
-      Namespace: AWS/ApplicationELB
-      Period: 60
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-  Alb5xxAlarmTags:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
-    Properties:
-      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt Alb5xxAlarm.Arn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-  AlbResponseTimeP95Alarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub ERROR [Feeder] Load balancer <${EnvironmentTypeAbbreviation}> RESPONDING SLOWLY (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Feeder's dedicated application load balancer (ALB)
-        is seeing very slow response times for a significant percent of the
-        traffic it's handling.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      Dimensions:
-        - Name: LoadBalancer
-          Value: !GetAtt Alb.LoadBalancerFullName
-      EvaluationPeriods: 2
-      ExtendedStatistic: p95
-      MetricName: TargetResponseTime
-      Namespace: AWS/ApplicationELB
-      Period: 300
-      Threshold: 0.2
-      TreatMissingData: notBreaching
-  AlbResponseTimeP95AlarmTags:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
-    Properties:
-      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt AlbResponseTimeP95Alarm.Arn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Feeder }
-
-  HttpListener:
-    # Generally all HTTP traffic is redirected to HTTPS
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - RedirectConfig:
-            Host: "#{host}"
-            Path: "/#{path}"
-            Port: "443"
-            Protocol: HTTPS
-            Query: "#{query}"
-            StatusCode: HTTP_301
-          Type: redirect
-      LoadBalancerArn: !Ref Alb
-      Port: 80
-      Protocol: HTTP
-  HttpsListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      Certificates:
-        - CertificateArn: !Ref Certificate
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref WebTargetGroup
-      LoadBalancerArn: !Ref Alb
-      Port: 443
-      Protocol: HTTPS
+      Actions:
+        - TargetGroupArn: !Ref WebTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - feeder.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
 
   DefaultJobQueue:
     Type: AWS::SQS::Queue
@@ -743,7 +304,6 @@ Resources:
 
   WebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn: Alb
     Properties:
       HealthCheckIntervalSeconds: 15
       HealthCheckPath: /api/v1
@@ -777,7 +337,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: LoadBalancer
-          Value: !GetAtt Alb.LoadBalancerFullName
+          Value: !Ref AlbFullName
         - Name: TargetGroup
           Value: !GetAtt WebTargetGroup.TargetGroupFullName
       EvaluationPeriods: 1
@@ -807,9 +367,6 @@ Resources:
   WebEcsService:
     Type: AWS::ECS::Service
     Condition: HasAuroraEndpoint # See README
-    DependsOn:
-      - HttpListener
-      - HttpsListener
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -1001,19 +558,5 @@ Resources:
       TaskRoleArn: !GetAtt TaskRole.Arn
 
 Outputs:
-  VanityAlbDomain:
-    Description: >-
-      The vanity wildcard domain configured for the ALB's certificate, and
-      registered in the DNS hosted zone
-    Value: !GetAtt Constants.VanityAlbDomain
-  AlbName:
-    Description: >-
-      The full name of the load balancer. For example, my-load-balancer
-    Value: !GetAtt Alb.LoadBalancerName
   WebTargetGroupFullName:
     Value: !GetAtt WebTargetGroup.TargetGroupFullName
-  AlbFullName:
-    Description: >-
-      The full name of the load balancer. For example,
-      app/my-load-balancer/50dc6c495c0c9188
-    Value: !GetAtt Alb.LoadBalancerFullName

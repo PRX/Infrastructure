@@ -24,9 +24,6 @@ Parameters:
   NewRelicApiKeyPrxLite: { Type: String }
   SecretsBase: { Type: String }
   SecretsStackName: { Type: String }
-  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -58,7 +55,6 @@ Parameters:
   SharedAuroraMysqlPort: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
-  SharedGlueDatabaseName: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
@@ -82,6 +78,7 @@ Parameters:
 
   FeederEcrImageTag: { Type: String }
   FeederSecretsVersion: { Type: String }
+  FeederSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   NetworksEcrImageTag: { Type: String }
   NetworksSecretsVersion: { Type: String }
@@ -247,27 +244,24 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationArn
       Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref FeederEcrImageTag
         SecretsVersion: !Ref FeederSecretsVersion
         SecretsStackName: !Ref SecretsStackName
+        AlbListenerRulePriorityPrefix: !Ref FeederSharedAlbListenerRulePriorityPrefix
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RegionMode: !Ref RegionMode
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
-        EchoServiceToken: !Ref EchoServiceToken
         CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
         CloudWatchLogGroupTaggerServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-        VpcPublicSubnet1Id: !Ref VpcPublicSubnet1Id
-        VpcPublicSubnet2Id: !Ref VpcPublicSubnet2Id
-        VpcPublicSubnet3Id: !Ref VpcPublicSubnet3Id
-        SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
         SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
-        SharedGlueDatabaseName: !Ref SharedGlueDatabaseName
         AnnounceResourcePrefix: !Ref AnnounceResourcePrefix
         FeedsS3BucketArn: !Ref FeedsS3BucketArn
       Tags:
@@ -419,12 +413,6 @@ Outputs:
   CastlePostgresInstanceEndpointPort:
     Value: !GetAtt CastleStack.Outputs.PostgresInstanceEndpointPort
 
-  FeederVanityAlbDomain:
-    Value: !GetAtt FeederStack.Outputs.VanityAlbDomain
-  FeederAlbName:
-    Value: !GetAtt FeederStack.Outputs.AlbName
-  FeederAlbFullName:
-    Value: !GetAtt FeederStack.Outputs.AlbFullName
   FeederWebTargetGroupFullName:
     Value: !GetAtt FeederStack.Outputs.WebTargetGroupFullName
 
