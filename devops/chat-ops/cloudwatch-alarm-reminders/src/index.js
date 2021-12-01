@@ -216,7 +216,7 @@ exports.handler = async (event) => {
     type: 'header',
     text: {
       type: 'plain_text',
-      text: 'Long-running Alarms',
+      text: ':stopwatch: Long-running Alarms',
       emoji: true,
     },
   });
@@ -248,7 +248,7 @@ exports.handler = async (event) => {
       Message: JSON.stringify({
         username: 'Amazon CloudWatch Alarms',
         icon_emoji: ':ops-cloudwatch-alarm:',
-        channel: '#sandbox2',
+        channel: '#ops-error',
         attachments: [
           {
             color: '#a30200',
