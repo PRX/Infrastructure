@@ -68,6 +68,7 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       SphinxBaseUrl: !Sub https://${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech/
       VanityNlbDomain: !Sub ${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech
+      NetworksS3BucketName: !Select [5, !Split [":", !Ref NetworksS3BucketArn]]
 
   TaskUser:
     Type: AWS::IAM::User
@@ -332,6 +333,12 @@ Resources:
               Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: SITE_HOST
               Value: !Ref NetworksHostname
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref TaskUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            - Name: AWS_S3_BUCKET
+              Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -694,6 +701,12 @@ Resources:
               Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: SITE_HOST
               Value: !Ref NetworksHostname
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref TaskUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            - Name: AWS_S3_BUCKET
+              Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
