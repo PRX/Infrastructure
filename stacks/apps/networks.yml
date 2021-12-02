@@ -93,16 +93,16 @@ Resources:
         - PolicyDocument:
             Statement:
               - Action:
-                  - s3:ListBucket*
+                  - s3:List*
                 Effect: Allow
                 Resource: !Ref NetworksS3BucketArn
                 Sid: AllowBucketActions
               - Action:
                   - s3:AbortMultipartUpload
-                  - s3:DeleteObject*
-                  - s3:GetObject*
+                  - s3:Delete*
+                  - s3:Get*
                   - s3:ListMultipartUploadParts
-                  - s3:PutObject*
+                  - s3:Put*
                 Effect: Allow
                 Resource: !Sub ${NetworksS3BucketArn}/*
                 Sid: AllowObjectActions
@@ -208,7 +208,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: !If [IsProduction, 2, 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
@@ -262,7 +262,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Networks }
-  PublicWebTaskRole: # TODO Refactor IAM user into this role: networks, networks-staging
+  PublicWebTaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -329,16 +329,16 @@ Resources:
               Value: "true"
             - Name: RAILS_PORT
               Value: !Ref kWebApplicationPort
-            - Name: PORTER_SNS_TOPIC
-              Value: !Ref PorterJobExecutionSnsTopicArn
-            - Name: SITE_HOST
-              Value: !Ref NetworksHostname
-            - Name: AWS_ACCESS_KEY_ID
-              Value: !Ref TaskUserAccessKey
-            - Name: AWS_SECRET_ACCESS_KEY
-              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
-            - Name: AWS_S3_BUCKET
-              Value: !GetAtt Constants.NetworksS3BucketName
+            # - Name: PORTER_SNS_TOPIC
+            #   Value: !Ref PorterJobExecutionSnsTopicArn
+            # - Name: SITE_HOST
+            #   Value: !Ref NetworksHostname
+            # - Name: AWS_ACCESS_KEY_ID
+            #   Value: !Ref TaskUserAccessKey
+            # - Name: AWS_SECRET_ACCESS_KEY
+            #   Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            # - Name: AWS_S3_BUCKET
+            #   Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -559,7 +559,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 1
+      DesiredCount: !If [IsProduction, 1, 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kSphinxContainerName
@@ -627,7 +627,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Networks }
-  SphinxServerTaskRole: # TODO Refactor IAM user into this role: networks, networks-staging
+  SphinxServerTaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -697,16 +697,16 @@ Resources:
               Value: "true"
             - Name: RAILS_PORT
               Value: !Ref kWebApplicationPort
-            - Name: PORTER_SNS_TOPIC
-              Value: !Ref PorterJobExecutionSnsTopicArn
-            - Name: SITE_HOST
-              Value: !Ref NetworksHostname
-            - Name: AWS_ACCESS_KEY_ID
-              Value: !Ref TaskUserAccessKey
-            - Name: AWS_SECRET_ACCESS_KEY
-              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
-            - Name: AWS_S3_BUCKET
-              Value: !GetAtt Constants.NetworksS3BucketName
+            # - Name: PORTER_SNS_TOPIC
+            #   Value: !Ref PorterJobExecutionSnsTopicArn
+            # - Name: SITE_HOST
+            #   Value: !Ref NetworksHostname
+            # - Name: AWS_ACCESS_KEY_ID
+            #   Value: !Ref TaskUserAccessKey
+            # - Name: AWS_SECRET_ACCESS_KEY
+            #   Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            # - Name: AWS_S3_BUCKET
+            #   Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
