@@ -69,6 +69,57 @@ Resources:
       SphinxBaseUrl: !Sub https://${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech/
       VanityNlbDomain: !Sub ${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech
 
+  TaskUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPorterJobExecution
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
+              - Action: sqs:SendMessage
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                Sid: AllowSqsSendForEmails
+            Version: "2012-10-17"
+          PolicyName: SharedQueues
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:ListBucket*
+                Effect: Allow
+                Resource: !Ref NetworksS3BucketArn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject*
+                  - s3:GetObject*
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject*
+                Effect: Allow
+                Resource: !Sub ${NetworksS3BucketArn}/*
+                Sid: AllowObjectActions
+            Version: "2012-10-17"
+          PolicyName: NetworksBucket
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Network }
+  TaskUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref TaskUser
+
   # INTERNET-FACING WEB SERVER #################################################
 
   PublicWebHostHeaderSharedAlbListenerRule:
