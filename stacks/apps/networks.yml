@@ -74,6 +74,9 @@ Resources:
     Type: AWS::IAM::User
     Properties:
       ManagedPolicyArns:
+        # When the user key/secret are passed into the task def, they are
+        # available when aws-secrets runs, so they'll be used for those calls,
+        # rather than the task role.
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Policies:
@@ -89,7 +92,10 @@ Resources:
             Statement:
               - Action: sqs:SendMessage
                 Effect: Allow
-                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                  # TODO Remove this once Exchange is moved to the new cluster
+                  - !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:Prx3*
                 Sid: AllowSqsSendForEmails
             Version: "2012-10-17"
           PolicyName: SharedQueues
@@ -211,7 +217,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 2, 0]
+      DesiredCount: 2
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
@@ -562,7 +568,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 1, 0]
+      DesiredCount: 1
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kSphinxContainerName
