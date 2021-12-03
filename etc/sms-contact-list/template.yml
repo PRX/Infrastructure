@@ -3,6 +3,7 @@ Description: >-
   Creates an SNS topic that will forward messages to a list of
 
 Parameters:
+  OrganizationId: { Type: String }
   PhoneNumber1: { Type: String }
   PhoneNumber2: { Type: String }
   PhoneNumber3: { Type: String }
@@ -26,6 +27,24 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
+  TopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: AcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Action: sns:Publish
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: !Ref Topic
+            Sid: AllowOrganizationPublish
+      Topics:
+        - !Ref Topic
 
   PhoneNumber1Subscription:
     Type: AWS::SNS::Subscription
@@ -34,3 +53,7 @@ Resources:
       Endpoint: !Ref PhoneNumber1
       Protocol: sms
       TopicArn: !Ref Topic
+
+Outputs:
+  TopicArn:
+    Value: !Ref Topic
