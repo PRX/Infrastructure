@@ -53,20 +53,24 @@ Parameters:
     Default: infrastructure-notifications
     Description: The name of a previously launched notifications stack
     Type: String
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
 Resources:
   Certificate:
     Type: "AWS::CertificateManager::Certificate"
     Properties:
       DomainName: !Ref DistributionDomain
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: Name
-          Value: !Sub "${AWS::StackName} ${AWS::Region}"
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
       ValidationMethod: DNS
   CloudFrontDistribution:
     Type: "AWS::CloudFront::Distribution"
@@ -127,12 +131,13 @@ Resources:
           AcmCertificateArn: !Ref Certificate
           SslSupportMethod: sni-only
       Tags:
-        - Key: Project
-          Value: Dovetail
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
   CloudFrontOriginAccessIdentity:
     Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
     Properties:
