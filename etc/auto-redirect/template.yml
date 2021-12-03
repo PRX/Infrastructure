@@ -7,34 +7,11 @@ Description: >-
 Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
-  IamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      # Policies:
-      #   - PolicyDocument:
-      #       Version: "2012-10-17"
-      #       Statement:
-      #         - Action:
-      #             - s3:List*
-      #           Effect: Allow
-      #           Resource:
-      #             - !GetAtt Bucket.Arn
-      #     PolicyName: S3List
+
   Function:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: index.js
+      CodeUri: ./
       Description: >-
         Responds to a request with a redirect to the included location
       Events:
@@ -70,11 +47,22 @@ Resources:
           Type: HttpApi
       Handler: index.handler
       MemorySize: 128
-      Role: !GetAtt IamRole.Arn
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Auto-redirect
       Timeout: 4
   FunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${Function}
       RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Auto-redirect }
