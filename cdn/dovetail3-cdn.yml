@@ -61,10 +61,6 @@ Parameters:
   RealtimeLogKinesisStreamArn:
     Type: String
     Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
-  InfrastructureNotificationsStackName:
-    Default: infrastructure-notifications
-    Description: The name of a previously launched notifications stack
-    Type: String
 
 Resources:
   Certificate:
@@ -310,16 +306,11 @@ Resources:
   CloudFrontDistribution400Alarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 4XX"]]
-      AlarmActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The 4xx rate on the Dovetail 3 CDN is too dang high
+      AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 4XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentTypeAbbreviation} Dovetail CDN is returning an
+        unusually high rate of 4XX errors to end users. The usually doesn't
+        indicate any operational problems with any components of Dovetail.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Region
@@ -337,16 +328,11 @@ Resources:
   CloudFrontDistribution500Alarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] 5XX"]]
-      AlarmActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the Dovetail 3 CDN is too dang high
+      AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentTypeAbbreviation} Dovetail CDN 5XX error rate is
+        higher than the baseline background noise rate, which could indicate a
+        problem with audio stitching or the CDN's origin.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Region
@@ -364,16 +350,11 @@ Resources:
   CloudFrontDistributionFatal500Alarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][ErrorRate] Fatal 5XX"]]
-      AlarmActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
-      AlarmDescription: >
-        The error rate on the Dovetail 3 CDN is too dang high
+      AlarmName: !Sub FATAL [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentTypeAbbreviation} Dovetail CDN 5XX error rate is
+        very high. This likely means a significant number of end users are not
+        able to download audio.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Region
@@ -391,16 +372,11 @@ Resources:
   CloudFrontDistributionLambdaExecutionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Join ["", ["[", !Ref DistributionDomain, "][Lambda] Execution Errors"]]
-      AlarmActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      InsufficientDataActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      OKActions:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-      AlarmDescription: >
-        Edge lambdas on the Dovetail 3 CDN are failing
+      AlarmName: !Sub WARN [Dovetail-CDN] Edge Lambda <${EnvironmentTypeAbbreviation}> EXECUTION ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentTypeAbbreviation} Dovetail CDN Lambda@Edge functions
+        are failing. This could mean the stitching functions they call are also
+        failing, or working too slowly. Some audio downloads may be failing.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: Region
