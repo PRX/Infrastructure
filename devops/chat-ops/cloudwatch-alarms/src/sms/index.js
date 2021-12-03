@@ -1,10 +1,8 @@
 /**
- * This Lambda function is subscribed to SNS topics, EventBridge buses, and
- * other message services. It expects that any message data it receives from
- * those sources is a fully-formed Slack message payload, and relays that
- * payload to Slack via the chat.postMessage Web API method [1].
- *
- * 1. https://api.slack.com/methods/chat.postMessage
+ * This Lambda function listens for messages on the organization-wide
+ * CloudWatch Alarm event bus, and forwards some of them to an SNS topic that
+ * has SMS subscribers. It's mainly intended for urgent alarms that need high
+ * visibility.
  */
 
 /** @typedef {String} JSONString */
