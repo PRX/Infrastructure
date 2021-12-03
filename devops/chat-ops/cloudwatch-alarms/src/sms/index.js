@@ -72,7 +72,7 @@ exports.handler = async (event) => {
     await sns
       .publish({
         TopicArn: process.env.FATAL_SMS_CONTACT_LIST_SNS_TOPIC_ARN,
-        Message: `${event.detail.state} | ${region} » ${event.detail.alarmName}`,
+        Message: `${event.detail.state.value} | ${region} » ${event.detail.alarmName}`,
       })
       .promise();
   }
