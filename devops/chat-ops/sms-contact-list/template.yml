@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates an SNS topic that will forward messages to a list of
+
+Parameters:
+  PhoneNumber1: { Type: String }
+  PhoneNumber2: { Type: String }
+  PhoneNumber3: { Type: String }
+  PhoneNumber4: { Type: String }
+  PhoneNumber5: { Type: String }
+
+Conditions:
+  HasPhoneNumber1: !Not [!Equals [!Ref PhoneNumber1, ""]]
+  HasPhoneNumber2: !Not [!Equals [!Ref PhoneNumber2, ""]]
+  HasPhoneNumber3: !Not [!Equals [!Ref PhoneNumber3, ""]]
+  HasPhoneNumber4: !Not [!Equals [!Ref PhoneNumber4, ""]]
+  HasPhoneNumber5: !Not [!Equals [!Ref PhoneNumber5, ""]]
+
+Resources:
+  Topic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PhoneNumber1Subscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasPhoneNumber1
+    Properties:
+      Endpoint: !Ref PhoneNumber1
+      Protocol: sms
+      TopicArn: !Ref Topic
