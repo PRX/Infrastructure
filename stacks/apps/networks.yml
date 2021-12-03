@@ -71,6 +71,9 @@ Resources:
       NetworksS3BucketName: !Select [5, !Split [":", !Ref NetworksS3BucketArn]]
 
   TaskUser:
+    # TODO Someday when the AWS client within the Networks app has support for
+    # role-based authentication, these policies should be moved into task
+    # roles, and the user should be removed
     Type: AWS::IAM::User
     Properties:
       ManagedPolicyArns:
@@ -97,6 +100,10 @@ Resources:
                   # TODO Remove this once Exchange is moved to the new cluster
                   - !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:Prx3*
                 Sid: AllowSqsSendForEmails
+              - Action: sqs:ListQueues
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowSqsList
             Version: "2012-10-17"
           PolicyName: SharedQueues
         - PolicyDocument:
