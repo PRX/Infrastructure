@@ -24,9 +24,6 @@ Parameters:
   NewRelicApiKeyPrxLite: { Type: String }
   SecretsBase: { Type: String }
   SecretsStackName: { Type: String }
-  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -53,16 +50,17 @@ Parameters:
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
   MetricsHostname: { Type: String }
+  NetworksHostname: { Type: String }
   PlayHostname: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
-  SharedGlueDatabaseName: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
+  NetworksS3BucketArn: { Type: String }
 
   BetaPrxOrgArchiveS3ObjectKey: { Type: String }
   BetaPrxOrgCloudFrontOai: { Type: String }
@@ -82,6 +80,7 @@ Parameters:
 
   FeederEcrImageTag: { Type: String }
   FeederSecretsVersion: { Type: String }
+  FeederSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   NetworksEcrImageTag: { Type: String }
   NetworksSecretsVersion: { Type: String }
@@ -247,27 +246,24 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationArn
       Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref FeederEcrImageTag
         SecretsVersion: !Ref FeederSecretsVersion
         SecretsStackName: !Ref SecretsStackName
+        AlbListenerRulePriorityPrefix: !Ref FeederSharedAlbListenerRulePriorityPrefix
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RegionMode: !Ref RegionMode
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
-        EchoServiceToken: !Ref EchoServiceToken
         CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
         CloudWatchLogGroupTaggerServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-        VpcPublicSubnet1Id: !Ref VpcPublicSubnet1Id
-        VpcPublicSubnet2Id: !Ref VpcPublicSubnet2Id
-        VpcPublicSubnet3Id: !Ref VpcPublicSubnet3Id
-        SharedEcsAsgInstanceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
         SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
-        SharedGlueDatabaseName: !Ref SharedGlueDatabaseName
         AnnounceResourcePrefix: !Ref AnnounceResourcePrefix
         FeedsS3BucketArn: !Ref FeedsS3BucketArn
       Tags:
@@ -317,6 +313,10 @@ Resources:
         KmsEndpointAccessSecurityGroupId: !Ref KmsEndpointAccessSecurityGroupId
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
+        PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
+        NetworksHostname: !Ref NetworksHostname
+        NetworksS3BucketArn: !Ref NetworksS3BucketArn
+        AnnounceResourcePrefix: !Ref AnnounceResourcePrefix
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -419,12 +419,6 @@ Outputs:
   CastlePostgresInstanceEndpointPort:
     Value: !GetAtt CastleStack.Outputs.PostgresInstanceEndpointPort
 
-  FeederVanityAlbDomain:
-    Value: !GetAtt FeederStack.Outputs.VanityAlbDomain
-  FeederAlbName:
-    Value: !GetAtt FeederStack.Outputs.AlbName
-  FeederAlbFullName:
-    Value: !GetAtt FeederStack.Outputs.AlbFullName
   FeederWebTargetGroupFullName:
     Value: !GetAtt FeederStack.Outputs.WebTargetGroupFullName
 

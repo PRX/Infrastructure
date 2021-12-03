@@ -45,6 +45,7 @@ Resources:
         prx:cloudformation:root-stack-id: !Ref RootStackId
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:application: S3 Signing Service
+
   UploadHttpLambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -92,6 +93,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: S3 Signing Service }
+
   UploadHttpSigningUser:
     Type: AWS::IAM::User
     Properties:
@@ -111,25 +113,19 @@ Resources:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
-        Version: "2012-10-17"
         Statement:
           - Action:
-              - s3:* # TODO Can this be the same as the others?
-            Effect: Allow
-            Resource: !Sub ${MediajointS3BucketArn}/public/uploads/*
-          - Action:
               - s3:AbortMultipartUpload
               - s3:ListMultipartUploadParts
               - s3:PutObject
             Effect: Allow
-            Resource: !Sub ${NetworksS3BucketArn}/public/item_attachments/*
-          - Action:
-              - s3:AbortMultipartUpload
-              - s3:ListMultipartUploadParts
-              - s3:PutObject
-            Effect: Allow
-            Resource: !Sub ${WfmtServicesS3BucketArn}/*
-      PolicyName: ExternalS3BucketAccess
+            Resource:
+              - !Sub ${MediajointS3BucketArn}/public/uploads/*
+              - !Sub ${NetworksS3BucketArn}/public/item_attachments/*
+              - !Sub ${WfmtServicesS3BucketArn}/*
+            Sid: AllowUploads
+        Version: "2012-10-17"
+      PolicyName: S3ObjectSigning
       Users:
         - !Ref UploadHttpSigningUser
 

@@ -157,6 +157,7 @@ Mappings:
   #
   # The final rule priority values must be between 1 and 50000.
   SharedAlbListenerRulePriorityMap:
+    Feeder: { prefix: 7 }
     Play: { prefix: 11 }
     Exchange: { prefix: 13 }
     Augury: { prefix: 17 }
@@ -233,6 +234,7 @@ Resources:
       FeederHostname: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
       IdHostname: !If [IsProduction, id.prx.org, id.staging.prx.tech]
       MetricsHostname: !If [IsProduction, metrics.prx.org, metrics.staging.prx.tech]
+      NetworksHostname: !If [IsProduction, networks.prx.org, networks.staging.prx.tech]
       PlayHostname: !If [IsProduction, play.prx.org, play.staging.prx.tech]
       AdFilesHostname: a.prxu.org
       MetaHostname: meta.prx.org
@@ -438,48 +440,6 @@ Resources:
         - Key: prx:cloudformation:stack-id
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/load-balancers.yml"]]
-      TimeoutInMinutes: 5
-  DovetailStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
-        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        VPCCertificateArn: !GetAtt CertificateStack.Outputs.WildcardCertificateArn
-        ECSCluster: !GetAtt ECSClusterStack.Outputs.ECSCluster
-        ECSServiceIAMRole: !GetAtt ECSClusterStack.Outputs.ECSServiceIAMRole
-        MetricsKinesisStream: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/analytics-ingest-lambda/METRICS_KINESIS_STREAM"]]
-        DynamodbKinesisStream: !Join ["", ["/prx/", !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation], "/analytics-ingest-lambda/DYNAMODB_KINESIS_STREAM"]]
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-        EcrRegion: !Ref EcrRegion
-        SecretsBase:
-          Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-        DovetailEcrImageTag: !Ref DovetailEcrImageTag
-        DovetailSecretsVersion: !Ref DovetailSecretsVersion
-        DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
-        DovetailRouterSecretsVersion: !Ref DovetailrouterSecretsVersion
-        ContainerMemory: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailMemory]
-        ContainerMemoryReservation: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailMemoryReservation]
-        ContainerCpu: !FindInMap [ECSReservationMap, !Ref EnvironmentType, DovetailCpu]
-        SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
-        SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
-        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/container-apps/dovetail.prx.org.yml"]]
       TimeoutInMinutes: 5
   DovetailStitchLambdaStack:
     Type: AWS::CloudFormation::Stack
@@ -878,9 +838,6 @@ Resources:
         RegionMode: !Ref RegionMode
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
-        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
@@ -907,16 +864,17 @@ Resources:
         FeederHostname: !GetAtt Constants.FeederHostname
         IdHostname: !GetAtt Constants.IdHostname
         MetricsHostname: !GetAtt Constants.MetricsHostname
+        NetworksHostname: !GetAtt Constants.NetworksHostname
         PlayHostname: !GetAtt Constants.PlayHostname
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
         SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
-        SharedGlueDatabaseName: !GetAtt SharedGlueDatabaseStack.Outputs.SharedGlueDatabaseName
         AnnounceResourcePrefix: !GetAtt SharedAnnounceStack.Outputs.ResourcePrefix
         PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
         FeedsS3BucketArn: !Ref FeedsS3BucketArn
         MediajointS3BucketArn: !Ref MediajointS3BucketArn
+        NetworksS3BucketArn: !Ref NetworksS3BucketArn
 
         # App-specific parameters
 
@@ -938,6 +896,7 @@ Resources:
 
         FeederEcrImageTag: !Ref FeederEcrImageTag
         FeederSecretsVersion: !Ref FeederSecretsVersion
+        FeederSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Feeder, prefix]
 
         NetworksEcrImageTag: !Ref NetworksEcrImageTag
         NetworksSecretsVersion: !Ref NetworksSecretsVersion
@@ -1137,9 +1096,6 @@ Resources:
         DovetailVanityAlbDomain: !GetAtt Apps300AStack.Outputs.DovetailVanityAlbDomain
         DovetailTargetGroupFullName: !GetAtt Apps300AStack.Outputs.DovetailTargetGroupFullName
 
-        FeederAlbName: !GetAtt Apps200AStack.Outputs.FeederAlbName
-        FeederAlbFullName: !GetAtt Apps200AStack.Outputs.FeederAlbFullName
-        FeederVanityAlbDomain: !GetAtt Apps200AStack.Outputs.FeederVanityAlbDomain
         FeederWebTargetGroupFullName: !GetAtt Apps200AStack.Outputs.FeederWebTargetGroupFullName
 
         IdTargetGroupFullName: !GetAtt Apps100AStack.Outputs.IdTargetGroupFullName
@@ -1252,8 +1208,6 @@ Outputs:
   SharedAuroraPostgresqlPort:
     Value: !Ref SharedAuroraPostgresqlPort
 
-  FeederVanityAlbDomain:
-    Value: !GetAtt Apps200AStack.Outputs.FeederVanityAlbDomain
   DovetailVanityAlbDomain:
     Value: !GetAtt Apps300AStack.Outputs.DovetailVanityAlbDomain
 

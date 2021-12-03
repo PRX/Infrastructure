@@ -115,11 +115,16 @@ function parameterDeltas(stackParameters, changeSetParameters) {
  * value, based on the type of parameter (Git commit, Docker tag, etc)
  * @param {AWS.CloudFormation.ParameterKey} key
  * @param {AWS.CloudFormation.ParameterValue} value
+ * @param {Boolean} noLinks
  * @returns {String}
  */
-function parameterDeltasListValue(key, value) {
+function parameterDeltasListValue(key, value, noLinks = false) {
   if (!value) {
     return;
+  }
+
+  if (noLinks) {
+    return `\`${value}\``;
   }
 
   if (key === 'InfrastructureGitCommit') {
@@ -151,24 +156,30 @@ function parameterDeltasListValue(key, value) {
  * Returns an arrow emoji for use when listed parameter changes. The arrow may
  * behave differently depending on the type of parameter it is representing
  * @param {ParameterDelta} parameterDelta
+ * @param {Boolean} noLinks
  * @returns {String}
  */
-function parameterDeltasListArrow(parameterDelta) {
+function parameterDeltasListArrow(parameterDelta, noLinks = false) {
+  if (noLinks) {
+    return '➡';
+  }
+
   if (parameterDelta[0] === 'InfrastructureGitCommit') {
     const url = `https://github.com/PRX/Infrastructure/compare/${parameterDelta[1]}...${parameterDelta[2]}`;
     return `<${url}|➡>`;
   }
 
-  if (/EcrImageTag/.test(parameterDelta[0])) {
-    if (parameterDelta[0] && parameterDelta[1] && parameterDelta[2]) {
-      const slug = parameterDelta[0].replace('EcrImageTag', '');
-      const sha1 = parameterDelta[1].split(':')[1];
-      const sha2 = parameterDelta[2].split(':')[1];
-      const url = `https://github.com/PRX/${slug}.prx.org/compare/${sha1}...${sha2}`;
-      return `<${url}|➡>`;
-    } else {
-      return `➡`;
-    }
+  if (
+    /EcrImageTag/.test(parameterDelta[0]) &&
+    parameterDelta[0] &&
+    parameterDelta[1] &&
+    parameterDelta[2]
+  ) {
+    const slug = parameterDelta[0].replace('EcrImageTag', '');
+    const sha1 = parameterDelta[1].split(':')[1];
+    const sha2 = parameterDelta[2].split(':')[1];
+    const url = `https://github.com/PRX/${slug}.prx.org/compare/${sha1}...${sha2}`;
+    return `<${url}|➡>`;
   }
 
   // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
@@ -179,8 +190,8 @@ function parameterDeltasListArrow(parameterDelta) {
   ) {
     const repo = parameterDelta[2].match(/GitHub\/([^\/]+\/[^\/]+)/)[1];
 
-    const oldCommit = parameterDelta[1]?.match(/\/([0-9a-f]{40})/)[1];
-    const newCommit = parameterDelta[2]?.match(/\/([0-9a-f]{40})/)[1];
+    const oldCommit = parameterDelta[1].match(/\/([0-9a-f]{40})/)[1];
+    const newCommit = parameterDelta[2].match(/\/([0-9a-f]{40})/)[1];
 
     const url = `https://github.com/${repo}/compare/${oldCommit}...${newCommit}`;
     return `<${url}|➡>`;
@@ -197,8 +208,12 @@ function parameterDeltasListArrow(parameterDelta) {
  * @returns {String}
  */
 function parameterDeltasList(stackParameters, changeSetParameters) {
-  return parameterDeltas(stackParameters, changeSetParameters)
-    .filter((d) => d[0] !== 'PipelineExecutionNonce')
+  const deltas = parameterDeltas(stackParameters, changeSetParameters);
+  const allowedDeltas = deltas.filter((d) => d[0] !== 'PipelineExecutionNonce');
+
+  // Text blocks within attachments have a 3000 character limit. If the text is
+  // too large, try creating the list without links to reduce the size.
+  const withLinks = allowedDeltas
     .map((d) => {
       const oldValue = parameterDeltasListValue(d[0], d[1]) || '❔';
       const newValue = parameterDeltasListValue(d[0], d[2]) || '❌';
@@ -207,6 +222,20 @@ function parameterDeltasList(stackParameters, changeSetParameters) {
       return `*${d[0]}*: ${oldValue} ${arrow} ${newValue}`;
     })
     .join('\n');
+
+  if (withLinks.length < 2900) {
+    return withLinks;
+  } else {
+    return allowedDeltas
+      .map((d) => {
+        const oldValue = parameterDeltasListValue(d[0], d[1]) || '❔';
+        const newValue = parameterDeltasListValue(d[0], d[2]) || '❌';
+        const arrow = parameterDeltasListArrow(d, true);
+
+        return `*${d[0]}*: ${oldValue} ${arrow} ${newValue}`;
+      })
+      .join('\n');
+  }
 }
 
 /**

@@ -52,6 +52,10 @@ Parameters:
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
+  PorterJobExecutionSnsTopicArn: { Type: String }
+  NetworksHostname: { Type: String }
+  NetworksS3BucketArn: { Type: String }
+  AnnounceResourcePrefix: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -64,6 +68,58 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       SphinxBaseUrl: !Sub https://${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech/
       VanityNlbDomain: !Sub ${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech
+      NetworksS3BucketName: !Select [5, !Split [":", !Ref NetworksS3BucketArn]]
+
+  TaskUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPorterJobExecution
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
+              - Action: sqs:SendMessage
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                Sid: AllowSqsSendForEmails
+            Version: "2012-10-17"
+          PolicyName: SharedQueues
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:List*
+                Effect: Allow
+                Resource: !Ref NetworksS3BucketArn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Delete*
+                  - s3:Get*
+                  - s3:ListMultipartUploadParts
+                  - s3:Put*
+                Effect: Allow
+                Resource: !Sub ${NetworksS3BucketArn}/*
+                Sid: AllowObjectActions
+            Version: "2012-10-17"
+          PolicyName: NetworksBucket
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Network }
+  TaskUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref TaskUser
 
   # INTERNET-FACING WEB SERVER #################################################
 
@@ -152,7 +208,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: !If [IsProduction, 2, 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
@@ -206,7 +262,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Networks }
-  PublicWebTaskRole: # TODO Refactor IAM user into this role: networks, networks-staging
+  PublicWebTaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -273,6 +329,16 @@ Resources:
               Value: "true"
             - Name: RAILS_PORT
               Value: !Ref kWebApplicationPort
+            # - Name: PORTER_SNS_TOPIC
+            #   Value: !Ref PorterJobExecutionSnsTopicArn
+            # - Name: SITE_HOST
+            #   Value: !Ref NetworksHostname
+            # - Name: AWS_ACCESS_KEY_ID
+            #   Value: !Ref TaskUserAccessKey
+            # - Name: AWS_SECRET_ACCESS_KEY
+            #   Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            # - Name: AWS_S3_BUCKET
+            #   Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -493,7 +559,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 1
+      DesiredCount: !If [IsProduction, 1, 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kSphinxContainerName
@@ -561,7 +627,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Networks }
-  SphinxServerTaskRole: # TODO Refactor IAM user into this role: networks, networks-staging
+  SphinxServerTaskRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -631,6 +697,16 @@ Resources:
               Value: "true"
             - Name: RAILS_PORT
               Value: !Ref kWebApplicationPort
+            # - Name: PORTER_SNS_TOPIC
+            #   Value: !Ref PorterJobExecutionSnsTopicArn
+            # - Name: SITE_HOST
+            #   Value: !Ref NetworksHostname
+            # - Name: AWS_ACCESS_KEY_ID
+            #   Value: !Ref TaskUserAccessKey
+            # - Name: AWS_SECRET_ACCESS_KEY
+            #   Value: !GetAtt TaskUserAccessKey.SecretAccessKey
+            # - Name: AWS_S3_BUCKET
+            #   Value: !GetAtt Constants.NetworksS3BucketName
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:

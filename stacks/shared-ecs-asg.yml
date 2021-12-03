@@ -10,11 +10,19 @@ Description: >-
   security groups. Instances in the ASG are launched in public subnets.
 
 Parameters:
-  kImageId:
+  kStagingImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     # Update this value to change which AMI the launch template uses. You can
     # find the latest image name here:
     # https://console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_name/description
+    #                                                      ▼              Put it here               ▼
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20211120-x86_64-ebs/image_id
+  kProductionImageId: # TODO Sync with staging
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    # Update this value to change which AMI the launch template uses. You can
+    # find the latest image name here:
+    # https://console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2/recommended/image_name/description
+    #                                                      ▼              Put it here               ▼
     Default: /aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20210819-x86_64-ebs/image_id
   ########
   EnvironmentType: { Type: String }
@@ -82,7 +90,7 @@ Resources:
         Statement:
           - Action: autoscaling:SetInstanceHealth
             Effect: Allow
-            Resource: !Sub arn:aws:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${Asg}
+            Resource: !Sub arn:${AWS::Partition}:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${Asg}
         Version: "2012-10-17"
       Roles:
         - !Ref InstanceRole
@@ -119,7 +127,7 @@ Resources:
           CpuCredits: unlimited
         IamInstanceProfile:
           Arn: !GetAtt InstanceProfile.Arn
-        ImageId: !Ref kImageId
+        ImageId: !If [IsProduction, !Ref kProductionImageId, !Ref kStagingImageId]
         InstanceType: !If
           - IsProduction
           - t3a.medium
