@@ -64,6 +64,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   # TODO: re-enable when we move off the old stacks
@@ -468,13 +469,14 @@ Resources:
 
   WorkerEcsService:
     Type: AWS::ECS::Service
-    Condition: EnableWorkers # See README
+    # Condition: EnableWorkers # See README
+    Condition: IsStaging
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 0 # !If [IsProduction, 6, 0] # TODO
+      DesiredCount: 1 # !If [IsProduction, 6, 0] # TODO
       EnableECSManagedTags: true
       PropagateTags: TASK_DEFINITION
       Tags:
@@ -725,13 +727,14 @@ Resources:
 
   SayWhenEcsService:
     Type: AWS::ECS::Service
-    Condition: EnableWorkers # See README
+    # Condition: EnableWorkers # See README
+    Condition: IsStaging
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 0 # TODO
+      DesiredCount: 1
       EnableECSManagedTags: true
       PropagateTags: TASK_DEFINITION
       Tags:
