@@ -837,6 +837,7 @@ Resources:
           Value: !Ref AWS::StackId
   ASGSizerFunction:
     Type: "AWS::Lambda::Function"
+    Condition: IsProduction
     Properties:
       Code:
         S3Bucket:
@@ -897,6 +898,7 @@ Resources:
           Value: !Ref AWS::StackId
   ASGSizerInvokeFunctionPermission:
     Type: "AWS::Lambda::Permission"
+    Condition: IsProduction
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ASGSizerFunction
@@ -904,6 +906,7 @@ Resources:
       SourceArn: !GetAtt ASGSizerFunctionEventTrigger.Arn
   ASGSizerFunctionEventTrigger:
     Type: "AWS::Events::Rule"
+    Condition: IsProduction
     Properties:
       Description: >
         Runs the ECS ASG sizer periodically
@@ -915,6 +918,7 @@ Resources:
           Id: !Sub "${EnvironmentType}-ECS-ASG-Sizing"
   ASGSizerErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"
+    Condition: IsProduction
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub "[ECS][ASGSizerLambda] ${EnvironmentType} Errors"
