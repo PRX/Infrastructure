@@ -251,47 +251,50 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
-              - Action: sqs:*
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:Get*
+                  - sqs:List*
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
                 Effect: Allow
                 Resource:
-                  - !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:*_feeder_*
                   - !GetAtt DefaultJobQueue.Arn
-                  - !GetAtt DefaultJobDeadletterQueue.Arn
                   - !GetAtt FixerCallbackQueue.Arn
-                  - !GetAtt FixerCallbackDeadletterQueue.Arn
+                Sid: AllowSendAndReceive
             Version: "2012-10-17"
-          PolicyName: SqsFullApplicationAccess
+          PolicyName: Queues
         - PolicyDocument:
             Statement:
-              - Action: sns:*
-                Effect: Allow
-                Resource:
-                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*_announce_feed_*
-                  - !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:*_announce_story_*
               - Action: sns:Publish
                 Effect: Allow
-                Resource: "*"
+                Resource: "*" # TODO permissive
+                Sid: AllowGlobalPublish
             Version: "2012-10-17"
           PolicyName: SnsFullApplicationAccess
         - PolicyDocument:
             Statement:
               - Action:
-                  - s3:AbortMultipartUpload
                   - s3:Get*
-                  - s3:ListAllMyBuckets
                   - s3:ListBucket
                   - s3:ListBucketMultipartUploads
                   - s3:ListBucketVersions
+                Effect: Allow
+                Resource: !Ref FeedsS3BucketArn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
                   - s3:ListMultipartUploadParts
                   - s3:PutObject
                   - s3:PutObjectAcl
                   - s3:PutObjectVersionAcl
                 Effect: Allow
-                Resource:
-                  - !Ref FeedsS3BucketArn
-                  - !Sub ${FeedsS3BucketArn}/*
+                Resource: !Sub ${FeedsS3BucketArn}/*
+                Sid: AllowObjectActions
             Version: "2012-10-17"
-          PolicyName: S3FeedBucketAccess
+          PolicyName: FeedsBucket
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
