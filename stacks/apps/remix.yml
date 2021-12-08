@@ -17,6 +17,7 @@ Parameters:
     Type: Number
     Default: 3000
   #######
+  SlackMessageRelaySnsTopicArn: { Type: String }
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
   EcsClusterArn: { Type: String }
@@ -28,6 +29,7 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
+  NewRelicApiKeyPrxLite: { Type: String }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
@@ -36,6 +38,10 @@ Parameters:
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
+  RemixS3BucketArn: { Type: String }
+  TransferS3BucketArn: { Type: String }
+  RemixHostname: { Type: String }
+  ExchangeHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -163,6 +169,50 @@ Resources:
       ManagedPolicyArns:
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
         - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPublish
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref SlackMessageRelaySnsTopicArn
+                Sid: AllowPublish
+            Version: "2012-10-17"
+          PolicyName: SlackMessages
+        - PolicyDocument:
+            Statement:
+              - Action: s3:ListAllMyBuckets
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowListAllBuckets
+              - Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Effect: Allow
+                Resource:
+                  - !Ref RemixS3BucketArn
+                  - !Ref TransferS3BucketArn
+                Sid: AllowBucketList
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectAcl
+                  - s3:GetObjectVersion
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Effect: Allow
+                Resource:
+                  - !Sub ${RemixS3BucketArn}/*
+                  - !Sub ${TransferS3BucketArn}/*
+                Sid: AllowObjectReadWrite
+            Version: "2012-10-17"
+          PolicyName: S3
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -236,8 +286,29 @@ Resources:
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: DB_PORT_5432_TCP_PORT
               Value: !Ref SharedAuroraPostgresqlPort
+            # TODO Below, remove from Secrets
             - Name: PORTER_SNS_TOPIC
               Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: DATABASE_POOL_SIZE
+              Value: "5"
+            - Name: LANG
+              Value: en_US.UTF-8
+            - Name: NEW_RELIC_LICENSE_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_LOG
+              Value: stdout
+            - Name: PRX_HOST
+              Value: !Ref ExchangeHostname
+            - Name: PRX_PORT
+              Value: "443"
+            - Name: PRX_SCHEME
+              Value: https
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_S3_BUCKET
+              Value: !Ref RemixS3BucketArn
+            - Name: REMIX_HOST
+              Value: !Ref RemixHostname
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
