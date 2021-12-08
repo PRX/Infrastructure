@@ -262,9 +262,23 @@ Resources:
                 Resource:
                   - !GetAtt DefaultJobQueue.Arn
                   - !GetAtt FixerCallbackQueue.Arn
-                Sid: AllowSendAndReceive
+                Sid: AllowShoryuken
             Version: "2012-10-17"
-          PolicyName: Queues
+          PolicyName: AppQueues
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:Get*
+                  - sqs:List*
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}_announce_feeder_*
+                Sid: AllowShoryuken
+            Version: "2012-10-17"
+          PolicyName: Announce
         - PolicyDocument:
             Statement:
               - Action: sns:Publish
@@ -272,7 +286,7 @@ Resources:
                 Resource: "*" # TODO permissive
                 Sid: AllowGlobalPublish
             Version: "2012-10-17"
-          PolicyName: SnsFullApplicationAccess
+          PolicyName: SNS
         - PolicyDocument:
             Statement:
               - Action:

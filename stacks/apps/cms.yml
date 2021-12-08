@@ -158,11 +158,18 @@ Resources:
               - Action: sns:Publish
                 Effect: Allow
                 Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPublish
             Version: "2012-10-17"
-          PolicyName: PorterSnsPublish
+          PolicyName: Porter
         - PolicyDocument:
             Statement:
-              - Action: sqs:*
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
                 Effect: Allow
                 Resource:
                   - !GetAtt AudioCallbackQueue.Arn
@@ -170,16 +177,15 @@ Resources:
                   - !GetAtt PodcastImportQueue.Arn
                   - !GetAtt SearchIndexerQueue.Arn
                   - !GetAtt DefaultJobQueue.Arn
+                Sid: AllowShoryuken
             Version: "2012-10-17"
-          PolicyName: JobQueues
+          PolicyName: AppQueueus
         - PolicyDocument:
             Statement:
-              - Action: sqs:* # TODO Seems very permissive
-                Effect: Allow
-                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
-              - Action: sns:* # TODO Seems very permissive
+              - Action: sns:Publish
                 Effect: Allow
                 Resource: !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                Sid: AllowPublish
             Version: "2012-10-17"
           PolicyName: Announce
         - PolicyDocument:
