@@ -231,7 +231,7 @@ Resources:
             build:
               commands:
                 # Calculate the SHA1 hash of the transcode directory
-                - sha1=`find containers/transcode -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                - sha1=`find src/containers/transcode -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
                 # Construct the Docker image name:tag using the hash
                 - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
                 # See if that tag already exists in the repository
@@ -239,7 +239,7 @@ Resources:
                   lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
                 # Only build and push the image if it doesn't exist, meaning the directory and code has changed
                 - >-
-                  if [ "$lookup" = "notFound" ]; then docker build -t transcode containers/transcode; fi
+                  if [ "$lookup" = "notFound" ]; then docker build -t transcode src/containers/transcode; fi
                 - >-
                   if [ "$lookup" = "notFound" ]; then docker tag transcode:latest "$imageName"; fi
                 - >-
@@ -351,7 +351,7 @@ Resources:
             build:
               commands:
                 # Calculate the SHA1 hash of the ftp directory
-                - sha1=`find containers/ftp -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                - sha1=`find src/containers/ftp -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
                 # Construct the Docker image name:tag using the hash
                 - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
                 # See if that tag already exists in the repository
@@ -359,7 +359,7 @@ Resources:
                   lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
                 # Only build and push the image if it doesn't exist, meaning the directory and code has changed
                 - >-
-                  if [ "$lookup" = "notFound" ]; then docker build -t ftp containers/ftp; fi
+                  if [ "$lookup" = "notFound" ]; then docker build -t ftp src/containers/ftp; fi
                 - >-
                   if [ "$lookup" = "notFound" ]; then docker tag ftp:latest "$imageName"; fi
                 - >-
