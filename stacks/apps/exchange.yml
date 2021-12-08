@@ -52,6 +52,7 @@ Parameters:
   SharedMemcachedEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
+  EchoServiceToken: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
@@ -72,6 +73,13 @@ Conditions:
   EnableWorkers: !Equals ["true", "false"]
 
 Resources:
+  Constants:
+    Type: Custom::Echo
+    Properties:
+      ServiceToken: !Ref EchoServiceToken
+      # Provides a namespace for Exchange-specific queues
+      SqsQueuePrefix: !Sub ${AnnounceResourcePrefix}_exchange_
+
   ExchangeWildcardHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -249,10 +257,10 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:SendMessage
                 Effect: Allow
-                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
-                Sid: AllowSqsSendForEmails
+                Resource: !Sub arn:${AWS::Partition}:sqs:${AWS::Region}:${AWS::AccountId}:${Constants.SqsQueuePrefix}*
+                Sid: AllowActiveMessaging
             Version: "2012-10-17"
-          PolicyName: Queues
+          PolicyName: AppQueues
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -401,7 +409,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: SQS_PREFIX
-              Value: !Ref AnnounceResourcePrefix
+              Value: !GetAtt Constants.SqsQueuePrefix
             # TODO delete this comment: From secrets
             - Name: AWS_REGION
               Value: !Ref AWS::Region
@@ -548,7 +556,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: SQS_PREFIX
-              Value: !Ref AnnounceResourcePrefix
+              Value: !GetAtt Constants.SqsQueuePrefix
             # TODO delete this comment: From secrets
             - Name: AWS_REGION
               Value: !Ref AWS::Region
@@ -808,7 +816,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: SQS_PREFIX
-              Value: !Ref AnnounceResourcePrefix
+              Value: !GetAtt Constants.SqsQueuePrefix
             # TODO delete this comment: From secrets
             - Name: AWS_REGION
               Value: !Ref AWS::Region
@@ -941,7 +949,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}FixerAudio
+      QueueName: !Sub ${Constants.SqsQueuePrefix}FixerAudio
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -957,7 +965,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}PerformSolrSave
+      QueueName: !Sub ${Constants.SqsQueuePrefix}PerformSolrSave
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -973,7 +981,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}PerformSolrDestroy
+      QueueName: !Sub ${Constants.SqsQueuePrefix}PerformSolrDestroy
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -989,7 +997,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}PublishPiece
+      QueueName: !Sub ${Constants.SqsQueuePrefix}PublishPiece
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1005,7 +1013,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}UnpublishPiece
+      QueueName: !Sub ${Constants.SqsQueuePrefix}UnpublishPiece
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1021,7 +1029,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}PurchasePiece
+      QueueName: !Sub ${Constants.SqsQueuePrefix}PurchasePiece
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1037,7 +1045,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}DropBoxFile
+      QueueName: !Sub ${Constants.SqsQueuePrefix}DropBoxFile
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1053,7 +1061,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}UpdateUserType
+      QueueName: !Sub ${Constants.SqsQueuePrefix}UpdateUserType
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1069,7 +1077,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}EmailUsers
+      QueueName: !Sub ${Constants.SqsQueuePrefix}EmailUsers
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1085,7 +1093,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}UpdatePieceLength
+      QueueName: !Sub ${Constants.SqsQueuePrefix}UpdatePieceLength
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1101,7 +1109,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}EmailGroup
+      QueueName: !Sub ${Constants.SqsQueuePrefix}EmailGroup
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1117,7 +1125,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}SayWhen
+      QueueName: !Sub ${Constants.SqsQueuePrefix}SayWhen
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1133,7 +1141,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}DeliveryUpdate
+      QueueName: !Sub ${Constants.SqsQueuePrefix}DeliveryUpdate
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1149,7 +1157,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}StationPassword
+      QueueName: !Sub ${Constants.SqsQueuePrefix}StationPassword
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1165,7 +1173,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}ApproveSubscription
+      QueueName: !Sub ${Constants.SqsQueuePrefix}ApproveSubscription
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1181,7 +1189,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}EmailNotifications
+      QueueName: !Sub ${Constants.SqsQueuePrefix}EmailNotifications
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1197,7 +1205,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${AnnounceResourcePrefix}_exchange_porter_callback
+      QueueName: !Sub ${Constants.SqsQueuePrefix}_exchange_porter_callback
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
