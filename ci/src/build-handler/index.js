@@ -16,11 +16,9 @@
  */
 
 const https = require('https');
-const fs = require('fs');
 const AWS = require('aws-sdk');
 
 const codebuild = new AWS.CodeBuild({ apiVersion: '2016-10-06' });
-const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 
 /** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
 /** @typedef { import('@octokit/types').Endpoints["GET /repos/{owner}/{repo}"]["response"]["data"] } ReposGetResponseData } */
@@ -48,6 +46,7 @@ const PR_ACTION_TRIGGERS = [
   'reopened',
   'synchronize',
   'ready_for_review',
+  'unlocked',
 ];
 const USER_AGENT = 'PRX/Infrastructure (github-event-handler)';
 const GITHUB_HEADERS = {
