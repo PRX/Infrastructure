@@ -216,6 +216,7 @@ Resources:
           Type: OAUTH
         GitCloneDepth: 1
         Location: https://github.com/PRX/Infrastructure.git
+        ReportBuildStatus: true
         Type: GITHUB
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -448,68 +449,68 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
 
-  GitHubStatusHandlerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/github-status-handler/
-      Description: >-
-        Listens for CI CodeBuild state changes on EventBridge and updates
-        GitHub repository statuses as necessary.
-      Environment:
-        Variables:
-          GITHUB_ACCESS_TOKEN: !Ref GitHubToken
-      Events:
-        CodeBuild:
-          Properties:
-            Pattern:
-              detail:
-                project-name:
-                  - !Ref CiCodeBuildProject
-              detail-type:
-                - CodeBuild Build State Change
-              source:
-                - aws.codebuild
-          Type: EventBridgeRule
-      Handler: index.handler
-      MemorySize: 128
-      Runtime: nodejs14.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CI
-      Timeout: 10
-  GitHubStatusHandlerLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${GitHubStatusHandlerFunction}
-      RetentionInDays: 5
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  GitHubStatusHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CI] GitHub status <prod> FUNCTION ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The Lambda function that updates GitHub statuses based on CI build
-        events is failing, so some commits or branches may show inaccurate
-        information.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref GitHubStatusHandlerFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 0
-      TreatMissingData: notBreaching
+  # GitHubStatusHandlerFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/github-status-handler/
+  #     Description: >-
+  #       Listens for CI CodeBuild state changes on EventBridge and updates
+  #       GitHub repository statuses as necessary.
+  #     Environment:
+  #       Variables:
+  #         GITHUB_ACCESS_TOKEN: !Ref GitHubToken
+  #     Events:
+  #       CodeBuild:
+  #         Properties:
+  #           Pattern:
+  #             detail:
+  #               project-name:
+  #                 - !Ref CiCodeBuildProject
+  #             detail-type:
+  #               - CodeBuild Build State Change
+  #             source:
+  #               - aws.codebuild
+  #         Type: EventBridgeRule
+  #     Handler: index.handler
+  #     MemorySize: 128
+  #     Runtime: nodejs14.x
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: Production
+  #       prx:dev:application: CI
+  #     Timeout: 10
+  # GitHubStatusHandlerLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub /aws/lambda/${GitHubStatusHandlerFunction}
+  #     RetentionInDays: 5
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:ops:environment, Value: Production }
+  #       - { Key: prx:dev:application, Value: CI }
+  # GitHubStatusHandlerErrorAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: !Sub WARN [CI] GitHub status <prod> FUNCTION ERRORS (${AWS::StackName})
+  #     AlarmDescription: >-
+  #       The Lambda function that updates GitHub statuses based on CI build
+  #       events is failing, so some commits or branches may show inaccurate
+  #       information.
+  #     ComparisonOperator: GreaterThanThreshold
+  #     Dimensions:
+  #       - Name: FunctionName
+  #         Value: !Ref GitHubStatusHandlerFunction
+  #     EvaluationPeriods: 1
+  #     MetricName: Errors
+  #     Namespace: AWS/Lambda
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
 
   SlackMessageHandlerFunction:
     Type: AWS::Serverless::Function
