@@ -87,6 +87,7 @@ Parameters:
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedGlueDatabaseName: { Type: String }
+  FeedsS3BucketArn: { Type: String }
   AuguryHostname: { Type: String }
   FeederHostname: { Type: String }
   DovetailCdnHostname: { Type: String }
@@ -876,17 +877,92 @@ Resources:
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref FeedScalerDynamodbTable
+          ECS_CLUSTER_NAME: !Ref EcsClusterName
           ECS_SERVICE_NAME: !GetAtt EcsService.Name
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
         const s3 = new AWS.S3();
+        const ddb = new AWS.DynamoDB({ region: 'us-east-1' });
+        const ecs = new AWS.ECS({ region: 'us-east-1' });
+
+        const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
+        const CLUSTER_NAME = process.env.ECS_CLUSTER_NAME;
+        const SERVICE_NAME = process.env.ECS_SERVICE_NAME;
+        const SCALE_TO = {
+          '284/feed-rss.xml': 4,
+          '70/feed-rss.xml': 20,
+        };
 
         exports.handler = async (event) => {
-          console.log(JSON.stringify(event));
+          for (const rec of event.Records) {
+            const Bucket = rec.s3.bucket.name;
+            const Key = rec.s3.object.key;
+            if (!SCALE_TO[Key]) {
+              continue;
+            }
+
+            // read rss guids
+            const result = await s3.getObject({ Bucket, Key }).promise();
+            const matches = result.Body.toString('utf-8').matchAll(/>([^<]+)<\/guid>/g);
+            const guids = [];
+            for (match of matches) {
+              guids.push(match[1]);
+            }
+            console.info(`Read ${guids.length} guids from s3://${Bucket}/${Key}`);
+
+            // break into chunks of 100
+            const allKeys = guids.map((g) => ({ guid: { S: g } }));
+            const chunkedKeys = [];
+            for (let i = 0; i < allKeys.length; i += 100) {
+              chunkedKeys.push(allKeys.slice(i, i + 100));
+            }
+
+            // scan DDB for already-seen guids
+            const found = {};
+            for (const Keys of chunkedKeys) {
+              const params = { RequestItems: { [TABLE_NAME]: { Keys } } };
+              const data = await ddb.batchGetItem(params).promise();
+              data.Responses[TABLE_NAME].forEach((r) => (found[r.guid.S] = true));
+            }
+            const newGuids = guids.filter((g) => !found[g]);
+            console.info(`Found ${newGuids.length} new guids not in DDB`);
+
+            // scale ECS service
+            if (newGuids.length > 0) {
+              const params = { cluster: CLUSTER_NAME, services: [SERVICE_NAME] };
+              const res = await ecs.describeServices(params).promise();
+              const count = res.services[0].desiredCount;
+              const desiredCount = SCALE_TO[Key];
+              if (count < desiredCount) {
+                console.info(`Scaling from ${count} to ${desiredCount}`);
+                const updateParams = {
+                  cluster: CLUSTER_NAME,
+                  service: SERVICE_NAME,
+                  desiredCount,
+                };
+                await ecs.updateService(updateParams).promise();
+              } else {
+                console.info(`Already at ${count}`);
+              }
+            }
+
+            // set new guids in DDB
+            for (const guid of newGuids) {
+              const params = { TableName: TABLE_NAME, Item: { guid: { S: guid } } };
+              await ddb.putItem(params).promise();
+            }
+          }
         };
       MemorySize: 512
       Policies:
+        - Statement:
+            - Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Effect: Allow
+              Resource: !Sub ${FeedsS3BucketArn}/*
+          Version: "2012-10-17"
         - Statement:
             - Action:
                 - dynamodb:DescribeTable
