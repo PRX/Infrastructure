@@ -890,6 +890,7 @@ Resources:
         const CLUSTER_NAME = process.env.ECS_CLUSTER_NAME;
         const SERVICE_NAME = process.env.ECS_SERVICE_NAME;
         const SCALE_TO = {
+          '815/feed-rss.xml': 4,
           '284/feed-rss.xml': 4,
           '70/feed-rss.xml': 20,
         };
@@ -906,7 +907,7 @@ Resources:
             const result = await s3.getObject({ Bucket, Key }).promise();
             const matches = result.Body.toString('utf-8').matchAll(/>([^<]+)<\/guid>/g);
             const guids = [];
-            for (match of matches) {
+            for (const match of matches) {
               guids.push(match[1]);
             }
             console.info(`Read ${guids.length} guids from s3://${Bucket}/${Key}`);
@@ -965,11 +966,19 @@ Resources:
           Version: "2012-10-17"
         - Statement:
             - Action:
+                - dynamodb:BatchGetItem
                 - dynamodb:DescribeTable
                 - dynamodb:GetItem
                 - dynamodb:PutItem
               Effect: Allow
               Resource: !GetAtt FeedScalerDynamodbTable.Arn
+          Version: "2012-10-17"
+        - Statement:
+            - Action:
+                - ecs:DescribeServices
+                - ecs:UpdateService
+              Effect: Allow
+              Resource: !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${EcsClusterName}/${EcsService.Name}
           Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
