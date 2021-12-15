@@ -1,5 +1,6 @@
 # stacks/apps/dovetail-router.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates a dedicated load balancer and the ECS service for Dovetail Router
@@ -866,6 +867,83 @@ Resources:
         ScaleInCooldown: 60
         ScaleOutCooldown: 60
         TargetValue: 800
+
+  # New episode publish autoscaling
+  FeedScalerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Scale out Dovetail Router when episodes drop in private feed
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref FeedScalerDynamodbTable
+          ECS_SERVICE_NAME: !GetAtt EcsService.Name
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const s3 = new AWS.S3();
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+        };
+      MemorySize: 512
+      Policies:
+        - Statement:
+            - Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Effect: Allow
+              Resource: !GetAtt FeedScalerDynamodbTable.Arn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Router
+      Timeout: 30
+  FeedScalerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FeedScalerFunction}
+      RetentionInDays: 30
+  FeedScalerLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref FeedScalerLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
+  FeedScalerDynamodbTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: guid
+          AttributeType: S
+      BillingMode: PAY_PER_REQUEST
+      KeySchema:
+        - AttributeName: guid
+          KeyType: HASH
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Router }
 
   # Log metric filters
   LogDownloadsMetricFilter:
