@@ -890,7 +890,9 @@ Resources:
                     - !Select [5, !Split [":", !Ref FeedsS3BucketArn]]
                 object:
                   key:
-                    - suffix: .xml
+                    - 815/feed-rss.xml
+                    - 284/feed-rss.xml
+                    - 70/feed-rss.xml
               detail-type:
                 - Object Created
               source:
@@ -907,68 +909,66 @@ Resources:
         const SERVICE_NAME = process.env.ECS_SERVICE_NAME;
         const SCALE_TO = {
           '815/feed-rss.xml': 4,
-          '284/feed-rss.xml': 4,
+          '284/feed-rss.xml': 9,
           '70/feed-rss.xml': 20,
         };
 
         exports.handler = async (event) => {
-          for (const rec of event.Records) {
-            const Bucket = rec.s3.bucket.name;
-            const Key = rec.s3.object.key;
-            if (!SCALE_TO[Key]) {
-              continue;
-            }
+          const Bucket = event.detail.bucket.name;
+          const Key = event.detail.object.key;
+          if (!SCALE_TO[Key]) {
+            return;
+          }
 
-            // read rss guids
-            const result = await s3.getObject({ Bucket, Key }).promise();
-            const matches = result.Body.toString('utf-8').matchAll(/>([^<]+)<\/guid>/g);
-            const guids = [];
-            for (const match of matches) {
-              guids.push(match[1]);
-            }
-            console.info(`Read ${guids.length} guids from s3://${Bucket}/${Key}`);
+          // read rss guids
+          const result = await s3.getObject({ Bucket, Key }).promise();
+          const matches = result.Body.toString('utf-8').matchAll(/>([^<]+)<\/guid>/g);
+          const guids = [];
+          for (const match of matches) {
+            guids.push(match[1]);
+          }
+          console.info(`Read ${guids.length} guids from s3://${Bucket}/${Key}`);
 
-            // break into chunks of 100
-            const allKeys = guids.map((g) => ({ guid: { S: g } }));
-            const chunkedKeys = [];
-            for (let i = 0; i < allKeys.length; i += 100) {
-              chunkedKeys.push(allKeys.slice(i, i + 100));
-            }
+          // break into chunks of 100
+          const allKeys = guids.map((g) => ({ guid: { S: g } }));
+          const chunkedKeys = [];
+          for (let i = 0; i < allKeys.length; i += 100) {
+            chunkedKeys.push(allKeys.slice(i, i + 100));
+          }
 
-            // scan DDB for already-seen guids
-            const found = {};
-            for (const Keys of chunkedKeys) {
-              const params = { RequestItems: { [TABLE_NAME]: { Keys } } };
-              const data = await ddb.batchGetItem(params).promise();
-              data.Responses[TABLE_NAME].forEach((r) => (found[r.guid.S] = true));
-            }
-            const newGuids = guids.filter((g) => !found[g]);
-            console.info(`Found ${newGuids.length} new guids not in DDB`);
+          // scan DDB for already-seen guids
+          const found = {};
+          for (const Keys of chunkedKeys) {
+            const params = { RequestItems: { [TABLE_NAME]: { Keys } } };
+            const data = await ddb.batchGetItem(params).promise();
+            data.Responses[TABLE_NAME].forEach((r) => (found[r.guid.S] = true));
+          }
+          const newGuids = guids.filter((g) => !found[g]);
+          console.info(`Found ${newGuids.length} new guids not in DDB`);
 
-            // scale ECS service
-            if (newGuids.length > 0) {
-              const params = { cluster: CLUSTER_NAME, services: [SERVICE_NAME] };
-              const res = await ecs.describeServices(params).promise();
-              const count = res.services[0].desiredCount;
-              const desiredCount = SCALE_TO[Key];
-              if (count < desiredCount) {
-                console.info(`Scaling from ${count} to ${desiredCount}`);
-                const updateParams = {
-                  cluster: CLUSTER_NAME,
-                  service: SERVICE_NAME,
-                  desiredCount,
-                };
-                await ecs.updateService(updateParams).promise();
-              } else {
-                console.info(`Already at ${count}`);
-              }
+          // scale ECS service
+          if (newGuids.length > 0) {
+            const params = { cluster: CLUSTER_NAME, services: [SERVICE_NAME] };
+            const res = await ecs.describeServices(params).promise();
+            const count = res.services[0].desiredCount;
+            const desiredCount = SCALE_TO[Key];
+            if (count < desiredCount) {
+              console.info(`Scaling from ${count} to ${desiredCount}`);
+              const updateParams = {
+                cluster: CLUSTER_NAME,
+                service: SERVICE_NAME,
+                desiredCount,
+              };
+              await ecs.updateService(updateParams).promise();
+            } else {
+              console.info(`Already at ${count}`);
             }
+          }
 
-            // set new guids in DDB
-            for (const guid of newGuids) {
-              const params = { TableName: TABLE_NAME, Item: { guid: { S: guid } } };
-              await ddb.putItem(params).promise();
-            }
+          // set new guids in DDB
+          for (const guid of newGuids) {
+            const params = { TableName: TABLE_NAME, Item: { guid: { S: guid } } };
+            await ddb.putItem(params).promise();
           }
         };
       MemorySize: 512
