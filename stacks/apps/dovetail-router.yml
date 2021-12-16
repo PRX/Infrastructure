@@ -879,6 +879,22 @@ Resources:
           DYNAMODB_TABLE_NAME: !Ref FeedScalerDynamodbTable
           ECS_CLUSTER_NAME: !Ref EcsClusterName
           ECS_SERVICE_NAME: !GetAtt EcsService.Name
+      Events:
+        S3Event:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              detail:
+                bucket:
+                  name:
+                    - !Select [5, !Split [":", !Ref FeedsS3BucketArn]]
+                object:
+                  key:
+                    - suffix: .xml
+              detail-type:
+                - Object Created
+              source:
+                - aws.s3
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
