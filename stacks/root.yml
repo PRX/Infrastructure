@@ -468,34 +468,6 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/dovetail-stitch-lambda.yml"]]
       TimeoutInMinutes: 5
-  # TODO: delete
-  SharedMemcachedStack:
-    Type: AWS::CloudFormation::Stack
-    Condition: IsProduction
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt VPCStack.Outputs.VPC
-        VPCSubnet1: !GetAtt VPCStack.Outputs.Subnet1
-        VPCSubnet2: !GetAtt VPCStack.Outputs.Subnet2
-        VPCSubnet3: !GetAtt VPCStack.Outputs.Subnet3
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackId
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
-        SourceSecurityGroupId1: !GetAtt ECSClusterStack.Outputs.ECSInstanceOutboundSecurityGroupId
-      Tags:
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/shared-memcached.yml"]]
-      TimeoutInMinutes: 40
   SharedMemcachedStack2:
     Type: AWS::CloudFormation::Stack
     Condition: IsProduction
@@ -678,37 +650,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-resource-share.yml
       TimeoutInMinutes: 20
-
-  # TODO: delete
-  PrivateSharedMemcachedStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        VPC: !GetAtt SharedVpcStack.Outputs.VpcId
-        VPCSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-        VPCSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-        VPCSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-        RootStackId: !GetAtt Constants.RootStackId
-        RootStackName: !GetAtt Constants.RootStackName
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
-        EnvironmentType: !Ref EnvironmentType
-        CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
-        SourceSecurityGroupId1: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
-      TimeoutInMinutes: 40
 
   PrivateSharedMemcachedStack2:
     Type: AWS::CloudFormation::Stack
