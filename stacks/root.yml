@@ -680,6 +680,38 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
+  PrivateSharedMemcachedStack2:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        VPC: !GetAtt SharedVpcStack.Outputs.VpcId
+        VPCSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
+        VPCSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
+        VPCSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
+        RootStackId: !GetAtt Constants.RootStackId
+        RootStackName: !GetAtt Constants.RootStackName
+        OpsWarnMessagesSnsTopicArn:
+          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
+        OpsErrorMessagesSnsTopicArn:
+          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
+        EnvironmentType: !Ref EnvironmentType
+        CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
+        SourceSecurityGroupId1: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
+        StagingInstanceType: cache.t4g.micro
+        ProductionInstanceType: cache.t4g.small
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
+      TimeoutInMinutes: 40
+
   SharedRedisStack:
     Type: AWS::CloudFormation::Stack
     Properties:
