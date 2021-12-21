@@ -110,6 +110,8 @@ Resources:
 
         const PODCAST_IDS = process.env.PODCAST_IDS.split(',').map(s => s.trim()).filter(s => s);
 
+        const IGNORE_PATHS = ['/', '/favicon.ico', '/robots.txt'];
+
         exports.handler = async (event) => {
           for (const rec of event.Records) {
             const Bucket = rec.s3.bucket.name;
@@ -139,7 +141,7 @@ Resources:
               } else if (parts.length === 5) {
                 data['prx-podcast-id'] = parts[0];
                 data['prx-episode-guid'] = parts[2];
-              } else {
+              } else if (!IGNORE_PATHS.includes(data['cs-uri-stem'])) {
                 console.warn(`Non-dovetail3 uri: ${data['cs-uri-stem']}`);
               }
               return PODCAST_IDS.includes(data['prx-podcast-id']);
@@ -188,7 +190,7 @@ Resources:
             console.info(`Shipped ${datas.length} of ${rows.length} to s3://${params.Bucket}/${params.Key}`);
           }
         };
-      MemorySize: 512
+      MemorySize: 768
       Policies:
         - Statement:
             - Action:
@@ -216,7 +218,7 @@ Resources:
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:family: Dovetail
         prx:dev:application: Log Shipper
-      Timeout: 30
+      Timeout: 45
   # TODO s3 trigger
   ShipperFunctionLogGroup:
     Type: AWS::Logs::LogGroup
