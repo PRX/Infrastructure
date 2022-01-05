@@ -7,19 +7,17 @@ Description: >-
   provided as a stack parameter.
 
 Parameters:
-  VPC:
+  VpcId:
     Type: AWS::EC2::VPC::Id
-  VPCSubnet1:
+  VpcPrivateSubnet1Id:
     Type: AWS::EC2::Subnet::Id
-  VPCSubnet2:
+  VpcPrivateSubnet2Id:
     Type: AWS::EC2::Subnet::Id
-  VPCSubnet3:
+  VpcPrivateSubnet3Id:
     Type: AWS::EC2::Subnet::Id
   EnvironmentType:
     Type: String
-  OpsWarnMessagesSnsTopicArn:
-    Type: String
-  OpsErrorMessagesSnsTopicArn:
+  EnvironmentTypeAbbreviation:
     Type: String
   SourceSecurityGroupId1:
     Type: AWS::EC2::SecurityGroup::Id
@@ -45,9 +43,9 @@ Resources:
     Properties:
       Description: !Sub Shared ${EnvironmentType} memcached subnet group
       SubnetIds:
-        - !Ref VPCSubnet1
-        - !Ref VPCSubnet2
-        - !Ref VPCSubnet3
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -74,7 +72,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VPC
+      VpcId: !Ref VpcId
 
   SharedMemcachedCluster:
     Type: AWS::ElastiCache::CacheCluster
@@ -109,15 +107,10 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Platform][Memcached][Swap] Swap exceeded 33 MB ${VPC} (${AWS::StackName})"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopicArn
-      AlarmDescription: Memcached swap usage exceeded 33 MB
+      AlarmName: !Sub WARN [Common] Memcached <${EnvironmentTypeAbbreviation}> HIGH SWAP USAGE (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Memcached's swap usage has exceeded
+        33 MB and could become a problem
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: CacheClusterId
@@ -148,15 +141,10 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      ActionsEnabled: true
-      AlarmName: !Sub "[Platform][Memcached][Swap] Swap exceeded 50 MB ${VPC} (${AWS::StackName})"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      AlarmDescription: Memcached swap usage exceeded 50 MB
+      AlarmName: !Sub ERROR [Common] Memcached <${EnvironmentTypeAbbreviation}> HIGH SWAP USAGE (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared Memcached's swap usage has exceeded
+        50 MB and likely is problematic
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: CacheClusterId

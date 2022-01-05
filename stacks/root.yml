@@ -122,12 +122,16 @@ Mappings:
   EnvironmentTypeMap:
     Testing:
       abbreviation: test
+      lowercase: testing
     Beta:
       abbreviation: beta
+      lowercase: beta
     Staging:
       abbreviation: stag
+      lowercase: staging
     Production:
       abbreviation: prod
+      lowercase: production
   # Each app should be given a listener rule priority prefix between 1 and 500.
   # In app stacks, listener rule priorities are created by combining the
   # prefix with exactly two more digits. This allows each app to have up to 99
@@ -450,23 +454,20 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-resource-share.yml
       TimeoutInMinutes: 20
 
-  PrivateSharedMemcachedStack2:
+  SharedMemcachedStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
         - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       Parameters:
-        VPC: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         VPCSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VPCSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VPCSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
         RootStackId: !GetAtt Constants.RootStackId
         RootStackName: !GetAtt Constants.RootStackName
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsWarnMessagesSnsTopicArn
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-OpsErrorMessagesSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
         CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
         SourceSecurityGroupId1: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
         StagingInstanceType: cache.t4g.micro
@@ -481,7 +482,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
-
   SharedRedisStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -556,7 +556,7 @@ Resources:
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
         KinesisStreamsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KinesisStreamsEndpointAccessSecurityGroupId
         StsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.StsEndpointAccessSecurityGroupId
-        SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack2.Outputs.CacheEndpointAddress
+        SharedMemcachedEndpointAddress: !GetAtt SharedMemcachedStack.Outputs.CacheEndpointAddress
         SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
         SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
         AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
@@ -654,8 +654,8 @@ Resources:
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-        SharedMemcachedEndpointAddress: !GetAtt PrivateSharedMemcachedStack2.Outputs.CacheEndpointAddress
-        SharedMemcachedEndpointPort: !GetAtt PrivateSharedMemcachedStack2.Outputs.CacheEndpointPort
+        SharedMemcachedEndpointAddress: !GetAtt SharedMemcachedStack.Outputs.CacheEndpointAddress
+        SharedMemcachedEndpointPort: !GetAtt SharedMemcachedStack.Outputs.CacheEndpointPort
         SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
         SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
         AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
@@ -892,7 +892,7 @@ Resources:
         SharedAlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         SharedAlbVanityDomain: !GetAtt SharedAlbStack.Outputs.VanityAlbDomain
 
-        SharedMemcachedCacheName: !GetAtt PrivateSharedMemcachedStack2.Outputs.CacheName
+        SharedMemcachedCacheName: !GetAtt SharedMemcachedStack.Outputs.CacheName
         SharedRedisReplicationGroupName: !GetAtt SharedRedisStack.Outputs.ReplicationGroupName
 
         StackResourceGroupName: !GetAtt ResourceGroupsStack.Outputs.StackResourceGroupName
