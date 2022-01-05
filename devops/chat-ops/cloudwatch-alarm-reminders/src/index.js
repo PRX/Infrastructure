@@ -134,6 +134,8 @@ function filterByName(alarm) {
     alarm.AlarmName.includes('AS:In') ||
     alarm.AlarmName.includes('AS:Out') ||
     alarm.AlarmName.includes('TargetTracking') ||
+    alarm.AlarmName.includes('ScaleInAlarm') ||
+    alarm.AlarmName.includes('ScaleOutAlarm') ||
     alarm.AlarmName.includes('Production Pollers Low CPU Usage')
   );
 }

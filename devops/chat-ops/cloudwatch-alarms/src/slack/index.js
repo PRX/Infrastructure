@@ -76,6 +76,8 @@ exports.handler = async (event) => {
       event.detail.alarmName.includes('AS:In') ||
       event.detail.alarmName.includes('AS:Out') ||
       event.detail.alarmName.includes('TargetTracking') ||
+      event.detail.alarmName.includes('ScaleInAlarm') ||
+      event.detail.alarmName.includes('ScaleOutAlarm') ||
       event.detail.alarmName.includes('Production Pollers Low CPU Usage')
     ) {
       return;
