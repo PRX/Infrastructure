@@ -7,26 +7,16 @@ Description: >-
   provided as a stack parameter.
 
 Parameters:
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-  VpcPrivateSubnet1Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPrivateSubnet2Id:
-    Type: AWS::EC2::Subnet::Id
-  VpcPrivateSubnet3Id:
-    Type: AWS::EC2::Subnet::Id
-  EnvironmentType:
-    Type: String
-  EnvironmentTypeAbbreviation:
-    Type: String
-  SourceSecurityGroupId1:
-    Type: AWS::EC2::SecurityGroup::Id
-  RootStackName:
-    Type: String
-  RootStackId:
-    Type: String
-  CloudWatchAlarmTaggerServiceToken:
-    Type: String
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  SourceSecurityGroupId1: { Type: AWS::EC2::SecurityGroup::Id }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
   StagingInstanceType:
     Type: String
     Default: cache.t3.micro
@@ -78,19 +68,13 @@ Resources:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
       AutoMinorVersionUpgrade: true
-      AZMode: !If
-        - IsProduction
-        - cross-az
-        - single-az
+      AZMode: !If [IsProduction, cross-az, single-az]
       Engine: memcached
       CacheNodeType: !If
         - IsProduction
         - !Ref ProductionInstanceType
         - !Ref StagingInstanceType
-      NumCacheNodes: !If
-        - IsProduction
-        - 2
-        - 1
+      NumCacheNodes: !If [IsProduction, 2, 1]
       CacheSubnetGroupName: !Ref SharedMemcachedSubnetGroup
       VpcSecurityGroupIds:
         - !GetAtt SharedMemcachedSecurityGroup.GroupId
