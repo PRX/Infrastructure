@@ -69,6 +69,8 @@ Resources:
       SphinxBaseUrl: !Sub https://${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech/
       VanityNlbDomain: !Sub ${Nlb.LoadBalancerName}.${AWS::Region}.prx.tech
       NetworksS3BucketName: !Select [5, !Split [":", !Ref NetworksS3BucketArn]]
+      # Provides a namespace for Exchange-specific queues
+      SqsQueuePrefix: !Sub ${AnnounceResourcePrefix}_exchange_
 
   TaskUser:
     # TODO Someday when the AWS client within the Networks app has support for
@@ -356,7 +358,7 @@ Resources:
             - Name: AWS_S3_BUCKET
               Value: !GetAtt Constants.NetworksS3BucketName
             - Name: SQS_PREFIX
-              Value: !Ref AnnounceResourcePrefix
+              Value: !GetAtt Constants.SqsQueuePrefix
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -726,7 +728,7 @@ Resources:
             - Name: AWS_S3_BUCKET
               Value: !GetAtt Constants.NetworksS3BucketName
             - Name: SQS_PREFIX
-              Value: !Ref AnnounceResourcePrefix
+              Value: !GetAtt Constants.SqsQueuePrefix
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
