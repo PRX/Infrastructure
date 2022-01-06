@@ -46,29 +46,6 @@ Parameters:
   RadiotopiaTowerLambdaCodeS3ObjectKey:
     Type: String
 Resources:
-  UploadLambdaStack:
-    Type: "AWS::CloudFormation::Stack"
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-CloudFormationNotificationSnsTopic"
-      Parameters:
-        OpsErrorMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsErrorMessagesSnsTopicArn"
-        OpsWarnMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsWarnMessagesSnsTopicArn"
-        OpsFatalMessagesSnsTopicArn:
-          Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-OpsFatalMessagesSnsTopicArn"
-        EnvironmentType: !Ref EnvironmentType
-        CodeS3Bucket:
-          Fn::ImportValue: !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket"
-        CodeS3ObjectKey: !Ref UploadLambdaCodeS3ObjectKey
-      Tags:
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "upload.prx.org.yml"]]
-      TimeoutInMinutes: 5
   DovetailBytesLambdaStack:
     Type: "AWS::CloudFormation::Stack"
     Properties:
@@ -86,15 +63,3 @@ Resources:
           Value: !Ref AWS::StackId
       TemplateURL: !Join ["", [!Ref TemplateUrlPrefix, "dovetail-bytes-lambda.yml"]]
       TimeoutInMinutes: 5
-Outputs:
-  UploadSigningUserName:
-    Description: The user name of the IAM user whose key is used for signing
-    Value: !GetAtt UploadLambdaStack.Outputs.UploadSigningUserName
-  UploadSigningAccessKeyId:
-    Description: >-
-      The IAM access key ID for the access key used to generate S3 API
-      request signatures
-    Value: !GetAtt UploadLambdaStack.Outputs.SigningAccessKeyId
-  UploadSigningEndpointUrl:
-    Description: The user name of the IAM user whose key is used for signing
-    Value: !GetAtt UploadLambdaStack.Outputs.SigningEndpointUrl
