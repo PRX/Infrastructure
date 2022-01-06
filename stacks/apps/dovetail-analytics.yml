@@ -25,6 +25,7 @@ Parameters:
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  SharedRedisSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
@@ -895,6 +896,16 @@ Resources:
           MetricValue: "1"
 
   # Redis
+  RedisSecurityGroupInstanceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow Redis traffic from the Counts SG
+      SourceSecurityGroupId: !GetAtt AnalyticsRedisFunctionSecurityGroup.GroupId
+      FromPort: 6379
+      GroupId: !Ref SharedRedisSecurityGroupId
+      IpProtocol: tcp
+      ToPort: 6379
+
   AnalyticsRedisFunctionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
