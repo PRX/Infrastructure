@@ -36,6 +36,7 @@ Parameters:
   DovetailCountedBytesKinesisArn: { Type: AWS::SSM::Parameter::Value<String> }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
+  SharedRedisSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -63,6 +64,17 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Counts }
       VpcId: !Ref VpcId
+
+  RedisSecurityGroupInstanceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allow Redis traffic from the Counts SG
+      SourceSecurityGroupId: !GetAtt AWS::EC2::SecurityGroup.GroupId
+      FromPort: 6737
+      GroupId: !Ref SharedRedisSecurityGroupId
+      IpProtocol: tcp
+      ToPort: 6737
+
   CountsFunction:
     Type: AWS::Serverless::Function
     Properties:
