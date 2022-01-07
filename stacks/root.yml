@@ -225,6 +225,25 @@ Resources:
       AdFilesHostname: a.prxu.org
       MetaHostname: meta.prx.org
 
+  # START LEGACY ===============================================================
+  # App and shared resource stacks
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        AwsOrganizationId: !Ref AwsOrganizationId
+      Tags:
+        - Key: prx:cloudformation:stack-name
+          Value: !Ref AWS::StackName
+        - Key: prx:cloudformation:stack-id
+          Value: !Ref AWS::StackId
+      TemplateURL: !Join ["", ["https://", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", !Sub ".s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}", "/stacks/vpc.yml"]]
+      TimeoutInMinutes: 5
+  # END LEGACY =================================================================
+
   SharedVpcStack:
     Type: AWS::CloudFormation::Stack
     Properties:
