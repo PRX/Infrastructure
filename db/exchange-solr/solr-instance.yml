@@ -1,0 +1,103 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  SharedVpcId: { Type: AWS::EC2::VPC::Id }
+  Subnet1Id: { Type: AWS::EC2::Subnet::Id }
+  InstanceSecurityGroupId:
+    Description: >-
+      The ID for a security group that EC2 instances which should have access
+      to Solr belong to
+    Type: String
+  Ec2ImageId: { Type: AWS::EC2::Image::Id }
+  Ec2KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  SolrInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Primary security group for the ${EnvironmentType} Exchange Solr EC2
+        instance
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_exchange_solr" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VpcId: !Ref SharedVpcId
+  GlobalSshIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: >-
+        Allows ingress traffic from all SSH traffic
+      FromPort: 22
+      GroupId: !GetAtt SolrInstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  SharedAsgInstanceSearchIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allows Solr search traffic from the shared ASG instance security group
+      FromPort: 8983
+      GroupId: !GetAtt SolrInstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref InstanceSecurityGroupId
+      ToPort: 8983
+  SharedAsgInstanceTomcatIngress:
+    # This is probably unused
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allows Tomcat AJP traffic from the shared ASG instance security group
+      FromPort: 8009
+      GroupId: !GetAtt SolrInstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref InstanceSecurityGroupId
+      ToPort: 8009
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !If [IsProduction, t3.medium, t3.micro]
+      ImageId: !Ref Ec2ImageId
+      KeyName: !Ref Ec2KeyPairName
+      SecurityGroupIds:
+        - !GetAtt SolrInstanceSecurityGroup.GroupId
+      SubnetId: !Ref Subnet1Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+
+  EbsVolume:
+    Type: AWS::EC2::Volume
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !GetAtt Ec2Instance.AvailabilityZone
+      Size: 8
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  EbsVolumeAttachent:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      Device: /dev/xvdb
+      InstanceId: !Ref Ec2Instance
+      VolumeId: !Ref EbsVolume
