@@ -1,4 +1,5 @@
 # stacks/apps/feeder.yml
+# 200A
 #
 # The names of the SQS queues created by this template are intended to
 # implicitly match some configuration that exists within the CMS application.
@@ -27,6 +28,7 @@ Parameters:
   EcsClusterArn: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  EnvironmentTypeLowercase: { Type: String }
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -34,6 +36,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   SecretsBase: { Type: String }
+  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
   SecretsStackName: { Type: String }
@@ -41,7 +44,12 @@ Parameters:
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   AnnounceResourcePrefix: { Type: String }
+  PorterJobExecutionSnsTopicArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
+  CmsHostname: { Type: String }
+  DovetailRouterHostname: { Type: String }
+  IdHostname: { Type: String }
+  BetaHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -434,6 +442,8 @@ Resources:
           Environment:
             - Name: APP_NAME
               Value: feeder
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -454,6 +464,32 @@ Resources:
               Value: !GetAtt FixerCallbackQueue.QueueName
             - Name: ANNOUNCE_RESOURCE_PREFIX
               Value: !Ref AnnounceResourcePrefix
+            - Name: CMS_HOST
+              Value: !Ref CmsHostname
+            - Name: DATABASE_POOL_SIZE
+              Value: "16"
+            - Name: DOVETAIL_HOST
+              Value: !Ref DovetailRouterHostname
+            - Name: ID_HOST
+              Value: !Ref IdHostname
+            - Name: LANG
+              Value: en_US.UTF-8
+            - Name: NEW_RELIC_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, Feeder Production, Feeder Staging]
+            - Name: PORTER_SNS_TOPIC
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: PRX_HOST
+              Value: !Ref BetaHostname
+            - Name: RAILS_SERVE_STATIC_FILES
+              Value: enabled
+            - Name: WORKER_PAUSE
+              Value: "30"
+            - Name: WORKER_DATABASE_POOL_SIZE
+              Value: !If [IsProduction, 10, 5]
+            - Name: WORKER_COUNT
+              Value: !If [IsProduction, 10, 5]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
@@ -530,6 +566,8 @@ Resources:
           Environment:
             - Name: APP_NAME
               Value: feeder
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_SECRETS_BASE
@@ -550,6 +588,32 @@ Resources:
               Value: !GetAtt FixerCallbackQueue.QueueName
             - Name: ANNOUNCE_RESOURCE_PREFIX
               Value: !Ref AnnounceResourcePrefix
+            - Name: CMS_HOST
+              Value: !Ref CmsHostname
+            - Name: DATABASE_POOL_SIZE
+              Value: "16"
+            - Name: DOVETAIL_HOST
+              Value: !Ref DovetailRouterHostname
+            - Name: ID_HOST
+              Value: !Ref IdHostname
+            - Name: LANG
+              Value: en_US.UTF-8
+            - Name: NEW_RELIC_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, Feeder Production, Feeder Staging]
+            - Name: PORTER_SNS_TOPIC
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: PRX_HOST
+              Value: !Ref BetaHostname
+            - Name: RAILS_SERVE_STATIC_FILES
+              Value: enabled
+            - Name: WORKER_PAUSE
+              Value: "30"
+            - Name: WORKER_DATABASE_POOL_SIZE
+              Value: !If [IsProduction, 10, 5]
+            - Name: WORKER_COUNT
+              Value: !If [IsProduction, 10, 5]
           Essential: true
           Image: !Ref EcrImageTag
           LogConfiguration:
