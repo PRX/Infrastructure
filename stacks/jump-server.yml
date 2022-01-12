@@ -1,0 +1,96 @@
+# stacks/jump-server.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an EC2 jump server for access to databases and other VPC resources.
+  Also, you know, whatever other random things we want to run.
+
+Parameters:
+  kImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2/amzn2-ami-ecs-hvm-2.0.20211209-x86_64-ebs/image_id
+  ########
+  AuthorizedKeys: { Type: CommaDelimitedList }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: String }
+  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  EC2JumpServer:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_add_authorized_keys:
+              # For more information, see:
+              # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  echo "Adding developer public keys to authorized_keys"
+                  echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
+                - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
+          files:
+            /etc/cfn/cfn-hup.conf:
+              # Create a configuration file for cfn-hup
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              mode: "000400"
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              # Define the actions to run when the resource metadata (found at
+              # the given path) changes during a stack update.
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-hook-file
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.EC2JumpServer.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource EC2JumpServer
+                runas=root
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: 100
+      CreditSpecification:
+        CpuCredits: unlimited
+      DisableApiTermination: true
+      IamInstanceProfile:
+        Arn: !GetAtt InstanceProfile.Arn
+      ImageId: !Ref kImageId
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: !If [IsProduction, t4g.small, t4g.micro]
+      KeyName: !Ref KeyPairName
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref SharedEcsAsgInstanceSecurityGroupId
+            - !Ref EcsLaunchEndpointsAccessSecurityGroupId
+          Ipv6AddressCount: 1
+      SubnetId: !Ref VpcPublicSubnet1Id
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_ec2_jump" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
