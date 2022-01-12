@@ -84,6 +84,20 @@ Resources:
                 path=Resources.JumpServer.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource JumpServer
                 runas=root
+          packages:
+            yum:
+              jq: []
+              bind-utils: []
+          services:
+            sysvinit:
+              cfn-hup:
+                # Starts the cfn-hup service, and restarts the service if
+                # cfn-init modifies the specified configuration files
+                enabled: "true"
+                ensureRunning: "true"
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
     Properties:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -138,3 +152,10 @@ Resources:
             # with aws-cfn-bootstrap. aws-cli fails to install as part of the cfn-init packages, so it's installed
             # here, even though they both use yum. Other packages should be installed through cfn-init.
             yum install -y aws-cfn-bootstrap aws-cli
+
+            # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
+            # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
+            # resource where this user data script (what you're reading right now) is defined.
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource JumpServer
