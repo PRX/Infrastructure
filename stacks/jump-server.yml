@@ -118,3 +118,23 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+      UserData:
+        # User data runs commands on EC2 instances when they are launched. To
+        # support configuration updates on running EC2 instance, the user
+        # data should primarily be used to run cfn-init. Any further launch
+        # scripts or tasks should be defined in the resource metadata that
+        # cfn-init loads, and that cfn-hup watches for changes.
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
+        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-amazon-amis
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            # The logs for this are found in: /var/log/cloud-init-output.log
+            # Except the cfn-signal seems to get logged to /var/log/cfn-init.log
+            # along with the rest of the cfn-init logs
+            #
+            # Despite what the docs say, the CloudFormation helper scripts are not preinstalled, so we install them
+            # with aws-cfn-bootstrap. aws-cli fails to install as part of the cfn-init packages, so it's installed
+            # here, even though they both use yum. Other packages should be installed through cfn-init.
+            yum install -y aws-cfn-bootstrap aws-cli
