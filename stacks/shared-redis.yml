@@ -11,12 +11,11 @@ Parameters:
   RootStackId: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
-  VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedRedisClusterSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -31,25 +30,6 @@ Resources:
         - !Ref VpcPrivateSubnet2Id
         - !Ref VpcPrivateSubnet3Id
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref VpcId
-      GroupDescription: !Sub Shared ${EnvironmentType} Redis security group
-      SecurityGroupIngress:
-        - FromPort: 6379
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-          ToPort: 6379
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared_redis" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
@@ -76,7 +56,7 @@ Resources:
       ReplicasPerNodeGroup: 1 # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
       ReplicationGroupDescription: !Sub Shared ${EnvironmentType} Redis
       SecurityGroupIds:
-        - !GetAtt RedisSecurityGroup.GroupId
+        - !Ref SharedRedisClusterSecurityGroupId
       SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -158,8 +138,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
 
 Outputs:
-  SecurityGroupId:
-    Value: !GetAtt RedisSecurityGroup.GroupId
   ReplicationGroupName:
     Value: !Ref RedisReplicationGroup
   ReplicationGroupEndpointAddress:
