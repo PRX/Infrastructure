@@ -12,11 +12,9 @@ Parameters:
   ########
   AuthorizedKeys: { Type: CommaDelimitedList }
   EnvironmentType: { Type: String }
-  EnvironmentTypeAbbreviation: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
-  VpcId: { Type: AWS::EC2::VPC::Id }
   SharedEcsAsgInstanceSecurityGroupId: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
 
@@ -24,7 +22,31 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  EC2JumpServer:
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      # TODO: the actual policies
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+  JumpServer:
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
@@ -57,8 +79,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.EC2JumpServer.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource EC2JumpServer
+                path=Resources.JumpServer.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource JumpServer
                 runas=root
     Properties:
       BlockDeviceMappings:
@@ -67,10 +89,9 @@ Resources:
             VolumeType: gp2
             VolumeSize: 100
       CreditSpecification:
-        CpuCredits: unlimited
+        CPUCredits: unlimited
       DisableApiTermination: true
-      IamInstanceProfile:
-        Arn: !GetAtt InstanceProfile.Arn
+      IamInstanceProfile: !Ref InstanceProfile
       ImageId: !Ref kImageId
       InstanceInitiatedShutdownBehavior: stop
       InstanceType: !If [IsProduction, t4g.small, t4g.micro]
@@ -82,11 +103,11 @@ Resources:
           DeviceIndex: 0
           GroupSet:
             - !Ref SharedEcsAsgInstanceSecurityGroupId
-            - !Ref EcsLaunchEndpointsAccessSecurityGroupId
+            # TODO: the actual security groups
           Ipv6AddressCount: 1
-      SubnetId: !Ref VpcPublicSubnet1Id
+          SubnetId: !Ref VpcPublicSubnet1Id
       Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_ec2_jump" }
+        - { Key: Name, Value: !Sub "${RootStackName}_jump_server" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
