@@ -1,0 +1,105 @@
+# stacks/shared-db-sg.yml
+#
+# This stack creates a number of security groups, which are intended to be used
+# *only* by resources managed within the same root stack. These groups are
+# based on the assumption that we manage a small number (currently two) of
+# shared databases outside of the root stack.
+#
+# These groups will be granted access to the security groups that the shared
+# databases belong to.
+#
+# Any resource that needs access to one of the databases associated with these
+# SGs can be added to the group. They could be EC2 instances, ECS tasks, Lambda
+# functions, etc.
+#
+# These SGs currently include egress rules based on the CIDR block of the
+# shared VPC, *not* the group ID of the databases' security groups. This is
+# entirely to make deployment easier. They could be refactored to specifically
+# grant access to the DB SGs; those IDs would have to be passed into the root
+# stack after they are created alongside the DBs.
+#
+# Currently, there are two shared databases: one MySQL and one PostgreSQL. A
+# SG is made for each, but in the future if there is a more obvious way to
+# organize clients of various shared databases, the structure could/should
+# change.
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates security groups that clients using the standard shared databases
+  will belong to. The databases' security groups will permit traffic from these
+  groups as necessary.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SharedVpcCidrBlock: { Type: String }
+
+Resources:
+  SharedMysqlClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} resources that act as clients
+        for the shared MySQL database
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-db_mysql" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  SharedMysqlClientSecurityGroupAuroraEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: !Ref SharedVpcCidrBlock
+      Description: !Sub >-
+        Allows outbound Aurora MySQL traffic
+      FromPort: 3306
+      GroupId: !GetAtt SharedMysqlClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 3306
+
+  SharedPostgresqlClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} resources that act as clients
+        for the shared PostgreSQL database
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-db_pg" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  SharedPostgresqlClientSecurityGroupAuroraEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: !Ref SharedVpcCidrBlock
+      Description: !Sub >-
+        Allows outbound Aurora PostgreSQL traffic
+      FromPort: 3306
+      GroupId: !GetAtt SharedPostgresqlClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 3306
+
+Outputs:
+  SharedMysqlClientSecurityGroupId:
+    Description: >-
+      The group ID of the security group used by clients that need access to
+      the shared MySQL database
+    Value: !GetAtt SharedMysqlClientSecurityGroup.GroupId
+  SharedPostgresqlClientSecurityGroupId:
+    Description: >-
+      The group ID of the security group used by clients that need access to
+      the shared PostgreSQL database
+    Value: !GetAtt SharedPostgresqlClientSecurityGroup.GroupId

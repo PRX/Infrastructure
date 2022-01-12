@@ -247,6 +247,28 @@ Resources:
       TimeoutInMinutes: 5
   # END LEGACY =================================================================
 
+  SharedDatabaseSecurityGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackName
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        SharedVpcCidrBlock: !Ref SharedVpcCidrBlock
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-db-sg.yml
+      TimeoutInMinutes: 20
+
   SharedVpcStack:
     Type: AWS::CloudFormation::Stack
     Properties:
