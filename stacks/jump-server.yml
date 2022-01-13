@@ -14,6 +14,7 @@ Parameters:
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedPostgresqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
 
 Conditions:
@@ -44,6 +45,26 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} Jump Server inbound traffic
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}-jump_server_sg" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
   JumpServer:
     Type: AWS::EC2::Instance
     Metadata:
@@ -118,7 +139,7 @@ Resources:
             - !Ref SharedRedisClientSecurityGroupId
           SubnetId: !Ref VpcPublicSubnet1Id
       Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_jump_server" }
+        - { Key: Name, Value: !Sub "${RootStackName}-jump_server" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
