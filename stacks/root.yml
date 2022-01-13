@@ -524,6 +524,32 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-announce.yml
       TimeoutInMinutes: 10
 
+  JumpServerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+      Parameters:
+        AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
+        EnvironmentType: !Ref EnvironmentType
+        KeyPairName: !Ref AsgKeyPairName
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
+        SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
+        SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/jump-server.yml
+      TimeoutInMinutes: 10
+
   Apps100AStack:
     Type: AWS::CloudFormation::Stack
     Properties:
