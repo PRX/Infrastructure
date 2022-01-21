@@ -118,7 +118,11 @@ exports.handler = async (event) => {
     330245: '#radiotopia-donations',
     342678: '#radiotopia-donations',
     327574: '#radiotopia-donations',
+    386768: '#radiotopia-donations',
     326353: '#earhustle-donations',
+    368624: 'tw-fall-2021-donations',
+    368561: 'tw-fall-2021-donations',
+    368367: 'tw-fall-2021-donations',
     // 999999: '#tw-fall-2021-donations',
   };
 
