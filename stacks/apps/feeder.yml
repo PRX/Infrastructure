@@ -23,12 +23,6 @@ Parameters:
   kWebApplicationPort:
     Type: Number
     Default: 3000
-  kInteralProdDomain:
-    Type: String
-    Default: p.u.prx.tech
-  kInteralStagDomain:
-    Type: String
-    Default: p.staging.u.prx.tech
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -668,7 +662,7 @@ Resources:
       Description: !Sub Feeder ${EnvironmentType} private feed proxy server
       Environment:
         Variables:
-          PUBLIC_FEED_DOMAIN: !If [IsProduction, f.prxu.org, f-staging.prxu.org]
+          PUBLIC_FEED_DOMAIN: !Ref PublicFeedsHostname
       Events:
         ApiRootRequest:
           Properties:
@@ -832,7 +826,7 @@ Resources:
             DNSName: !GetAtt ExternalDomainName.RegionalDomainName
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
-          Name: !If [IsProduction, !Ref kInteralProdDomain, !Ref kInteralStagDomain]
+          Name: !Ref FeederAuthProxyInternalHostname
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
           Type: A
@@ -840,7 +834,7 @@ Resources:
             DNSName: !GetAtt ExternalDomainName.RegionalDomainName
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
-          Name: !If [IsProduction, !Ref kInteralProdDomain, !Ref kInteralStagDomain]
+          Name: !Ref FeederAuthProxyInternalHostname
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
           Type: AAAA
