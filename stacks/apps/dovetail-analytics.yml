@@ -1142,3 +1142,36 @@ Resources:
         - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref AnalyticsRedisFunctionLogGroup }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Analytics }
+
+  # CloudWatch Dashboard
+  RouterDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody: !Sub |-
+        {
+          "widgets": [
+            {
+              "height": 6,
+              "width": 12,
+              "y": 36,
+              "x": 0,
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsBigqueryFunction}", { "label": "BigQuery Lambda" } ],
+                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "DynamoDB Lambda" } ],
+                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsPingbacksFunction}", { "label": "Pingbacks Lambda" } ],
+                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsRedisFunction}", { "label": "Redis Lambda" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Max Iterator Age",
+                "period": 60,
+                "liveData": true,
+                "stat": "Maximum"
+              }
+            }
+          ]
+        }
+      DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Analytics
