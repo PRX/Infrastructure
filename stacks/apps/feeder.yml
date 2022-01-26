@@ -7,6 +7,7 @@
 # prefix; if the stems change in other the template or the app config, things
 # will not function as expected.
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates a dedicated load balancer and the ECS service for the public Feeder
@@ -22,6 +23,12 @@ Parameters:
   kWebApplicationPort:
     Type: Number
     Default: 3000
+  kInteralProdDomain:
+    Type: String
+    Default: p.u.prx.tech
+  kInteralStagDomain:
+    Type: String
+    Default: p.staging.u.prx.tech
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -50,6 +57,7 @@ Parameters:
   DovetailRouterHostname: { Type: String }
   IdHostname: { Type: String }
   BetaHostname: { Type: String }
+  FeederAuthProxyHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -638,6 +646,207 @@ Resources:
         - { Key: prx:dev:application, Value: Feeder }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  AuthProxyHttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: !Sub Feeder ${EnvironmentType} private feed proxy service
+      DisableExecuteApiEndpoint: false
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Feeder
+  AuthProxyHttpLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub Feeder ${EnvironmentType} private feed proxy server
+      Environment:
+        Variables:
+          PUBLIC_FEED_DOMAIN: !If [IsProduction, f.prxu.org, f-staging.prxu.org]
+      Events:
+        ApiRootRequest:
+          Properties:
+            ApiId: !Ref AuthProxyHttpApi
+            Method: any
+            Path: /
+            PayloadFormatVersion: "1.0"
+          Type: HttpApi
+        ApiDeepRequest:
+          Properties:
+            ApiId: !Ref AuthProxyHttpApi
+            Method: any
+            Path: /{proxy+}
+            PayloadFormatVersion: "1.0"
+          Type: HttpApi
+      Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+        const s3 = new AWS.S3();
+
+        // lightweight json logger
+        function log(level, msg, extra = {}) {
+          console[level](JSON.stringify({ level, msg, ...extra }));
+        }
+
+        exports.handler = async (event) => {
+          // TODO: everything
+          console.log(JSON.stringify(event));
+          return {
+            statusCode: 404,
+            body: 'todo',
+            headers: {
+              'Content-Type': 'text/plain',
+              'Cache-Control': 'public, max-age=0'
+            }
+          };
+        };
+      MemorySize: 192
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Feeder
+      Timeout: 30
+  AuthProxyHttpLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AuthProxyHttpLambdaFunction}
+      RetentionInDays: 14
+  AuthProxyHttpLambdaLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref AuthProxyHttpLambdaLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+  AuthProxyHttpLambdaElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Feeder Proxy] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Feeder Private Feed Proxy Lambda function is failing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AuthProxyHttpLambdaFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  ProxyHttpLambdaElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AuthProxyHttpLambdaElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+
+  ExternalCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref FeederAuthProxyHostname
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_the-world_search" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      ValidationMethod: DNS
+
+  # Creates an association between p.[staging.]prxu.org and the
+  # API Gateway. This association can be created once per region.
+  # This association allows for a CNAME to be made between p.[staging.]prxu.org
+  # and p.[staging.]u.prx.tech, the latter of which provides latency-based
+  # routing for the app between regions.
+  ExternalDomainName:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Ref FeederAuthProxyHostname
+      DomainNameConfigurations:
+        - CertificateArn: !Ref ExternalCertificate
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Feeder
+  ExternalApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Properties:
+      ApiId: !Ref AuthProxyHttpApi
+      DomainName: !Ref ExternalDomainName
+      Stage: $default
+
+  # Creates DNS records for p.[staging.]u.prx.tech, which alias to the
+  # regional domain name for the domain association for search.theworld.org.
+  # This allows for p.[staging.].prxu.org to resolve to p.[staging.]u.prx.tech,
+  # and have p.[staging.]u.prx.tech return the IP for an endpoint that
+  # is associated with p.[staging.].prxu.org.
+  # There is no API Gateway domain association for p.[staging.]u.prx.tech
+  # itself, so that domain is not functional, in any way other than as a DNS
+  # CNAME target.
+  InternalDomainNameRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for auth proxy server API
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt ExternalDomainName.RegionalDomainName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
+          Name: !If [IsProduction, !Ref kInteralProdDomain, !Ref kInteralStagDomain]
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: A
+        - AliasTarget:
+            DNSName: !GetAtt ExternalDomainName.RegionalDomainName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt ExternalDomainName.RegionalHostedZoneId
+          Name: !If [IsProduction, !Ref kInteralProdDomain, !Ref kInteralStagDomain]
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: AAAA
+
 Outputs:
   WebTargetGroupFullName:
     Value: !GetAtt WebTargetGroup2.TargetGroupFullName
+  AuthApiDefaultEndpoint:
+    Value: !Sub https://${AuthProxyHttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  AuthApiId:
+    Value: !Ref AuthProxyHttpApi
