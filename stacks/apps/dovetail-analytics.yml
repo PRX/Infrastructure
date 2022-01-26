@@ -830,6 +830,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Analytics }
 
+  # TODO Adzerk Pingbacks are probably no longer necessary to track
   AnalyticsPingbacksFunctionAdzerkMetricFilter:
     # Counts the number of pingbacks sent to Adzerk
     Type: AWS::Logs::MetricFilter
@@ -1144,34 +1145,88 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
 
   # CloudWatch Dashboard
-  RouterDashboard:
+  Dashboard:
     Type: AWS::CloudWatch::Dashboard
     Properties:
-      DashboardBody: !Sub |-
-        {
-          "widgets": [
-            {
-              "height": 6,
-              "width": 12,
-              "y": 36,
-              "x": 0,
-              "type": "metric",
-              "properties": {
-                "metrics": [
-                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsBigqueryFunction}", { "label": "BigQuery Lambda" } ],
-                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "DynamoDB Lambda" } ],
-                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsPingbacksFunction}", { "label": "Pingbacks Lambda" } ],
-                  [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsRedisFunction}", { "label": "Redis Lambda" } ]
-                ],
-                "view": "timeSeries",
-                "stacked": false,
-                "region": "${AWS::Region}",
-                "title": "Max Iterator Age",
-                "period": 60,
-                "liveData": true,
-                "stat": "Maximum"
+      DashboardBody: !Sub
+        - |-
+          {
+            "widgets": [
+              {
+                "height": 6,
+                "width": 12,
+                "y": 0,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "PRX/Dovetail/Analytics", "bigquery_downloads_${AnalyticsBigqueryFunction}", { "label": "BigQuery Download Records", "color": "#1f77b4" } ],
+                    [ "PRX/Dovetail/Analytics", "bigquery_impressions_${AnalyticsBigqueryFunction}", { "label": "BigQuery Impression Records", "color": "#ff7f0e" } ],
+                    [ "PRX/Dovetail/Analytics", "pingbacks_other_${AnalyticsPingbacksFunction}", { "label": "Pingbacks", "color": "#d62728" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "yAxis": {
+                    "left": {
+                      "min": 0
+                    }
+                  },
+                  "title": "Resultant Data",
+                  "period": 60,
+                  "stat": "Sum"
+                }
+              },
+              {
+                "height": 6,
+                "width": 12,
+                "y": 6,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsBigqueryFunction}", { "label": "BigQuery Lambda" } ],
+                    [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "DynamoDB Lambda" } ],
+                    [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsPingbacksFunction}", { "label": "Pingbacks Lambda" } ],
+                    [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsRedisFunction}", { "label": "Redis Lambda" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "Max Iterator Age",
+                  "period": 60,
+                  "liveData": true,
+                  "stat": "Maximum"
+                }
+              },
+              {
+                "height": 6,
+                "width": 12,
+                "y": 12,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "AWS/Kinesis", "IncomingRecords", "StreamName", "${MetricsStreamName}", { "label": "Metrics stream IN" } ],
+                    [ "AWS/Kinesis", "GetRecords.Records", "StreamName", "${MetricsStreamName}", { "yAxis": "left", "label": "Metrics stream OUT" } ],
+                    [ "AWS/Kinesis", "IncomingRecords", "StreamName", "${DdbStreamName}", { "label": "DynamoDB stream IN", "yAxis": "right" } ],
+                    [ "AWS/Kinesis", "GetRecords.Records", "StreamName", "${DdbStreamName}", { "label": "DynamoDB stream OUT", "color": "#d62728", "yAxis": "right" } ]
+                  ],
+                  "period": 60,
+                  "stat": "Sum",
+                  "title": "Kinesis Streams I/O",
+                  "region": "${AWS::Region}",
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "yAxis": {
+                    "left": {
+                      "min": 0
+                    }
+                  }
+                }
               }
-            }
-          ]
-        }
-      DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Analytics
+            ]
+          }
+        - DdbStreamName: !Select [1, !Split [":stream/", !Ref DynamoDbKinesisStreamArn]]
+          MetricsStreamName: !Select [1, !Split [":stream/", !Ref MetricsKinesisStreamArn]]
+      DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Analytics2
