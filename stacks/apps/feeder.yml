@@ -680,25 +680,47 @@ Resources:
           Type: HttpApi
       Handler: index.handler
       InlineCode: |
-        const AWS = require('aws-sdk');
-        const s3 = new AWS.S3();
-
-        // lightweight json logger
-        function log(level, msg, extra = {}) {
-          console[level](JSON.stringify({ level, msg, ...extra }));
-        }
+        const http = require('http');
+        const text = (statusCode = 200, body = 'ok', maxAge = 0) => {
+          const headers = {
+            'Content-Type': 'text/plain',
+            'Cache-Control': `public, max-age=${maxAge}`,
+          };
+          return { statusCode, body, headers };
+        };
 
         exports.handler = async (event) => {
-          // TODO: everything
-          console.log(JSON.stringify(event));
-          return {
-            statusCode: 404,
-            body: 'todo',
-            headers: {
-              'Content-Type': 'text/plain',
-              'Cache-Control': 'public, max-age=0'
-            }
+          if (!event.queryStringParameters || !event.queryStringParameters.auth) {
+            return text(403, 'nope, no feed for you!', 300);
+          }
+
+          const resp = await new Promise((resolve) => {
+            http.get(`http://${process.env.PUBLIC_FEED_DOMAIN}${event.path}`, resolve);
+          });
+          if (resp.statusCode !== 200) {
+            return text(404, 'Not Found', 300);
+          }
+          if (!(resp.headers['content-type'] || '').includes('application/rss+xml')) {
+            return text(404, 'Not Feed', 300);
+          }
+
+          const data = await new Promise((resolve, reject) => {
+            let chunks = '';
+            resp.on('data', (chunk) => (chunks += chunk));
+            resp.on('error', (err) => reject(err));
+            resp.on('end', () => resolve(chunks));
+          });
+
+          const auth = event.queryStringParameters.auth;
+          const body = data.replace(
+            /<enclosure url="([^"]+)"/g,
+            `<enclosure url="$1?auth=${auth}"`,
+          );
+          const headers = {
+            'Content-Type': resp.headers['content-type'],
+            'Cache-Control': `public, max-age=300`,
           };
+          return { statusCode: 200, body, headers };
         };
       MemorySize: 192
       Runtime: nodejs14.x
