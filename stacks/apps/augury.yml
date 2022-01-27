@@ -883,6 +883,80 @@ Resources:
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
 
+  # CloudWatch Dashboard
+  Dashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody: !Sub
+        - |-
+          {
+            "widgets": [
+              {
+                "height": 6,
+                "width": 24,
+                "y": 0,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "label": "Maximum", "stat": "Maximum" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "stat": "p99", "label": "p99" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "stat": "p95", "label": "p95" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "stat": "p90", "label": "p90" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "label": "p50", "stat": "p50" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "label": "Average" } ],
+                    [ "${kMetricFilterNamespace}", "${JobDurationMetricName}", { "stat": "Minimum", "label": "Minimum" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "Forecast Job Duration",
+                  "stat": "Average",
+                  "period": 300,
+                  "liveData": true,
+                  "yAxis": {
+                    "left": {
+                      "min": 0
+                    }
+                  }
+                }
+              },
+              {
+                "height": 3,
+                "width": 12,
+                "y": 6,
+                "x": 0,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "label": "Maximum", "stat": "Maximum" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "stat": "p99", "label": "p99" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "stat": "p95", "label": "p95" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "stat": "p90", "label": "p90" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "label": "p50", "stat": "p50" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "label": "Average" } ],
+                    [ "${kMetricFilterNamespace}", "${DownloadDurationMetricName}", { "stat": "Minimum", "label": "Minimum" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "Forecast Downloads Duration",
+                  "stat": "Average",
+                  "period": 300,
+                  "liveData": true,
+                  "yAxis": {
+                    "left": {
+                      "min": 0
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        - JobDurationMetricName: !Sub ForecastJobElapsed${EnvironmentType}
+          DownloadDurationMetricName: !Sub ForecastDownloadsElapsed${EnvironmentType}
+      DashboardName: !Sub ${RootStackName}-${AWS::Region}-Augury
+
 Outputs:
   TargetGroupFullName:
     Value: !GetAtt TargetGroup.TargetGroupFullName
