@@ -1,0 +1,97 @@
+# etc/adzerk-poller/template.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Tools for dealing with various accounting- and finance-related systems
+
+Parameters:
+  AccountingZendeskApiUsername:
+    Type: String
+  AccountingZendeskApiToken:
+    Type: String
+    NoEcho: true
+  PrxZendeskApiUsername:
+    Type: String
+  PrxZendeskApiToken:
+    Type: String
+    NoEcho: true
+  NetSuiteCertificateId:
+    Type: String
+    NoEcho: true
+  NetSuiteClientId:
+    Type: String
+    NoEcho: true
+  Frequency:
+    Type: String
+    Description: In minutes, greater than 1
+    Default: 60
+
+Resources:
+  NetSuiteSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_function.rb
+      Description: >-
+        Syncs data from NetSuite to Zendesk
+      Environment:
+        Variables:
+          NETSUITE_CLIENT_ID: !Ref NetSuiteClientId
+          NETSUITE_CERTIFICATE_ID: !Ref NetSuiteCertificateId
+          ACCOUNTING_ZENDESK_API_USERNAME: !Ref AccountingZendeskApiUsername
+          ACCOUNTING_ZENDESK_API_TOKEN: !Ref AccountingZendeskApiToken
+          PRX_ZENDESK_API_USERNAME: !Ref PrxZendeskApiUsername
+          PRX_ZENDESK_API_TOKEN: !Ref PrxZendeskApiToken
+      Events:
+        Poller:
+          Properties:
+            Description: Runs the Zendesk data sync
+            Enabled: true
+            Schedule: !Sub rate(${Frequency} minutes)
+          Type: Schedule
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      # Policies:
+      #   - Statement:
+      #       - Action: sns:Publish
+      #         Effect: Allow
+      #         Resource: !Ref SlackMessageRelayTopicArn
+      #     Version: "2012-10-17"
+      #   - Statement:
+      #       - Action: sns:Publish
+      #         Effect: Allow
+      #         Resource: !Ref SlackMessageRelayTopicArn
+      #       - Action:
+      #           - s3:getObject
+      #           - s3:putObject
+      #         Effect: Allow
+      #         Resource: !Sub arn:aws:s3:::${CounterBucket}/${CounterObject}
+      #     Version: "2012-10-17"
+      Runtime: ruby2.7
+      # Tags:
+      #   Project: Misc
+      #   prx:cloudformation:stack-name: !Ref AWS::StackName
+      #   prx:cloudformation:stack-id: !Ref AWS::StackId
+      Timeout: 300
+  NetSuiteSyncFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${NetSuiteSyncFunction}
+      RetentionInDays: 30
+  NetSuiteSyncFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "MINOR [Zendesk] Data Sync <prod> EXPERIENCING ERRORS"
+      AlarmDescription: >-
+        The error rate on the Zendesk sync app has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref NetSuiteSyncFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
