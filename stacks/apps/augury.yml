@@ -21,6 +21,9 @@ Parameters:
   kPostgresPoolSize:
     Type: Number
     Default: 10
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Augury
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -489,7 +492,7 @@ Resources:
       LogGroupName: !Ref WorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !GetAtt Constants.ActualsIngestJobInvocationCountMetricName
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
   ReallocationJobMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -499,7 +502,7 @@ Resources:
       LogGroupName: !Ref WorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ReallocationJobElapsed${EnvironmentType}
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
   InventoryUpdateJobMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -509,7 +512,7 @@ Resources:
       LogGroupName: !Ref WorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub InventoryUpdateJobElapsed${EnvironmentType}
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
   AuguryActualsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -522,7 +525,7 @@ Resources:
       ComparisonOperator: LessThanThreshold
       EvaluationPeriods: 3
       MetricName: !GetAtt Constants.ActualsIngestJobInvocationCountMetricName
-      Namespace: PRX/Augury
+      Namespace: !Ref kMetricFilterNamespace
       Period: 300
       Statistic: Sum
       Threshold: 1
@@ -855,7 +858,7 @@ Resources:
       LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastJobElapsed${EnvironmentType}
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
 
   # Forecast Rscript timings
@@ -867,7 +870,7 @@ Resources:
       LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastDownloadsElapsed${EnvironmentType}
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
   ForecastGeocountriesMetricFilter:
     Type: AWS::Logs::MetricFilter
@@ -877,7 +880,7 @@ Resources:
       LogGroupName: !Ref SlowWorkerTaskLogGroup
       MetricTransformations:
         - MetricName: !Sub ForecastPartitionsElapsed${EnvironmentType}
-          MetricNamespace: PRX/Augury
+          MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
 
 Outputs:
