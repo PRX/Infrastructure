@@ -219,62 +219,6 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${CloudFormationNotificationHandlerLambdaFunction}
       RetentionInDays: 5
-  # ASG Autoscaling Notifications
-  ASGNotificationSnsTopic:
-    Type: AWS::SNS::Topic
-  ASGNotificationHandlerLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: lambdas/autoscaling-notification-handler/
-      Description: >-
-        Handles autoscaling notifications from EC2 auto scaling groups
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-      Events:
-        SnsMessages:
-          Properties:
-            Topic: !Ref ASGNotificationSnsTopic
-          Type: SNS
-      Handler: index.handler
-      MemorySize: 128
-      Policies:
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: nodejs12.x
-      Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-      Timeout: 10
-  ASGNotificationHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][ASG][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >-
-        ASG notifications function has encountered several invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ASGNotificationHandlerLambdaFunction
-  ASGNotificationHandlerLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${ASGNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
   # CloudWatch Alarms Notifications
   CloudWatchAlarmNotificationHandlerLambdaFunction:
     Type: AWS::Serverless::Function
@@ -540,7 +484,3 @@ Outputs:
     Value: !Ref CloudFormationNotificationSnsTopic
     Export:
       Name: !Sub ${AWS::StackName}-CloudFormationNotificationSnsTopic
-  ASGNotificationSnsTopic:
-    Value: !Ref ASGNotificationSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-ASGNotificationSnsTopic
