@@ -7,7 +7,7 @@ In order to support the [practice](https://en.wikipedia.org/wiki/Continuous_inte
 The high-level goals of the system are:
 
 - Watch for important code changes that are pushed to GitHub repositories, including all commits to `master` branches, as well as to open [pull requests](https://help.github.com/articles/about-pull-requests/)
-- Run build, test, or other processes defined by the applications any time there are such code changes
+- Run any build, test, or other processes defined by the applications any time there are such code changes
 - Notify developers of the status of those processes in Slack, and ensure that the [build status](https://github.com/blog/1227-commit-status-api) in GitHub is accurate
 - Allow for code that passes build and test process to be packaged and pushed to destinations from which it can be deployed
 - Create small amounts of lightweight, reusable code to [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) up the amount of boilerplate needed for getting a project to support this type of continuous integration
@@ -26,7 +26,7 @@ The following describes each aspect of the CI system in the order that they usua
 
 For an organization in GitHub (e.g. [PRX](https://github.com/prx/)) a [webhook](https://developer.github.com/webhooks/) is configured which will be sent **pull request** and **push** events. This will cause GitHub to notify an HTTP endpoint every time either of those events takes place on *any* repository in the organization.
 
-An HTTP API is constructed using [Amazon API Gateway](https://aws.amazon.com/api-gateway/) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, and filters out some noise that is expected, and sends relevant events to an [Amazon EvetntBridge](https://aws.amazon.com/eventbridge/) for further processing.
+An HTTP API is constructed using [Amazon API Gateway](https://aws.amazon.com/api-gateway/) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, and filters out some noise that is expected, and sends relevant events to an [Amazon EventBridge](https://aws.amazon.com/eventbridge/) for further processing.
 
 The URL of the API to use for the webhook configuration is an output of the CloudFormation stack.
 
@@ -48,12 +48,11 @@ The configuration for each build is determined by the event Lambda function. Thi
 - The location, in GitHub, of the code to be tested
 - Various environment variables that help with the rest of the CI process
 
+CodeBuild natively supports updating the code's build status in GitHub.
+
 #### Build Events
 
-Several additional Lambda functions are configured as targets for EventBridge rules that watch for state changes on the CodeBuild project. These functions are responsible for handling some or all of the various stages of a build (start, success, fail, etc). The purpose of these functions are things like:
-
-- Update the GitHub commit status for the code being tested
-- Send a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible
+Several additional Lambda functions are configured as targets for EventBridge rules that watch for state changes on the CodeBuild project. These functions are responsible for handling some or all of the various stages of a build (start, success, fail, etc). The purpose of these functions are things like sending a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible.
 
 Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) in a predefined location, which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/master/cd) system to manage app deployments.
 
@@ -68,7 +67,7 @@ Adding CI support to an app is rather simple, but the process differs depending 
 CI will attempt to run if the following conditions are met:
 
 - The repository is in the PRX GitHub organization (public or private)
-- A commit is made to a master branch or a change is made to a pull request
+- A commit is made to a default branch or a code change is made to a pull request
 - The repository contains a `buildspec.yml` file
 - The `buildspec.yml` contains the string `PRX_`
 
@@ -76,7 +75,9 @@ Beyond this, there are no technical requirements necessary to be compatible with
 
 In general, though, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
 
-If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. The script will only attempt to publish code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The GitHub event handler Lambda will set that by default for `master` branch events. The `post_build` script also sends a message to an SNS topic, including information about the build process and any published code. There is a callback Lambda function that also runs as part of the CI process that can take these messages, and trigger updates to the CD system.
+If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. The script will only attempt to publish code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The build handler Lambda will set that by default for default branch events.
+
+A Lambda function that watches for successful builds in CodeBuild extracts information from the details of the build, and updates the staging environemnt's configuration values used within the CD system as necessary (e.g., updates the ECR image version to deploy for the app code that was built).
 
 ### ECS Targets
 
