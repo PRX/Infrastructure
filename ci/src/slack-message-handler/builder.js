@@ -18,6 +18,8 @@ module.exports = {
     const envVars = info.environment['environment-variables'];
     const exportedEnvVars = info['exported-environment-variables'] || [];
 
+    // Combine all envionment variables into a single key-value object (rather
+    // than multiple arrays of objects)
     const allEnvVars = [...envVars, ...exportedEnvVars].reduce(
       (acc, cur) => ({ ...acc, [cur.name]: cur.value }),
       {},
@@ -37,6 +39,10 @@ module.exports = {
       STOPPED: 'Stopped building',
     };
 
+    // e.g.,
+    // Building PRX/Infrastructure master branch with commit be8e83b
+    // Built PRX/Infrastructure master branch with commit 674811e
+    // Building PRX/Infrastructure #582 with commit 26fad6b
     const line1 = [
       `<${codebuildUrl(event)}|${verb[event.detail['build-status']]}>`,
       ownerAndRepo,
@@ -50,8 +56,9 @@ module.exports = {
     // For IN PROGRESS pushes, include the pushed commits
     // For PRs include the title and action (ready_for_review, etc)
 
-    const moreLines = [];
+    let moreLines = [];
 
+    // For builds with ECR artifacts, link to the image in ECR
     if (allEnvVars.PRX_ECR_IMAGE) {
       const imageName = allEnvVars.PRX_ECR_IMAGE;
 
@@ -66,6 +73,7 @@ module.exports = {
       );
     }
 
+    // For builds with Lambda artifacts, link to the S3 object
     if (allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE) {
       const objectKey = allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE;
 
@@ -75,6 +83,7 @@ module.exports = {
       );
     }
 
+    // For builds with static site artifacts, link to the S3 object
     if (allEnvVars.PRX_S3_STATIC_CONFIG_VALUE) {
       const objectKey = allEnvVars.PRX_S3_STATIC_CONFIG_VALUE;
 
@@ -84,6 +93,7 @@ module.exports = {
       );
     }
 
+    // For default branch pushes, include a list of commits
     if (!pr) {
       const beforeSha = allEnvVars['PRX_GITHUB_BEFORE'];
       const afterSha = allEnvVars['PRX_GITHUB_AFTER'];
@@ -101,6 +111,8 @@ module.exports = {
       }
     }
 
+    // Include info about how the merge will happen for PRs and basic details
+    // about the PR
     if (pr) {
       const prTitle = allEnvVars.PRX_GITHUB_PR_TITLE;
       const prBaseBranch = allEnvVars.PRX_GITHUB_PR_BASE_BRANCH;
@@ -115,11 +127,24 @@ module.exports = {
       );
     }
 
+    let text = [`*${line1.join(' ')}*`, moreLines.join('\n')].join('\n');
+
+    // If the total text length is greater than 3000, remove links to try to
+    // get below the limit
+    if (text.length > 3000) {
+      text = text.replace(/<.+?\|(.+?)>/g, '$1');
+    }
+
+    // If the text is still too long, brute force it down to 3000 characters
+    if (text.length > 3000) {
+      text = text.substring(0, 3000);
+    }
+
     blox.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: [`*${line1.join(' ')}*`, moreLines.join('\n')].join('\n'),
+        text,
       },
     });
 
