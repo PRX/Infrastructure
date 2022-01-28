@@ -1,0 +1,31 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates Lambda functions that back CloudFormation macros. This does NOT
+  create the macro; macros must be created in each account which reference this
+  function.
+
+Resources:
+  PrxUtility20210622:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: index.js
+      Description: >-
+        Backs a CloudFormation macro that is used as a whole-template
+        transformer.
+      Handler: index.handler
+      MemorySize: 128
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
+      Timeout: 8
+  PrxUtility20210622LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PrxUtility20210622}
+      RetentionInDays: 30
