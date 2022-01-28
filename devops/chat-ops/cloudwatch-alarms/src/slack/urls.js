@@ -78,9 +78,10 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
                 .sort()[0],
           );
 
-          const firstOkDatapoint = data.newState.stateReasonData.evaluatedDatapoints.sort(
-            (a, b) => a.timestamp.localeCompare(b.timestamp),
-          )[0];
+          const firstOkDatapoint =
+            data.newState.stateReasonData.evaluatedDatapoints.sort(
+              (a, b) => (a, b) => a.timestamp.localeCompare(b.timestamp),
+            )[0];
           const endTs = Date.parse(firstOkDatapoint.timestamp);
 
           // # is encoded to *23 in the colors

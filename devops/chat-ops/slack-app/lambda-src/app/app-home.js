@@ -33,8 +33,7 @@ async function publishOpsView(userId, hash) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'If you need to remove a file from CloudFront edge caches before it expires, you can manually <https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Invalidation.html|invalidate> the file from edge caches.',
+            text: 'If you need to remove a file from CloudFront edge caches before it expires, you can manually <https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Invalidation.html|invalidate> the file from edge caches.',
           },
           accessory: {
             type: 'button',
@@ -62,8 +61,7 @@ async function publishOpsView(userId, hash) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'When a pipeline execution starts, it runs a revision through every stage and action in the pipeline. You can manually rerun the most recent revision through the pipeline.',
+            text: 'When a pipeline execution starts, it runs a revision through every stage and action in the pipeline. You can manually rerun the most recent revision through the pipeline.',
           },
           accessory: {
             type: 'button',
@@ -80,8 +78,7 @@ async function publishOpsView(userId, hash) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'Transitions are links between pipeline stages that can be disabled or enabled. They are enabled by default. When you re-enable a disabled transition, the latest revision runs through the remaining stages of the pipeline unless more than 30 days have passed. Pipeline execution won’t resume for a transition that has been disabled more than 30 days unless a new change is detected or you manually rerun the pipeline. ',
+            text: 'Transitions are links between pipeline stages that can be disabled or enabled. They are enabled by default. When you re-enable a disabled transition, the latest revision runs through the remaining stages of the pipeline unless more than 30 days have passed. Pipeline execution won’t resume for a transition that has been disabled more than 30 days unless a new change is detected or you manually rerun the pipeline. ',
           },
           accessory: {
             type: 'button',
@@ -109,8 +106,7 @@ async function publishOpsView(userId, hash) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'Replay the stack parameters of the staging stack from a previous version. This will redeploy apps and services using previous code artifacts and secrets to staging, which can then be deployed to production. The only change this makes is to take a previous S3 object version of the staging stack parameters JSON file and recreate it as the current version.',
+            text: 'Replay the stack parameters of the staging stack from a previous version. This will redeploy apps and services using previous code artifacts and secrets to staging, which can then be deployed to production. The only change this makes is to take a previous S3 object version of the staging stack parameters JSON file and recreate it as the current version.',
           },
           accessory: {
             type: 'button',

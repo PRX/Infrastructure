@@ -129,6 +129,7 @@ module.exports = {
         'is awaiting manual approval',
         'has been rejected',
       ),
+      // @ts-ignore
       blocks: msg.blocks,
     });
   },

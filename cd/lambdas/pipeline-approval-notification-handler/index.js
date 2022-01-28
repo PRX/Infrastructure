@@ -356,8 +356,7 @@ async function buildMessage(approvalNotification) {
               },
               text: {
                 type: 'mrkdwn',
-                text:
-                  'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
+                text: 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
               },
               confirm: {
                 type: 'plain_text',

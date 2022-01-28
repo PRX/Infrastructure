@@ -64,6 +64,7 @@ module.exports = {
         'is awaiting manual approval',
         'has been approved',
       ),
+      // @ts-ignore
       blocks: msg.blocks,
     });
   },

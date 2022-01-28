@@ -21,8 +21,7 @@ async function openModal(payload) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'Invalidate files from CloudFront edge caches for a given distribution',
+            text: 'Invalidate files from CloudFront edge caches for a given distribution',
           },
         },
         {
@@ -88,8 +87,7 @@ async function selectAccount(payload) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'Invalidate files from CloudFront edge caches for a given distribution',
+            text: 'Invalidate files from CloudFront edge caches for a given distribution',
           },
         },
         {
@@ -160,8 +158,7 @@ async function selectDistribution(payload) {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text:
-              'Invalidate files from CloudFront edge caches for a given distribution',
+            text: 'Invalidate files from CloudFront edge caches for a given distribution',
           },
         },
         {
@@ -187,8 +184,7 @@ async function selectDistribution(payload) {
           },
           hint: {
             type: 'plain_text',
-            text:
-              'Put each path on its own line. All paths must start with a slash. Paths may include wildcards (*), which must be the last character if included.',
+            text: 'Put each path on its own line. All paths must start with a slash. Paths may include wildcards (*), which must be the last character if included.',
           },
           element: {
             type: 'plain_text_input',
