@@ -16,6 +16,8 @@ Parameters:
   PrxZendeskApiToken:
     Type: String
     NoEcho: true
+  NetSuiteDomainSlug:
+    Type: String
   NetSuiteCertificateId:
     Type: String
     NoEcho: true
@@ -31,11 +33,12 @@ Resources:
   NetSuiteSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambda_function.rb
+      CodeUri: src/netsuite-sync
       Description: >-
         Syncs data from NetSuite to Zendesk
       Environment:
         Variables:
+          NETSUITE_DOMAIN_SLUG: !Ref NetSuiteDomainSlug
           NETSUITE_CLIENT_ID: !Ref NetSuiteClientId
           NETSUITE_CERTIFICATE_ID: !Ref NetSuiteCertificateId
           ACCOUNTING_ZENDESK_API_USERNAME: !Ref AccountingZendeskApiUsername
@@ -51,22 +54,6 @@ Resources:
           Type: Schedule
       Handler: lambda_function.lambda_handler
       MemorySize: 256
-      # Policies:
-      #   - Statement:
-      #       - Action: sns:Publish
-      #         Effect: Allow
-      #         Resource: !Ref SlackMessageRelayTopicArn
-      #     Version: "2012-10-17"
-      #   - Statement:
-      #       - Action: sns:Publish
-      #         Effect: Allow
-      #         Resource: !Ref SlackMessageRelayTopicArn
-      #       - Action:
-      #           - s3:getObject
-      #           - s3:putObject
-      #         Effect: Allow
-      #         Resource: !Sub arn:aws:s3:::${CounterBucket}/${CounterObject}
-      #     Version: "2012-10-17"
       Runtime: ruby2.7
       # Tags:
       #   Project: Misc
