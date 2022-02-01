@@ -3,15 +3,12 @@ AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Wires up Stripe payments webhooks and the Squarespace Commerce API to allow
   sales notifications to Slack
+
 Parameters:
-  SquarespaceApiToken:
-    Type: String
-  StripeWebhookSigningSecret:
-    Type: String
-  SlackMessageRelayTopicArn:
-    Type: String
-  OpsErrorMessagesSnsTopicArn:
-    Type: String
+  SquarespaceApiToken: { Type: String }
+  StripeWebhookSigningSecret: { Type: String }
+  SlackMessageRelayTopicArn: { Type: String }
+
 Resources:
   # API Gateway
   RestApi:
@@ -228,14 +225,7 @@ Resources:
   LambdaErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: "[Squarespace][Lambda][Error] Invocation 4XX"
-      AlarmActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      InsufficientDataActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
-      OKActions:
-        - !Ref OpsErrorMessagesSnsTopicArn
+      AlarmName: !Sub ERROR [Squarespace] Commerce webhook <prod> INVOCATION ERRORS (${AWS::StackName})
       AlarmDescription: The error rate on the Squarespace sales lambda has exceeded 0
       ComparisonOperator: GreaterThanThreshold
       EvaluationPeriods: 1
