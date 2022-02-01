@@ -16,7 +16,7 @@
 
 ## Deployment
 
-The continuous deployment platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/), so any AWS resources that are necessary for the system to operate should be added to the `cd.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
+The continuous deployment platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/), so any AWS resources that are necessary for the system to operate should be added to the `cd/template.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
 
 **Never make changes to AWS resources that were created through CloudFormation other than through CloudFormation, and do not create any resources outside of the CloudFormation template**. The CD system is entirely self-contained and should remain that way.
 

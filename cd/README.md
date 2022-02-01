@@ -16,7 +16,7 @@ The high-level goals of the system are:
 
 ## Project Architecture
 
-As with [CI](https://github.com/PRX/Infrastructure/tree/master/ci), the CD system itself is built using native AWS resources that are managed through a CloudFormation template. Launching a stack from the `cd.yml` template is fairly straightforward, but this CD project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
+As with [CI](https://github.com/PRX/Infrastructure/tree/master/ci), the CD system itself is built using native AWS resources that are managed through a CloudFormation template. Launching a stack from the `cd/template.yml` template is fairly straightforward, but this CD project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
 
 At the core of the CD system is an [AWS CodePipeline](https://aws.amazon.com/codepipeline/) pipeline that moves code and configuration through a deployment path. That includes things like staging and production deploys, acceptance testing, notification messaging, and state capture. The pipeline is triggered automatically by code and configuration changes.
 
