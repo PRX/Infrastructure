@@ -32,15 +32,6 @@ Parameters:
       Organization ID that will be given SNS:Publish access to notification SNS
       topics. This grants access to all resources/roles/etc in that
       organization.
-  FatalNotificationEmailAddress:
-    Type: String
-    Description: >-
-      An email address to deliver fatal alarm notifications to
-  CrossAccountCloudWatchAlarmReaderRoleName:
-    Type: String
-    Description: >-
-      The name of an IAM role that exists in other AWS accounts that are
-      generating CloudWatch Alarms that this stack will handle.
 
 Resources:
   # Common IAM policies
@@ -53,6 +44,7 @@ Resources:
             Effect: Allow
             Resource: !Ref SlackMessageRelaySnsTopic
         Version: "2012-10-17"
+
   # Slack message relay
   SlackMessageRelaySnsTopic:
     Type: AWS::SNS::Topic
@@ -120,6 +112,7 @@ Resources:
                 "AWS:SourceOwner": !Ref AWS::AccountId
       Topics:
         - !Ref SlackMessageRelaySnsTopic
+
   # CloudFormation notifications
   CloudFormationNotificationSnsTopic:
     Type: AWS::SNS::Topic
@@ -192,14 +185,7 @@ Resources:
   CloudFormationNotificationHandlerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Cfn][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
+      AlarmName: !Sub WARN [Notifications] CloudFormation notifications <prod> INVOCATIONS ERRORS (${AWS::StackName})
       AlarmDescription: >-
         CloudFormation notifications function has encountered several
         invocation errors
@@ -219,185 +205,6 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${CloudFormationNotificationHandlerLambdaFunction}
       RetentionInDays: 5
-  # CloudWatch Alarms Notifications
-  CloudWatchAlarmNotificationHandlerLambdaFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: lambdas/cloudwatch-alarm-notification-handler/
-      Description: >-
-        Handles notifications from CloudWatch Alarms
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopic
-          CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmReaderRoleName
-      Events:
-        DebugMessages:
-          Properties:
-            Topic: !Ref OpsDebugMessagesSnsTopic
-          Type: SNS
-        InfoMessages:
-          Properties:
-            Topic: !Ref OpsInfoMessagesSnsTopic
-          Type: SNS
-        WarnMessages:
-          Properties:
-            Topic: !Ref OpsWarnMessagesSnsTopic
-          Type: SNS
-        ErrorMessages:
-          Properties:
-            Topic: !Ref OpsErrorMessagesSnsTopic
-          Type: SNS
-        FatalMessages:
-          Properties:
-            Topic: !Ref OpsFatalMessagesSnsTopic
-          Type: SNS
-      Handler: lambda_function.lambda_handler
-      MemorySize: 192
-      Role: !GetAtt LambdaBasicExecutionIamRole.Arn
-      Runtime: python3.6
-      Tags:
-        Project: Infrastructure
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-      Timeout: 10
-  CloudWatchAlarmNotificationHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: true
-      AlarmName: "[Notif][Alarms][Lambda] Elevated error volume"
-      AlarmActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      InsufficientDataActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      OKActions:
-        - !Ref OpsWarnMessagesSnsTopic
-      AlarmDescription: >-
-        CloudWatch Alarms notifications function has encountered several
-        invocation errors
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 120
-      Statistic: Sum
-      Threshold: 2
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CloudWatchAlarmNotificationHandlerLambdaFunction
-  CloudWatchAlarmNotificationHandlerLambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmNotificationHandlerLambdaFunction}
-      RetentionInDays: 5
-  OpsDebugMessagesSnsTopic:
-    Type: AWS::SNS::Topic
-  OpsDebugMessagesSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Statement:
-          - Action: sns:Publish
-            Condition:
-              ArnLike:
-                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Sid: CloudWatchAlarmsPublish
-        Version: "2012-10-17"
-      Topics:
-        - !Ref OpsDebugMessagesSnsTopic
-  OpsInfoMessagesSnsTopic:
-    Type: AWS::SNS::Topic
-  OpsInfoMessagesSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Statement:
-          - Action: sns:Publish
-            Condition:
-              ArnLike:
-                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Sid: CloudWatchAlarmsPublish
-        Version: "2012-10-17"
-      Topics:
-        - !Ref OpsInfoMessagesSnsTopic
-  OpsWarnMessagesSnsTopic:
-    Type: AWS::SNS::Topic
-  OpsWarnMessagesSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Statement:
-          - Action: sns:Publish
-            Condition:
-              ArnLike:
-                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Sid: CloudWatchAlarmsPublish
-        Version: "2012-10-17"
-      Topics:
-        - !Ref OpsWarnMessagesSnsTopic
-  OpsErrorMessagesSnsTopic:
-    Type: AWS::SNS::Topic
-  OpsErrorMessagesSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Statement:
-          - Action: sns:Publish
-            Condition:
-              ArnLike:
-                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Sid: CloudWatchAlarmsPublish
-        Version: "2012-10-17"
-      Topics:
-        - !Ref OpsErrorMessagesSnsTopic
-  OpsFatalMessagesSnsTopic:
-    Type: AWS::SNS::Topic
-  OpsFatalMessagesSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: OrganizationAcccessPolicy
-        Statement:
-          - Action: sns:Publish
-            Condition:
-              ArnLike:
-                aws:SourceArn: "arn:aws:cloudwatch:*:*:alarm:*"
-            Effect: Allow
-            Principal:
-              AWS: "*"
-            Resource: !Ref OpsDebugMessagesSnsTopic
-            Sid: CloudWatchAlarmsPublish
-        Version: "2012-10-17"
-      Topics:
-        - !Ref OpsFatalMessagesSnsTopic
-
-  # Fatal email redundancy
-  OpsFatalMessagesSnsTopicEmailSubscription:
-    Type: AWS::SNS::Subscription
-    Properties:
-      Endpoint: !Ref FatalNotificationEmailAddress
-      Protocol: email
-      TopicArn: !Ref OpsFatalMessagesSnsTopic
 
   # Shared IAM Roles
   LambdaBasicExecutionIamRole:
@@ -458,27 +265,6 @@ Outputs:
     Value: !Ref SlackMessageRelaySnsTopic
     Export:
       Name: !Sub ${AWS::StackName}-SlackMessageRelaySnsTopicArn
-  # Log-level topics used by CloudWatch Alarms
-  OpsDebugMessagesSnsTopicArn:
-    Value: !Ref OpsDebugMessagesSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-OpsDebugMessagesSnsTopicArn
-  OpsInfoMessagesSnsTopicArn:
-    Value: !Ref OpsInfoMessagesSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-OpsInfoMessagesSnsTopicArn
-  OpsWarnMessagesSnsTopicArn:
-    Value: !Ref OpsWarnMessagesSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-OpsWarnMessagesSnsTopicArn
-  OpsErrorMessagesSnsTopicArn:
-    Value: !Ref OpsErrorMessagesSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-OpsErrorMessagesSnsTopicArn
-  OpsFatalMessagesSnsTopicArn:
-    Value: !Ref OpsFatalMessagesSnsTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-OpsFatalMessagesSnsTopicArn
   # Service-specific notification handler topics
   CloudFormationNotificationSnsTopic:
     Value: !Ref CloudFormationNotificationSnsTopic
