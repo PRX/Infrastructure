@@ -97,7 +97,7 @@ def lambda_handler(event:, context:)
       .filter { |r| !r['isInactive']}
       .filter { |r| !r['custrecord_dept_zd_exclude']}
       .filter { |r| r['parent'] }
-      .map { |r| { name: "#{r['parent']['refName']}::#{r['name']}", value: "prx_netsuite_department_#{r['id']}" } }
+      .map { |r| { name: r['name'], value: "prx_netsuite_department_#{r['id']}" } }
   end
 
   program_field_id = { 'prxaccounting' => '4415963526555', 'prx' => '4416459836699' }
@@ -106,7 +106,7 @@ def lambda_handler(event:, context:)
       .filter { |r| !r['isInactive']}
       .filter { |r| !r['custrecord_class_zd_exclude']}
       .map {|r| { name: nested_name(r, records), value: "prx_netsuite_program_#{r['id']}" } }
-      .sort { |a, b| a[:name].split('::').last <=> b[:name].split('::').last }
+      .sort { |a, b| a[:name] <=> b[:name] }
   end
 
   account_field_id = { 'prxaccounting' => '4415976781083', 'prx' => '4416438526235' }
@@ -123,7 +123,7 @@ def lambda_handler(event:, context:)
       .filter { |r| !r['isInactive']}
       .filter { |r| !r['custrecord_grant_zd_exclude']}
       .map {|r| { name: nested_name(r, records), value: "prx_netsuite_grant_#{r['id']}" } }
-      .sort { |a, b| a[:name].split('::').last <=> b[:name].split('::').last }
+      .sort { |a, b| a[:name] <=> b[:name] }
   end
 
   project_field_id = { 'prxaccounting' => '4415963355803', 'prx' => '4416445822619' }
@@ -132,6 +132,6 @@ def lambda_handler(event:, context:)
       .filter { |r| !r['isInactive']}
       .filter { |r| !r['custrecord_project_zd_exclude']}
       .map { |r| { name: nested_name(r, records), value: "prx_netsuite_project_#{r['id']}" } }
-      .sort { |a, b| a[:name].split('::').last <=> b[:name].split('::').last }
+      .sort { |a, b| a[:name] <=> b[:name] }
   end
 end
