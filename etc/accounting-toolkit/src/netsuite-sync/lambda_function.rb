@@ -80,14 +80,14 @@ def update_zendesk_field(field_ids, records)
   end
 end
 
-def nested_name(record, records)
+def nested_name(record, records, separator = '::')
   if record['parent']
     parent_id = record['parent']['id']
     parent_record = records.find { |r| r['id'] == parent_id }
     prefix = nested_name(parent_record, records)
   end
 
-  [prefix, record['name']].compact.join('::')
+  [prefix, record['name']].compact.join(separator)
 end
 
 def lambda_handler(event:, context:)
@@ -97,7 +97,7 @@ def lambda_handler(event:, context:)
       .filter { |r| !r['isInactive']}
       .filter { |r| !r['custrecord_dept_zd_exclude']}
       .filter { |r| r['parent'] }
-      .map { |r| { name: r['name'], value: "prx_netsuite_department_#{r['id']}" } }
+      .map { |r| { name: nested_name(r, records, ' – '), value: "prx_netsuite_department_#{r['id']}" } }
   end
 
   program_field_id = { 'prxaccounting' => '4415963526555', 'prx' => '4416459836699' }

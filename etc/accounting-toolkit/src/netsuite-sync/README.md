@@ -12,11 +12,13 @@ Add exclude booleans
 
 (This is for native record types)
 
-For each `Record Type` of `Department`, `Class`, and `Expense Category`:
+For each `Record Type` of `Department`, `Class` (may also be called `Program`), and `Expense Category`:
 
 - Label: Exclude from Zendesk
 - Type: Checkbox
 - ID: `_class_zd_exclude`, or `_dept_zd_exclude`, or `_expensecat_zd_exclude`
+
+`_class_zd_exclude` must be called `_class_zd_exclude`, even if the record is called `Program`
 
 **Customization > List, Records, & Fields > Record Types**
 
