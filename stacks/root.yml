@@ -111,6 +111,16 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
+  HasAllSharedAuroraEndpoints: !And [!Condition HasSharedAuroraMysqlEndpoint, !Condition HasSharedAuroraPostgresqlEndpoint]
+  CreateDatabaseDependentResources: !Condition HasAllSharedAuroraEndpoints
+  # Application stacks require external MySQL/PostgreSQL databases
+  CreateApplicationStacks: !Condition CreateDatabaseDependentResources
+  # Jump server requires that application stacks have been created
+  CreateJumpServerStack: !Condition CreateApplicationStacks
+  # Dashboard requires that application stacks have been created
+  CreateDashboardsStack: !Condition CreateApplicationStacks
 
 Mappings:
   EnvironmentTypeMap:
@@ -233,6 +243,87 @@ Resources:
       MetaHostname: meta.prx.org
       PublicFeedsHostname: !If [IsProduction, f.prxu.org, f-staging.prxu.org]
 
+  ResourceGroupsStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        EnvironmentType: !Ref EnvironmentType
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/resource-groups.yml
+      TimeoutInMinutes: 10
+
+  SharedGlueDatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !GetAtt Constants.RootStackName
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-glue-database.yml
+      TimeoutInMinutes: 10
+
+  SharedAnnounceStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
+        HashStringServiceToken: !GetAtt CustomResourcesStack.Outputs.HashStringServiceToken
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-announce.yml
+      TimeoutInMinutes: 10
+
+  SharedEcsClusterStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackName
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/ecs-cluster.yml
+      TimeoutInMinutes: 20
+
   SharedVpcStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -259,6 +350,32 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc.yml
       TimeoutInMinutes: 20
 
+  # Requires VPC
+  SharedResourceShareStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !GetAtt Constants.CloudFormationNotificationArn
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !GetAtt Constants.RootStackName
+        RootStackId: !GetAtt Constants.RootStackId
+        SharedResourceSharePrincipals: !Join [",", !Ref SharedResourceSharePrincipals]
+        VpcPrivateSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
+        VpcPrivateSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
+        VpcPrivateSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-resource-share.yml
+      TimeoutInMinutes: 20
+
+  # Requires VPC
   SharedDatabaseSecurityGroupsStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -283,6 +400,7 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-db-sg.yml
       TimeoutInMinutes: 20
 
+  # Requires VPC and shared Glue DB
   SharedAlbStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -311,25 +429,7 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-alb.yml
       TimeoutInMinutes: 40
 
-  SharedEcsClusterStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackName
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/ecs-cluster.yml
-      TimeoutInMinutes: 20
+  # Requires VPC and ALB
   SharedEcsAsgSecurityGroupStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -351,6 +451,7 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/asg-sg.yml
       TimeoutInMinutes: 20
+  # Requires VPC, ALB, and more
   SharedEcsAsgStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -391,35 +492,12 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/asg.yml
       TimeoutInMinutes: 1440
 
-  SharedResourceShareStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackId
-        SharedResourceSharePrincipals: !Join [",", !Ref SharedResourceSharePrincipals]
-        VPCPrivateSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-        VPCPrivateSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-        VPCPrivateSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-resource-share.yml
-      TimeoutInMinutes: 20
-
+  # Requires VPC and ECS ASG SG
   SharedMemcachedStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
@@ -444,6 +522,7 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
+  # Requires VPC
   SharedRedisSecurityGroupStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -464,11 +543,12 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-redis/security-groups.yml
       TimeoutInMinutes: 20
+  # Requires VPC and Redis SG
   SharedRedisStack:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
@@ -490,58 +570,10 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-redis/cluster.yml
       TimeoutInMinutes: 60
 
-  SharedAnnounceStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackId
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
-        HashStringServiceToken: !GetAtt CustomResourcesStack.Outputs.HashStringServiceToken
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-announce.yml
-      TimeoutInMinutes: 10
-
-  JumpServerStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      Parameters:
-        AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
-        EnvironmentType: !Ref EnvironmentType
-        KeyPairName: !Ref AsgKeyPairName
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackId
-        CastlePostgresClientSecurityGroupId: !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId
-        SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
-        SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
-        SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
-        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/jump-server.yml
-      TimeoutInMinutes: 10
-
+  # Requires everything above, AND external MySQL/PostgreSQL databases
   Apps100AStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
@@ -642,6 +674,7 @@ Resources:
       TimeoutInMinutes: 40
   Apps200AStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
@@ -759,6 +792,7 @@ Resources:
       TimeoutInMinutes: 40
   Apps300AStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
@@ -843,6 +877,7 @@ Resources:
       TimeoutInMinutes: 40
   Apps400AStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
@@ -870,15 +905,25 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
 
-  ResourceGroupsStack:
+  # Requires VPC, Redis and DB SGs, and Castle
+  JumpServerStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateJumpServerStack
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
       Parameters:
+        AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
+        EnvironmentType: !Ref EnvironmentType
+        KeyPairName: !Ref AsgKeyPairName
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        EnvironmentType: !Ref EnvironmentType
+        CastlePostgresClientSecurityGroupId: !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId
+        SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
+        SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
+        SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -887,11 +932,13 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/resource-groups.yml
+      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/jump-server.yml
       TimeoutInMinutes: 10
 
+  # Assumed to require all possible requirements
   DashboardsStack:
     Type: AWS::CloudFormation::Stack
+    Condition: CreateDashboardsStack
     Properties:
       NotificationARNs:
         - !GetAtt Constants.CloudFormationNotificationArn
@@ -975,25 +1022,6 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/dashboards.yml
       TimeoutInMinutes: 10
 
-  SharedGlueDatabaseStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        RootStackName: !GetAtt Constants.RootStackName
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-glue-database.yml
-      TimeoutInMinutes: 10
-
 Outputs:
   PipelineExecutionNonce:
     Value: !Ref PipelineExecutionNonce
@@ -1039,17 +1067,21 @@ Outputs:
     Value: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
 
   SharedAuroraMysqlEndpoint:
+    Condition: HasSharedAuroraMysqlEndpoint
     Value: !Ref SharedAuroraMysqlEndpoint
   SharedAuroraMysqlPort:
     Value: !Ref SharedAuroraMysqlPort
 
   SharedAuroraPostgresqlEndpoint:
+    Condition: HasSharedAuroraPostgresqlEndpoint
     Value: !Ref SharedAuroraPostgresqlEndpoint
   SharedAuroraPostgresqlPort:
     Value: !Ref SharedAuroraPostgresqlPort
 
   DovetailVanityAlbDomain:
+    Condition: CreateApplicationStacks
     Value: !GetAtt Apps300AStack.Outputs.DovetailVanityAlbDomain
 
   TheWorldSearchApiEndpoint:
+    Condition: CreateApplicationStacks
     Value: !GetAtt Apps100AStack.Outputs.TheWorldSearchApiEndpoint
