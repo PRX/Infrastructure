@@ -35,6 +35,8 @@ Parameters:
     Type: String
   InfrastructureConfigStagingKey:
     Type: String
+  OrganizationId:
+    Type: String
 
 Resources:
   HttpApi:
@@ -259,6 +261,43 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
+  SlackMessageRelaySnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: OrganizationAcccessPolicy
+        Version: "2012-10-17"
+        Statement:
+          - Action: sns:Publish
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationId
+            Effect: Allow
+            Sid: OrganizationPublish
+            Principal:
+              AWS: "*"
+            Resource: !Ref SlackMessageRelaySnsTopic
+
+          # - Sid: OwnerAllAccess
+          #   Effect: Allow
+          #   Principal:
+          #     AWS: "*"
+          #   Action:
+          #     - sns:GetTopicAttributes
+          #     - sns:SetTopicAttributes
+          #     - sns:AddPermission
+          #     - sns:RemovePermission
+          #     - sns:DeleteTopic
+          #     - sns:Subscribe
+          #     - sns:ListSubscriptionsByTopic
+          #     - sns:Publish
+          #     - sns:Receive
+          #   Resource: !Ref SlackMessageRelaySnsTopic
+          #   Condition:
+          #     StringEquals:
+          #       AWS:SourceOwner: !Ref AWS::AccountId
+      Topics:
+        - !Ref SlackMessageRelaySnsTopic
 
 Outputs:
   SlackMessageRelaySnsTopicArn:
