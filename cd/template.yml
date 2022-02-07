@@ -76,6 +76,8 @@ Parameters:
     Description: >-
       The Arn of a previously-created and configured CodeStar Connection, which
       has access to the any Git repositories used as sources in the template
+  SlackMessageRelaySnsTopicArn:
+    Type: String
 
 Resources:
   # Common IAM policies
@@ -86,8 +88,7 @@ Resources:
         Statement:
           - Action: sns:Publish
             Effect: Allow
-            Resource:
-              - Fn::ImportValue: !Sub "${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn"
+            Resource: !Ref SlackMessageRelaySnsTopicArn
         Version: "2012-10-17"
   CodePipelineJobResultWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -225,8 +226,7 @@ Resources:
         builds a messages to alert externally
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         SnsMessages:
           Properties:
@@ -523,7 +523,8 @@ Resources:
                     "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
-                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
+                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
+                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}"
                   }
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
@@ -637,7 +638,8 @@ Resources:
                     "NotificationsStackName": "${InfrastructureNotificationsStackName}",
                     "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
-                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
+                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
+                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}"
                   }
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-production
@@ -740,8 +742,7 @@ Resources:
       Description: Copies Infrastructure repo artifact to S3
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         PipelineEvents:
           Properties:
@@ -1151,8 +1152,7 @@ Resources:
         Sends a message about stack changes in a CloudFormation change set
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
           CD_STACK_NAME: !Ref AWS::StackName
       Handler: index.handler
       MemorySize: 128
@@ -1200,8 +1200,7 @@ Resources:
         Sends a message when deployments finish
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
           CD_STACK_NAME: !Ref AWS::StackName
           INFRASTRUCTURE_CONFIG_BUCKET:
             Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
@@ -1266,7 +1265,7 @@ Resources:
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref ProductionConfigObjectReadOnlyAccessPolicy
         - !Ref SnapshotsBucketWriteAccessPolicy
-      Runtime: nodejs12.x
+      Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
