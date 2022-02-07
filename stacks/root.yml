@@ -108,6 +108,7 @@ Parameters:
   SecretsStackName: { Type: String }
   InfrastructureGitCommit: { Type: String }
   PipelineExecutionNonce: { Type: String }
+  SlackMessageRelaySnsTopicArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -203,8 +204,6 @@ Resources:
         Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
       CloudFormationNotificationArn:
         Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
-      SlackMessageRelaySnsTopicArn:
-        Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
       TemplateUrlBase:
         # This is a URL including the hostname of the source bucket, and the
         # path starting with a Git commit hash for the Infrastructure
@@ -462,8 +461,7 @@ Resources:
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackName
-        SlackMessageRelaySnsTopicArn:
-          Fn::ImportValue: !Sub ${NotificationsStackName}-SlackMessageRelaySnsTopicArn
+        SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         KeyPairName: !Ref AsgKeyPairName
         AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
@@ -681,7 +679,7 @@ Resources:
       Parameters:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
-        SlackMessageRelaySnsTopicArn: !GetAtt Constants.SlackMessageRelaySnsTopicArn
+        SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
