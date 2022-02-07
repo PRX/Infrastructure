@@ -3,10 +3,12 @@ import json
 import os
 import re
 
-code_pipeline = boto3.client("codepipeline")
 sns_endpoint_region = re.search(
     r"arn:aws:sns:([a-z0-9-]+)", os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"]
 ).group(1)
+
+code_pipeline = boto3.client("codepipeline")
+sns = boto3.client("sns", region_name=sns_endpoint_region)
 
 SLACK_CHANNEL = "#ops-deploys"
 SLACK_USERNAME = "AWS CodePipeline"
