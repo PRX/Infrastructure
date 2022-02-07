@@ -16,9 +16,14 @@ import boto3
 import traceback
 import json
 import os
+import re
 
+sns_endpoint_region = re.search(
+    r"arn:aws:sns:([a-z0-9-]+)", os.environ["SLACK_MESSAGE_RELAY_TOPIC_ARN"]
+).group(1)
+
+sns = boto3.client("sns", region_name=sns_endpoint_region)
 code_pipeline = boto3.client("codepipeline")
-sns = boto3.client("sns")
 cloudwatch = boto3.client("cloudwatch")
 s3 = boto3.client("s3")
 
