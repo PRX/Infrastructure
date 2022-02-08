@@ -103,7 +103,6 @@ Resources:
     Type: Custom::Echo
     Properties:
       ServiceToken: !Ref EchoServiceToken
-      VanityAlbDomain: !Sub dovetail.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech
       # The ServiceDomain is the name used to create alias records in each region
       # for the load balancer. Having multiple records with the same name in this
       # way creates latency records. This is the domain responsible for both
@@ -129,7 +128,6 @@ Resources:
       DomainName: !If [IsProduction, dovetail.prxu.org, dovetail.staging.prxu.org]
       SubjectAlternativeNames:
         - !If [IsProduction, dovetail-router.prxu.org, dovetail-router.staging.prxu.org]
-        - !GetAtt Constants.VanityAlbDomain
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_dovetail_${Alb.LoadBalancerName}" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -142,29 +140,6 @@ Resources:
         - { Key: prx:dev:application, Value: Router }
       ValidationMethod: DNS
 
-  # The vanity ALB domain provides direct access to the ALB created in this
-  # template. It's essentially an alternative to the xxxx.elb.amazonaws.com
-  # domain provided with each ALB, but lives at a PRX-owned domain and includes
-  # some context clues, like the environment type. It's not used as part of any
-  # DNS strategies; it doesn't really need to exist.
-  VanityAlbDomainRecordSetGroup:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: !Sub >-
-        Record sets that provide direct access to a specific Dovetail
-        ${EnvironmentType} ALB
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - AliasTarget:
-            DNSName: !GetAtt Alb.DNSName
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-          Name: !GetAtt Constants.VanityAlbDomain
-          Type: AAAA
-        - AliasTarget:
-            DNSName: !GetAtt Alb.DNSName
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-          Name: !GetAtt Constants.VanityAlbDomain
-          Type: A
   # The service failover domain is a domain that is the SAME FOR ALL REGIONS.
   # This is the mechanism that Route 53 uses to add load balancers to a latancy
   # group. All ALBs for a given environment type should use the exact same
@@ -1450,11 +1425,6 @@ Resources:
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Router
 
 Outputs:
-  VanityAlbDomain:
-    Description: >-
-      The vanity wildcard domain configured for the ALB's certificate, and
-      registered in the DNS hosted zone
-    Value: !GetAtt Constants.VanityAlbDomain
   AlbName:
     Description: >-
       The full name of the load balancer. For example, my-load-balancer
