@@ -38,10 +38,13 @@ Parameters:
     Type: String
 
 Resources:
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
 
   # Slack message relay
   SlackMessageRelaySnsTopic:
     Type: AWS::SNS::Topic
+    Condition: IsUsEast1
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -54,6 +57,7 @@ Resources:
           Value: !Ref AWS::StackId
   SlackMessageRelaySnsTopicPolicy:
     Type: AWS::SNS::TopicPolicy
+    Condition: IsUsEast1
     Properties:
       PolicyDocument:
         Id: OrganizationAcccessPolicy
@@ -207,6 +211,7 @@ Resources:
 Outputs:
   # Slack relay topic used by many other notification handlers
   SlackMessageRelaySnsTopicArn:
+    Condition: IsUsEast1
     Value: !Ref SlackMessageRelaySnsTopic
     Export:
       Name: !Sub ${AWS::StackName}-SlackMessageRelaySnsTopicArn
