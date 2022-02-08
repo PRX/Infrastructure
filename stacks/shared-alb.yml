@@ -65,7 +65,6 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  EchoServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   SharedGlueDatabaseName: { Type: String }
 
@@ -73,12 +72,6 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  Constants:
-    Type: Custom::Echo
-    Properties:
-      ServiceToken: !Ref EchoServiceToken
-      VanityAlbDomain: !Sub "*.dualstack.${Alb.DNSName}.${EnvironmentTypeAbbreviation}.prx.tech"
-
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
@@ -89,7 +82,6 @@ Resources:
         - !If [IsProduction, "*.prx.mx", !Ref "AWS::NoValue"]
         - !If [IsProduction, "*.pri.org", !Ref "AWS::NoValue"]
         - !If [IsProduction, "*.theworld.org", !Ref "AWS::NoValue"]
-        - !GetAtt Constants.VanityAlbDomain
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_shared_${Alb.LoadBalancerName}" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -394,25 +386,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
-  WildcardUtilityRecordSetGroup:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: !Sub >-
-        Record sets for dualstack web traffic to the shared ${EnvironmentType}
-        ALB
-      HostedZoneName: prx.tech.
-      RecordSets:
-        - Type: AAAA
-          Name: !GetAtt Constants.VanityAlbDomain
-          AliasTarget:
-            DNSName: !Sub dualstack.${Alb.DNSName}
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-        - Type: A
-          Name: !GetAtt Constants.VanityAlbDomain
-          AliasTarget:
-            DNSName: !Sub dualstack.${Alb.DNSName}
-            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
-
 Outputs:
   AlbArn:
     Description: The Amazon Resource Name (ARN) of the load balancer
@@ -449,8 +422,3 @@ Outputs:
       The group ID of the ALB security group that allows inbound web traffic
       and outbound traffic to instances
     Value: !GetAtt LoadBalancerSecurityGroup.GroupId
-  VanityAlbDomain:
-    Description: >-
-      The vanity wildcard domain configured for the ALB's certificate, and
-      registered in the DNS hosted zone
-    Value: !GetAtt Constants.VanityAlbDomain
