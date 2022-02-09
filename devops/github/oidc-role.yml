@@ -29,14 +29,28 @@ Resources:
             Principal:
               Federated: !Ref GitHubOidc
       Policies:
-        # CodePipeline seems to need access to special buckets
         - PolicyDocument:
             Statement:
-              - Action: s3:PutObject
+              - Action:
+                  - cloudformation:Describe*
+                  - cloudformation:Get*
+                  - cloudformation:List*
                 Effect: Allow
-                Resource: arn:aws:s3:::codepipeline*
+                Resource: "*"
+                Sid: FullCloudFormationReadOnly
+              - Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:UpdateStack
+                  - cloudformation:ValidateTemplate
+                Effect: Allow
+                Resource:
+                  - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline
+                  - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline/*
+                Sid: AllowPorterPipelineUpdates
             Version: "2012-10-17"
-          PolicyName: GenericCodePipelineS3PutPolicy
+          PolicyName: CloudFormationStacks
       RoleName: DevOps-GitHubOidcFederatedRole
 
 Outputs:
