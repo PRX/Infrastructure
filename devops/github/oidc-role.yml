@@ -1,3 +1,4 @@
+# devops/github/oidc-role.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
@@ -37,7 +38,7 @@ Resources:
                   - cloudformation:List*
                 Effect: Allow
                 Resource: "*"
-                Sid: FullCloudFormationReadOnly
+                Sid: AllowFullCloudFormationReadOnly
               - Action: cloudformation:*
                 Effect: Allow
                 Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
@@ -52,6 +53,26 @@ Resources:
                   - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline
                   - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline/*
                 Sid: AllowPorterPipelineUpdates
+              - Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:UpdateStack
+                Effect: Allow
+                Resource:
+                  - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com
+                  - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
+                Sid: AllowHostedZoneUpdates
+              - Action:
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:UpdateStack
+                Effect: Allow
+                Resource:
+                  - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd
+                  - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd/*
+                Sid: AllowManagementCdUpdates
             Version: "2012-10-17"
           PolicyName: CloudFormationStacks
         - PolicyDocument:
@@ -59,7 +80,7 @@ Resources:
               - Action: codepipeline:StartPipelineExecution
                 Effect: Allow
                 Resource: "*"
-                Sid: AllowServerlessTransformFullAccess
+                Sid: AllowGlobalStartExecution
             Version: "2012-10-17"
           PolicyName: CodePipelineExecutions
       RoleName: DevOps-GitHubOidcFederatedRole
