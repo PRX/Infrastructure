@@ -55,26 +55,92 @@ Resources:
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Runtime: ruby2.7
-      # Tags:
-      #   Project: Misc
-      #   prx:cloudformation:stack-name: !Ref AWS::StackName
-      #   prx:cloudformation:stack-id: !Ref AWS::StackId
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Accounting Toolkit
       Timeout: 300
   NetSuiteSyncFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${NetSuiteSyncFunction}
       RetentionInDays: 30
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Accounting Toolkit }
   NetSuiteSyncFunctionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: "MINOR [Zendesk] Data Sync <prod> EXPERIENCING ERRORS"
+      AlarmName: "MINOR [Zendesk] NetSuite Sync <prod> EXPERIENCING ERRORS"
       AlarmDescription: >-
         The error rate on the Zendesk sync app has exceeded 0.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
           Value: !Ref NetSuiteSyncFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  ZendeskSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/zendesk-sync
+      Description: >-
+        Syncs data from Zendesk to Zendesk
+      Environment:
+        Variables:
+          ACCOUNTING_ZENDESK_API_USERNAME: !Ref AccountingZendeskApiUsername
+          ACCOUNTING_ZENDESK_API_TOKEN: !Ref AccountingZendeskApiToken
+          PRX_ZENDESK_API_USERNAME: !Ref PrxZendeskApiUsername
+          PRX_ZENDESK_API_TOKEN: !Ref PrxZendeskApiToken
+      Events:
+        Poller:
+          Properties:
+            Description: Runs the Zendesk data sync
+            Enabled: true
+            Schedule: rate(1 day)
+          Type: Schedule
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Runtime: ruby2.7
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Accounting Toolkit
+      Timeout: 300
+  ZendeskSyncFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ZendeskSyncFunction}
+      RetentionInDays: 30
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Accounting Toolkit }
+  ZendeskSyncFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "MINOR [Zendesk] Zendesk Sync <prod> EXPERIENCING ERRORS"
+      AlarmDescription: >-
+        The error rate on the Zendesk sync app has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ZendeskSyncFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
