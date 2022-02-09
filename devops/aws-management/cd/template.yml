@@ -473,15 +473,21 @@ Resources:
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
-                Provider: CloudFormation
+                Provider: CloudFormationStackSet
                 Version: "1"
               Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}GitHubOidcRole
-                RoleArn: !GetAtt GitHubOidcRoleStackCloudFormationRole.Arn
-                StackName: !Sub ${AWS::StackName}-github-oidc-role
+                StackSetName: org-github-oidc-role
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to create the GitHub OIDC role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/github/oidc-role.yml
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref SingleRegion
+                FailureTolerancePercentage: 8
+                MaxConcurrentPercentage: 100
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
