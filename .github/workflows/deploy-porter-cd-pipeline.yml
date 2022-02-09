@@ -1,14 +1,17 @@
-name: Deploy CloudFormation stacks for Porter CD pipeline
+name: Deploy Porter CD pipeline CloudFormation stacks
 
-# This workflow deploys a CloudFormation stack for the Porter continuous
-# deployment pipeline. It does **not** deploy Porter itself. This pipeline is
-# expected to exist in any region where Porter is deployed, and is responisble
-# for deploying and updating the entire Porter stack.
+# This workflow updates the CloudFormations stacks that manage the continuous
+# deployment pipelines for Porter. These pipelines exist in multiple regions,
+# and this workflow updates all of them. This workflow is only intended to
+# update **existing** stacks, not to launch new stacks.
+#
+# The stacks that this workflow interacts with are only for the deployment
+# pipelines, **not** for Porter itself.
 
-on: [push]
-#   push:
-#     paths:
-#       - devops/porter-cd-pipeline.yml
+on:
+  push:
+    paths:
+      - devops/porter-cd-pipeline.yml
 
 jobs:
   deploy:
@@ -27,4 +30,5 @@ jobs:
       - name: Deploy CloudFormation stacks
         working-directory: devops
         run: |
+          aws cloudformation deploy --region us-east-1 --stack-name porter-cd-pipeline --template-file porter-cd-pipeline.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
           aws cloudformation deploy --region us-west-2 --stack-name porter-cd-pipeline --template-file porter-cd-pipeline.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
