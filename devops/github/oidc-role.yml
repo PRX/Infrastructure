@@ -1,20 +1,23 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Parameters:
-  GitHubOrg:
-    Type: String
-    Default: PRX
   FullRepoName:
     Type: String
     Default: PRX/Infrastructure
 
 Resources:
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Properties:
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+      Url: https://token.actions.githubusercontent.com
+
   Role:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: DevOps-GitHubOidcFederatedRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/ReadOnlyAccess
       AssumeRolePolicyDocument:
         Statement:
           - Action: sts:AssumeRoleWithWebIdentity
@@ -25,15 +28,16 @@ Resources:
             Effect: Allow
             Principal:
               Federated: !Ref GitHubOidc
-
-  GitHubOidc:
-    Type: AWS::IAM::OIDCProvider
-    Properties:
-      ClientIdList:
-        - !Sub https://github.com/${GitHubOrg}
-      ThumbprintList:
-        - a031c46782e6e6c662c2c87c76da9aa62ccabd8e
-      Url: https://token.actions.githubusercontent.com
+      Policies:
+        # CodePipeline seems to need access to special buckets
+        - PolicyDocument:
+            Statement:
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: arn:aws:s3:::codepipeline*
+            Version: "2012-10-17"
+          PolicyName: GenericCodePipelineS3PutPolicy
+      RoleName: DevOps-GitHubOidcFederatedRole
 
 Outputs:
   RoleArn:
