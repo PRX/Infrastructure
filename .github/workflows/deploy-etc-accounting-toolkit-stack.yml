@@ -1,0 +1,25 @@
+name: Deploy DevOps tooling CD pipeline CloudFormation stack
+
+on:
+  push:
+    paths:
+      - etc/accounting-toolkit/**
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: aws-actions/setup-sam@v1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-DeployAccountingToolkitStack
+      - run: sam build
+      # - run: sam deploy --region us-east-1 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name accounting-toolkit --s3-bucket aws-sam-cli-managed-default-samclisourcebucket-1kyq6davxwatj --capabilities CAPABILITY_IAM
