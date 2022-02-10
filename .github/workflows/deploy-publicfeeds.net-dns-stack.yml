@@ -1,0 +1,27 @@
+name: Deploy radiotopia.com DNS
+
+# Continuously deploys dns/publicfeeds.net-hosted_zone.yml
+
+on:
+  push:
+    paths:
+      - dns/publicfeeds.net-hosted_zone.yml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::838846856186:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-DeployPublicfeedsNetStack
+      - name: Deploy CloudFormation stack
+        working-directory: dns
+        run: |
+          aws cloudformation deploy --region us-east-1 --stack-name hostedzone-publicfeeds-net --template-file publicfeeds.net-hosted_zone.yml --no-fail-on-empty-changeset
