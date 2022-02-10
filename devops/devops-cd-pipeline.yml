@@ -125,7 +125,7 @@ Resources:
                 python: latest
             build:
               commands:
-                - cd devops/cfn-macro-functions
+                - cd devops/tooling/cfn-macro-functions
                 - sam build --parallel
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudFormationMacroFunctionsPackagedTemplateFileName}
                 - cd ../chat-ops/cloudwatch-alarms
@@ -139,10 +139,10 @@ Resources:
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kSlackAppPackagedTemplateFileName}
           artifacts:
             files:
-              - devops/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
-              - devops/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
-              - devops/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
-              - devops/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+              - devops/tooling/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
+              - devops/tooling/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+              - devops/tooling/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
+              - devops/tooling/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
             name: SamBuildArtifact
         Type: CODEPIPELINE
       Tags:
@@ -316,6 +316,7 @@ Resources:
                 FullRepositoryId: PRX/Infrastructure
                 BranchName: master
                 OutputArtifactFormat: CODE_ZIP
+                DetectChanges: false
               OutputArtifacts:
                 - Name: InfraRepoSourceArtifact
               RunOrder: 1
@@ -355,7 +356,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudFormationMacroFunctionsStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::devops/tooling/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 1
@@ -384,7 +385,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kSlackAppStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               Namespace: slack_app_deploy
@@ -407,7 +408,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudWatchAlarmsStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
@@ -432,7 +433,7 @@ Resources:
                     accounts: !Join [",", !Ref CloudWatchAlarmReminderAccountIds]
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudWatchAlarmRemindersStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
