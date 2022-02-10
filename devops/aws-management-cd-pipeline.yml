@@ -1,4 +1,4 @@
-# devops/aws-management/cd/template.yml
+# devops/aws-management-cd-pipeline.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
@@ -169,6 +169,7 @@ Resources:
                 FullRepositoryId: PRX/Infrastructure
                 BranchName: master
                 OutputArtifactFormat: CODE_ZIP
+                DetectChanges: false
               Namespace: infrastructure_repo
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
@@ -216,7 +217,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudWatchDataSharingRoleStackCloudFormationRole.Arn
                 StackName: !Sub ${AWS::StackName}-cloudwatch-data-sharing-role
-                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/cloudwatch-data-sharing-role.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -238,7 +239,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudWatchSharingListAccountsRoleStackCloudFormationRole.Arn
                 StackName: cloudwatch-sharing-list-accounts-role
-                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-org-list-role.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/cloudwatch-data-sharing-org-list-role.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -303,7 +304,7 @@ Resources:
                 ChangeSetName: !Sub ${AWS::StackName}GitHubOidcRole
                 RoleArn: !GetAtt GitHubOidcRoleStackCloudFormationRole.Arn
                 StackName: !Sub ${AWS::StackName}-github-oidc-role
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/github/oidc-role.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/github-oidc-role.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -406,34 +407,7 @@ Resources:
                   Launches a stack in one region in each account in an AWS Organization
                   to add the CloudWatch-CrossAccountSharingRole IAM role to each account,
                   which provides read-only access to that account's CloudWatch data.
-                TemplatePath: InfrastructureRepoSourceArtifact::etc/cloudwatch-data-sharing-role.yml
-                Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
-                PermissionModel: SERVICE_MANAGED
-                OrganizationsAutoDeployment: EnabledWithStackRetention
-                DeploymentTargets: !Ref OrganizationRootId
-                Regions: !Ref SingleRegion
-                FailureTolerancePercentage: 8
-                MaxConcurrentPercentage: 100
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            # DevOps-VpcPeeringAccepterRole IAM role
-            # There's no management account deploy for this becasue we
-            # shouldn't have any VPC in the management account
-            - Name: VpcPeeringRole
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormationStackSet
-                Version: "1"
-              Configuration:
-                StackSetName: org-vpc-peering-accpter-role
-                Capabilities: CAPABILITY_NAMED_IAM
-                Description: >-
-                  Launches a stack in one region in each account in an AWS Organization
-                  to add the DevOps-VpcPeeringAccepterRole IAM role to each account,
-                  which can be used to set up inter-account VPC peerings
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-vpc-peering-accepter-role.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/cloudwatch-data-sharing-role.yml
                 Parameters: !Sub ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
@@ -481,7 +455,7 @@ Resources:
                 Description: >-
                   Launches a stack in one region in each account in an AWS Organization
                   to create the GitHub OIDC role
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/github/oidc-role.yml
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/github-oidc-role.yml
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
                 DeploymentTargets: !Ref OrganizationRootId
