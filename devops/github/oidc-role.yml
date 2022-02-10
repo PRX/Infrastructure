@@ -33,17 +33,6 @@ Resources:
         - PolicyDocument:
             Statement:
               - Action:
-                  - cloudformation:Describe*
-                  - cloudformation:Get*
-                  - cloudformation:List*
-                Effect: Allow
-                Resource: "*"
-                Sid: AllowFullCloudFormationReadOnly
-              - Action: cloudformation:*
-                Effect: Allow
-                Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
-                Sid: AllowServerlessTransformFullAccess
-              - Action:
                   - cloudformation:CreateChangeSet
                   - cloudformation:DeleteChangeSet
                   - cloudformation:ExecuteChangeSet
@@ -60,30 +49,103 @@ Resources:
                   - cloudformation:UpdateStack
                 Effect: Allow
                 Resource:
-                  - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com
-                  - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
-                Sid: AllowHostedZoneUpdates
-              - Action:
-                  - cloudformation:CreateChangeSet
-                  - cloudformation:DeleteChangeSet
-                  - cloudformation:ExecuteChangeSet
-                  - cloudformation:UpdateStack
-                Effect: Allow
-                Resource:
                   - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd
                   - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd/*
                 Sid: AllowManagementCdUpdates
             Version: "2012-10-17"
           PolicyName: CloudFormationStacks
-        - PolicyDocument:
-            Statement:
-              - Action: codepipeline:StartPipelineExecution
-                Effect: Allow
-                Resource: "*"
-                Sid: AllowGlobalStartExecution
-            Version: "2012-10-17"
-          PolicyName: CodePipelineExecutions
       RoleName: DevOps-GitHubOidcFederatedRole
+
+  # Allows GitHub actions to start execution of any CodePipeline pipeline
+  CodePipelineExecutionsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: codepipeline:StartPipelineExecution
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalStartExecution
+        Version: "2012-10-17"
+      PolicyName: CodePipelineExecutions
+      Roles: [!Ref Role]
+
+  # tktktk
+  DefaultCloudFormationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:Describe*
+              - cloudformation:Get*
+              - cloudformation:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalCloudFormationReadOnly
+          - Action: cloudformation:*
+            Effect: Allow
+            Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
+            Sid: AllowServerlessTransformFullAccess
+        Version: "2012-10-17"
+      PolicyName: DefaultCloudFormationAccess
+      Roles: [!Ref Role]
+
+  # Allows GitHub actions to update hosted zone CloudFormation stacks, as well
+  # as the HostedZone resources within those stacks
+  HostedZoneUpdatesPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:CreateChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:UpdateStack
+            Effect: Allow
+            Resource:
+              # Two entries for each hosted zone stack being touched by
+              # GitHub actions
+              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
+            Sid: AllowHostedZoneStackUpdates
+          - Action:
+              - route53:Get*
+              - route53:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalRoute53ReadOnly
+          - Action:
+              - route53:ChangeResourceRecordSets
+              - route53:ChangeTagsForResource
+              - route53:CreateHealthCheck
+              - route53:CreateTrafficPolicy
+              - route53:CreateTrafficPolicyInstance
+              - route53:DeleteHealthCheck
+              - route53:DeleteTrafficPolicy
+              - route53:DeleteTrafficPolicyInstance
+              - route53:UpdateHealthCheck
+              - route53:UpdateHostedZoneComment
+              - route53:UpdateTrafficPolicyComment
+              - route53:UpdateTrafficPolicyInstance
+            Condition:
+              StringEquals:
+                # This ensures that the role only makes Route 53 changes via
+                # CloudFormation, which ensures that only hosted zones managed
+                # by the stacks listed above can be altered.
+                aws:CalledViaFirst: cloudformation.amazonaws.com
+            Effect: Allow
+            Resource: "*" # TODO Should this list each zone ID explicitly?
+            Sid: AllowRoute53HostedZoneUpdates
+          - Action:
+              - route53:CreateHostedZone
+              - route53:DeleteHostedZone
+            Effect: Deny
+            Resource: "*"
+            Sid: DenyAllRoute53HostedZoneCreateAndDelete
+        Version: "2012-10-17"
+      PolicyName: HostedZoneUpdate
+      Roles: [!Ref Role]
 
 Outputs:
   RoleArn:
