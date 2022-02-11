@@ -1,4 +1,6 @@
 # devops/aws-management-cd-pipeline.yml
+# This template is deployed continuously via GitHub Actions.
+#
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
@@ -51,6 +53,423 @@ Parameters:
     Type: CommaDelimitedList
 
 Resources:
+  # Allows read-only access to all CloudFormation resources (not the resources
+  # in CloudFormation stacks).
+  CloudFormationReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows read only access for all CloudFormation resources
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:Describe*
+              - cloudformation:Get*
+              - cloudformation:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalReadOnly
+        Version: "2012-10-17"
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref CloudFormationReadOnlyPolicy
+      Policies:
+        # Let CodePipeline describe CloudFormation stacks
+        - PolicyName: CloudFormationAccess
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: cloudformation:*
+                Resource:
+                  - "*" # TODO
+                  # - arn:aws:cloudformation:*::type/resource/AWS-IAM-ManagedPolicy
+                  # # Add each StackSetName from the pipeline's actions. There
+                  # # will be both a root and wildcard resource for each.
+                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role
+                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role:*
+            Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  # CodePipeline need PUT access to AWS-managed service buckets
+  CodePipelineServiceS3Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: s3:PutObject
+            Effect: Allow
+            Resource: arn:aws:s3:::codepipeline*
+            Sid: AllowCodePipelineS3Put
+        Version: "2012-10-17"
+      PolicyName: CodePipelineService
+      Roles: [!Ref PipelineRole]
+  # Allow CodePipeline to read and write artifacts
+  PipelineArtifactStoreAccessPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:Get*
+              - s3:Put*
+              - s3:List*
+            Effect: Allow
+            Resource:
+              - !GetAtt PipelineArtifactStore.Arn
+              - !Sub ${PipelineArtifactStore.Arn}/*
+            Sid: AllowArtifactFullReadWrite
+        Version: "2012-10-17"
+      PolicyName: PipelineArtifactStore
+      Roles: [!Ref PipelineRole]
+  # To allow the pipeline to use a CodeStar Connection
+  CodeStarConnectionPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: codestar-connections:*
+            Condition:
+              ForAllValues:StringEquals:
+                codestar-connections:PassedToService: codepipeline.amazonaws.com
+            Effect: Allow
+            Resource: !Ref CodeStarConnectionArn
+            Sid: AllowConnectionFullAccess
+        Version: "2012-10-17"
+      PolicyName: CodeStarConnection
+      Roles: [!Ref PipelineRole]
+  # Allow the pipeline role to pass roles to CloudFormation. These are the
+  # roles used by individual CloudFormation deploy actions within the pipeline.
+  PassRollToCloudFormationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: iam:PassRole
+            Condition:
+              StringEquals:
+                iam:PassedToService: cloudformation.amazonaws.com
+            Effect: Allow
+            Resource:
+              - !GetAtt DevopsCrossAccountAccessRoleStackRole.Arn
+              - !GetAtt CloudWatchDataSharingRoleStackRole.Arn
+              - !GetAtt CloudWatchSharingListAccountsRoleStackRole.Arn
+              - !GetAtt OrganizationDataSharingRoleStackRole.Arn
+              - !GetAtt OrganizationCloudTrailStackRole.Arn
+              - !GetAtt GitHubOidcRoleStackRole.Arn
+            Sid: AllowPassingRoleToCloudFormation
+        Version: "2012-10-17"
+      PolicyName: PassRole
+      Roles: [!Ref PipelineRole]
+
+  # Provides read-only access to certain stack resources
+  StackResourceReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows read only access for select stack resources
+      PolicyDocument:
+        Statement:
+          - Action:
+              - iam:Get*
+              - iam:List*
+
+              - organizations:DescribeOrganization
+              - organizations:ListAccounts
+              - organizations:ListAWSServiceAccessForOrganization
+
+              - s3:Get*
+              - s3:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowStackResourceReadOnly
+        Version: "2012-10-17"
+  # Provides access to serverless tranform
+  ServerlessTransformPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows read only access for select stack resources
+      PolicyDocument:
+        Statement:
+          - Action: cloudformation:*
+            Effect: Allow
+            Resource: !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+            Sid: AllowServerlessTransformFullAccess
+        Version: "2012-10-17"
+
+  # These roles are passed to CloudFormation by the pipeline role in various
+  # pipeline deploy actions. They each must have permissions to manage the
+  # resources in the associated stack.
+  #
+  # These roles are used only for deploying single stacks within the management
+  # account; they do not apply to any aspect of StackSet deploys.
+  DevopsCrossAccountAccessRoleStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreatePolicy
+                  - iam:CreatePolicyVersion
+                  - iam:CreateRole
+                  - iam:DeletePolicy
+                  - iam:DeletePolicyVersion
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:Get*
+                  - iam:List*
+                  - iam:PutRolePolicy
+                  - iam:SetDefaultPolicyVersion
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: ResourceManipulationPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  GitHubOidcRoleStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref StackResourceReadOnlyPolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - iam:AddClientIDToOpenIDConnectProvider
+                  - iam:AttachRolePolicy
+                  - iam:CreateOpenIDConnectProvider
+                  - iam:CreatePolicy
+                  - iam:CreatePolicyVersion
+                  - iam:CreateRole
+                  - iam:DeleteOpenIDConnectProvider
+                  - iam:DeletePolicy
+                  - iam:DeletePolicyVersion
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:RemoveClientIDFromOpenIDConnectProvider
+                  - iam:SetDefaultPolicyVersion
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateOpenIDConnectProviderThumbprint
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowRoleManipulation
+            Version: "2012-10-17"
+          PolicyName: StackResourceManipulation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  CloudWatchDataSharingRoleStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref StackResourceReadOnlyPolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowRoleManipulation
+            Version: "2012-10-17"
+          PolicyName: StackResourceManipulation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  CloudWatchSharingListAccountsRoleStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref StackResourceReadOnlyPolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowRoleManipulation
+            Version: "2012-10-17"
+          PolicyName: StackResourceManipulation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  OrganizationDataSharingRoleStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref StackResourceReadOnlyPolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:Tag*
+                  - iam:Untag*
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Resource: "*"
+                Sid: AllowRoleManipulation
+            Version: "2012-10-17"
+          PolicyName: StackResourceManipulation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  OrganizationCloudTrailStackRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - !Ref StackResourceReadOnlyPolicy
+        - !Ref ServerlessTransformPolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - athena:*
+
+                  - cloudtrail:*
+
+                  - glue:*
+
+                  - iam:CreateServiceLinkedRole
+
+                  - lambda:*
+
+                  - logs:*
+
+                  - organizations:DisableAWSServiceAccess
+                  - organizations:EnableAWSServiceAccess
+
+                  - s3:CreateBucket
+                  - s3:PutBucketOwnershipControls
+                  - s3:PutBucketPolicy
+                  - s3:PutBucketTagging
+                  - s3:PutLifecycleConfiguration
+                  - s3:PutObjectTagging
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowCloudTrailManipulation
+            Version: "2012-10-17"
+          PolicyName: StackResourceManipulation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
   PipelineArtifactStore:
     # The bucket used to store artifacts generated by CodePipeline actions.
     # This bucket is to be used exclusively by AWS; don't use it to store any
@@ -69,92 +488,13 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
-
-  PipelineIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: codepipeline.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        # CodePipeline seems to need access to special buckets
-        - PolicyDocument:
-            Statement:
-              - Action: s3:PutObject
-                Effect: Allow
-                Resource: arn:aws:s3:::codepipeline*
-            Version: "2012-10-17"
-          PolicyName: GenericCodePipelineS3PutPolicy
-        # Let CodePipeline read and write artifacts
-        - PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:Get*
-                  - s3:Put*
-                  - s3:List*
-                Resource:
-                  - !GetAtt PipelineArtifactStore.Arn
-                  - !Sub ${PipelineArtifactStore.Arn}/*
-          PolicyName: ArtifactStoreFullAccess
-        # To allow the pipeline to use a CodeStar Connection
-        - PolicyDocument:
-            Statement:
-              - Action: codestar-connections:*
-                Condition:
-                  ForAllValues:StringEquals:
-                    codestar-connections:PassedToService: codepipeline.amazonaws.com
-                Effect: Allow
-                Resource: !Ref CodeStarConnectionArn
-            Version: "2012-10-17"
-          PolicyName: CodeStarConnectionPolicy
-        # Let CodePipeline describe CloudFormation stacks
-        - PolicyName: CloudFormationAccess
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action: cloudformation:*
-                Resource:
-                  - "*" # TODO
-                  # - arn:aws:cloudformation:*::type/resource/AWS-IAM-ManagedPolicy
-                  # # Add each StackSetName from the pipeline's actions. There
-                  # # will be both a root and wildcard resource for each.
-                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role
-                  # - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/org-devops-cross-account-access-role:*
-            Version: "2012-10-17"
-        # Allow PassRole to the CloudFormation role
-        - PolicyDocument:
-            Statement:
-              - Action: iam:PassRole
-                Effect: Allow
-                Resource:
-                  - !GetAtt DevopsCrossAccountAccessRoleStackCloudFormationRole.Arn
-                  - !GetAtt CloudWatchDataSharingRoleStackCloudFormationRole.Arn
-                  - !GetAtt CloudWatchSharingListAccountsRoleStackCloudFormationRole.Arn
-                  - !GetAtt OrganizationDataSharingRoleStackCloudFormationRole.Arn
-                  - !GetAtt OrganizationCloudTrailStackCloudFormationRole.Arn
-                  - !GetAtt GitHubOidcRoleStackCloudFormationRole.Arn
-            Version: "2012-10-17"
-          PolicyName: IamPassRole
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       ArtifactStore:
         Location: !Ref PipelineArtifactStore
         Type: S3
-      RoleArn: !GetAtt PipelineIamRole.Arn
+      RoleArn: !GetAtt PipelineRole.Arn
       Stages:
         - Name: Source
           Actions:
@@ -194,7 +534,7 @@ Resources:
                   {
                     "OrganizationId": "${OrganizationId}"
                   }
-                RoleArn: !GetAtt DevopsCrossAccountAccessRoleStackCloudFormationRole.Arn
+                RoleArn: !GetAtt DevopsCrossAccountAccessRoleStackRole.Arn
                 StackName: !Sub ${AWS::StackName}-devops-cross-account-access-role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/devops-cross-account-access-role.yml
               InputArtifacts:
@@ -215,7 +555,7 @@ Resources:
                   {
                     "OrganizationId": "${OrganizationId}"
                   }
-                RoleArn: !GetAtt CloudWatchDataSharingRoleStackCloudFormationRole.Arn
+                RoleArn: !GetAtt CloudWatchDataSharingRoleStackRole.Arn
                 StackName: !Sub ${AWS::StackName}-cloudwatch-data-sharing-role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/cloudwatch-data-sharing-role.yml
               InputArtifacts:
@@ -237,7 +577,7 @@ Resources:
                   {
                     "MonitoringAccountIds": "${CloudWatchMonitoringAccountIds}"
                   }
-                RoleArn: !GetAtt CloudWatchSharingListAccountsRoleStackCloudFormationRole.Arn
+                RoleArn: !GetAtt CloudWatchSharingListAccountsRoleStackRole.Arn
                 StackName: cloudwatch-sharing-list-accounts-role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/cloudwatch-data-sharing-org-list-role.yml
               InputArtifacts:
@@ -259,7 +599,7 @@ Resources:
                   {
                     "OrganizationId": "${OrganizationId}"
                   }
-                RoleArn: !GetAtt OrganizationDataSharingRoleStackCloudFormationRole.Arn
+                RoleArn: !GetAtt OrganizationDataSharingRoleStackRole.Arn
                 StackName: organization-data-sharing-role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-cross-account-sharing-role.yml
               InputArtifacts:
@@ -285,7 +625,7 @@ Resources:
                     }
                   - regions: !Join [",", !Ref CloudTrailProjectionRegions]
                     accounts: !Join [",", !Ref CloudTrailProjectionAccounts]
-                RoleArn: !GetAtt OrganizationCloudTrailStackCloudFormationRole.Arn
+                RoleArn: !GetAtt OrganizationCloudTrailStackRole.Arn
                 StackName: organization-trail
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-trail.yml
               InputArtifacts:
@@ -302,7 +642,7 @@ Resources:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
                 ChangeSetName: !Sub ${AWS::StackName}GitHubOidcRole
-                RoleArn: !GetAtt GitHubOidcRoleStackCloudFormationRole.Arn
+                RoleArn: !GetAtt GitHubOidcRoleStackRole.Arn
                 StackName: !Sub ${AWS::StackName}-github-oidc-role
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/github-oidc-role.yml
               InputArtifacts:
@@ -530,286 +870,6 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
 
-  DevopsCrossAccountAccessRoleStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - iam:AttachRolePolicy
-                  - iam:CreatePolicy
-                  - iam:CreatePolicyVersion
-                  - iam:CreateRole
-                  - iam:DeletePolicy
-                  - iam:DeletePolicyVersion
-                  - iam:DeleteRole
-                  - iam:DeleteRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:Get*
-                  - iam:List*
-                  - iam:PutRolePolicy
-                  - iam:SetDefaultPolicyVersion
-                  - iam:Tag*
-                  - iam:Untag*
-                  - iam:UpdateAssumeRolePolicy
-                  - iam:UpdateRole
-                  - iam:UpdateRoleDescription
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  GitHubOidcRoleStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - iam:AddClientIDToOpenIDConnectProvider
-                  - iam:AttachRolePolicy
-                  - iam:CreateOpenIDConnectProvider
-                  - iam:CreatePolicy
-                  - iam:CreatePolicyVersion
-                  - iam:CreateRole
-                  - iam:DeleteOpenIDConnectProvider
-                  - iam:DeletePolicy
-                  - iam:DeletePolicyVersion
-                  - iam:DeleteRole
-                  - iam:DeleteRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:Get*
-                  - iam:List*
-                  - iam:PutRolePolicy
-                  - iam:RemoveClientIDFromOpenIDConnectProvider
-                  - iam:SetDefaultPolicyVersion
-                  - iam:Tag*
-                  - iam:Untag*
-                  - iam:UpdateAssumeRolePolicy
-                  - iam:UpdateOpenIDConnectProviderThumbprint
-                  - iam:UpdateRole
-                  - iam:UpdateRoleDescription
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  CloudWatchDataSharingRoleStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - iam:AttachRolePolicy
-                  - iam:CreateRole
-                  - iam:DeleteRole
-                  - iam:DeleteRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:Get*
-                  - iam:List*
-                  - iam:PutRolePolicy
-                  - iam:Tag*
-                  - iam:Untag*
-                  - iam:UpdateAssumeRolePolicy
-                  - iam:UpdateRole
-                  - iam:UpdateRoleDescription
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  CloudWatchSharingListAccountsRoleStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - iam:AttachRolePolicy
-                  - iam:CreateRole
-                  - iam:DeleteRole
-                  - iam:DeleteRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:Get*
-                  - iam:List*
-                  - iam:PutRolePolicy
-                  - iam:Tag*
-                  - iam:Untag*
-                  - iam:UpdateAssumeRolePolicy
-                  - iam:UpdateRole
-                  - iam:UpdateRoleDescription
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  OrganizationDataSharingRoleStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyName: ResourceManipulationPolicy
-          PolicyDocument:
-            Statement:
-              - Effect: Allow
-                Action:
-                  - iam:AttachRolePolicy
-                  - iam:CreateRole
-                  - iam:DeleteRole
-                  - iam:DeleteRolePolicy
-                  - iam:DeleteRolePolicy
-                  - iam:DetachRolePolicy
-                  - iam:Get*
-                  - iam:List*
-                  - iam:PutRolePolicy
-                  - iam:Tag*
-                  - iam:Untag*
-                  - iam:UpdateAssumeRolePolicy
-                  - iam:UpdateRole
-                  - iam:UpdateRoleDescription
-                Resource: "*"
-            Version: "2012-10-17"
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  OrganizationCloudTrailStackCloudFormationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - s3:CreateBucket
-                  - s3:Get*
-                  - s3:List*
-                  - s3:PutBucketOwnershipControls
-                  - s3:PutBucketPolicy
-                  - s3:PutBucketTagging
-                  - s3:PutLifecycleConfiguration
-                  - s3:PutObjectTagging
-                Effect: Allow
-                Resource: "*"
-              - Action: cloudtrail:*
-                Effect: Allow
-                Resource: "*"
-              - Action:
-                  - iam:CreateServiceLinkedRole
-                  - iam:GetRole
-                Effect: Allow
-                Resource: "*"
-              - Action:
-                  - organizations:DescribeOrganization
-                  - organizations:DisableAWSServiceAccess
-                  - organizations:EnableAWSServiceAccess
-                  - organizations:ListAccounts
-                  - organizations:ListAWSServiceAccessForOrganization
-                Effect: Allow
-                Resource: "*"
-              - Action: logs:*
-                Effect: Allow
-                Resource: "*"
-              - Action: lambda:*
-                Effect: Allow
-                Resource: "*"
-              - Action: glue:*
-                Effect: Allow
-                Resource: "*"
-              - Action: athena:*
-                Effect: Allow
-                Resource: "*"
-              - Action: cloudformation:*
-                Effect: Allow
-                Resource: !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-
-  SlackRelaySnsPublishOnlyAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: sns:Publish
-            Effect: Allow
-            Resource: !Ref SlackMessageRelayTopicArn
-            Sid: AllowSlackSnsPublish
-        Version: "2012-10-17"
-
   PipelineStateChangeFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -869,7 +929,12 @@ Resources:
         };
       MemorySize: 128
       Policies:
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+              Sid: AllowSlackSnsPublish
+          Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
