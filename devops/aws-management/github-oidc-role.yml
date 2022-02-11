@@ -71,7 +71,7 @@ Resources:
       Roles: [!Ref Role]
 
   # tktktk
-  DefaultCloudFormationPolicy:
+  GenericCloudFormationPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
@@ -105,6 +105,8 @@ Resources:
               - cloudformation:UpdateStack
             Effect: Allow
             Resource:
+              # List each hosted zone CloudFormation stack ARN being
+              # continuously deployed
               - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
               - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-earhustlesq-com/*
               - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-trax-fm/*
@@ -146,6 +148,33 @@ Resources:
             Sid: DenyAllRoute53HostedZoneCreateAndDelete
         Version: "2012-10-17"
       PolicyName: HostedZoneUpdate
+      Roles: [!Ref Role]
+
+  EcrUpdatesPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr:Describe*
+              - ecr:Get*
+              - ecr:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalEcrReadOnly
+          - Action:
+              - ecr:DeleteLifecyclePolicy
+              - ecr:DeleteRepositoryPolicy
+              - ecr:PutLifecyclePolicy
+              - ecr:PutReplicationConfiguration
+              - ecr:SetRepositoryPolicy
+              - ecr:TagResource
+              - ecr:UntagResource
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalEcrReadOnly
+        Version: "2012-10-17"
+      PolicyName: EcrUpdate
       Roles: [!Ref Role]
 
 Outputs:
