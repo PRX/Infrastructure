@@ -1,0 +1,25 @@
+name: Deploy CI CloudFormation stack
+
+on:
+  push:
+    paths:
+      - ci/template.yml
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-DeployCiStack
+      - name: Deploy CloudFormation stack
+        working-directory: ci
+        run: |
+          aws cloudformation deploy --region us-east-1 --stack-name infrastructure-ci --template-file template.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
