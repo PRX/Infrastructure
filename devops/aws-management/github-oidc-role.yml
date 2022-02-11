@@ -16,6 +16,87 @@ Resources:
         - 6938fd4d98bab03faadb97b34396831e3780aea1
       Url: https://token.actions.githubusercontent.com
 
+  # Allows read-only access to all services that GitHub actions interact with,
+  # either directly, or through something like CloudFormation
+  OidcReadOnlyPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows read only access services needed for GitHub actions
+      PolicyDocument:
+        Statement:
+          - Action:
+              - codebuild:Get*
+              - codebuild:List*
+              - codepipeline:Get*
+              - codepipeline:List*
+              - ecr:Describe*
+              - ecr:Get*
+              - ecr:List*
+              - events:Describe*
+              - events:List*
+              - iam:Get*
+              - iam:List*
+              - lambda:Get*
+              - lambda:List*
+              - logs:Describe*
+              - logs:Get*
+              - logs:List*
+              - route53:Get*
+              - route53:List*
+              - s3:Describe*
+              - s3:Get*
+              - s3:List*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalReadOnly
+        Version: "2012-10-17"
+
+  # Allows global (all resources) access for specific actions that are
+  # generally considered safe
+  OidcSafeActionGlobalAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows access to specific actions needed by GitHub OIDC
+      PolicyDocument:
+        Statement:
+          - Action:
+              # Allows GitHub actions to start execution of any CodePipeline
+              - codepipeline:StartPipelineExecution
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowGlobalAccess
+        Version: "2012-10-17"
+
+  # Allows GitHub actions to interact directly with certain CloudFormation
+  # stacks, in order to deploy updates to those stacks
+  OidcCloudFormationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows access to specific actions needed by GitHub OIDC
+      PolicyDocument:
+        Statement:
+          - Action: cloudformation:*
+            Effect: Allow
+            Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
+            Sid: AllowServerlessTransformFullAccess
+          - Action:
+              - cloudformation:CreateChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:UpdateStack
+            Effect: Allow
+            Resource:
+              # List the ARN of each CloudFormation stack being deployed via
+              # GitHub actions
+              - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline/*
+              - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd/*
+              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
+              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-earhustlesq-com/*
+              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-trax-fm/*
+              - arn:aws:cloudformation:us-east-1:838846856186:stack/hostedzone-publicfeeds-net/*
+            Sid: AllowStackUpdates
+        Version: "2012-10-17"
+
   Role:
     Type: AWS::IAM::Role
     Properties:
@@ -29,96 +110,43 @@ Resources:
             Effect: Allow
             Principal:
               Federated: !Ref GitHubOidc
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - cloudformation:CreateChangeSet
-                  - cloudformation:DeleteChangeSet
-                  - cloudformation:ExecuteChangeSet
-                  - cloudformation:UpdateStack
-                Effect: Allow
-                Resource:
-                  - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline
-                  - arn:aws:cloudformation:*:*:stack/porter-cd-pipeline/*
-                Sid: AllowPorterPipelineUpdates
-              - Action:
-                  - cloudformation:CreateChangeSet
-                  - cloudformation:DeleteChangeSet
-                  - cloudformation:ExecuteChangeSet
-                  - cloudformation:UpdateStack
-                Effect: Allow
-                Resource:
-                  - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd
-                  - arn:aws:cloudformation:us-east-2:048723829744:stack/management-cd/*
-                Sid: AllowManagementCdUpdates
-            Version: "2012-10-17"
-          PolicyName: CloudFormationStacks
+      ManagedPolicyArns:
+        - !Ref OidcReadOnlyPolicy
+        - !Ref OidcSafeActionGlobalAccessPolicy
+        - !Ref OidcCloudFormationPolicy
       RoleName: DevOps-GitHubOidcFederatedRole
 
-  # Allows GitHub actions to start execution of any CodePipeline pipeline
-  CodePipelineExecutionsPolicy:
+  # Allows CloudFormation deploys initiated via GitHub actions to manage the
+  # subset of resources contained within those CloudFormation stacks.
+  #
+  # In order to prevent this policy from becoming too powerful, given that it
+  # will ultimately be used by an external service, it purposefuly excludes
+  # some permissions that may be required to provide complete coverage of the
+  # CloudFormation deploys. For example, it does not include
+  # `route53:DeleteHostedZone`, even though there are stacks within GitHub
+  # actions that could theoretically delete a hosted zone. This is forces those
+  # more dangerous/destructive updates to happen somewhere other than GitHub
+  # actions.
+  #
+  # In general, this role still has a significant number of privileges for a
+  # wildcard set of resources and should be treated with care.
+  #
+  # It is an inline policy, rather than a managed policy, becuase of the larger
+  # character limit on inline policies.
+  CloudFormationResourceManipulationPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
         Statement:
-          - Action: codepipeline:StartPipelineExecution
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalStartExecution
-        Version: "2012-10-17"
-      PolicyName: CodePipelineExecutions
-      Roles: [!Ref Role]
+          - Action:
+              - ecr:DeleteLifecyclePolicy
+              - ecr:DeleteRepositoryPolicy
+              - ecr:PutLifecyclePolicy
+              - ecr:PutReplicationConfiguration
+              - ecr:SetRepositoryPolicy
+              - ecr:TagResource
+              - ecr:UntagResource
 
-  # tktktk
-  GenericCloudFormationPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - cloudformation:Describe*
-              - cloudformation:Get*
-              - cloudformation:List*
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalCloudFormationReadOnly
-          - Action: cloudformation:*
-            Effect: Allow
-            Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
-            Sid: AllowServerlessTransformFullAccess
-        Version: "2012-10-17"
-      PolicyName: DefaultCloudFormationAccess
-      Roles: [!Ref Role]
-
-  # Allows GitHub actions to update hosted zone CloudFormation stacks, as well
-  # as the HostedZone resources within those stacks
-  HostedZoneUpdatesPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - cloudformation:CreateChangeSet
-              - cloudformation:DeleteChangeSet
-              - cloudformation:ExecuteChangeSet
-              - cloudformation:UpdateStack
-            Effect: Allow
-            Resource:
-              # List each hosted zone CloudFormation stack ARN being
-              # continuously deployed
-              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-radiotopia-com/*
-              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-earhustlesq-com/*
-              - arn:aws:cloudformation:us-east-1:561178107736:stack/hostedzone-trax-fm/*
-              - arn:aws:cloudformation:us-east-1:838846856186:stack/hostedzone-publicfeeds-net/*
-            Sid: AllowHostedZoneStackUpdates
-          - Action:
-              - route53:Get*
-              - route53:List*
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalRoute53ReadOnly
-          - Action:
               - route53:ChangeResourceRecordSets
               - route53:ChangeTagsForResource
               - route53:CreateHealthCheck
@@ -138,43 +166,10 @@ Resources:
                 # by the stacks listed above can be altered.
                 aws:CalledViaFirst: cloudformation.amazonaws.com
             Effect: Allow
-            Resource: "*" # TODO Should this list each zone ID explicitly?
-            Sid: AllowRoute53HostedZoneUpdates
-          - Action:
-              - route53:CreateHostedZone
-              - route53:DeleteHostedZone
-            Effect: Deny
             Resource: "*"
-            Sid: DenyAllRoute53HostedZoneCreateAndDelete
+            Sid: AllowGlobalResourceUpdates
         Version: "2012-10-17"
-      PolicyName: HostedZoneUpdate
-      Roles: [!Ref Role]
-
-  EcrUpdatesPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - ecr:Describe*
-              - ecr:Get*
-              - ecr:List*
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalEcrReadOnly
-          - Action:
-              - ecr:DeleteLifecyclePolicy
-              - ecr:DeleteRepositoryPolicy
-              - ecr:PutLifecyclePolicy
-              - ecr:PutReplicationConfiguration
-              - ecr:SetRepositoryPolicy
-              - ecr:TagResource
-              - ecr:UntagResource
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowEcrUpdate
-        Version: "2012-10-17"
-      PolicyName: EcrUpdate
+      PolicyName: CfnResourceManipulation
       Roles: [!Ref Role]
 
 Outputs:
