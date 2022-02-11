@@ -28,6 +28,7 @@ Resources:
               - cloudformation:Describe*
               - cloudformation:Get*
               - cloudformation:List*
+              - codebuild:BatchGet*
               - codebuild:Get*
               - codebuild:List*
               - codepipeline:Get*
@@ -136,12 +137,27 @@ Resources:
   #
   # It is an inline policy, rather than a managed policy, becuase of the larger
   # character limit on inline policies.
+  #
+  # NOTE: If this gets too big, it may need to be split into multiple roles,
+  # with different roles being used for different types of GitHub actions
   CloudFormationResourceManipulationPolicy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyDocument:
         Statement:
           - Action:
+              - codebuild:UpdateProject
+
+              - codepipeline:CreatePipeline
+              - codepipeline:DeletePipeline
+              - codepipeline:DeleteWebhook
+              - codepipeline:DeregisterWebhookWithThirdParty
+              - codepipeline:PutWebhook
+              - codepipeline:RegisterWebhookWithThirdParty
+              - codepipeline:TagResource
+              - codepipeline:UntagResource
+              - codepipeline:UpdatePipeline
+
               - ecr:DeleteLifecyclePolicy
               - ecr:DeleteRepositoryPolicy
               - ecr:PutLifecyclePolicy
@@ -149,6 +165,19 @@ Resources:
               - ecr:SetRepositoryPolicy
               - ecr:TagResource
               - ecr:UntagResource
+
+              - iam:PassRole
+              - iam:Tag*
+              - iam:Untag*
+
+              - logs:CreatLogGroup
+              - logs:CreateLogStream
+              - logs:DeleteLogGroup
+              - logs:DeleteLogStream
+              - logs:DeleteRetentionPolicy
+              - logs:PutRetentionPolicy
+              - logs:TagLogGroup
+              - logs:UntagLogGroup
 
               - route53:ChangeResourceRecordSets
               - route53:ChangeTagsForResource
@@ -162,6 +191,11 @@ Resources:
               - route53:UpdateHostedZoneComment
               - route53:UpdateTrafficPolicyComment
               - route53:UpdateTrafficPolicyInstance
+
+              - s3:PutBucketTagging
+
+              - sns:Tag*
+              - sns:Untag*
             Condition:
               StringEquals:
                 # This ensures that the role only makes Route 53 changes via
