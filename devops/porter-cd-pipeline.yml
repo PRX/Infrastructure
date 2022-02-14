@@ -672,19 +672,6 @@ Resources:
               OutputArtifacts:
                 - Name: PorterRepoSourceArtifact
               RunOrder: 1
-            - Name: TemplateConfig-S3
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: S3
-                Version: "1"
-              Configuration:
-                PollForSourceChanges: false
-                S3Bucket: !Ref TemplateConfigBucketName
-                S3ObjectKey: !Ref TemplateConfigObject
-              OutputArtifacts:
-                - Name: TemplateConfigZipArtifact
-              RunOrder: 1
         - Name: Build
           Actions:
             # The output artifact is the CloudFormation template that's a
@@ -750,16 +737,17 @@ Resources:
                 ParameterOverrides: |
                   {
                     "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
-                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}"
+                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "EnvironmentType": "Staging",
+                    "EnvironmentTypeAbbreviation": "stag",
+                    "TranscodeJobNamePrefix": "porter-stag-"
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref StagingStackName
-                TemplateConfiguration: TemplateConfigZipArtifact::staging.json
                 # Get the YAML template from `sam package` out of the artifact
                 TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
-                - Name: TemplateConfigZipArtifact
               Namespace: staging_deploy
               RunOrder: 1
         - Name: Testing
@@ -809,15 +797,16 @@ Resources:
                 ParameterOverrides: |
                   {
                     "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
-                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}"
+                    "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "EnvironmentType": "Production",
+                    "EnvironmentTypeAbbreviation": "prod",
+                    "TranscodeJobNamePrefix": "porter-prod-"
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref ProductionStackName
-                TemplateConfiguration: TemplateConfigZipArtifact::production.json
                 TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
               InputArtifacts:
                 - Name: SamBuildArtifact
-                - Name: TemplateConfigZipArtifact
               RunOrder: 2
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
