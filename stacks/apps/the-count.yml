@@ -17,8 +17,8 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
-  # CodeS3ObjectKey: { Type: String }
-  CountHostname: { Type: String }
+  CodeS3ObjectKey: { Type: String }
+  # CountHostname: { Type: String }
 
 Resources:
   # ExternalCertificate:
@@ -63,48 +63,84 @@ Resources:
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:application: The Count
 
-  # EndpointFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri:
-  #       Bucket: !Ref CodeS3Bucket
-  #       Key: !Ref CodeS3ObjectKey
-  #     Description: The Count
-  #     Events:
-  #       ApiRequest:
-  #         Properties:
-  #           ApiId: !Ref HttpApi
-  #           Method: get
-  #           Path: /query
-  #         Type: HttpApi
-  #     Handler: index.handler
-  #     MemorySize: 192
-  #     Runtime: nodejs14.x
-  #     Tags:
-  #       prx:meta:tagging-version: "2021-04-07"
-  #       prx:cloudformation:stack-name: !Ref AWS::StackName
-  #       prx:cloudformation:stack-id: !Ref AWS::StackId
-  #       prx:cloudformation:root-stack-name: !Ref RootStackName
-  #       prx:cloudformation:root-stack-id: !Ref RootStackId
-  #       prx:ops:environment: !Ref EnvironmentType
-  #       prx:dev:application: The Count
-  #     Timeout: 16
+  EndpointFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: The Count
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /query
+          Type: HttpApi
+      Handler: index.handler
+      MemorySize: 192
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: The Count
+      Timeout: 16
 
-  # EndpointFunctionLogGroup:
-  #   Type: AWS::Logs::LogGroup
-  #   Properties:
-  #     LogGroupName: !Sub /aws/lambda/${EndpointFunction}
-  #     RetentionInDays: 14
-  # EndpointFunctionLogGroupTags:
-  #   Type: Custom::CloudWatchLogGroupTags
-  #   Properties:
-  #     ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-  #     LogGroupName: !Ref EndpointFunctionLogGroup
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: The Count }
+  EndpointFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [The Count] API Handler <${EnvironmentTypeAbbreviation}> ELEVATED FUNCTION ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The Count API endpoint Lambda function is
+        experiencing function errors, thrown by the code or runtime. The
+        invocations likely origintated from API Gateway and will not be
+        retried.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EndpointFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 2
+      TreatMissingData: notBreaching
+  EndpointFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt EndpointFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Count }
+
+  EndpointFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EndpointFunction}
+      RetentionInDays: 14
+  EndpointFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref EndpointFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Count }
