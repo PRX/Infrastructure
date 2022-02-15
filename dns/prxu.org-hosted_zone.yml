@@ -24,6 +24,7 @@ Resources:
           Value: Dovetail
       Name: !Ref Domain
 
+  # Purpose-based
   Text:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -50,6 +51,38 @@ Resources:
           TTL: "1800"
           Type: TXT
           Name: !Sub dzc.${Domain}
+  AuthProxy:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Auth proxy
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub p.${Domain}
+          ResourceRecords:
+            - p.u.prx.tech.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub p.staging.${Domain}
+          ResourceRecords:
+            - p.staging.u.prx.tech.
+          TTL: "3600"
+          Type: CNAME
+  Mx: # TODO Rename to Email
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: MX Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - ResourceRecords:
+            - 1 ASPMX.L.GOOGLE.COM.
+            - 5 ALT1.ASPMX.L.GOOGLE.COM.
+            - 5 ALT2.ASPMX.L.GOOGLE.COM.
+            - 10 ASPMX2.GOOGLEMAIL.COM.
+            - 10 ASPMX3.GOOGLEMAIL.COM.
+          TTL: "300"
+          Type: MX
+          Name: !Ref Domain
+
   Dovetail:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -99,21 +132,6 @@ Resources:
           AliasTarget:
             DNSName: dualstack.infrast-Alb-AL6G9YR36Q2W-1508457227.us-east-1.elb.amazonaws.com.
             HostedZoneId: Z35SXDOTRQ7X7K
-  Mx:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: MX Records
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - ResourceRecords:
-            - 1 ASPMX.L.GOOGLE.COM.
-            - 5 ALT1.ASPMX.L.GOOGLE.COM.
-            - 5 ALT2.ASPMX.L.GOOGLE.COM.
-            - 10 ASPMX2.GOOGLEMAIL.COM.
-            - 10 ASPMX3.GOOGLEMAIL.COM.
-          TTL: "300"
-          Type: MX
-          Name: !Ref Domain
   CloudFront:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -186,23 +204,7 @@ Resources:
             DNSName: dqos2vqrtnmab.cloudfront.net
             HostedZoneId: Z2FDTNDATAQYW2
 
-  AuthProxy:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Auth proxy
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - Name: !Sub p.${Domain}
-          ResourceRecords:
-            - p.u.prx.tech.
-          TTL: "3600"
-          Type: CNAME
-        - Name: !Sub p.staging.${Domain}
-          ResourceRecords:
-            - p.staging.u.prx.tech.
-          TTL: "3600"
-          Type: CNAME
-
+  # Service-specifc
   AwsAcmLegacyUsEast1:
     Type: AWS::Route53::RecordSetGroup
     Properties:
