@@ -23,6 +23,7 @@ Resources:
           Value: !Ref AWS::StackId
       Name: !Ref Domain
 
+  # Purpose-based
   Text:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -42,28 +43,19 @@ Resources:
             - '"google-site-verification=zFRPkYoCbmLhpl-z3WCBzd0uUXdlP50m39evhsNZHKQ"'
           TTL: "300"
           Type: TXT
+  GSuite: # TODO Rename to Email
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Email
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
         # DMARC
         - Name: !Sub _dmarc.${Domain}
           ResourceRecords:
             - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
           TTL: "300"
           Type: TXT
-        - Name: !Sub zendesk_verification.${Domain}
-          ResourceRecords:
-            - '"26777e86e5712a38"'
-          TTL: "300"
-          Type: TXT
-        - Name: !Sub cm._domainkey.${Domain}
-          ResourceRecords:
-            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDYge8wksKTUDp27iGsOvkwkTSaO7iXVwMPiHqG8x9JH/Pi9YBwQ8Ld1laKERFi7JSMR0VAr7BCBF935LRPrNuTtE7p3E1EAbjn7ZO5ZpWE0cvBEAYOXDh2RLTWZnW294CvvzhWhg77Oe43rNl0+0duHSCbM4/q2BT8Y4voea3nIwIDAQAB"'
-          TTL: "300"
-          Type: TXT
-  GSuite:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: G Suite
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
+        # Email
         - Name: !Ref Domain
           ResourceRecords:
             - 1 ASPMX.L.GOOGLE.COM.
@@ -73,90 +65,6 @@ Resources:
             - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "300"
           Type: MX
-  Squarespace:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Squarespace
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - Name: !Ref Domain
-          ResourceRecords:
-            - "198.185.159.144"
-            - "198.185.159.145"
-            - "198.49.23.144"
-            - "198.49.23.145"
-          TTL: "300"
-          Type: A
-        - Name: !Sub www.${Domain}
-          ResourceRecords:
-            - ext-cust.squarespace.com.
-          TTL: "300"
-          Type: CNAME
-        - Name: !Sub 8k7w47c5y878fddxzmfk.${Domain}
-          ResourceRecords:
-            - verify.squarespace.com.
-          TTL: "300"
-          Type: CNAME
-  MailChimp:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: MailChimp
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - Name: !Sub k1._domainkey.${Domain}
-          ResourceRecords:
-            - dkim.mcsv.net.
-          TTL: "300"
-          Type: CNAME
-  Zendesk:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Zendesk
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        # Domain Validation
-        - Name: !Sub zendesk1.${Domain}
-          ResourceRecords:
-            - mail1.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-        - Name: !Sub zendesk2.${Domain}
-          ResourceRecords:
-            - mail2.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-        - Name: !Sub zendesk3.${Domain}
-          ResourceRecords:
-            - mail3.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-        - Name: !Sub zendesk4.${Domain}
-          ResourceRecords:
-            - mail4.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-        # DKIM
-        - Name: !Sub zendesk1._domainkey.${Domain}
-          ResourceRecords:
-            - zendesk1._domainkey.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-        - Name: !Sub zendesk2._domainkey.${Domain}
-          ResourceRecords:
-            - zendesk2._domainkey.zendesk.com.
-          TTL: "3600"
-          Type: CNAME
-  Feedburner:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: MailChimp
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - Name: !Sub feeds.${Domain}
-          ResourceRecords:
-            - io25k.feedproxy.ghs.google.com.
-          TTL: "300"
-          Type: CNAME
   Media:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -223,13 +131,19 @@ Resources:
             HostedZoneId: Z2FDTNDATAQYW2
           Name: !Sub v1.${Domain}
           Type: AAAA
-
-  Plus:
+  Podcast:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: Radiotopia Plus
+      Comment: Podcast feeds
       HostedZoneId: !Ref HostedZone
       RecordSets:
+        # Showcase
+        - Name: !Sub feeds.${Domain}
+          ResourceRecords:
+            - io25k.feedproxy.ghs.google.com.
+          TTL: "300"
+          Type: CNAME
+        # Plus
         - AliasTarget:
             DNSName: dlbhchudv5ekb.cloudfront.net.
             # Global CloudFront hosted zone ID
@@ -242,7 +156,7 @@ Resources:
             HostedZoneId: Z2FDTNDATAQYW2
           Name: !Sub plus.${Domain}
           Type: AAAA
-
+  # Service-specifc
   AwsAcmLegacyUsEast1:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -303,3 +217,92 @@ Resources:
             - _fc5d225af903e59bec83de07d729d9e6.ltfvzjuylp.acm-validations.aws.
           TTL: "3600"
           Type: CNAME
+  MailChimp:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: MailChimp
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub k1._domainkey.${Domain}
+          ResourceRecords:
+            - dkim.mcsv.net.
+          TTL: "3600"
+          Type: CNAME
+  Squarespace:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Squarespace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            - "198.185.159.144"
+            - "198.185.159.145"
+            - "198.49.23.144"
+            - "198.49.23.145"
+          TTL: "3600"
+          Type: A
+        - Name: !Sub www.${Domain}
+          ResourceRecords:
+            - ext-cust.squarespace.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub 8k7w47c5y878fddxzmfk.${Domain}
+          ResourceRecords:
+            - verify.squarespace.com.
+          TTL: "3600"
+          Type: CNAME
+  Zendesk:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Zendesk
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # Domain Validation
+        - Name: !Sub zendesk_verification.${Domain}
+          ResourceRecords:
+            - '"26777e86e5712a38"'
+          TTL: "3600"
+          Type: TXT
+        - Name: !Sub zendesk1.${Domain}
+          ResourceRecords:
+            - mail1.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2.${Domain}
+          ResourceRecords:
+            - mail2.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk3.${Domain}
+          ResourceRecords:
+            - mail3.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk4.${Domain}
+          ResourceRecords:
+            - mail4.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        # DKIM
+        - Name: !Sub zendesk1._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk1._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+        - Name: !Sub zendesk2._domainkey.${Domain}
+          ResourceRecords:
+            - zendesk2._domainkey.zendesk.com.
+          TTL: "3600"
+          Type: CNAME
+  CampaignMonitor:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Campaign Monitor
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub cm._domainkey.${Domain}
+          ResourceRecords:
+            - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDYge8wksKTUDp27iGsOvkwkTSaO7iXVwMPiHqG8x9JH/Pi9YBwQ8Ld1laKERFi7JSMR0VAr7BCBF935LRPrNuTtE7p3E1EAbjn7ZO5ZpWE0cvBEAYOXDh2RLTWZnW294CvvzhWhg77Oe43rNl0+0duHSCbM4/q2BT8Y4voea3nIwIDAQAB"'
+          TTL: "3600"
+          Type: TXT
