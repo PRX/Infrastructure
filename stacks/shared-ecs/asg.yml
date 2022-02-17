@@ -104,7 +104,6 @@ Resources:
   # terminate. Should keep an eye on the github issue for less-DIY support of this
   # functionality: https://github.com/aws/containers-roadmap/issues/256
   EcsDrainSnsTopic:
-    Condition: IsStaging
     Type: AWS::SNS::Topic
     Properties:
       Tags:
@@ -116,7 +115,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Infrastructure }
   EcsDrainSnsRole:
-    Condition: IsStaging
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -137,7 +135,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Infrastructure }
   EcsDrainHook:
-    Condition: IsStaging
     Type: AWS::AutoScaling::LifecycleHook
     Properties:
       AutoScalingGroupName: !Ref Asg
@@ -147,7 +144,6 @@ Resources:
       NotificationTargetARN: !Ref EcsDrainSnsTopic
       RoleARN: !GetAtt EcsDrainSnsRole.Arn
   EcsDrainFunction:
-    Condition: IsStaging
     Type: AWS::Serverless::Function
     Properties:
       Description: Drain tasks off ECS instances before allowing them to terminate
@@ -159,7 +155,7 @@ Resources:
           Properties:
             Topic: !Ref EcsDrainSnsTopic
           Type: SNS
-      Handler: lambda_function.lambda_handler
+      Handler: index.lambda_handler
       InlineCode: |
         from __future__ import print_function
         import boto3
@@ -400,13 +396,11 @@ Resources:
         prx:dev:application: Infrastructure
       Timeout: 300
   EcsDrainLogGroup:
-    Condition: IsStaging
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${EcsDrainFunction}
       RetentionInDays: 30
   EcsDrainLogGroupTags:
-    Condition: IsStaging
     Type: Custom::CloudWatchLogGroupTags
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
@@ -682,8 +676,8 @@ Resources:
         # template values, even if a scheduled action is in effect.
         IgnoreUnmodifiedGroupSizeProperties: true
     Properties:
-      Cooldown: !If [IsProduction, "240", "120"]
-      HealthCheckGracePeriod: !If [IsProduction, 512, 0]
+      Cooldown: "120"
+      HealthCheckGracePeriod: 0
       HealthCheckType: EC2
       LaunchTemplate:
         LaunchTemplateId: !Ref Ec2LaunchTemplate
@@ -693,7 +687,7 @@ Resources:
       MetricsCollection:
         - Granularity: 1Minute
       MinSize: !If [IsProduction, "7", "0"]
-      NewInstancesProtectedFromScaleIn: !If [IsProduction, true, false]
+      NewInstancesProtectedFromScaleIn: false
       Tags:
         - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
         - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -717,7 +711,7 @@ Resources:
       AutoScalingGroupProvider:
         AutoScalingGroupArn: !Ref Asg
         ManagedScaling:
-          InstanceWarmupPeriod: !If [IsProduction, 300, 180]
+          InstanceWarmupPeriod: 180
           MaximumScalingStepSize: 10
           MinimumScalingStepSize: 1
           Status: ENABLED
