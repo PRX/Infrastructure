@@ -1,39 +1,21 @@
-This means that standard practices like code reviews and Git merges can be applied to infrastructure code, and the deployment of changes to the AWS resources that run applications can be managed much more explicitly.
-
 ## Coding Standards
 
 Follow these rules for Git commits: https://chris.beams.io/posts/git-commit/
 
-### Python
+CI builds will enforce the following linters and static code checkers:
 
-Python code should be automatically formatted using [Black](https://black.readthedocs.io/en/stable/#), and statically checked using Pylance (or similar).
+- [cfn-lint](https://github.com/aws-cloudformation/cfn-lint)
+- [Black](https://black.readthedocs.io/en/stable/#)
+- [Flake8](https://flake8.pycqa.org/en/latest/)
+- [ESLint](https://eslint.org/)
+- [Prettier](https://prettier.io/)
+- TypeScript [tsc](https://www.typescriptlang.org/docs/handbook/compiler-options.html)
 
-### JavaScript
-
-JavaScript should follow the included ESLint rules. These follow the Airbnb style guide, save for a few minor changes to that relate to coding specifically for AWS Lambda functions.
-
-Ensure that Airbnb config is available, as the included `.eslintrc` inherits from that, and that your editor is configured to check for problems.
-
-```
-(
-  export PKG=eslint-config-airbnb;
-  npm info "$PKG@latest" peerDependencies --json | command sed 's/[\{\},]//g ; s/: /@/g' | xargs npm install --save-dev "$PKG@latest"
-)
-```
-
-JavaScript files should be automatically formatted using Prettier.
-
-### YAML
-
-YAML files should be automatically formatted using Prettier. It may be helpful to only format modifications, since many YAML files are not formatted, and would result in large deltas.
+It's recommended you configure your IDE to continuously run those tools to catch any errors before committing. When possible, configure the tools to run automatically (e.g., on save).
 
 ### CloudFormation Templates
 
-Templates should be linted to be error-free with [cfn-lint](https://github.com/awslabs/cfn-python-lint).
-
-There is also an atom plugin https://atom.io/packages/atom-cfn-lint.
-
-Always write templates in YAML. CloudFormation templates can be hard to parse. Always use clear, verbose naming and add inline comments when appropriate. Group resources by their function, not by their type. Add the filename at the top of the file as a comment (this makes it easier to identify which template was used to launch a stack).
+Always write templates in YAML. CloudFormation templates can be hard to parse. Always use clear, verbose naming and add inline comments and whitespace when appropriate. Group resources by their function, not by their type. Add the filename at the top of the file as a comment (this makes it easier to identify which template was used to launch a stack).
 
 #### Function syntax
 
@@ -64,10 +46,15 @@ Pets:
       - !Ref AWS::NoValue
 ```
 
-- stack protection
+# Example Development Environment
 
-- notes about learning fundementals of AWS
+- Use [asdf](https://asdf-vm.com/) for managing Node.js and Ruby runtimes.
+- Install the versions indicated in `.tool-versions`
+- `npm install` – This will some install linters and checkers, and packages needed by them
+- Use `pyenv` for managing Python version
+- Use `pyenv-virtualenv` for virtual environments
+- `pyenv install 3.8.12`
+- `pyenv virtualenv 3.8.12 venv_infrastructure`
+- `pip install -r requirements.txt`
 
-
-
-Lambda functions should contain a README file in the directory with the code, or a README section at the top of the code file. Unless absolutely necessary, Lambda functions should be a single text file with no external libraries (to make managing them through the AWS Console as easy as possible). Python is the preferred language to use for functions in the CI stack.
+This should install all tooling required in a way that doesn't pollute your global environment. You may need to configure your IDE or install additional plugins to integrate these tools into your editor. Be sure paths are configured to look in the right spots for `asdf` or `pyenv`, or however you choose to install runtimes.

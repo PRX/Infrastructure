@@ -1,7 +1,7 @@
 # Infrastructure
 Templates and assets used to launch and manage many aspects of PRX's applications and services.
 
-The Infrastructure project itself contains many independent or related-but-separate projects and assets. It is the home for all work that helps PRX adhere to an _[infrastructure](https://docs.microsoft.com/en-us/azure/devops/learn/what-is-infrastructure-as-code) [as](http://infrastructure-as-code.com/) [code](https://www.thoughtworks.com/insights/blog/infrastructure-code-reason-smile)_ philosophy. The goal is to describe the various AWS resources (and their associated configurations) needed to run a multitude of applications, servers, and services using code and templates.
+The Infrastructure project itself contains many independent or related-but-separate projects and assets. It is the home for any work that helps PRX adhere to an _[infrastructure](https://docs.microsoft.com/en-us/azure/devops/learn/what-is-infrastructure-as-code) [as](http://infrastructure-as-code.com/) [code](https://www.thoughtworks.com/insights/blog/infrastructure-code-reason-smile)_ philosophy. The goal is to describe the various AWS resources (and their associated configurations) needed to run a multitude of applications, servers, and services using code and templates.
 
 All aspects of Infrastructure largely rely on [AWS CloudFormation](https://aws.amazon.com/cloudformation/).
 
@@ -38,8 +38,10 @@ Files found in `cd/`, `ci/`, `notifications/`, `secrets/`, `stacks/` and `storag
 - `etc/` – Misc. standalone stacks
 - `utility/` - Scripts and Lambda functions that help with other parts of Infrastructure
 
-### Notable Resources
+### GitHub Actions
 
-**Root account activity monitor** – Uses [AWS CloudTrail](https://aws.amazon.com/cloudtrail/) to monitor AWS accounts for any activity from a root account. This stack should be launched in any AWS account in the PRX organization.
+The `.github/workflows` directory contains files that describe automated processes that are run as [GitHub Action](https://docs.github.com/en/actions) under certain conditions (e.g., a specific file is updated). These workflows are meant to operate in coordination with various processes deployed into AWS. For example, the CI system is continuously deployed using a GitHub action. Some DNS hosted zones are also continuously deployed using GitHub actions.
 
-**Cross account VPC peering** – When resources in different AWS accounts need to be able to route traffic wihout going over the internet, VPCs can be peered to create a connection. Using the _requester_ and _accepter_ peering templates, such a connection can be established.
+Highly integrated processes and pipelines (for example, where CloudFormation, CodeBuild, CodePipeline, Lambda, etc are all working together) should not be created as GitHub Actions. GitHub Actions should only be used for very simple workflows, or in cases where there's no reasonable way to accomplish something using AWS primatives (such as deploying a CloudFormation stack that deploys another deployment process). A CodePipeline that would end up being a single action may be a good candidate for GitHub actions.
+
+GitHub Actions also have greater visibility into commit-level events than CodePipeline source actions. If there is a pipeline that only needs to run when certain files or directories are altered, it can be beneficial to create a GitHub Action to start the execution of that pipeline using a detailed `on` condition, rather than having the pipeline start for all commits made to this repository.
