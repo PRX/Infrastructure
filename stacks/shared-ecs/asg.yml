@@ -361,8 +361,8 @@ Resources:
         # template values, even if a scheduled action is in effect.
         IgnoreUnmodifiedGroupSizeProperties: true
     Properties:
-      Cooldown: "240"
-      HealthCheckGracePeriod: 512
+      Cooldown: !If [IsProduction, "240", "120"]
+      HealthCheckGracePeriod: !If [IsProduction, 512, 0]
       HealthCheckType: EC2
       LaunchTemplate:
         LaunchTemplateId: !Ref Ec2LaunchTemplate
@@ -372,7 +372,7 @@ Resources:
       MetricsCollection:
         - Granularity: 1Minute
       MinSize: !If [IsProduction, "7", "0"]
-      NewInstancesProtectedFromScaleIn: true
+      NewInstancesProtectedFromScaleIn: !If [IsProduction, true, false]
       Tags:
         - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
         - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -383,6 +383,7 @@ Resources:
         - { PropagateAtLaunch: true, Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { PropagateAtLaunch: true, Key: prx:dev:application, Value: Common }
       TerminationPolicies:
+        - OldestInstance
         - Default
       VPCZoneIdentifier:
         - !Ref VpcPublicSubnet1Id
@@ -395,6 +396,7 @@ Resources:
       AutoScalingGroupProvider:
         AutoScalingGroupArn: !Ref Asg
         ManagedScaling:
+          InstanceWarmupPeriod: !If [IsProduction, 300, 180]
           MaximumScalingStepSize: 10
           MinimumScalingStepSize: 1
           Status: ENABLED
