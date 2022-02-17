@@ -41,7 +41,11 @@ def update_staging_config_file(event, env_vars):
         with zipfile.ZipFile(archive_path, "r") as archive:
             staging_config = json.load(archive.open("staging.json"))
 
-        if "PRX_ECR_IMAGE" in env_vars and len(env_vars["PRX_ECR_IMAGE"]) > 0:
+        if (
+            "PRX_ECR_CONFIG_PARAMETERS" in env_vars
+            and "PRX_ECR_IMAGE" in env_vars
+            and len(env_vars["PRX_ECR_IMAGE"]) > 0
+        ):
             print("...Updating ECR image value...")
 
             config_did_change = True
