@@ -104,6 +104,7 @@ Resources:
   # terminate. Should keep an eye on the github issue for less-DIY support of this
   # functionality: https://github.com/aws/containers-roadmap/issues/256
   ECSDrainSNSTopic:
+    Condition: IsStaging
     Type: AWS::SNS::Topic
     Properties:
       Tags:
@@ -115,6 +116,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
   ECSDrainSNSRole:
+    Condition: IsStaging
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -138,6 +140,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
   ECSDrainHook:
+    Condition: IsStaging
     Type: AWS::AutoScaling::LifecycleHook
     Properties:
       AutoScalingGroupName: !Ref Asg
@@ -147,6 +150,7 @@ Resources:
       NotificationTargetARN: !Ref ECSDrainSNSTopic
       RoleARN: !GetAtt ECSDrainSNSRole.Arn
   ECSDrainFunction:
+    Condition: IsStaging
     Type: AWS::Serverless::Function
     Properties:
       Description: Drain tasks off ECS instances before allowing them to terminate
@@ -402,11 +406,13 @@ Resources:
         prx:dev:application: Common
       Timeout: 300
   ECSDrainLogGroup:
+    Condition: IsStaging
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${ECSDrainFunction}
       RetentionInDays: 30
   ECSDrainLogGroupTags:
+    Condition: IsStaging
     Type: Custom::CloudWatchLogGroupTags
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
