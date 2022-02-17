@@ -103,7 +103,7 @@ Resources:
   # this lambda handles draining ECS tasks from instances in this ASG before they
   # terminate. Should keep an eye on the github issue for less-DIY support of this
   # functionality: https://github.com/aws/containers-roadmap/issues/256
-  ECSDrainSNSTopic:
+  EcsDrainSnsTopic:
     Condition: IsStaging
     Type: AWS::SNS::Topic
     Properties:
@@ -114,23 +114,20 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-  ECSDrainSNSRole:
+        - { Key: prx:dev:application, Value: Infrastructure }
+  EcsDrainSnsRole:
     Condition: IsStaging
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
         Statement:
-          - Action:
-              - sts:AssumeRole
+          - Action: sts:AssumeRole
             Effect: Allow
             Principal:
-              Service:
-                - autoscaling.amazonaws.com
+              Service: autoscaling.amazonaws.com
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AutoScalingNotificationAccessRole
-      Path: /
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -138,8 +135,8 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-  ECSDrainHook:
+        - { Key: prx:dev:application, Value: Infrastructure }
+  EcsDrainHook:
     Condition: IsStaging
     Type: AWS::AutoScaling::LifecycleHook
     Properties:
@@ -147,9 +144,9 @@ Resources:
       DefaultResult: ABANDON
       HeartbeatTimeout: 900
       LifecycleTransition: autoscaling:EC2_INSTANCE_TERMINATING
-      NotificationTargetARN: !Ref ECSDrainSNSTopic
-      RoleARN: !GetAtt ECSDrainSNSRole.Arn
-  ECSDrainFunction:
+      NotificationTargetARN: !Ref EcsDrainSnsTopic
+      RoleARN: !GetAtt EcsDrainSnsRole.Arn
+  EcsDrainFunction:
     Condition: IsStaging
     Type: AWS::Serverless::Function
     Properties:
@@ -160,7 +157,7 @@ Resources:
       Events:
         SnsMessages:
           Properties:
-            Topic: !Ref ECSDrainSNSTopic
+            Topic: !Ref EcsDrainSnsTopic
           Type: SNS
       Handler: index.handler
       InlineCode: |
@@ -389,11 +386,9 @@ Resources:
                 - !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task/*
           Version: "2012-10-17"
         - Statement:
-            - Action:
-                - sns:Publish
+            - Action: sns:Publish
               Effect: Allow
-              Resource:
-                - !Ref ECSDrainSNSTopic
+              Resource: !Ref EcsDrainSnsTopic
           Version: "2012-10-17"
       Runtime: python3.9
       Tags:
@@ -403,20 +398,20 @@ Resources:
         prx:cloudformation:root-stack-name: !Ref RootStackName
         prx:cloudformation:root-stack-id: !Ref RootStackId
         prx:ops:environment: !Ref EnvironmentType
-        prx:dev:application: Common
+        prx:dev:application: Infrastructure
       Timeout: 300
-  ECSDrainLogGroup:
+  EcsDrainLogGroup:
     Condition: IsStaging
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${ECSDrainFunction}
+      LogGroupName: !Sub /aws/lambda/${EcsDrainFunction}
       RetentionInDays: 30
-  ECSDrainLogGroupTags:
+  EcsDrainLogGroupTags:
     Condition: IsStaging
     Type: Custom::CloudWatchLogGroupTags
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-      LogGroupName: !Ref ECSDrainLogGroup
+      LogGroupName: !Ref EcsDrainLogGroup
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -424,7 +419,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
+        - { Key: prx:dev:application, Value: Infrastructure }
 
   # This adds a rule to the load balancer security group defined in
   # shared-alb.yml. It allows all TCP egress traffic from the load balancer
