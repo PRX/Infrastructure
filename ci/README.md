@@ -6,7 +6,7 @@ In order to support the [practice](https://en.wikipedia.org/wiki/Continuous_inte
 
 The high-level goals of the system are:
 
-- Watch for important code changes that are pushed to GitHub repositories, including all commits to `master` branches, as well as to open [pull requests](https://help.github.com/articles/about-pull-requests/)
+- Watch for important code changes that are pushed to GitHub repositories, including all commits to default (`master`, `main`, etc) branches, as well as to open [pull requests](https://help.github.com/articles/about-pull-requests/)
 - Run any build, test, or other processes defined by the applications any time there are such code changes
 - Notify developers of the status of those processes in Slack, and ensure that the [build status](https://github.com/blog/1227-commit-status-api) in GitHub is accurate
 - Allow for code that passes build and test process to be packaged and pushed to destinations from which it can be deployed

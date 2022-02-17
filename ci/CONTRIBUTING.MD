@@ -14,7 +14,7 @@
 
 ## Deployment
 
-The continuous integration platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/) via [AWS SAM](https://aws.amazon.com/serverless/sam/), so any AWS resources that are necessary for the system to operate should be added to the `ci.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
+The continuous integration platform is intended to be managed and launched through [AWS CloudFormation](https://aws.amazon.com/cloudformation/) via [AWS SAM](https://aws.amazon.com/serverless/sam/), so any AWS resources that are necessary for the system to operate should be added to the `ci/template.yml` template that already exists. CloudFormation stacks should always be designed to work in any AWS region, and allow for multiple stacks to be launched without conflicting, even in the same region (though doing so is unexpected and not recommended).
 
 **Never make changes to AWS resources that were created through CloudFormation other than through CloudFormation, and do not create any resources outside of the CloudFormation template**. The CI system is entirely self-contained and should remain that way.
 
@@ -22,9 +22,7 @@ Sensitive information, such as API keys, should be managed through [Parameter St
 
 When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/master/ci/README.md) should include information to help with getting those dependencies set up.
 
-There is no automated process for deploying changes to the CI stack. If the CloudFormation template changes, the stack must be updated manually. You should always be sure to carefully review the resources that are changing before executing the stack update.
-
-Use the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli) to deploy updates. A `samconfig.toml` file can be found in LastPass. Once that file is copied to the `ci/` directory, run `sam deploy` to deploy your local branch.
+Deployment of the CI stack is generally handled automatically by a [GitHub action](https://github.com/PRX/Infrastructure/blob/master/.github/workflows/deploy-ci-stack.yml), which deploys using the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli). If necesary, the stack can also be updated manually using the AWS SAM CLI locally.
 
 ## Code Review
 
