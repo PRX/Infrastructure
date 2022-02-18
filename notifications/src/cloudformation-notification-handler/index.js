@@ -122,59 +122,29 @@ function messageForEvent(event) {
     'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS',
   ];
 
-  if (resourceType === 'AWS::CloudFormation::Stack') {
-    // For notifications about Stack resources
-    if (
-      resourceId.endsWith('root-staging') ||
-      resourceId.endsWith('root-production')
-    ) {
-      // For root stacks…
-      if (
-        concerning.includes(resourceStatus) ||
-        ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(resourceStatus)
-      ) {
-        // Send only select notifications to INFO
-        // Under normal circumstances, this will just be the UPDATE and COMPLETE notifications
-        msg.channel = SLACK_INFO_CHANNEL;
-        return msg;
-      }
-    } else {
-      // For non-root stacks
-      if (concerning.includes(resourceStatus)) {
-        // Send all concerning status to DEBUG
-        msg.channel = SLACK_DEBUG_CHANNEL;
-        return msg;
-      } else {
-        // For non-concerning statuses
-        if (resourceReason) {
-          // If there's a reason
-          if (
-            !['User Initiated', 'Transformation succeeded'].includes(
-              resourceReason,
-            )
-          ) {
-            // And the reason is NOT from the well-known list
-            // send to DEBUG
-            msg.channel = SLACK_DEBUG_CHANNEL;
-            return msg;
-          }
-          return;
-        } else {
-          // If there no reason, never send it
-          return;
-        }
-      }
-    }
-  } else {
-    // For all non-stack resources
-    if (concerning.includes(resourceStatus)) {
-      // For notifications about concerning statuses
-      if (resourceReason && resourceReason !== 'User Initiated') {
-        // Send notifications with abnormal reasons to DEBUG
-        msg.channel = SLACK_DEBUG_CHANNEL;
-        return msg;
-      }
-    }
+  // For root stacks, send all start, finish, and concerning status
+  // notifications to INFO
+  if (
+    resourceType === 'AWS::CloudFormation::Stack' &&
+    (resourceId.endsWith('root-staging') ||
+      resourceId.endsWith('root-production')) &&
+    (concerning.includes(resourceStatus) ||
+      ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(resourceStatus))
+  ) {
+    msg.channel = SLACK_INFO_CHANNEL;
+    return msg;
+  }
+
+  // For everything that isn't a root stack, send any notifications that
+  // include a reason to DEBUG. Reasons are most often provided when there is
+  // an issue ("resources failed to create", "handler returned message", etc).
+  // But some nominal updates do include reasons.
+  if (
+    resourceReason &&
+    !['User Initiated', 'Transformation succeeded'].includes(resourceReason)
+  ) {
+    msg.channel = SLACK_DEBUG_CHANNEL;
+    return msg;
   }
 
   return;
