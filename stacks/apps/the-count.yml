@@ -4,7 +4,8 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: >-
-  Creates an API Gateway and Lambda function for The Count
+  Creates an ECS service for The Count, along with target group and listener
+  rule for the shared ALB.
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -194,7 +195,7 @@ Resources:
             - Name: LISTEN_PORT
               Value: !Ref kApplicationPort
             - Name: PIXEL_DOMAIN
-              Value: count.prx.tech # TODO Once off Contegix, update the CountHostname in root and use that value here
+              Value: !If [IsProduction, count.prx.tech, count.staging.prx.tech] # TODO Once off Contegix, update the CountHostname in root and use that value here
             - Name: COOKIE_DOMAIN
               Value: .prx.tech # TODO
             - Name: COOKIE_SECRET
