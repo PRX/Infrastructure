@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - cd/template.yml
+      - .github/workflows/deploy-devops-platform-cd-pipeline-stack.yml
 
 jobs:
   deploy:
@@ -13,16 +14,17 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: aws-actions/setup-sam@v1
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-DeployPlatformCdPipelineStack
-      # - name: Deploy CloudFormation stacks
-      #   working-directory: cd
-      #   run: |
-      #     # TODO Needs to SAM deploy
-      #     # TODO template too big to deploy
-      #     # aws cloudformation deploy --region us-east-1 --stack-name infrastructure-cd --template-file template.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
-      #     # aws cloudformation deploy --region us-west-2 --stack-name infrastructure-cd --template-file template.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
+      - name: Deploy CloudFormation stack – us-west-2
+        working-directory: cd
+        run: |
+          bucket_name=$(aws cloudformation describe-stacks --region us-west-2 --stack-name aws-sam-cli-managed-default | jq -r ".Stacks[0].Outputs[0].OutputValue")
+          stack_name="infrastructure-cd"
+          sam deploy --region us-west-2 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --s3-bucket "$bucket_name" --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
