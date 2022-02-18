@@ -123,32 +123,61 @@ function messageForEvent(event) {
   ];
 
   if (resourceType === 'AWS::CloudFormation::Stack') {
-    // Send all root stack resource notifications to INFO
-    if (resourceId.endsWith('-staging') || resourceId.endsWith('-production')) {
-      msg.channel = SLACK_INFO_CHANNEL;
-      return msg;
+    // For notifications about Stack resources
+    if (
+      resourceId.endsWith('root-staging') ||
+      resourceId.endsWith('root-production')
+    ) {
+      // For root stacks…
+      if (
+        concerning.includes(resourceStatus) ||
+        ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(resourceStatus)
+      ) {
+        // Send only select notifications to INFO
+        // Under normal circumstances, this will just be the UPDATE and COMPLETE notifications
+        msg.channel = SLACK_INFO_CHANNEL;
+        return msg;
+      }
+    } else {
+      // For non-root stacks
+      if (concerning.includes(resourceStatus)) {
+        // Send all concerning status to DEBUG
+        msg.channel = SLACK_DEBUG_CHANNEL;
+        return msg;
+      } else {
+        // For non-concerning statuses
+        if (resourceReason) {
+          // If there's a reason
+          if (
+            !['User Initiated', 'Transformation succeeded'].includes(
+              resourceReason,
+            )
+          ) {
+            // And the reason is NOT from the well-known list
+            // send to DEBUG
+            msg.channel = SLACK_DEBUG_CHANNEL;
+            return msg;
+          }
+          return;
+        } else {
+          // If there no reason, never send it
+          return;
+        }
+      }
     }
-
-    // Send bad stack resource notifications to INFO
+  } else {
+    // For all non-stack resources
     if (concerning.includes(resourceStatus)) {
-      msg.channel = SLACK_INFO_CHANNEL;
-      return msg;
+      // For notifications about concerning statuses
+      if (resourceReason && resourceReason !== 'User Initiated') {
+        // Send notifications with abnormal reasons to DEBUG
+        msg.channel = SLACK_DEBUG_CHANNEL;
+        return msg;
+      }
     }
-
-    // Don't send okay notifications for a stack updating a nested stack
-    if (stackName !== resourceId) {
-      return;
-    }
-
-    msg.channel = SLACK_DEBUG_CHANNEL;
-    return msg;
   }
 
-  // Send only bad non-stack resource notifications to debug
-  if (concerning.includes(resourceStatus)) {
-    msg.channel = SLACK_DEBUG_CHANNEL;
-    return msg;
-  }
+  return;
 }
 
 exports.handler = async (event) => {
