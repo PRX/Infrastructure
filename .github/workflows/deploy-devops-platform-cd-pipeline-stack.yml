@@ -4,9 +4,10 @@ on:
   push:
     paths:
       - cd/template.yml
+      - .github/workflows/deploy-devops-platform-cd-pipeline-stack.yml
 
 jobs:
-  deploy:
+  deploy_us_east_1:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -18,11 +19,10 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
-          aws-region: us-east-2
+          aws-region: us-east-1
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-DeployPlatformCdPipelineStack
-
-      - name: Deploy CloudFormation stack – us-east-1
+      - name: Deploy CloudFormation stack
         working-directory: cd
         run: |
           region="us-east-1"
@@ -30,7 +30,22 @@ jobs:
           stack_name="infrastructure-cd"
           sam deploy --region "$region" --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --s3-bucket "$bucket_name" --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
 
-      - name: Deploy CloudFormation stack – us-west-2
+  deploy_us_west_2:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: aws-actions/setup-sam@v1
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-DeployPlatformCdPipelineStack
+      - name: Deploy CloudFormation stack
         working-directory: cd
         run: |
           region="us-west-2"
