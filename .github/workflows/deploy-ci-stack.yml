@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - ci/**
+      - .github/workflows/deploy-ci-stack.yml
 
 jobs:
   deploy:
@@ -13,14 +14,20 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: aws-actions/setup-sam@v1
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-DeployCiStack
-      # - name: Deploy CloudFormation stack
-      #   working-directory: ci
-      #   run: |
+      - name: Deploy CloudFormation stack
+        working-directory: ci
+        run: |
+          desc=$(aws cloudformation describe-stacks --region us-east-1 --stack-name aws-sam-cli-managed-default)
+          bucket=$(echo "$desc" | jq -r ".Stacks[0].Outputs[0].OutputValue")
+          echo $bucket
+
       #     # TODO Needs to SAM deploy
-      #     # aws cloudformation deploy --region us-east-1 --stack-name infrastructure-ci --template-file template.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
+      #     # aws cloudformation deploy   --template-file template.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
