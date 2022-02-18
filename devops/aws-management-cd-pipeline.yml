@@ -888,6 +888,21 @@ Resources:
               source:
                 - aws.codepipeline
           Type: EventBridgeRule
+        StageState:
+          Properties:
+            Pattern:
+              detail:
+                stage:
+                  - Organization_Accounts-One_Region
+                state:
+                  - SUCCEEDED
+              detail-type:
+                - CodePipeline Stage Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
@@ -907,9 +922,13 @@ Resources:
             if (event.detail.state === 'SUCCEEDED') {
                 msg = ':white_check_mark: `prx-main`:`us-east-2` – AWS Management pipeline completed.';
             } else if (event.detail.state === 'FAILED') {
-                msg = ':x: `prx-main`:`us-east-2` – AWS Management pipeline failed.'
+                msg = ':x: `prx-main`:`us-east-2` – AWS Management pipeline failed.';
             } else if (event.detail.state === 'STARTED') {
-                msg = ':hourglass_flowing_sand: `prx-main`:`us-east-2` – AWS Management pipeline started.'
+                msg = ':hourglass_flowing_sand: `prx-main`:`us-east-2` – AWS Management pipeline started.';
+            }
+          } else if (event['detail-type'] === 'CodePipeline Stage Execution State Change') {
+            if (event.detail.state === 'SUCCEEDED' && event.detail.stage === 'Organization_Accounts-One_Region') {
+              msg = ':hourglass_flowing_sand: `prx-main`:`us-east-2` – AWS Management pipeline *one region* stages completed.';
             }
           }
 
