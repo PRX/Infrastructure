@@ -565,6 +565,7 @@ Resources:
                 ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-staging
+              Namespace: staging_deploy
               RunOrder: 3
             - Name: CaptureStagingState
               ActionTypeId:
@@ -599,11 +600,30 @@ Resources:
           Actions:
             - Name: Acceptance
               ActionTypeId:
-                Category: Build
+                Category: Test
                 Owner: AWS
                 Provider: CodeBuild
                 Version: "1"
               Configuration:
+                EnvironmentVariables: |-
+                  [
+                    {
+                      "name": "DOVETAIL_HOST_2",
+                      "value": "#{staging_deploy.DovetailRouterHostname}"
+                    }, {
+                      "name": "FEEDER_HOST_2",
+                      "value": "#{staging_deploy.FeederHostname}"
+                    }, {
+                      "name": "METRICS_HOST_2",
+                      "value": "#{staging_deploy.MetricsHostname}"
+                    }, {
+                      "name": "PUBLISH_HOST_2",
+                      "value": "#{staging_deploy.PublishHostname}"
+                    }, {
+                      "name": "UPLOAD_HOST_2",
+                      "value": "#{staging_deploy.S3SigningHostname}"
+                    }
+                  ]
                 ProjectName: !Ref AcceptanceTestsCodeBuildProject
               InputArtifacts:
                 - Name: MetaRepoSourceArtifact
