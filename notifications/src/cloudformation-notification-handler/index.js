@@ -139,9 +139,14 @@ function messageForEvent(event) {
   // include a reason to DEBUG. Reasons are most often provided when there is
   // an issue ("resources failed to create", "handler returned message", etc).
   // But some nominal updates do include reasons.
+  // Certain irrelevant reasons are filtered out.
   if (
     resourceReason &&
-    !['User Initiated', 'Transformation succeeded'].includes(resourceReason)
+    ![
+      'User Initiated',
+      'Transformation succeeded',
+      'Resource creation Initiated',
+    ].includes(resourceReason)
   ) {
     msg.channel = SLACK_DEBUG_CHANNEL;
     return msg;
