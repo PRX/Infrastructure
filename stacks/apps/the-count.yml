@@ -26,6 +26,8 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   EcsClusterArn: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -66,6 +68,14 @@ Resources:
         - { Key: prx:dev:application, Value: The Count }
       # LifecyclePolicies:
       #   - LifecyclePolicy
+  LogsMountPoint:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !GetAtt LogsFileSystem.FileSystemId
+      IpAddress: String
+      SecurityGroups:
+        - !Ref SharedEcsAsgInstanceSecurityGroupId
+      SubnetId: !Ref VpcPublicSubnet1Id
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
