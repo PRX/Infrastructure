@@ -1,4 +1,4 @@
-# stacks/apps/theworld-search.yml
+# stacks/apps/the-count.yml
 # 300A
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
@@ -17,6 +17,9 @@ Parameters:
   kApplicationPort:
     Type: Number
     Default: 8000
+  kLogsVolumeName:
+    Type: Number
+    Default: logs-fs
   #######
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
@@ -233,6 +236,9 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 400, 200]
+          MountPoints:
+            - ContainerPath: /efs/logs
+              SourceVolume: !Ref kLogsVolumeName
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
@@ -248,6 +254,10 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: The Count }
       TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - EFSVolumeConfiguration:
+            FilesystemId: !GetAtt LogsFileSystem.FileSystemId
+          Name: !Ref kLogsVolumeName
 
 Outputs:
   TargetGroupFullName:
