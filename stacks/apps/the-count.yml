@@ -5,7 +5,8 @@ Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates an ECS service for The Count, along with target group and listener
-  rule for the shared ALB.
+  rule for the shared ALB. Also creates an EFS file system that logs are
+  written to.
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -188,7 +189,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 0, 0]
+      DesiredCount: !If [IsProduction, 1, 1]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
@@ -276,8 +277,6 @@ Resources:
               Value: tktktktk # TODO Set this as a stack param
             - Name: SESSION_LENGTH
               Value: 3600
-            # - Name: SETUID
-            #   Value: !Ref .prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
