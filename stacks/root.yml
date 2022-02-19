@@ -103,6 +103,8 @@ Parameters:
   TheWorldSearchGoogleCustomSearchEngineId: { Type: String, Default: "" }
   TheWorldSearchGoogleCustomSearchApiKey: { Type: String, Default: "" }
   TheCountEcrImageTag: { Type: String, Default: "" }
+  # TODO TheCastleEcrImageTag: { Type: String, Default: "" }
+  # TODO heCastleSecretsVersion: { Type: String, Default: "" }
   # Parameter Overrides from the CodePipeline action
   InfrastructureStorageStackName: { Type: String }
   NotificationsStackName: { Type: String }
@@ -893,16 +895,32 @@ Resources:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
         EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
         S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
+        CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
+        CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         TheCountLogsFileSystemId: !GetAtt Apps300AStack.Outputs.TheCountLogsFileSystemId
+        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+        AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
+        AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
+        SecretsBase: !GetAtt Constants.SecretsBaseRegion
+        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
+        SecretsStackName: !Ref SecretsStackName
 
         # App-specific parameters
 
         BacksawArchiveS3ObjectKey: !Ref BacksawArchiveS3ObjectKey
         BacksawCloudFrontOai: !Ref BacksawCloudFrontOai
+
+        # TheCastleEcrImageTag: !Ref TheCastleEcrImageTag
+        TheCastleEcrImageTag: !Ref PublishEcrImageTag # TODO Placeholder
+        # TheCastleSecretsVersion: !Ref TheCastleSecretsVersion
+        TheCastleSecretsVersion: !Ref PublishSecretsVersion # TODO Placeholder
+        TheCastleSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, TheCastle, prefix]
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
