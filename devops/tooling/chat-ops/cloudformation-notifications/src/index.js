@@ -6,6 +6,8 @@
 // SNS topic in order to be sent to Slack. Messages about the stack being
 // updated directly are sent to the info channel, and other messages are sent
 // to the debug channel
+//
+// These notifications may come from any region or any account.
 
 const AWS = require('aws-sdk');
 
