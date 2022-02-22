@@ -35,9 +35,12 @@ Parameters:
   SecretsVersion: { Type: String }
   SecretsBase: { Type: String }
   NewRelicApiKeyPrxLite: { Type: String }
+  SharedAuroraMysqlEndpoint: { Type: String }
+  SharedAuroraMysqlPort: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
 
 Resources:
   HostHeaderListenerRule:
@@ -158,6 +161,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
+    Condition: HasAuroraEndpoint # See README
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -216,6 +220,14 @@ Resources:
               Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, The Castle Production, The Castle Staging]
+            - Name: DB_PORT_3306_TCP_ADDR
+              Value: !Ref SharedAuroraMysqlEndpoint
+            - Name: DB_PORT_3306_TCP_PORT
+              Value: !Ref SharedAuroraMysqlPort
+            - Name: MEDIAJOINT_HOST
+              Value: !Ref SharedAuroraMysqlEndpoint
+            - Name: MEDIAJOINT_PORT
+              Value: !Ref SharedAuroraMysqlPort
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -230,7 +242,7 @@ Resources:
           MountPoints:
             # TODO This should match where The Castle app expects to read log
             # files from.
-            - ContainerPath: /app/log
+            - ContainerPath: /app/count_files
               SourceVolume: !Ref kLogsVolumeName
           Name: !Ref kWebContainerName
           PortMappings:
