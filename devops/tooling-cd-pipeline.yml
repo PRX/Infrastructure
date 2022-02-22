@@ -1,6 +1,16 @@
 # devops/tooling-cd-pipeline.yml
 # This template is deployed continuously via GitHub Actions.
 #
+# For each SAM application being deployed:
+# 1. Add a parameter constant with the stack name of the new application
+#    e.g. kMyAppStackName.
+# 2. Add that stack to the CloudFormationAccess policy of the PipelineRole.
+# 3. Update the build phase of the CodeBuild project to `sam build` and
+#    `sam package` the application, The output-template-file should match the
+#    stack name.
+# 2. Add the output file of the `sam package` command the artifacts files list
+#    of the CodeBuild project (which is the stack name).
+# 3. Add an action to the Deploy stage of the CodePipeline pipeline
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -9,30 +19,21 @@ Description: >-
   and other resources needed to support the pipeline, for DevOps resources.
 
 Parameters:
+  kCloudFormationNotificationsStackName:
+    Type: String
+    Default: prx-devops-cloudformation-notifications
   kCloudFormationMacroFunctionsStackName:
     Type: String
     Default: prx-devops-cloudformation-macro-functions
-  kCloudFormationMacroFunctionsPackagedTemplateFileName:
-    Type: String
-    Default: pkg-template-cfn-macro-functions.yaml
   kCloudWatchAlarmsStackName:
     Type: String
     Default: prx-devops-cloudwatch-alarms-to-slack
-  kCloudWatchAlarmsPackagedTemplateFileName:
-    Type: String
-    Default: pkg-template-cloudwatch-alarms.yaml
   kCloudWatchAlarmRemindersStackName:
     Type: String
     Default: prx-devops-cloudwatch-alarm-reminders
-  kCloudWatchAlarmRemindersPackagedTemplateFileName:
-    Type: String
-    Default: pkg-template-cloudwatch-alarm-reminders.yaml
   kSlackAppStackName:
     Type: String
     Default: prx-devops-slack-app
-  kSlackAppPackagedTemplateFileName:
-    Type: String
-    Default: pkg-template-slack-app.yaml
   ######
   GitHubCodeStarConnectionArn: { Type: String }
   OrganizationId:
@@ -117,33 +118,41 @@ Resources:
           Status: ENABLED
       ServiceRole: !GetAtt SamCodeBuildProjectRole.Arn
       Source:
+        # - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudformtion-notifications/template.yml
         BuildSpec: !Sub |-
           version: 0.2
           phases:
             install:
               runtime-versions:
                 python: latest
+            pre_build:
+              commands:
+                - "rm .python-version"
             build:
               commands:
-                - cd devops/tooling/cfn-macro-functions
-                - sam build --parallel
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudFormationMacroFunctionsPackagedTemplateFileName}
-                - cd ../chat-ops/cloudwatch-alarms
-                - sam build --parallel
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudWatchAlarmsPackagedTemplateFileName}
-                - cd ../cloudwatch-alarm-reminders
-                - sam build --parallel
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kCloudWatchAlarmRemindersPackagedTemplateFileName}
-                - cd ../slack-app
-                - sam build --parallel
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kSlackAppPackagedTemplateFileName}
+                - sam build --parallel --template-file ./devops/tooling/cfn-macro-functions/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudFormationMacroFunctionsStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudformation-notifications/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudFormationNotificationsStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudwatch-alarms/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudWatchAlarmsStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudwatch-alarm-reminders/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudWatchAlarmRemindersStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/chat-ops/slack-app/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kSlackAppStackName}
           artifacts:
             files:
-              - devops/tooling/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
-              - devops/tooling/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
-              - devops/tooling/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
-              - devops/tooling/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+              - ${kCloudFormationMacroFunctionsStackName}
+              - ${kCloudFormationNotificationsStackName}
+              - ${kCloudWatchAlarmsStackName}
+              - ${kCloudWatchAlarmRemindersStackName}
+              - ${kSlackAppStackName}
             name: SamBuildArtifact
+
         Type: CODEPIPELINE
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -271,14 +280,11 @@ Resources:
               - Action: cloudformation:*
                 Effect: Allow
                 Resource:
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}/*
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}/*
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationMacroFunctionsStackName}
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationMacroFunctionsStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationNotificationsStackName}/*
             Version: "2012-10-17"
           PolicyName: CloudFormationAccess
         # Allow PassRole to the CloudFormation role
@@ -356,7 +362,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudFormationMacroFunctionsStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/tooling/cfn-macro-functions/${kCloudFormationMacroFunctionsPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::${kCloudFormationMacroFunctionsStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 1
@@ -385,7 +391,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kSlackAppStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/slack-app/${kSlackAppPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::${kSlackAppStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               Namespace: slack_app_deploy
@@ -408,7 +414,7 @@ Resources:
                   }
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudWatchAlarmsStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/cloudwatch-alarms/${kCloudWatchAlarmsPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::${kCloudWatchAlarmsStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
@@ -433,7 +439,26 @@ Resources:
                     accounts: !Join [",", !Ref CloudWatchAlarmReminderAccountIds]
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudWatchAlarmRemindersStackName
-                TemplatePath: !Sub SamBuildArtifact::devops/tooling/chat-ops/cloudwatch-alarm-reminders/${kCloudWatchAlarmRemindersPackagedTemplateFileName}
+                TemplatePath: !Sub SamBuildArtifact::${kCloudWatchAlarmRemindersStackName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 2
+            - Name: CloudFormation_Notifications
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "SlackMessageRelaySnsTopicArn": "#{slack_app_deploy.SlackMessageRelaySnsTopicArn}",
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kCloudFormationNotificationsStackName
+                TemplatePath: !Sub SamBuildArtifact::${kCloudFormationNotificationsStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
