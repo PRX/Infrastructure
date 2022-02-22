@@ -7,8 +7,8 @@ Description: >-
   tktktk
 
 Parameters:
-  SlackMessageRelaySnsTopicArn:
-    Type: String
+  SlackMessageRelaySnsTopicArn: { Type: String }
+  OrganizationId: { Type: String }
 
 Resources:
   CloudFormationNotificationsSlackFunction:
@@ -87,6 +87,15 @@ Resources:
               Service:
                 - cloudformation.amazonaws.com
             Resource: !Ref CloudFormationNotificationsSnsTopic
+          - Action: sns:Publish
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationId
+            Effect: Allow
+            Sid: OrganizationPublish
+            Principal:
+              AWS: "*"
+            Resource: !Ref SlackMessageRelaySnsTopic
       Topics:
         - !Ref CloudFormationNotificationsSnsTopic
 
