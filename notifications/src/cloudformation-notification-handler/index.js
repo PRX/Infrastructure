@@ -147,6 +147,7 @@ function messageForEvent(event) {
       'Transformation succeeded',
       'Resource creation Initiated',
       'Requested update required the provider to create a new physical resource',
+      'Requested update requires the creation of a new physical resource; hence creating one.',
     ].includes(resourceReason)
   ) {
     msg.channel = SLACK_DEBUG_CHANNEL;
