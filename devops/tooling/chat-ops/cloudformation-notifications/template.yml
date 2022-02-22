@@ -61,3 +61,36 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
+
+  CloudFormationNotificationsSnsTopic:
+    Type: AWS::SNS::Topic
+    # This SNS topic is retained to prevent clients that are configured to
+    # publish to it from breaking if the stack gets torn down. In cases where
+    # the stack is being moved or replaced, the retained topic should be
+    # imported into the new stack, or the new subscriber should continue to
+    # subscribe to this topic
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  CloudFormationNotificationsSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Id: ServicePolicy
+        Version: "2012-10-17"
+        Statement:
+          - Action: sns:Publish
+            Effect: Allow
+            Sid: CloudFormationPublish
+            Principal:
+              Services:
+                - cloudwatch.amazonaws.com
+            Resource: !Ref CloudFormationNotificationsSnsTopic
+      Topics:
+        - !Ref CloudFormationNotificationsSnsTopic
