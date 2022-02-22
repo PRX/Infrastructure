@@ -11,9 +11,12 @@ Parameters:
   kWebContainerName:
     Type: String
     Default: thecastle-web
+  kWorkerContainerName:
+    Type: String
+    Default: thecastle-worker
   kWebApplicationPort:
     Type: Number
-    Default: 8000
+    Default: 3000
   kLogsVolumeName:
     Type: String
     Default: logs-fs
@@ -22,6 +25,7 @@ Parameters:
   RootStackId: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -40,7 +44,9 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
 
 Resources:
   HostHeaderListenerRule:
@@ -60,7 +66,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 15
-      HealthCheckPath: /health # TODO
+      HealthCheckPath: /login
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       Port: 80
@@ -224,10 +230,6 @@ Resources:
               Value: !Ref SharedAuroraMysqlEndpoint
             - Name: DB_PORT_3306_TCP_PORT
               Value: !Ref SharedAuroraMysqlPort
-            - Name: MEDIAJOINT_HOST
-              Value: !Ref SharedAuroraMysqlEndpoint
-            - Name: MEDIAJOINT_PORT
-              Value: !Ref SharedAuroraMysqlPort
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -239,12 +241,84 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 400, 200]
+          Name: !Ref kWebContainerName
+          PortMappings:
+            - ContainerPort: !Ref kWebApplicationPort
+              HostPort: 0
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Castle }
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  ### Add in the scheduled worker
+  WorkerTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 14
+  WorkerTaskLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref WorkerTaskLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Castle }
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command:
+            - worker
+          Cpu: !If [IsProduction, 200, 128]
+          Environment:
+            - Name: APP_NAME
+              Value: thecastle
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_SECRETS_BASE
+              Value: !Ref SecretsBase
+            - Name: AWS_SECRETS_VERSION
+              Value: !Ref SecretsVersion
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: NEW_RELIC_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, The Castle Production, The Castle Staging]
+            - Name: DB_PORT_3306_TCP_ADDR
+              Value: !Ref SharedAuroraMysqlEndpoint
+            - Name: DB_PORT_3306_TCP_PORT
+              Value: !Ref SharedAuroraMysqlPort
+          Essential: true
+          Image: !Ref EcrImageTag
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
           MountPoints:
-            # TODO This should match where The Castle app expects to read log
-            # files from.
+            # This matches the default where the app expects count files
+            # Override in secrets: COUNT_FILES=/app/count_files
             - ContainerPath: /app/count_files
               SourceVolume: !Ref kLogsVolumeName
-          Name: !Ref kWebContainerName
+          Name: !Ref kWorkerContainerName
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
               HostPort: 0
@@ -263,6 +337,49 @@ Resources:
         - EFSVolumeConfiguration:
             FilesystemId: !Ref TheCountLogsFileSystemId
           Name: !Ref kLogsVolumeName
+  WorkerEventsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceEventsRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Castle }
+  WorkerScheduledRule:
+    Type: AWS::Events::Rule
+    Condition: EnableWorkers # See README
+    Properties:
+      Description: !Sub Periodically runs ${EnvironmentType} The Castle ETL
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Arn: !Ref EcsClusterArn
+          EcsParameters:
+            TaskCount: 1
+            TaskDefinitionArn: !Ref WorkerTaskDefinition
+          Id: TheCastleWorkerRuleTarget
+          Input: !Sub | # containerOverrides comes from the ECS run-task API
+            {
+              "containerOverrides": [
+                {
+                  "name": "${kWorkerContainerName}",
+                  "command": ["etl"]
+                }
+              ]
+            }
+          RoleArn: !GetAtt WorkerEventsRole.Arn
 
 Outputs:
   TargetGroupFullName:
