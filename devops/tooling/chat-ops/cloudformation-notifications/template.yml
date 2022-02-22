@@ -1,0 +1,63 @@
+# devops/tooling/chat-ops/cloudformation-notifications/template.yml
+# This template is continuously deployed by the DevOps CD pipeline
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  tktktk
+
+Parameters:
+  SlackMessageRelaySnsTopicArn:
+    Type: String
+
+Resources:
+  CloudFormationNotificationsSlackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Description: >-
+        Sends messages to Slack in response to CloudWatch Alarms state changes
+        from across the organization. All accounts and all regions forward
+        CloudWatch Alarms state change events to the custom event bus that
+        has rules to trigger this function.
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+      # Events:
+      #   Alarms:
+      #     Properties:
+      #       EventBusName: !Ref CloudWatchAlarmsEventBus
+      #       Pattern:
+      #         detail-type:
+      #           - CloudWatch Alarm State Change
+      #         source:
+      #           - aws.cloudwatch
+      #     Type: EventBridgeRule
+      Handler: index.handler
+      MemorySize: 192
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelaySnsTopicArn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
+      Timeout: 20
+  CloudFormationNotificationsSlackFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudFormationNotificationsSlackFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
