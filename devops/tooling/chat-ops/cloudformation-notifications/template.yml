@@ -4,11 +4,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
-  tktktk
+  Creates a Lambda function that handles CloudFormation stack event
+  notifications, which the CloudFormation service delivers to SNS topics.
+  CloudFormation cannot deliver to topics across regions, so this function is
+  subscribed to topics in all regions where we use CloudFormation. It can
+  deliver across accounts, so only one topic is necessary per region for the
+  entire organization.
 
 Parameters:
   SlackMessageRelaySnsTopicArn: { Type: String }
-  OrganizationId: { Type: String }
 
 Resources:
   CloudFormationNotificationsSlackFunction:
@@ -16,19 +20,18 @@ Resources:
     Properties:
       CodeUri: src/
       Description: >-
-        Sends messages to Slack in response to CloudWatch Alarms state changes
-        from across the organization. All accounts and all regions forward
-        CloudWatch Alarms state change events to the custom event bus that
-        has rules to trigger this function.
+        Sends messages to Slack in response to CloudFormation stack event
+        notifications. Only certain notifications are forwarded to slack, to
+        reduce the volume of messages.
       Environment:
         Variables:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-      Events:
-        Relay:
-          Properties:
-            Topic: !Ref CloudFormationNotificationsSnsTopic
-          Type: SNS
+      # Events:
+      #   Relay:
+      #     Properties:
+      #       Topic: !Ref CloudFormationNotificationsSnsTopic
+      #     Type: SNS
       Handler: index.handler
       MemorySize: 192
       Policies:
@@ -56,49 +59,3 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
-
-  CloudFormationNotificationsSnsTopic:
-    Type: AWS::SNS::Topic
-    # This SNS topic is retained to prevent clients that are configured to
-    # publish to it from breaking if the stack gets torn down. In cases where
-    # the stack is being moved or replaced, the retained topic should be
-    # imported into the new stack, or the new subscriber should continue to
-    # subscribe to this topic
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: DevOps }
-  CloudFormationNotificationsSnsTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      PolicyDocument:
-        Id: ServicePolicy
-        Version: "2012-10-17"
-        Statement:
-          - Action: sns:Publish
-            Effect: Allow
-            Sid: CloudFormationPublish
-            Principal:
-              Service:
-                - cloudformation.amazonaws.com
-            Resource: !Ref CloudFormationNotificationsSnsTopic
-          - Action: sns:Publish
-            Condition:
-              StringEquals:
-                aws:PrincipalOrgID: !Ref OrganizationId
-            Effect: Allow
-            Sid: OrganizationPublish
-            Principal:
-              AWS: "*"
-            Resource: !Ref SlackMessageRelaySnsTopicArn
-      Topics:
-        - !Ref CloudFormationNotificationsSnsTopic
-
-Outputs:
-  CloudFormationNotificationsSnsTopicArn:
-    Value: !Ref CloudFormationNotificationsSnsTopic
