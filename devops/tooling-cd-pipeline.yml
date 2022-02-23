@@ -22,6 +22,9 @@ Parameters:
   kCloudFormationNotificationsStackName:
     Type: String
     Default: prx-devops-cloudformation-notifications
+  kCloudFormationNotificationTopicsStacksetName:
+    Type: String
+    Default: regional-cloudformation-notification-topics
   kCloudFormationMacroFunctionsStackName:
     Type: String
     Default: prx-devops-cloudformation-macro-functions
@@ -54,6 +57,75 @@ Parameters:
   CloudWatchAlarmReminderAccountIds: { Type: CommaDelimitedList }
 
 Resources:
+  # These roles are being created here as a matter of convenience. They could
+  # (and, perhaps, should) be moved into discrete templates and deployed as
+  # part of the pipeline. They are not strictly related to the tooling
+  # pipeline, but currently that's all they're used for.
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/stacksets-prereqs-self-managed.html
+  StackSetExecutionRole:
+    # This role is used to perform operations on stack instances within
+    # StackSets. It must have any permissions required to perform those
+    # operations. For example, if a stack instance creates and SNS topic, this
+    # role must be able to create SNS topics.
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: !Ref AWS::AccountId
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - cloudformation:*
+                  - sns:*
+                  - sts:AssumeRole
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowGlobalResourceUpdates
+            Version: "2012-10-17"
+          PolicyName: CfnResourceManipulation
+      RoleName: AWSCloudFormationStackSetExecutionRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  StackSetAdministrationRole:
+    # This role is used by StackSets. It assumes an execution role to perform
+    # operations on stack instances. It is only intended to assume the
+    # execution role in this account, thus StackSets can only deploy within
+    # this account.
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sts:AssumeRole
+                Effect: Allow
+                Resource: !GetAtt StackSetExecutionRole.Arn
+                Sid: AllowExecutionRoleAssumption
+            Version: "2012-10-17"
+          PolicyName: StackSetAdministration
+      RoleName: AWSCloudFormationStackSetAdministrationRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
   # Runs `sam build` and `sam package`, and outputs the resulting
   # CloudFormation template as an artifact.
   SamCodeBuildProjectLogGroup:
@@ -283,6 +355,7 @@ Resources:
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationMacroFunctionsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationNotificationsStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationNotificationTopicsStacksetName}:*
             Version: "2012-10-17"
           PolicyName: CloudFormationAccess
         # Allow PassRole to the CloudFormation role
@@ -467,12 +540,13 @@ Resources:
                 Provider: CloudFormationStackSet
                 Version: "1"
               Configuration:
-                StackSetName: regional-cloudformation-notification-topics
+                StackSetName: !Ref kCloudFormationNotificationTopicsStacksetName
+                Capabilities: CAPABILITY_AUTO_EXPAND
                 Description: >-
-                  Launches a stack in each certain regions to create an SNS
+                  Launches a stack in certain regions to create an SNS
                   topic that can be used for CloudFormation stack event
                   notifications
-                TemplatePath: InfrastructureRepoSourceArtifact::devops/tooling/chat-ops/cloudformation-notifications/regional-sns-topic.yml
+                TemplatePath: InfraRepoSourceArtifact::devops/tooling/chat-ops/cloudformation-notifications/regional-sns-topic.yml
                 Parameters: !Sub |-
                   ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
                 PermissionModel: SELF_MANAGED
