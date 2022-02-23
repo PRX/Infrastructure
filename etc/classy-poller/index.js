@@ -11,6 +11,22 @@ const CLASSY_API_CLIENT_ID = process.env.CLASSY_API_CLIENT_ID;
 const CLASSY_API_CLIENT_SECRET = process.env.CLASSY_API_CLIENT_SECRET;
 const POLLING_FREQUENCY = +process.env.POLLING_FREQUENCY;
 
+const mapping = {
+  338429: '#radiotopia-donations',
+  336384: '#radiotopia-donations',
+  330330: '#radiotopia-donations',
+  330245: '#radiotopia-donations',
+  342678: '#radiotopia-donations',
+  327574: '#radiotopia-donations',
+  386768: '#radiotopia-donations',
+  389319: '#radiotopia-donations',
+  326353: '#earhustle-donations',
+  368624: '#tw-fall-2021-donations',
+  368561: '#tw-fall-2021-donations',
+  368367: '#tw-fall-2021-donations',
+  // 999999: '#tw-fall-2021-donations',
+};
+
 function getAccessToken() {
   return new Promise((resolve, reject) => {
     const body = `grant_type=client_credentials&client_id=${CLASSY_API_CLIENT_ID}&client_secret=${CLASSY_API_CLIENT_SECRET}`;
@@ -102,6 +118,60 @@ function getCount() {
   });
 }
 
+function shortMemberName(member) {
+  return `${member?.first_name} ${member?.last_name.charAt(0)}.`;
+}
+
+function campaignUrl(campaign) {
+  return `https://www.classy.org/manage/event/${campaign.id}/overview`;
+}
+
+function transactionUrl(transaction) {
+  return `https://www.classy.org/admin/72482/transactions/${transaction.id}`;
+}
+
+function moneyAmountString(transaction) {
+  const currency =
+    transaction?.metadata?.['_classy_pay']?.transaction?.currency ||
+    transaction.currency_code;
+  const rawAmount =
+    transaction?.metadata?.['_classy_pay']?.transaction?.amount ||
+    transaction.raw_donation_gross_amount;
+  const amount = (+rawAmount).toFixed(2);
+
+  let money;
+  if (currency === 'USD') {
+    money = `$${amount}`;
+  } else if (currency === 'GBP') {
+    money = `£${amount}`;
+  } else if (currency === 'CAD') {
+    money = `CA$${amount}`;
+  } else if (currency === 'EUR') {
+    money = `€${amount}`;
+  } else {
+    money = `${amount} ${currency}`;
+  }
+
+  if (
+    transaction?.metadata?.['_classy_pay']?.transaction?.chargeCurrency &&
+    transaction?.metadata?.['_classy_pay']?.transaction?.chargeAmount &&
+    transaction?.metadata?.['_classy_pay']?.transaction?.chargeCurrency !==
+      currency
+  ) {
+    const t = transaction?.metadata?.['_classy_pay']?.transaction;
+    const ca = +t?.chargeAmount;
+    const cc = t?.chargeCurrency;
+
+    if (cc === 'USD') {
+      money = `${money} ($${ca.toFixed(2)})`;
+    } else {
+      money = `${money} (${ca.toFixed(2)} ${cc})`;
+    }
+  }
+
+  return money;
+}
+
 exports.handler = async (event) => {
   const token = await getAccessToken();
 
@@ -111,136 +181,121 @@ exports.handler = async (event) => {
   const threshold = +now - POLLING_FREQUENCY * 60 * 1000;
   // const threshold = +now - 6 * 60 * 1000;
 
-  const mapping = {
-    338429: '#radiotopia-donations',
-    336384: '#radiotopia-donations',
-    330330: '#radiotopia-donations',
-    330245: '#radiotopia-donations',
-    342678: '#radiotopia-donations',
-    327574: '#radiotopia-donations',
-    386768: '#radiotopia-donations',
-    326353: '#earhustle-donations',
-    368624: 'tw-fall-2021-donations',
-    368561: 'tw-fall-2021-donations',
-    368367: 'tw-fall-2021-donations',
-    // 999999: '#tw-fall-2021-donations',
-  };
-
   for (const activity of payload.data) {
-    if (activity.type === 'donation_created') {
-      const tx = activity.transaction;
+    if (activity.campaign) {
+      let text;
       const camp = activity.campaign;
-      const mem = activity.member;
 
-      const ts = Date.parse(activity.created_at);
+      if (activity.type === 'donation_created') {
+        const tx = activity.transaction;
+        const mem = activity.member;
 
-      // Only process transactions from the campaigns we care about, since
-      // the last time the the poller ran
-      if (mapping[camp.id] && ts >= threshold) {
-        const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
-        let text = '';
+        const ts = Date.parse(activity.created_at);
 
-        // For transactions that are part of the recurring donation plan,
-        // if the transaction date is after the plan's start date, we ignore
-        // the activity. We only care about the initial transaction for
-        // recurring plans.
-        if (tx?.metadata?._classy_pay?.transaction?.metaData?.planId) {
-          const rdpId = tx.metadata._classy_pay.transaction.metaData.planId;
-          const recPlan = await httpGet(
-            token,
-            `/recurring-donation-plans/${rdpId}`,
-          );
+        // Only process transactions from the campaigns we care about, since
+        // the last time the the poller ran
+        if (mapping[camp.id] && ts >= threshold) {
+          const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
+          text = '';
 
-          // This is when the transaction actually started, which could be days
-          // before the activity showed up (like with ACH transactions).
-          const txCreatedDate =
-            tx?.metadata?._classy_pay?.transaction?.createdDate;
+          // For transactions that are part of the recurring donation plan,
+          // if the transaction date is after the plan's start date, we ignore
+          // the activity. We only care about the initial transaction for
+          // recurring plans.
+          if (tx?.metadata?._classy_pay?.transaction?.metaData?.planId) {
+            const rdpId = tx.metadata._classy_pay.transaction.metaData.planId;
+            const recPlan = await httpGet(
+              token,
+              `/recurring-donation-plans/${rdpId}`,
+            );
 
-          // This is midnight of the day the plan started
-          const recPlanStartedDate = recPlan?.started_at;
+            // This is when the transaction actually started, which could be days
+            // before the activity showed up (like with ACH transactions).
+            const txCreatedDate =
+              tx?.metadata?._classy_pay?.transaction?.createdDate;
 
-          if (txCreatedDate && recPlanStartedDate) {
-            const txDate = txCreatedDate.slice(0, 10);
-            const planDate = recPlanStartedDate.slice(0, 10);
+            // This is midnight of the day the plan started
+            const recPlanStartedDate = recPlan?.started_at;
 
-            // Compare the YYYY-MM-DD dates
-            if (txDate > planDate) {
-              console.log('Skipping recurring donation plan activity');
-              text = text.concat(':recycle:');
-              continue;
+            if (txCreatedDate && recPlanStartedDate) {
+              const txDate = txCreatedDate.slice(0, 10);
+              const planDate = recPlanStartedDate.slice(0, 10);
+
+              // Compare the YYYY-MM-DD dates
+              if (txDate > planDate) {
+                console.log('Skipping recurring donation plan activity');
+                text = text.concat(':recycle:');
+                continue;
+              }
             }
           }
-        }
 
-        // const fullTx = await httpGet(`/transactions/${tx.id}`);
-        // console.log(tx);
+          // const fullTx = await httpGet(`/transactions/${tx.id}`);
+          // console.log(tx);
 
-        const name = `${mem?.first_name} ${mem?.last_name.charAt(0)}.`;
-        const campUrl = `https://www.classy.org/manage/event/${camp.id}/overview`;
-        const txUrl = `https://www.classy.org/admin/72482/transactions/${tx.id}`;
-        // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
+          const name = shortMemberName(mem);
+          const campUrl = campaignUrl(camp);
+          const txUrl = transactionUrl(tx);
+          // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
 
-        const currency =
-          tx?.metadata?.['_classy_pay']?.transaction?.currency ||
-          tx.currency_code;
-        const rawAmount =
-          tx?.metadata?.['_classy_pay']?.transaction?.amount ||
-          tx.raw_donation_gross_amount;
-        const amount = (+rawAmount).toFixed(2);
+          const money = moneyAmountString(tx);
 
-        let money;
-        if (currency === 'USD') {
-          money = `$${amount}`;
-        } else if (currency === 'GBP') {
-          money = `£${amount}`;
-        } else if (currency === 'CAD') {
-          money = `CA$${amount}`;
-        } else if (currency === 'EUR') {
-          money = `€${amount}`;
-        } else {
-          money = `${amount} ${currency}`;
-        }
-
-        if (
-          tx?.metadata?.['_classy_pay']?.transaction?.chargeCurrency &&
-          tx?.metadata?.['_classy_pay']?.transaction?.chargeAmount &&
-          tx?.metadata?.['_classy_pay']?.transaction?.chargeCurrency !==
-            currency
-        ) {
-          const t = tx?.metadata?.['_classy_pay']?.transaction;
-          const ca = +t?.chargeAmount;
-          const cc = t?.chargeCurrency;
-
-          if (cc === 'USD') {
-            money = `${money} ($${ca.toFixed(2)})`;
+          if (tx.frequency === 'one-time') {
+            text = text.concat(
+              `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`,
+            );
           } else {
-            money = `${money} (${ca.toFixed(2)} ${cc})`;
+            text = text.concat(
+              `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`,
+            );
           }
+
+          // if (mapping[camp.id] === '#radiotopia-donations') {
+          //   const count = await getCount();
+          //   await s3
+          //     .putObject({
+          //       Body: `${count + 1}`,
+          //       Bucket: process.env.COUNTER_BUCKET,
+          //       Key: process.env.COUNTER_OBJECT,
+          //     })
+          //     .promise();
+
+          //   text = `${text} (#${count})`;
+          // }
+
+          await sns
+            .publish({
+              TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+              Message: JSON.stringify({
+                channel: mapping[camp.id],
+                username: 'Classy',
+                icon_emoji: ':classy:',
+                text,
+              }),
+            })
+            .promise();
         }
+      } else if (activity.type === 'ticket_purchased') {
+        const tx = activity.transaction;
+        const mem = activity.member;
 
-        if (tx.frequency === 'one-time') {
-          text = text.concat(
-            `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`,
-          );
-        } else {
-          text = text.concat(
-            `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`,
-          );
+        const ts = Date.parse(activity.created_at);
+
+        // Only process transactions from the campaigns we care about, since
+        // the last time the the poller ran
+        if (mapping[camp.id] && ts >= threshold) {
+          const name = shortMemberName(mem);
+          const campUrl = campaignUrl(camp);
+          const txUrl = transactionUrl(tx);
+
+          const money = moneyAmountString(tx);
+
+          const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
+          text = `:admission_tickets: *${name}* selected a <${txUrl}|${money}> reward from the <${campUrl}|${camp.name}> campaign${comment}`;
         }
+      }
 
-        // if (mapping[camp.id] === '#radiotopia-donations') {
-        //   const count = await getCount();
-        //   await s3
-        //     .putObject({
-        //       Body: `${count + 1}`,
-        //       Bucket: process.env.COUNTER_BUCKET,
-        //       Key: process.env.COUNTER_OBJECT,
-        //     })
-        //     .promise();
-
-        //   text = `${text} (#${count})`;
-        // }
-
+      if (text) {
         await sns
           .publish({
             TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
