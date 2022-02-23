@@ -47,6 +47,7 @@ Parameters:
     AllowedPattern: ^(10|172|192).[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}\/16$
     ConstraintDescription: >-
       must be a /16 private network
+  CloudFormationNotificationsSnsTopicArn: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   SharedResourceSharePrincipals: { Type: CommaDelimitedList }
   FeedsS3BucketArn: { Type: String }
@@ -107,7 +108,6 @@ Parameters:
   ThecastleSecretsVersion: { Type: String, Default: "" }
   # Parameter Overrides from the CodePipeline action
   InfrastructureStorageStackName: { Type: String }
-  NotificationsStackName: { Type: String }
   SecretsStackName: { Type: String }
   InfrastructureGitCommit: { Type: String }
   PipelineExecutionNonce: { Type: String }
@@ -172,7 +172,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         StorageStackName: !Ref InfrastructureStorageStackName
         EnvironmentType: !Ref EnvironmentType
@@ -208,8 +208,6 @@ Resources:
         Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
       SecretsBaseRegion:
         Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-      CloudFormationNotificationArn:
-        Fn::ImportValue: !Sub ${NotificationsStackName}-CloudFormationNotificationSnsTopic
       TemplateUrlBase:
         # This is a URL including the hostname of the source bucket, and the
         # path starting with a Git commit hash for the Infrastructure
@@ -255,7 +253,7 @@ Resources:
     Condition: IsUsEast1
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
@@ -275,7 +273,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -294,7 +292,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
@@ -316,7 +314,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -336,14 +334,14 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         AvailabilityZoneSelectorServiceToken: !GetAtt CustomResourcesStack.Outputs.AvailabilityZoneSelectorServiceToken
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc
-        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         Ec2ResourceTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.Ec2ResourceTaggerServiceToken
         SharedVpcCidrBlock: !Ref SharedVpcCidrBlock
@@ -363,7 +361,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -388,7 +386,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -413,7 +411,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -441,7 +439,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -463,7 +461,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
@@ -503,7 +501,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
@@ -533,7 +531,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
@@ -554,7 +552,7 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
@@ -582,10 +580,10 @@ Resources:
     Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
@@ -683,10 +681,10 @@ Resources:
     Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
@@ -801,10 +799,10 @@ Resources:
     Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
@@ -890,10 +888,10 @@ Resources:
     Condition: CreateApplicationStacks
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
-        CloudFormationNotificationArn: !GetAtt Constants.CloudFormationNotificationArn
+        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         RegionMode: !Ref RegionMode
@@ -939,7 +937,7 @@ Resources:
     Condition: CreateJumpServerStack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
         EnvironmentType: !Ref EnvironmentType
@@ -969,7 +967,7 @@ Resources:
     Condition: CreateDashboardsStack
     Properties:
       NotificationARNs:
-        - !GetAtt Constants.CloudFormationNotificationArn
+        - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
         EnvironmentType: !Ref EnvironmentType
 

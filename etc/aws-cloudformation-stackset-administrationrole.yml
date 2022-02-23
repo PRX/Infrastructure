@@ -1,30 +1,33 @@
 # etc/aws-cloudformation-stackset-administrationrole.yml
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Configure the AWSCloudFormationStackSetAdministrationRole to enable use of AWS CloudFormation StackSets.
+Description: >-
+  Configure the AWSCloudFormationStackSetAdministrationRole to enable use of
+  AWS CloudFormation StackSets with self-managed permissions.
+  This is the universal configuration for the
+  AWSCloudFormationStackSetAdministrationRole role, and must exist in any
+  account in which StackSets are being created, regardless of where the
+  StackSets are deploying stack instances (i.e., individual stacks) to.
+
 Resources:
   AdministrationRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: AWSCloudFormationStackSetAdministrationRole
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Action: sts:AssumeRole
+            Effect: Allow
             Principal:
               Service: cloudformation.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
+        Version: "2012-10-17"
       Policies:
         - PolicyName: AssumeRole-AWSCloudFormationStackSetExecutionRole
           PolicyDocument:
-            Version: "2012-10-17"
             Statement:
-              - Effect: Allow
-                Action:
-                  - sts:AssumeRole
-                Resource:
-                  - "arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole"
+              - Action: sts:AssumeRole
+                Effect: Allow
+                Resource: arn:aws:iam::*:role/AWSCloudFormationStackSetExecutionRole
+            Version: "2012-10-17"
       Tags:
         - Key: Project
           Value: Infrastructure
