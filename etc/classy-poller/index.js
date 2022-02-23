@@ -262,18 +262,6 @@ exports.handler = async (event) => {
 
           //   text = `${text} (#${count})`;
           // }
-
-          await sns
-            .publish({
-              TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-              Message: JSON.stringify({
-                channel: mapping[camp.id],
-                username: 'Classy',
-                icon_emoji: ':classy:',
-                text,
-              }),
-            })
-            .promise();
         }
       } else if (activity.type === 'ticket_purchased') {
         const tx = activity.transaction;
