@@ -124,6 +124,11 @@ function messageForEvent(event) {
     'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS',
   ];
 
+  if (resourceStatus === 'DELETE_SKIPPED') {
+    msg.channel = '#ops-delete-skipped';
+    return msg;
+  }
+
   // For root stacks, send all start, finish, and concerning status
   // notifications to INFO
   if (
