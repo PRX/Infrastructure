@@ -81,6 +81,7 @@ function messageForEvent(event) {
   // And information about the resource that is actually changing
   const resourceType = note.match(/ResourceType='([a-zA-Z0-9-:]+)'\n/)[1];
   const resourceId = note.match(/LogicalResourceId='(.+)'\n/)[1];
+  const physicalResourceId = note.match(/PhysicalResourceId='(.+)'\n/)[1];
   const resourceStatus = note.match(/ResourceStatus='([a-zA-Z_]+)'\n/)[1];
   const resourceReason = note.match(/ResourceStatusReason='(.*)'\n/)[1];
 
@@ -139,6 +140,7 @@ function messageForEvent(event) {
       ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(resourceStatus))
   ) {
     msg.channel = SLACK_INFO_CHANNEL;
+    msg.attachments[0].text = physicalResourceId;
     return msg;
   }
 
