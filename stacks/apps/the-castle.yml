@@ -32,6 +32,7 @@ Parameters:
   EcsClusterArn: { Type: String }
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
+  AlbInsecureHttpListenerArn: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
   TheCountLogsFileSystemId: { Type: String }
   EcrImageTag: { Type: String }
@@ -60,6 +61,18 @@ Resources:
           Values:
             - thecastle.*
       ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
+  InsecureHttpHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - thecastle.*
+      ListenerArn: !Ref AlbInsecureHttpListenerArn
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
 
   TargetGroup:
