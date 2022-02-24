@@ -63,6 +63,25 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
 
+  CloudFormationNotificationsSlackFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [CloudFormation Notifications] Slack Relay <prod> INVOCATION ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The CloudFormation Notifications Slack message Lambda function is
+        experiencing errors.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudFormationNotificationsSlackFunction
+
   UsEast1Subscription:
     Condition: HasUsEast1TopicArn
     Type: AWS::SNS::Subscription
