@@ -79,11 +79,12 @@ function messageForEvent(event) {
   const timestamp = note.match(/Timestamp='([0-9TZ.:-]+)'\n/)[1];
 
   // And information about the resource that is actually changing
-  const resourceType = note.match(/ResourceType='([a-zA-Z0-9-:]+)'\n/)[1];
-  const resourceId = note.match(/LogicalResourceId='(.+)'\n/)[1];
-  const physicalResourceId = note.match(/PhysicalResourceId='(.+)'\n/)[1];
-  const resourceStatus = note.match(/ResourceStatus='([a-zA-Z_]+)'\n/)[1];
-  const resourceReason = note.match(/ResourceStatusReason='(.*)'\n/)[1];
+  const resourceType = note.match(/ResourceType='([a-zA-Z0-9-:]+)'\n/)?.[1];
+  const resourceId = note.match(/LogicalResourceId='(.+)'\n/)?.[1];
+  const resourceStatus = note.match(/ResourceStatus='([a-zA-Z_]+)'\n/)?.[1];
+  const resourceReason = note.match(/ ='(.*)'\n/)?.[1];
+  // This seems optional
+  const physicalResourceId = note.match(/PhysicalResourceId='(.+)'\n/)?.[1];
 
   const region = stackId.split(':')[3];
   const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home#/stack/detail?stackId=${stackId}`;
@@ -127,6 +128,7 @@ function messageForEvent(event) {
 
   if (resourceStatus === 'DELETE_SKIPPED') {
     msg.channel = '#ops-delete-skipped';
+    msg.attachments[0].text = physicalResourceId || 'No physical ID';
     return msg;
   }
 
@@ -140,7 +142,6 @@ function messageForEvent(event) {
       ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(resourceStatus))
   ) {
     msg.channel = SLACK_INFO_CHANNEL;
-    msg.attachments[0].text = physicalResourceId;
     return msg;
   }
 
