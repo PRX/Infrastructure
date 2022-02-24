@@ -231,7 +231,6 @@ exports.handler = async (event) => {
           }
 
           // const fullTx = await httpGet(`/transactions/${tx.id}`);
-          // console.log(tx);
 
           const name = shortMemberName(mem);
           const campUrl = campaignUrl(camp);
