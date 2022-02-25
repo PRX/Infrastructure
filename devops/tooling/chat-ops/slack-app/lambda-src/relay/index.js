@@ -11,6 +11,7 @@
 /** @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments */
 
 const { WebClient } = require('@slack/web-api');
+const events = require('../app/events');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
@@ -24,5 +25,14 @@ exports.handler = async (event) => {
     const msg = JSON.parse(event.Records[0].Sns.Message);
     console.log(event.Records[0].Sns.Message);
     await web.chat.postMessage(msg);
+
+    // Watch for any messages coming through a non-canonical topic, and
+    // forward them to a different channel for identification
+    if (
+      event.Records[0].Sns.TopicArn !== process.env.CANONICAL_RELAY_TOPIC_ARN
+    ) {
+      msg.channel = '#sandbox2';
+      await web.chat.postMessage(msg);
+    }
   }
 };

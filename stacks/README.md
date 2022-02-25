@@ -3,6 +3,7 @@
 # Misc
 
 - The Augury stack currently assumes that the bucket referenced in AdFilesS3BucketArn is in the same region where Augury tasks are being launched
+- After the Castle DB is created, a user needs to be created
 
 ## Amazon SES
 
