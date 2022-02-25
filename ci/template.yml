@@ -21,7 +21,6 @@ Metadata:
           default: Stack Dependencies
         Parameters:
           - InfrastructureStorageStackName
-          - InfrastructureNotificationsStackName
           - InfrastructureSecretsStackName
       - Label:
           default: Template Configuration
@@ -35,8 +34,6 @@ Metadata:
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
-      InfrastructureNotificationsStackName:
-        default: Notifications stack name
       InfrastructureSecretsStackName:
         default: Secrets stack name
       InfrastructureConfigStagingKey:
@@ -50,10 +47,6 @@ Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
-    Type: String
-  InfrastructureNotificationsStackName:
-    Default: infrastructure-notifications
-    Description: The name of a previously launched notifications stack
     Type: String
   InfrastructureSecretsStackName:
     Default: infrastructure-secrets
@@ -73,6 +66,8 @@ Parameters:
   GitHubWebhookSecret:
     Description: >-
       The secret provided by GitHub for the push and pull request events webhook
+    Type: String
+  SlackMessageRelaySnsTopicArn:
     Type: String
 
 Resources:
@@ -466,8 +461,7 @@ Resources:
       Environment:
         Variables:
           GITHUB_ACCESS_TOKEN: !Ref GitHubToken
-          SLACK_MESSAGE_RELAY_TOPIC_ARN:
-            Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         CodeBuild:
           Properties:
@@ -486,8 +480,7 @@ Resources:
         - Statement:
             - Action: sns:Publish
               Effect: Allow
-              Resource:
-                Fn::ImportValue: !Sub ${InfrastructureNotificationsStackName}-SlackMessageRelaySnsTopicArn
+              Resource: !Ref SlackMessageRelaySnsTopicArn
           Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
