@@ -128,7 +128,9 @@ function messageForEvent(event) {
 
   if (resourceStatus === 'DELETE_SKIPPED') {
     msg.channel = '#ops-delete-skipped';
-    msg.attachments[0].text = physicalResourceId || 'No physical ID';
+    msg.attachments[0].text = physicalResourceId
+      ? `PYS ID: ${physicalResourceId}`
+      : 'No physical ID';
     return msg;
   }
 
