@@ -28,11 +28,25 @@ stacks = all_stacks()
 
 # stacks = cloudformation.describe_stacks()
 
-old_east_topic = "arn:aws:sns:us-east-1:561178107736:infrastructure-notifications-CloudFormationNotificationSnsTopic-2OCAWQM7S7BP"
-# old_west_topic = "arn:aws:sns:us-west-2:561178107736:infrastructure-notifications-CloudFormationNotificationSnsTopic-V0V6R4GCC6PB"
+old_east_topic = (
+    "arn:aws:sns:us-east-1:561178107736:infrastructure-"
+    "notifications-CloudFormationNotificationSnsTopic-2OCAWQM7S7BP"
+)
+# old_west_topic = (
+#     "arn:aws:sns:us-west-2:561178107736:infrastructure-"
+#     "notifications-CloudFormationNotificationSnsTopic-V0V6R4GCC6PB"
+# )
 
-new_east_topic = "arn:aws:sns:us-east-1:578003269847:StackSet-regional-cloudformation-notification-topics-ab259fcb-8a7e-4251-ad41-5ee55dbc65ed-CloudFormationNotificationsSnsTopic-FO6UHHCE92V1"
-# new_west_topic = "arn:aws:sns:us-west-2:578003269847:StackSet-regional-cloudformation-notification-topics-141ca10f-57ec-48f4-b953-a89382294382-CloudFormationNotificationsSnsTopic-1XY4PUFA0BC8W"
+new_east_topic = (
+    "arn:aws:sns:us-east-1:578003269847:StackSet-regional-cloudformation"
+    "-notification-topics-ab259fcb-8a7e-4251-ad41-5ee55dbc65ed-"
+    "CloudFormationNotificationsSnsTopic-FO6UHHCE92V1"
+)
+new_west_topic = (
+    "arn:aws:sns:us-west-2:578003269847:StackSet-regional-cloudformation"
+    "-notification-topics-141ca10f-57ec-48f4-b953-a89382294382-"
+    "CloudFormationNotificationsSnsTopic-1XY4PUFA0BC8W"
+)
 
 print("======================================================================")
 print("These stacks use the legacy notification ARN:")
