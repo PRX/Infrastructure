@@ -11,7 +11,6 @@
 /** @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments */
 
 const { WebClient } = require('@slack/web-api');
-const events = require('../app/events');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
