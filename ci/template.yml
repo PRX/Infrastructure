@@ -9,11 +9,6 @@ Description: >-
   Creates a continuous integration system to handle testing, building, and
   pushing assets in response to changes on GitHub
 
-Mappings:
-  Shared:
-    SourceArchives:
-      Key: github-source-archive.zip
-
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -72,22 +67,6 @@ Parameters:
 
 Resources:
   # CodeBuild Project
-  CiCodeBuildSourceArchiveBucket:
-    # TODO Remove, no longer used
-    # The CI CodeBuild project has read access to this bucket, so code and
-    # assets needed for builds can be placed in it
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-      VersioningConfiguration:
-        Status: Enabled
   CiCodeBuildIamRole:
     Type: AWS::IAM::Role
     Properties:
@@ -99,15 +78,6 @@ Resources:
               Service: codebuild.amazonaws.com
         Version: "2012-10-17"
       Policies:
-        - PolicyName: CiCodeBuildSourceArchiveBucketBasicAccess
-          PolicyDocument:
-            Statement:
-              - Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Effect: Allow
-                Resource: !Sub arn:aws:s3:::${CiCodeBuildSourceArchiveBucket}/*
-            Version: "2012-10-17"
         - PolicyName: ApplicationCodeWriteAccess
           PolicyDocument:
             Statement:
@@ -122,15 +92,6 @@ Resources:
                 Effect: Allow
                 Resource: "*" # TODO
             Version: "2012-10-17"
-        # - PolicyName: SnsPolicy
-        #   PolicyDocument:
-        #     Statement:
-        #       - Action: sns:Publish
-        #         Effect: Allow
-        #         Resource:
-        #           - !Ref CiStatusSnsTopic
-        #           - !Ref CodeBuildCallbackSnsTopic
-        #     Version: "2012-10-17"
         - PolicyName: ECRAccess
           PolicyDocument:
             Statement:
@@ -313,8 +274,6 @@ Resources:
         Variables:
           GITHUB_ACCESS_TOKEN: !Ref GitHubToken
           CODEBUILD_PROJECT_NAME: !Ref CiCodeBuildProject
-          CODEBUILD_SOURCE_ARCHIVE_BUCKET: !Ref CiCodeBuildSourceArchiveBucket
-          CODEBUILD_SOURCE_ARCHIVE_KEY: !FindInMap [Shared, SourceArchives, Key]
           AWS_ACCOUNT_ID: !Ref AWS::AccountId
       Events:
         GitHubWebhook:
@@ -326,11 +285,6 @@ Resources:
       Handler: index.handler
       MemorySize: 256
       Policies:
-        - Statement:
-            - Action: s3:PutObject
-              Effect: Allow
-              Resource: !Sub ${CiCodeBuildSourceArchiveBucket.Arn}/*
-          Version: "2012-10-17"
         - Statement:
             - Action: codebuild:StartBuild
               Effect: Allow
