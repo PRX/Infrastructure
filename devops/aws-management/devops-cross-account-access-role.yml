@@ -23,25 +23,7 @@ Parameters:
       that it's predictable by other users and services.
 
 Resources:
-  CloudFrontListDistributionsPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: cloudfront:ListDistributions
-            Effect: Allow
-            Resource: "*"
-        Version: "2012-10-17"
-  CloudFrontCreateInvalidationPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: cloudfront:CreateInvalidation
-            Effect: Allow
-            Resource: "*"
-        Version: "2012-10-17"
-  CodePipelineListPipelinesPolicy:
+  CodePipelinePolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
@@ -49,47 +31,44 @@ Resources:
           - Action: codepipeline:ListPipelines
             Effect: Allow
             Resource: "*"
-        Version: "2012-10-17"
-  CodePipelineStartPipelineExecutionPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
+            Sid: AllowListPipelines
           - Action: codepipeline:StartPipelineExecution
             Effect: Allow
             Resource: "*"
-        Version: "2012-10-17"
-  CodePipelineStartPipelineApprovalResultPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
+            Sid: AllowStartExecution
           - Action: codepipeline:PutApprovalResult
             Effect: Allow
             Resource: "*"
-        Version: "2012-10-17"
-  CodePipelineTransitionChangePolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
+            Sid: AllowApprovalAction
           - Action:
               - codepipeline:DisableStageTransition
               - codepipeline:EnableStageTransition
             Effect: Allow
             Resource: "*"
-        Version: "2012-10-17"
-  CodePipelineReadPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
+            Sid: AllowStageTransitionToggle
           - Action:
               - codepipeline:GetPipeline
               - codepipeline:GetPipelineState
             Effect: Allow
             Resource: "*"
+            Sid: AllowReadOnlyAccess
         Version: "2012-10-17"
+
+  CloudFrontPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: cloudfront:ListDistributions
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowListDistributions
+          - Action: cloudfront:CreateInvalidation
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowInvalidations
+        Version: "2012-10-17"
+
   S3ListVersionsPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -147,24 +126,18 @@ Resources:
               AWS: "*"
       # Include all the policies defined above
       ManagedPolicyArns:
-        - !Ref CloudFrontListDistributionsPolicy
-        - !Ref CloudFrontCreateInvalidationPolicy
-        - !Ref CodePipelineListPipelinesPolicy
-        - !Ref CodePipelineStartPipelineExecutionPolicy
-        - !Ref CodePipelineStartPipelineApprovalResultPolicy
-        - !Ref CodePipelineTransitionChangePolicy
-        - !Ref CodePipelineReadPolicy
+        - !Ref CloudFrontPolicy
+        - !Ref CodePipelinePolicy
         - !Ref IamPolicy
         - !Ref S3ListVersionsPolicy
         - !Ref S3TemplateConfigCopyPolicy
       RoleName: !Sub ${CrossAccountAccessRoleName}
       Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: prx:cloudformation:stack-name
-          Value: !Ref AWS::StackName
-        - Key: prx:cloudformation:stack-id
-          Value: !Ref AWS::StackId
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
 
 Outputs:
   RoleNamePattern:
