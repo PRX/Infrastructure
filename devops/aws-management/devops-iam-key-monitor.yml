@@ -31,26 +31,115 @@ Resources:
         const AWS = require('aws-sdk');
 
         const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+        const sts = new AWS.STS({ apiVersion: '2011-06-15' });
+
+        const lookup = {
+          '048723829744': ['Organization-Owners'],
+          '561178107736': ['Admins'],
+        };
+
+        const names = {
+          '048723829744': 'prx-main',
+          '561178107736': 'prx-legacy',
+        };
+
+        const THRESHOLD_DAYS = 90;
+        const THRESHOLD = THRESHOLD_DAYS * 86400 * 1000;
 
         exports.handler = async (event) => {
-          console.log(JSON.stringify(event));
+          const now = +new Date();
+          const lines = [];
 
-          await sns.publish({
-            TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-            Message: JSON.stringify({
-              channel: '#sandbox2',
-              username: 'AWS CloudTrail',
-              icon_emoji: ':ops-cloudtrail:',
-              text: `test`,
-            }),
-          }).promise();
+          for (const accountId of Object.keys(lookup)) {
+            const roleArn = `arn:aws:iam::${accountId}:role/DevOps-CrossAccountAccessRole`;
+
+            const role = await sts
+              .assumeRole({
+                RoleArn: roleArn,
+                RoleSessionName: 'iam_key_monitor',
+              })
+              .promise();
+
+            const iam = new AWS.IAM({
+              apiVersion: '2010-05-08',
+              accessKeyId: role.Credentials.AccessKeyId,
+              secretAccessKey: role.Credentials.SecretAccessKey,
+              sessionToken: role.Credentials.SessionToken,
+            });
+
+            for (const groupName of lookup[accountId]) {
+              const group = await iam.getGroup({
+                GroupName: groupName,
+              }).promise();
+
+              for (const groupUser of group.Users) {
+                const keys = await iam.listAccessKeys({
+                  UserName: groupUser.UserName,
+                }).promise();
+
+                const activeKeys = keys.AccessKeyMetadata.filter(k => k.Status === 'Active');
+                const staleKeys = activeKeys.filter(k => now - +k.CreateDate > THRESHOLD);
+
+                for (const staleKey of staleKeys) {
+                  const ageMs = now - +staleKey.CreateDate;
+                  const ageDays = Math.round(ageMs / 86400000);
+
+                  let line = `\`${groupUser.UserName}\` @ \`${names[accountId]}\` – Key age: *${ageDays}* days`;
+
+                  const usage = await iam.getAccessKeyLastUsed({
+                    AccessKeyId: staleKey.AccessKeyId,
+                  }).promise();
+
+                  if (usage?.AccessKeyLastUsed?.LastUsedDate) {
+                    const lastUsedMs = now - +usage.AccessKeyLastUsed.LastUsedDate;
+                    const lastUsedDays = Math.round(lastUsedMs / 86400000);
+
+                    if (lastUsedDays > 7) {
+                      line = `${line}; last activity: *${lastUsedDays}* days.`;
+                    } else {
+                      line = `${line}; used recently.`;
+                    }
+
+                  } else {
+                    line = `${line}; no activity.`;
+                  }
+
+                  let icon = ':warning:';
+                  if (ageDays > 180) {
+                    icon = ':bangbang:';
+                  }
+                  line = `${icon} ${line}`;
+
+                  lines.push(line);
+                }
+              }
+            }
+          }
+
+          if (lines.length) {
+            await sns.publish({
+              TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+              Message: JSON.stringify({
+                channel: '#ops-info',
+                username: 'AWS IAM',
+                icon_emoji: ':ops-iam:',
+                text: lines.join("\n"),
+              }),
+            }).promise();
+          }
         };
+
       MemorySize: 128
       Policies:
         - Statement:
             - Action: sns:Publish
               Effect: Allow
               Resource: !Ref SlackMessageRelayTopicArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Sub arn:aws:iam::*:role/${CrossAccountCloudWatchAlarmIamRoleName}
           Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
