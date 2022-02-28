@@ -31,6 +31,8 @@
 # }
 
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
 Description: >-
   Creates EventBridge rules that watch CloudTrail for specific types of
   activity, which trigger a Lambda function (used for generating notifications,
@@ -41,70 +43,60 @@ Parameters:
     Type: String
 
 Resources:
-  MonitorFunctionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-        Version: "2012-10-17"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action: sns:Publish
-                Effect: Allow
-                Resource: !Ref SlackMessageRelayTopicArn
-            Version: "2012-10-17"
-          PolicyName: SlackRelaySnsPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Security }
   MonitorFunction:
-    Type: AWS::Lambda::Function
+    Type: AWS::Serverless::Function
     Properties:
-      Code:
-        ZipFile: |-
-          const AWS = require('aws-sdk');
-
-          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
-
-          exports.handler = async (event) => {
-            console.log(JSON.stringify(event));
-
-            await sns.publish({
-              TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-              Message: JSON.stringify({
-                channel: '#ops-fatal',
-                username: 'AWS CloudTrail',
-                icon_emoji: ':ops-cloudtrail:',
-                text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
-              }),
-            }).promise();
-          };
       Description: >-
         Receives CloudWatch Events rule events related to CloudTrail activity
         and sends alerting messages to the Slack relay
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        RootActivity:
+          Properties:
+            Pattern:
+              detail:
+                userIdentity:
+                  type:
+                    - Root
+              detail-type:
+                - AWS API Call via CloudTrail
+                - AWS Console Sign In via CloudTrail
+          Type: EventBridgeRule
       Handler: index.handler
+      InlineCode: |
+        const AWS = require('aws-sdk');
+
+        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          await sns.publish({
+            TargetArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+            Message: JSON.stringify({
+              channel: '#ops-fatal',
+              username: 'AWS CloudTrail',
+              icon_emoji: ':ops-cloudtrail:',
+              text: `Root account event detected - ${event.account} ${event['detail-type']} ${event.region} ${event.detail.eventName}`,
+            }),
+          }).promise();
+        };
       MemorySize: 128
-      Role: !GetAtt MonitorFunctionRole.Arn
-      Runtime: nodejs12.x
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+          Version: "2012-10-17"
+      Runtime: nodejs14.x
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Security }
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Security
       Timeout: 8
   MonitorFunctionLogGroup:
     Type: AWS::Logs::LogGroup
@@ -117,29 +109,3 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: Security }
-
-  RootActivityEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: >-
-        Triggers the monitor function for any root account activity in the
-        region
-      EventPattern:
-        detail-type:
-          - AWS API Call via CloudTrail
-          - AWS Console Sign In via CloudTrail
-        detail:
-          userIdentity:
-            type:
-              - Root
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt MonitorFunction.Arn
-          Id: CloudTrailMonitor.RootActivity
-  RootActivityEventRuleLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref MonitorFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt RootActivityEventRule.Arn
