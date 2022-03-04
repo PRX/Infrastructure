@@ -73,13 +73,14 @@ Resources:
       Comment: Email
       HostedZoneId: !Ref HostedZone
       RecordSets:
-        # Web access
+        # Webmail
         - Name: !Sub mail.${Domain}
           ResourceRecords:
             - ghs.googlehosted.com.
           TTL: "3600"
           Type: CNAME
-        # Google Workspace
+
+        # Inbound email for @prx.org, currently through Google Workspace
         - Name: !Ref Domain
           ResourceRecords:
             - 1 ASPMX.L.GOOGLE.COM.
@@ -89,22 +90,45 @@ Resources:
             - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "3600"
           Type: MX
+
         # DMARC
+        # https://simonandrews.ca/articles/how-to-set-up-spf-dkim-dmarc#dmarc
+        # Sets the DMARC policy for email sent from @prx.org
         - Name: !Sub _dmarc.${Domain}
           ResourceRecords:
             - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
           TTL: "300"
           Type: TXT
+
+        # This allows DMARC reports from radiotopia.fm to be sent to a prx.org
+        # address
         - Name: !Sub radiotopia.fm._report._dmarc.${Domain}
           ResourceRecords:
             - '"v=DMARC1"'
-          TTL: "300"
+          TTL: "172800"
           Type: TXT
+        # This allows DMARC reports from theworld.org to be sent to a prx.org
+        # address
         - Name: !Sub theworld.org._report._dmarc.${Domain}
           ResourceRecords:
             - '"v=DMARC1"'
-          TTL: "300"
+          TTL: "172800"
           Type: TXT
+        # This allows DMARC reports from trax.fm to be sent to a prx.org
+        # address
+        - Name: !Sub trax.fm._report._dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1"'
+          TTL: "172800"
+          Type: TXT
+        # This allows DMARC reports from earhustlesq.com to be sent to a prx.org
+        # address
+        - Name: !Sub earhustlesq.com._report._dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1"'
+          TTL: "172800"
+          Type: TXT
+
         # DKIM
         - Name: !Sub smtp._domainkey.${Domain}
           ResourceRecords:
@@ -833,6 +857,10 @@ Resources:
       Comment: Campaign Monitor
       HostedZoneId: !Ref HostedZone
       RecordSets:
+        # DKIM
+        # This is the public key matching a private key that Campaign Monitor
+        # uses to sign emails it send on our behalf
+        # https://prx.createsend.com/admin/client/domainrecords/F4794DDC869E942D
         - Name: !Sub cm._domainkey.${Domain}
           ResourceRecords:
             - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDGekjRBpJt4pFq65ZNr8SV8+XPiZ+hjkkBToUAeEqGoZCyXFKVDfCEWbdPnp9W8VGf0o5ZBay5z4sGkkhUSGyCBlp8CvCFw7PQqjb9HfC+PrVVQgIRxMyh0Ea6FvMISPADBHj8mSYS+G6E1CMvXm76OaTIruo3/VRUfHhnTR4lnQIDAQAB"'
@@ -902,6 +930,10 @@ Resources:
       Comment: Google Workspace
       HostedZoneId: !Ref HostedZone
       RecordSets:
+        # DKIM
+        # This is the public key matching a private key that Google Workspace
+        # uses to sign emails it send on our behalf
+        # https://admin.google.com/ac/apps/gmail/authenticateemail
         - Name: !Sub google._domainkey.${Domain}
           ResourceRecords:
             - '"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCYbt8bCjEvkdbTiYthVqEtFVySGUqThs+Agsbz7nU2BybHIqo9DCD7xMy9wVfaQOr0uPiKkahvpRVZAFgbYK4o2T7q4tibwb0UoD2LD0X6y+aKN8KWh07vyr17/fq6fiYTeeCIKyz8bufJcEZ1ZatLhlSp5gvUs2CUNWJjwSxh3wIDAQAB"'
