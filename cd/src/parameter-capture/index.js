@@ -5,63 +5,63 @@ const cloudformation = new AWS.CloudFormation({
   retryDelayOptions: { base: 1100 },
 });
 
-async function findDescendentStacks(StackName) {
-  const stacks = [];
+const rootStackName = 'infrastructure-cd-root-staging';
 
-  const resources = await cloudformation
-    .listStackResources({ StackName })
+/**
+ * Returns an array of all stacks that are related to some root stack through
+ * nesting, including the root stack. The elements of the array are the objects
+ * returned by describe-stacks.
+ * @param {*} stackId
+ * @returns {Promise<AWS.CloudFormation.Stacks>}
+ */
+async function getStackFamily(stackId) {
+  const stackDesc = await cloudformation
+    .describeStacks({ StackName: stackId })
     .promise();
 
-  for (const resource of resources.StackResourceSummaries) {
-    if (resource.ResourceType === 'AWS::CloudFormation::Stack') {
-      // stacks.push(resource);
-      // stacks.push(...(await findDescendentStacks(resource.PhysicalResourceId)));
-    }
+  // Start with an arry containing only the root stack
+  let stacks = stackDesc.Stacks;
+
+  // Query all the resources in the given stack, and look for any nested
+  // CloudFormation stacks
+  const resourceList = await cloudformation
+    .listStackResources({ StackName: stackId })
+    .promise();
+
+  const resourceSummaries = resourceList.StackResourceSummaries;
+  const nestedStackSummaries = resourceSummaries.filter(
+    (r) => r.ResourceType === 'AWS::CloudFormation::Stack',
+  );
+
+  for (const s of nestedStackSummaries) {
+    const nestedStackId = s.PhysicalResourceId;
+    const nestedStackFamily = await getStackFamily(nestedStackId);
+    stacks = stacks.concat(nestedStackFamily);
   }
 
   return stacks;
 }
 
-const rootStackName = 'infrastructure-cd-root-staging';
-// const rootStackName =
-//   'infrastructure-cd-root-staging-Apps100AStack-E9M188QXWO6X-DovetailTrafficStack-5ODSF66NUSII';
+/**
+ * Returns an object, where each key is the name of a parameter in Parameter
+ * Store, and each value is the value of that parameter at the time
+ * CloudFormation resolved it.
+ * @param {AWS.CloudFormation.Stacks} stacks
+ * @returns {Object}
+ */
+function getAllResolveParameters(stacks) {
+  return stacks
+    .reduce(
+      (acc, cur) => [...acc, ...cur.Parameters.filter((p) => p.ResolvedValue)],
+      [],
+    )
+    .reduce(
+      (acc, cur) => ({ ...acc, [cur.ParameterValue]: cur.ResolvedValue }),
+      {},
+    );
+}
 
 exports.handler = async () => {
-  const allStacks = await findDescendentStacks(rootStackName);
-  allStacks.push({ PhysicalResourceId: rootStackName });
-  console.log(`Found ${allStacks.length} stacks`);
-
-  const capture = {};
-
-  for (const stack of allStacks) {
-    const desc = await cloudformation
-      .describeStacks({ StackName: stack.PhysicalResourceId })
-      .promise();
-    console.log(JSON.stringify(desc.Stacks[0].Parameters));
-
-    if (desc?.Stacks?.[0]?.Parameters?.length) {
-      const params = desc.Stacks[0].Parameters;
-
-      for (const param of params) {
-        // ParameterKey   = MyStackParameter
-        // ParameterValue = /prx/foo/bar/BAZ_ARN
-        // ResolvedValue  = arn:aws:foo:us-east-1:123456:bar
-        if (param.ResolvedValue) {
-          if (
-            Object.keys(capture).includes(param.ParameterValue) &&
-            capture[param.ParameterValue] !== param.ResolvedValue
-          ) {
-            // Two references to the same parameter store parameter have
-            // different values, which really shouldn't happen, and we don't
-            // know which one should be captured
-            throw 'Parameter value mismatch';
-          }
-
-          capture[param.ParameterValue] = param.ResolvedValue;
-        }
-      }
-    }
-  }
-
-  console.log(capture);
+  const allStacks = await getStackFamily(rootStackName);
+  const resolvedParams = getAllResolveParameters(allStacks);
 };
