@@ -34,7 +34,7 @@ module.exports = async (event) => {
                 text: {
                   type: 'mrkdwn',
                   text: [
-                    `Pipeline execution has started.`,
+                    'Pipeline execution has started.',
                     `*Execution ID:* \`${event.detail['execution-id']}\``,
                   ].join('\n'),
                 },
