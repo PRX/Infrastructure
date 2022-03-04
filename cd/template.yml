@@ -758,42 +758,26 @@ Resources:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
-        PipelineEvents:
+        StateChange:
           Properties:
             Pattern:
               detail-type:
+                - CodePipeline Action Execution State Change
+                - CodePipeline Stage Execution State Change
                 - CodePipeline Pipeline Execution State Change
               resources:
                 - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
               source:
                 - aws.codepipeline
           Type: EventBridgeRule
-        StageEvents:
-          Properties:
-            Pattern:
-              detail-type:
-                - CodePipeline Stage Execution State Change
-              resources:
-                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-              source:
-                - aws.codepipeline
-          Type: EventBridgeRule
-        ActionsEvents:
-          Properties:
-            Pattern:
-              detail-type:
-                - CodePipeline Action Execution State Change
-              resources:
-                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-              source:
-                - aws.codepipeline
-          Type: EventBridgeRule
-      Handler: lambda_function.lambda_handler
+      # Handler: lambda_function.lambda_handler
+      Handler: index.handler
       MemorySize: 128
       Policies:
         - !Ref CodePipelineStateReadOnlyAccessPolicy
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: python3.8
+      # Runtime: python3.8
+      Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1415,9 +1399,14 @@ Resources:
       CodeUri: src/parameter-capture/
       Description: TKTKTK
       Handler: index.handler
+      Environment:
+        Variables:
+          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
+            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
       MemorySize: 256
       Policies:
         - !Ref CloudFormationReadOnlyAccessPolicy
+        - !Ref SnapshotsBucketWriteAccessPolicy
       Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -1425,7 +1414,7 @@ Resources:
         prx:cloudformation:stack-id: !Ref AWS::StackId
         prx:ops:environment: Production
         prx:dev:application: CD
-      Timeout: 60
+      Timeout: 120
   ParameterCaptureFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:

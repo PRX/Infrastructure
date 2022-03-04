@@ -1,4 +1,8 @@
 const AWS = require('aws-sdk');
+
+
+const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
+const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 const cloudformation = new AWS.CloudFormation({
   apiVersion: '2010-05-15',
   maxRetries: 5,
@@ -61,7 +65,36 @@ function getAllResolveParameters(stacks) {
     );
 }
 
-exports.handler = async () => {
-  const allStacks = await getStackFamily(rootStackName);
-  const resolvedParams = getAllResolveParameters(allStacks);
+exports.handler = async (event, context) => {
+  const job = event['CodePipeline.job'];
+
+  try {
+    const allStacks = await getStackFamily(rootStackName);
+    const resolvedParams = getAllResolveParameters(allStacks);
+
+    await s3
+      .putObject({
+        Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
+        Key: key,
+        Body: JSON.stringify(resolvedParams),
+      })
+      .promise();
+
+    await codepipeline
+      .putJobSuccessResult({
+        jobId: job.id,
+      })
+      .promise();
+  } catch (error) {
+    await codepipeline
+      .putJobFailureResult({
+        jobId: job.id,
+        failureDetails: {
+          message: JSON.stringify(error),
+          type: 'JobFailed',
+          externalExecutionId: context.invokeid,
+        },
+      })
+      .promise();
+  }
 };
