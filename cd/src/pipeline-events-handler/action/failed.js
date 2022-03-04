@@ -37,7 +37,7 @@ module.exports = async (event) => {
                   text: {
                     type: 'mrkdwn',
                     text: [
-                      `${event.detail.stage} stage has succeeded.`,
+                      `${event.detail.stage} \`${event.detail.action}\` has failed.`,
                       `*Execution ID:* \`${event.detail['execution-id']}\``,
                       `*Reason*: _${
                         event.detail?.['execution-result']?.[
