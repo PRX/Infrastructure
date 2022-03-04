@@ -15,7 +15,7 @@ module.exports = async (event) => {
       .publish({
         TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
         Message: JSON.stringify({
-          channel: '#sandbox2',
+          channel: '#ops-deploys',
           username: 'AWS CodePipeline',
           icon_emoji: ':ops-codepipeline:',
           attachments: [

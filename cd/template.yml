@@ -393,7 +393,6 @@ Resources:
                   - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
-                  - !GetAtt DeploymentNotificationFunction.Arn
                   - !GetAtt ChangeSetDeltaNotificationFunction.Arn
             Version: "2012-10-17"
           PolicyName: LambdaRolePolicy
@@ -482,23 +481,6 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            - Name: DeploymentNotification
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: |
-                  {
-                    "stage": "Housekeeping",
-                    "info": "start"
-                  }
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 1
         - Name: Staging
           Actions:
             - Name: CreateStagingChangeSet
@@ -567,23 +549,6 @@ Resources:
                 Version: "1"
               Configuration:
                 FunctionName: !Ref EnvironmentStateCaptureFunction
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 4
-            - Name: DeploymentNotification
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: |
-                  {
-                    "stage": "Staging",
-                    "info": "complete"
-                  }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
@@ -723,23 +688,6 @@ Resources:
                 FunctionName: !Ref EnvironmentStateCaptureFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 5
-            - Name: DeploymentNotification
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref DeploymentNotificationFunction
-                UserParameters: |
-                  {
-                    "stage": "Production",
-                    "info": "complete"
-                  }
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1190,60 +1138,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ChangeSetDeltaNotificationFunction
-
-  DeploymentNotificationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/deployment-notification/
-      Description: >-
-        Sends a message when deployments finish
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-          CD_STACK_NAME: !Ref AWS::StackName
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
-      Handler: lambda_function.lambda_handler
-      MemorySize: 128
-      Policies:
-        - !Ref CloudWatchMetricWriteAccessPolicy
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-        - !Ref StagingConfigObjectReadOnlyAccessPolicy
-      Runtime: python3.8
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 3
-  DeploymentNotificationLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${DeploymentNotificationFunction}
-      RetentionInDays: 14
-  DeploymentNotificationErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Deploy notifications <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the deploy notification lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref DeploymentNotificationFunction
 
   EnvironmentStateCaptureFunction:
     Type: AWS::Serverless::Function
