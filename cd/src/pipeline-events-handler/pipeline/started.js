@@ -26,7 +26,9 @@ module.exports = async (event) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: `*<${urls.executionConsoleUrl}|${region} » Core CD Pipeline>*`,
+                  text: `*<${urls.executionConsoleUrl(
+                    event,
+                  )}|${region} » Core CD Pipeline>*`,
                 },
               },
               {
