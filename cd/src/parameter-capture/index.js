@@ -72,13 +72,13 @@ exports.handler = async (event, context) => {
     const allStacks = await getStackFamily(rootStackName);
     const resolvedParams = getAllResolveParameters(allStacks);
 
-    await s3
-      .putObject({
-        Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
-        Key: key,
-        Body: JSON.stringify(resolvedParams),
-      })
-      .promise();
+    // await s3
+    //   .putObject({
+    //     Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
+    //     Key: key,
+    //     Body: JSON.stringify(resolvedParams),
+    //   })
+    //   .promise();
 
     await codepipeline
       .putJobSuccessResult({
