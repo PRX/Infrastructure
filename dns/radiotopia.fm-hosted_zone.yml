@@ -47,28 +47,28 @@ Resources:
             - '"google-site-verification=zFRPkYoCbmLhpl-z3WCBzd0uUXdlP50m39evhsNZHKQ"'
           TTL: "300"
           Type: TXT
-  GSuite: # TODO Rename to Email
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Email
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        # DMARC
-        - Name: !Sub _dmarc.${Domain}
-          ResourceRecords:
-            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org"'
-          TTL: "300"
-          Type: TXT
-        # Email
-        - Name: !Ref Domain
-          ResourceRecords:
-            - 1 ASPMX.L.GOOGLE.COM.
-            - 5 ALT1.ASPMX.L.GOOGLE.COM.
-            - 5 ALT2.ASPMX.L.GOOGLE.COM.
-            - 10 ASPMX2.GOOGLEMAIL.COM.
-            - 10 ASPMX3.GOOGLEMAIL.COM.
-          TTL: "300"
-          Type: MX
+  # GSuite: # TODO Rename to Email
+  #   Type: AWS::Route53::RecordSetGroup
+  #   Properties:
+  #     Comment: Email
+  #     HostedZoneId: !Ref HostedZone
+  #     RecordSets:
+  #       # DMARC
+  #       - Name: !Sub _dmarc.${Domain}
+  #         ResourceRecords:
+  #           - '"v=DMARC1; p=none; pct=100; ri=86400; rua=mailto:dmarc-reports@prx.org; ruf=mailto:dmarc-reports@prx.org; aspf=r; adkim=r"'
+  #         TTL: "300"
+  #         Type: TXT
+  #       # Email
+  #       - Name: !Ref Domain
+  #         ResourceRecords:
+  #           - 1 ASPMX.L.GOOGLE.COM.
+  #           - 5 ALT1.ASPMX.L.GOOGLE.COM.
+  #           - 5 ALT2.ASPMX.L.GOOGLE.COM.
+  #           - 10 ASPMX2.GOOGLEMAIL.COM.
+  #           - 10 ASPMX3.GOOGLEMAIL.COM.
+  #         TTL: "300"
+  #         Type: MX
   Media:
     Type: AWS::Route53::RecordSetGroup
     Properties:
@@ -309,5 +309,22 @@ Resources:
         - Name: !Sub cm._domainkey.${Domain}
           ResourceRecords:
             - '"k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDYge8wksKTUDp27iGsOvkwkTSaO7iXVwMPiHqG8x9JH/Pi9YBwQ8Ld1laKERFi7JSMR0VAr7BCBF935LRPrNuTtE7p3E1EAbjn7ZO5ZpWE0cvBEAYOXDh2RLTWZnW294CvvzhWhg77Oe43rNl0+0duHSCbM4/q2BT8Y4voea3nIwIDAQAB"'
+          TTL: "3600"
+          Type: TXT
+  GoogleWorkspace:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Google Workspace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # DKIM
+        # This is the public key matching a private key that Google Workspace
+        # uses to sign emails it send on our behalf
+        # https://admin.google.com/ac/apps/gmail/authenticateemail
+        - Name: !Sub google._domainkey.${Domain}
+          ResourceRecords:
+            # Because of how Route 53 works, this value is split into two
+            # quoted parts within the YAML string: '"part 1" "part 2"'
+            - '"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAgN5Lqfhy0AHPjNrqrS7+bZ1krYdKHIgyRL+8UZFVW3EDt9ei2Wv5lxer/uybGj9+TuOJ/rQt4DsK1IPqKeLMiB7hnaOipo8HCOXxahhRG+e9metZnkVV3KaTlpAECeuq0jrNdC1EiXjS7LuZTTJeHQz6k52T5+0fVHUYGSok/" "ljvzoM810D11lyhYC5dT6SefF19d8ahSggyaEk73otmbFL5gz558Y7WbdZdqxbIaDlATAEpY8tFqdWofLQRFksYi7LIawu0qe4LFjqZNCnK7/7aBOLS1cmGIq5ORkBhv4pl6KZivs3+4N3cR4MYQPr3WxSP7I7sP2T5DCdB/HrV6QIDAQAB"'
           TTL: "3600"
           Type: TXT
