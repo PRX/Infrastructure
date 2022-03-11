@@ -148,3 +148,69 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Accounting Toolkit
+
+  ZendeskWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/zendesk-webhook
+      Description: >-
+        Handles webhooks from Zendesk
+      Environment:
+        Variables:
+          PRX_ZENDESK_API_USERNAME: !Ref PrxZendeskApiUsername
+          PRX_ZENDESK_API_TOKEN: !Ref PrxZendeskApiToken
+      Events:
+        AttachmentTagRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /attachment-tag
+          Type: HttpApi
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Runtime: ruby2.7
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Accounting Toolkit
+      Timeout: 16
+  ZendeskWebhookFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ZendeskWebhookFunction}
+      RetentionInDays: 30
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Accounting Toolkit }
+  ZendeskWebhookFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: "MINOR [Zendesk] Zendesk Webhook <prod> EXPERIENCING ERRORS"
+      AlarmDescription: >-
+        The error rate on the Zendesk webhook app has exceeded 0.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ZendeskWebhookFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
