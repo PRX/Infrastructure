@@ -55,6 +55,7 @@ Resources:
       Comment: Email, DMARC, etc
       HostedZoneId: !Ref HostedZone
       RecordSets:
+        # Mail exchange
         - Name: !Ref Domain
           ResourceRecords:
             - 1 ASPMX.L.GOOGLE.COM.
@@ -64,6 +65,13 @@ Resources:
             - 10 ASPMX3.GOOGLEMAIL.COM.
           TTL: "3600"
           Type: MX
+        # DMARC
+        - Name: !Sub _dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com; ruf=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com"'
+          TTL: "3600"
+          Type: TXT
+        # SPF domain alignment for Campaign Monitor
         - Name: !Sub bounce.${Domain}
           ResourceRecords:
             - 5 mx20.inbound.createsend.com.
@@ -75,6 +83,7 @@ Resources:
             - '"v=spf1 include:_spf.createsend.com -all"'
           TTL: "3600"
           Type: TXT
+        # SPF domain alignment for Amazon SES
         - Name: !Sub bounces.${Domain}
           ResourceRecords:
             - 10 feedback-smtp.us-east-2.amazonses.com.
@@ -85,11 +94,7 @@ Resources:
             - '"v=spf1 include:amazonses.com ~all"'
           TTL: "3600"
           Type: TXT
-        - Name: !Sub _dmarc.${Domain}
-          ResourceRecords:
-            - '"v=DMARC1; p=none; pct=100; rua=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com; ruf=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com"'
-          TTL: "3600"
-          Type: TXT
+        # Google Workspace DKIM
         - Name: !Sub tw._domainkey.${Domain}
           ResourceRecords:
             - '"v=DKIM1;" "k=rsa;" "p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC0G0xkC9q99G/ckuWkxyHwZ3NKyvmqRYjfvO0GdEoQHg1Vmzgziuf5gEJJDeJlSB7YcmUfi3XG18mI4L4m5p3WlUCKCMQ04V+o3Cc4Rxg4JVqkd8qEQ31kEZV8GXhStbPCEhDPU1hlrOV3aS03fLE5mXMBrfnxYj8PMH70GRJgVQIDAQAB"'
