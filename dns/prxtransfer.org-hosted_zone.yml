@@ -22,8 +22,12 @@ Resources:
         RequestInterval: 30
         Type: TCP
       HealthCheckTags:
-        - Key: Name
-          Value: East2 FTPD
+        - { Key: Name, Value: Broadcast FTP east2 instance }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
   East3HealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
@@ -36,8 +40,12 @@ Resources:
         RequestInterval: 30
         Type: TCP
       HealthCheckTags:
-        - Key: Name
-          Value: East3 FTPD
+        - { Key: Name, Value: Broadcast FTP east3 instance }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
   West3HealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
@@ -50,8 +58,12 @@ Resources:
         RequestInterval: 30
         Type: TCP
       HealthCheckTags:
-        - Key: Name
-          Value: West4 FTPD
+        - { Key: Name, Value: Broadcast FTP west3 instance }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
   West4HealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
@@ -64,14 +76,18 @@ Resources:
         RequestInterval: 30
         Type: TCP
       HealthCheckTags:
-        - Key: Name
-          Value: West4 FTPD
+        - { Key: Name, Value: Broadcast FTP west4 instance }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
 
   HostedZone:
     Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
-        Comment: PRXBD FTP Pull Delivery
+        Comment: Broadcast FTP pull delivery
       HostedZoneTags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -119,106 +135,106 @@ Resources:
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
         # Apex and wildcard domains ALIAS to `balanced.{domain}`
-        - AliasTarget:
+        - Name: !Ref Domain
+          AliasTarget:
             DNSName: !Sub balanced.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
-          Name: !Ref Domain
           Type: A
-        - AliasTarget:
+        - Name: !Sub "*.${Domain}"
+          AliasTarget:
             DNSName: !Sub balanced.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
-          Name: !Sub "*.${Domain}"
           Type: A
 
         # CNAME for `www.{domain}`
-        - ResourceRecords:
+        - Name: !Sub www.${Domain}
+          ResourceRecords:
             - !Ref Domain
           TTL: "86400"
           Type: CNAME
-          Name: !Sub www.${Domain}
 
         # `balanced.{domain}` is a latency routing group that will spread
         # traffic to various regions or instances
-        - AliasTarget:
+        - Name: !Sub balanced.${Domain}
+          AliasTarget:
             DNSName: !Sub east.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
-          Name: !Sub balanced.${Domain}
           Region: us-east-1 # N. Virginia
-          SetIdentifier: balanced-latency
+          SetIdentifier: balanced-latency-east
           Type: A
-        - AliasTarget:
+        - Name: !Sub balanced.${Domain}
+          AliasTarget:
             DNSName: !Sub west3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           HealthCheckId: !GetAtt West3HealthCheck.HealthCheckId
-          Name: !Sub balanced.${Domain}
           Region: us-west-1 # N. California
-          SetIdentifier: balanced-latency
+          SetIdentifier: balanced-latency-west3
           Type: A
-        - AliasTarget:
+        - Name: !Sub balanced.${Domain}
+          AliasTarget:
             DNSName: !Sub west4.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           HealthCheckId: !GetAtt West4HealthCheck.HealthCheckId
-          Name: !Sub balanced.${Domain}
           Region: us-west-2 # Oregon
-          SetIdentifier: balanced-latency
+          SetIdentifier: balanced-latency-west4
           Type: A
 
         # `east.{domain}` is one of the latency targets of `balanced.{domain}`,
         # and is a weighted routing policy group
-        - AliasTarget:
+        - Name: !Sub east.${Domain}
+          AliasTarget:
             DNSName: !Sub east2.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           HealthCheckId: !GetAtt East2HealthCheck.HealthCheckId
-          Name: !Sub east.${Domain}
-          SetIdentifier: east-weighted
+          SetIdentifier: east-weighted-east2
           Type: A
           Weight: 1
-        - AliasTarget:
+        - Name: !Sub east.${Domain}
+          AliasTarget:
             DNSName: !Sub east3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          Name: !Sub east.${Domain}
-          SetIdentifier: east-weighted
+          SetIdentifier: east-weighted-east3
           Type: A
           Weight: 1
 
         # Regional wildcards. I don't think these are really in use
-        - AliasTarget:
+        - Name: !Sub "*.east.${Domain}"
+          AliasTarget:
             DNSName: !Sub east.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
-          Name: !Sub "*.east.${Domain}"
           Type: A
-        - AliasTarget:
+        - Name: !Sub "*.west1.${Domain}"
+          AliasTarget:
             DNSName: !Sub west3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
-          Name: !Sub "*.west1.${Domain}"
           Type: A
-        - AliasTarget:
+        - Name: !Sub "*.west.${Domain}"
+          AliasTarget:
             DNSName: !Sub west4.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: PRIMARY
           HealthCheckId: !GetAtt West4HealthCheck.HealthCheckId
-          Name: !Sub "*.west.${Domain}"
-          SetIdentifier: west-wildcard-failover
+          SetIdentifier: west-wildcard-failover-west4
           Type: A
-        - AliasTarget:
+        - Name: !Sub "*.west.${Domain}"
+          AliasTarget:
             DNSName: !Sub west3.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: SECONDARY
           HealthCheckId: !GetAtt West3HealthCheck.HealthCheckId
-          Name: !Sub "*.west.${Domain}"
-          SetIdentifier: west-wildcard-failover
+          SetIdentifier: west-wildcard-failover-west3
           Type: A
 
   # Override to make WFCR hit east3 by default
@@ -228,22 +244,22 @@ Resources:
       Comment: WFCR-specific records
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
-        - AliasTarget:
+        - Name: !Sub wfcr.${Domain}
+          AliasTarget:
             DNSName: !Sub east3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: PRIMARY
           HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          Name: !Sub wfcr.${Domain}
-          SetIdentifier: wfcr
+          SetIdentifier: wfcr-primary
           Type: A
-        - AliasTarget:
+        - Name: !Sub wfcr.${Domain}
+          AliasTarget:
             DNSName: !Sub balanced.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: SECONDARY
-          Name: !Sub wfcr.${Domain}
-          SetIdentifier: wfcr
+          SetIdentifier: wfcr-secondary
           Type: A
 
   # Override to make WGUC hit east3 by default
@@ -253,22 +269,22 @@ Resources:
       Comment: WGUC-specific records
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
-        - AliasTarget:
+        - Name: !Sub wguc.${Domain}
+          AliasTarget:
             DNSName: !Sub east3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: PRIMARY
           HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          Name: !Sub wguc.${Domain}
-          SetIdentifier: wguc
+          SetIdentifier: wguc-primary
           Type: A
-        - AliasTarget:
+        - Name: !Sub wguc.${Domain}
+          AliasTarget:
             DNSName: !Sub balanced.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: SECONDARY
-          Name: !Sub wguc.${Domain}
-          SetIdentifier: wguc
+          SetIdentifier: wguc-secondary
           Type: A
 
   # Override to make WKSU hit east3 by default
@@ -278,20 +294,20 @@ Resources:
       Comment: WKSU-specific records
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
-        - AliasTarget:
+        - Name: !Sub wksu.${Domain}
+          AliasTarget:
             DNSName: !Sub east3.${Domain}
             EvaluateTargetHealth: false
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: PRIMARY
           HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          Name: !Sub wksu.${Domain}
-          SetIdentifier: wksu
+          SetIdentifier: wksu-primary
           Type: A
-        - AliasTarget:
+        - Name: !Sub wksu.${Domain}
+          AliasTarget:
             DNSName: !Sub balanced.${Domain}
             EvaluateTargetHealth: true
             HostedZoneId: !GetAtt HostedZone.Id
           Failover: SECONDARY
-          Name: !Sub wksu.${Domain}
-          SetIdentifier: wksu
+          SetIdentifier: wksu-secondary
           Type: A
