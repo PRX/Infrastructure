@@ -1,8 +1,8 @@
-const regions = require('./regions');
-const urls = require('./urls');
 const pipelineStarted = require('./pipeline/started');
 const stageSucceeded = require('./stage/succeeded');
 const actionFailed = require('./action/failed');
+const actionStarted = require('./action/started');
+const actionSucceeded = require('./action/succeeded');
 
 // https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html#detect-state-events-types
 exports.handler = async (event) => {
@@ -26,6 +26,10 @@ exports.handler = async (event) => {
     // https://console.aws.amazon.com/events/home?region=us-east-1#/registries/aws.events/schemas/aws.codepipeline%40CodePipelineActionExecutionStateChange/version/1
     if (event.detail.state === 'FAILED') {
       await actionFailed(event);
+    } else if (event.detail.state === 'STARTED') {
+      await actionStarted(event);
+    } else if (event.detail.state === 'SUCCEEDED') {
+      await actionSucceeded(event);
     }
   }
 };
