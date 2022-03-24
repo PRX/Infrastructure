@@ -1406,6 +1406,12 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
       Type: network
+  FtpServerIpAddresses:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsStaging
+    Properties:
+      ServiceToken: !Ref TransferServerIpFinderServiceToken
+      ServerId: !GetAtt FtpServer.ServerId
   FtpServerFtpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Condition: IsStaging
@@ -1455,10 +1461,10 @@ Resources:
       HealthyThresholdCount: 3
       Port: 22
       Protocol: TCP
-      # Targets:
-      #   - Id: !Ref FtpServerElasticIP1
-      #   - Id: !Ref FtpServerElasticIP2
-      #   - Id: !Ref FtpServerElasticIP3
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: "30"
