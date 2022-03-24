@@ -1440,6 +1440,41 @@ Resources:
       LoadBalancerArn: !Ref FtpServerNlb
       Port: 21
       Protocol: TCP
+  FtpServerSftpTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: IsStaging
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 22
+      Protocol: TCP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerSftpNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: IsStaging
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpTargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 22
+      Protocol: TCP
 
 Outputs:
   WebTargetGroupFullName:
