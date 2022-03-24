@@ -7,6 +7,7 @@
 # prefix; if the stems change in other the template or the app config, things
 # will not function as expected.
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates an ECS service for the public Exchange web server, along with target
@@ -57,6 +58,7 @@ Parameters:
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
+  TransferS3BucketArn: { Type: String }
   IdHostname: { Type: String }
   CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
@@ -65,6 +67,7 @@ Parameters:
   TheCastleHostname: { Type: String }
 
 Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
@@ -1215,6 +1218,143 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
       VisibilityTimeout: 5400 # 1.5 hour
+
+  FtpUserAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: transfer.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:ListBucket
+                Effect: Allow
+                Resource: !Ref TransferS3BucketArn
+                Sid: AllowBucketReadOnly
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectAttributes
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAttributes
+                Effect: Allow
+                Resource: !Sub ${TransferS3BucketArn}/*
+                Sid: AllowObjectReadOnly
+            Version: "2012-10-17"
+          PolicyName: TransferUserBasePolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  FtpServerAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      # CodeUri:
+      #   Bucket: !Ref CodeS3Bucket
+      #   Key: !Ref CodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} FTP transfer server authorizer
+      Environment:
+        Variables:
+          FTP_USER_ACCESS_ROLE: !GetAtt FtpUserAccessRole.Arn
+          S3_BUCKET_ARN: !Ref TransferS3BucketArn
+      Handler: index.handler
+      InlineCode: |
+        exports.handler = async (event) => {};
+      MemorySize: 128
+      Runtime: nodejs14.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Exchange
+      Timeout: 5
+  FtpServerAuthorizerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FtpServerAuthorizerFunction}
+      RetentionInDays: 14
+  FtpServerAuthorizerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    # TODO This should have a condition
+    # https://docs.aws.amazon.com/transfer/latest/userguide/custom-identity-provider-users.html#lambda-resource-policy
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt FtpServerAuthorizerFunction.Arn
+      Principal: transfer.amazonaws.com
+  FtpServerLoggingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: transfer.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:DescribeLogStreams
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource: arn:aws:logs:*:*:log-group:/aws/transfer/*
+                Sid: AllowLogging
+            Version: "2012-10-17"
+          PolicyName: TransferActivityLogging
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  FtpServer:
+    Type: AWS::Transfer::Server
+    Condition: IsStaging
+    Properties:
+      Domain: S3
+      # EndpointDetails: EndpointDetails
+      EndpointType: PUBLIC
+      IdentityProviderDetails:
+        Function: !GetAtt FtpServerAuthorizerFunction.Arn
+      IdentityProviderType: AWS_LAMBDA
+      LoggingRole: !GetAtt FtpServerLoggingRole.Arn
+      PostAuthenticationLoginBanner: tktktk1
+      PreAuthenticationLoginBanner: tktktk2
+      # ProtocolDetails:
+      #   ProtocolDetails
+      Protocols:
+        - SFTP
+      SecurityPolicyName: TransferSecurityPolicy-2020-06
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  FtpServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
+      RetentionInDays: 14
 
 Outputs:
   WebTargetGroupFullName:
