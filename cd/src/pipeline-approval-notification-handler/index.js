@@ -299,7 +299,7 @@ async function buildMessage(approvalNotification) {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: 'Production deploy',
+          text: `Production deploy – ${approvalNotification.region}`,
           emoji: true,
         },
       },
