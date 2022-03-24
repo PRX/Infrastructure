@@ -1044,11 +1044,22 @@ Resources:
           try {
             const serverId = event.ResourceProperties.ServerId;
 
-            const serverDesc = transfer.describeServer({ ServerId: serverId }).promise();
-            const vpcEndpointId = serverDesc.EndpointDetails.VpcEndpointId;
+            const serverDesc = await transfer.describeServer({ ServerId: serverId }).promise();
+            const vpcEndpointId = serverDesc.Server.EndpointDetails.VpcEndpointId;
+
+            const vpcEndpointDesc = await ec2.describeVpcEndpoints({
+              VpcEndpointIds: [vpcEndpointId]
+            }).promise();
+            const networkInterfaceIds = vpcEndpointDesc.VpcEndpoints[0].NetworkInterfaceIds;
+
+            const networkInterfacesDesc = await ec2.describeNetworkInterfaces({
+              NetworkInterfaceIds: networkInterfaceIds
+            }).promise();
+
+            const privateIpAddresses = networkInterfacesDesc.NetworkInterfaces.map(i => i.PrivateIpAddress);
 
             await response.send(event, context, response.SUCCESS, {
-              Hash: hex.substring(0, len),
+              PrivateIpAddress: privateIpAddresses,
             });
           } catch (error) {
               console.error(error);
@@ -1098,8 +1109,8 @@ Resources:
     Properties:
       AlarmName: !Sub ERROR [Infrastructure] IP Finder <${EnvironmentTypeAbbreviation}> FUNCTION ERRORS (${RootStackName})
       AlarmDescription: !Sub |-
-        ${EnvironmentType} stack custom resource function for selecting
-        availability zones is failing. This could mean that a stack update is
+        ${EnvironmentType} stack custom resource function for finding transfer
+        server IPs is failing. This could mean that a stack update is
         stalled, waiting for an HTTP callback from the function.
 
         Be careful rolling back the stack; if the function fails again during
