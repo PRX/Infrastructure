@@ -194,16 +194,18 @@ Resources:
         exports.handler = async (event) => {};
       MemorySize: 8000
       Runtime: nodejs14.x
-      # Policies:
-      #   - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
-      #   - Statement:
-      #       - Action:
-      #           - dynamodb:DescribeTable
-      #           - dynamodb:GetItem
-      #           - dynamodb:PutItem
-      #         Effect: Allow
-      #         Resource: !Sub arn:${AWS::Partition}:dynamodb:*:*:table/${ArrangementsDynamodbTableName}
-      #     Version: "2012-10-17"
+      Policies:
+        - Statement:
+            - Action:
+                - elasticfilesystem:ClientMount
+                - elasticfilesystem:ClientRootAccess
+                - elasticfilesystem:ClientWrite
+              Condition:
+                StringEquals:
+                  elasticfilesystem:AccessPointArn: !GetAtt LogsAccessPoint.Arn
+              Effect: Allow
+              Resource: !GetAtt LogsFileSystem.Arn
+          Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
