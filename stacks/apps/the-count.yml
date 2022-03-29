@@ -28,6 +28,21 @@ Parameters:
   TheCountHostname: { Type: String }
 
 Resources:
+  LogsKinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      RetentionPeriodHours: 48
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: The Count }
+
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
@@ -47,20 +62,7 @@ Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      CorsConfiguration:
-        AllowHeaders:
-          - Content-Type
-          - X-Amz-Date
-          - Authorization
-          - X-Api-Key
-          - X-Amz-Security-Token
-        AllowMethods:
-          - GET
-          - OPTIONS
-        AllowOrigins:
-          - "*"
-      Description: !Sub >-
-        ${EnvironmentType} The Count
+      Description: !Sub ${EnvironmentType} The Count
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -253,21 +255,6 @@ Resources:
           OwnerUid: 1010
           Permissions: "0777"
         Path: /action-logs
-
-  LogsKinesisStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      RetentionPeriodHours: 48
-      StreamModeDetails:
-        StreamMode: ON_DEMAND
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: The Count }
 
   StreamToFileFunctionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
