@@ -254,6 +254,11 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
           Memory: !If [IsProduction, 400, 200]
+          MountPoints:
+            # This matches the default where the app expects count files
+            # Override in secrets: COUNT_FILES=/app/count_files
+            - ContainerPath: /app/count_files
+              SourceVolume: !Ref kLogsVolumeName
           Name: !Ref kWebContainerName
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
@@ -269,6 +274,10 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: The Castle }
       TaskRoleArn: !GetAtt TaskRole.Arn
+      Volumes:
+        - EFSVolumeConfiguration:
+            FilesystemId: !Ref TheCountLogsFileSystemId
+          Name: !Ref kLogsVolumeName
 
   ### Add in the scheduled worker
   WorkerTaskLogGroup:
