@@ -88,9 +88,9 @@ Resources:
   ActionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      # CodeUri:
-      #   Bucket: !Ref CodeS3Bucket
-      #   Key: !Ref CodeS3ObjectKey
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
       Description: The Count
       Environment:
         Variables:
@@ -103,9 +103,7 @@ Resources:
             Method: get
             Path: /action.gif
           Type: HttpApi
-      Handler: index.handler
-      InlineCode: |
-        exports.handler = async (event) => {};
+      Handler: action.handler
       MemorySize: 192
       Policies:
         - Statement:
@@ -322,12 +320,12 @@ Resources:
       - LogsMountPointSubnet2
       - LogsMountPointSubnet3
     Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
       Description: !Sub >-
         ${EnvironmentType} Dovetail CDN Arranger for transcoding and stitching
         audio files
-      # Environment:
-      #   Variables:
-      #     ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
       Events:
         KinesisTrigger:
           Properties:
@@ -339,9 +337,7 @@ Resources:
       FileSystemConfigs:
         - Arn: !GetAtt LogsAccessPoint.Arn
           LocalMountPath: /mnt/action-logs
-      Handler: index.handler
-      InlineCode: |
-        exports.handler = async (event) => {};
+      Handler: writer.handler
       MemorySize: 8000
       Runtime: nodejs14.x
       Policies:
