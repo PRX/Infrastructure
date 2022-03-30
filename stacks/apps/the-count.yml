@@ -279,6 +279,27 @@ Resources:
           OwnerUid: "1000"
           Permissions: "0777"
         Path: /app/count_files
+  LogsHighStorageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [The Count] Log Files <${EnvironmentTypeAbbreviation}> HIGH STORAGE USAGE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The Count file system storage usage is unusually
+        high. Ensure that logs are being processed and that processed logs are
+        being deleted.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: StorageClass
+          Value: Total
+        - Name: FileSystemId
+          Value: !GetAtt LogsFileSystem.FileSystemId
+      EvaluationPeriods: 1
+      MetricName: StorageBytes
+      Namespace: AWS/EFS
+      Period: 60
+      Statistic: Maximum
+      Threshold: 512000000 # 512 MB
+      TreatMissingData: notBreaching
 
   StreamToFileFunctionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
