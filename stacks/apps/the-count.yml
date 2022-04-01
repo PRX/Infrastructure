@@ -28,21 +28,21 @@ Parameters:
   TheCountHostname: { Type: String }
 
 Resources:
-  LogsKinesisStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      RetentionPeriodHours: 48
-      ShardCount: 1
-      StreamModeDetails:
-        StreamMode: PROVISIONED
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: The Count }
+  # LogsKinesisStream:
+  #   Type: AWS::Kinesis::Stream
+  #   Properties:
+  #     RetentionPeriodHours: 48
+  #     ShardCount: 1
+  #     StreamModeDetails:
+  #       StreamMode: PROVISIONED
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+  #       - { Key: prx:dev:application, Value: The Count }
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
@@ -105,7 +105,7 @@ Resources:
         ${EnvironmentType} The Count API endpoint handler
       Environment:
         Variables:
-          ACTION_LOG_STREAM_NAME: !Ref LogsKinesisStream
+          # ACTION_LOG_STREAM_NAME: !Ref LogsKinesisStream
           COOKIE_DOMAIN: !If [IsProduction, .prx.org, .prx.tech]
       Events:
         ApiRequest:
@@ -116,14 +116,14 @@ Resources:
           Type: HttpApi
       Handler: action.handler
       MemorySize: 192
-      Policies:
-        - Statement:
-            - Action:
-                - kinesis:PutRecord
-              Effect: Allow
-              Resource: !GetAtt LogsKinesisStream.Arn
-              Sid: AllowRecordWrite
-          Version: "2012-10-17"
+      # Policies:
+      #   - Statement:
+      #       - Action:
+      #           - kinesis:PutRecord
+      #         Effect: Allow
+      #         Resource: !GetAtt LogsKinesisStream.Arn
+      #         Sid: AllowRecordWrite
+      #     Version: "2012-10-17"
       Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -331,15 +331,15 @@ Resources:
       Description: !Sub >-
         ${EnvironmentType} The Count function that writes logs from a Kinesis
         stream to a file in EFS
-      Events:
-        KinesisTrigger:
-          Properties:
-            BatchSize: 1000
-            Enabled: true
-            MaximumBatchingWindowInSeconds: 300
-            StartingPosition: LATEST
-            Stream: !GetAtt LogsKinesisStream.Arn
-          Type: Kinesis
+      # Events:
+      #   KinesisTrigger:
+      #     Properties:
+      #       BatchSize: 1000
+      #       Enabled: true
+      #       MaximumBatchingWindowInSeconds: 300
+      #       StartingPosition: LATEST
+      #       Stream: !GetAtt LogsKinesisStream.Arn
+      #     Type: Kinesis
       FileSystemConfigs:
         - Arn: !GetAtt LogsAccessPoint.Arn
           LocalMountPath: /mnt/count_files
