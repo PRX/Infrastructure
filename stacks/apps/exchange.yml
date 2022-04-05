@@ -1333,14 +1333,17 @@ Resources:
     Properties:
       GroupDescription: Controls access to and from FTP server
       SecurityGroupIngress:
+        # FTP control port
         - CidrIp: 0.0.0.0/0
           FromPort: 21
           IpProtocol: tcp
           ToPort: 21
+        # SSH port for SFTP
         - CidrIp: 0.0.0.0/0
           FromPort: 22
           IpProtocol: tcp
           ToPort: 22
+        # Data channel ports used by AWS Transfer Family
         - CidrIp: 0.0.0.0/0
           FromPort: 8192
           IpProtocol: tcp
@@ -1395,6 +1398,9 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
       RetentionInDays: 14
+  # AWS Transfer Family does not allow public servers with insecure FTP
+  # enabled. Putting the server behind an NLB allows forwarding of public FTP
+  # requests to a private server.
   FtpServerNlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Condition: IsStaging
@@ -1459,6 +1465,47 @@ Resources:
       LoadBalancerArn: !Ref FtpServerNlb
       Port: 21
       Protocol: TCP
+  FtpServerSftpTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Condition: IsStaging
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 22
+      HealthyThresholdCount: 3
+      Port: 22
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_sftp" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerSftpNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Condition: IsStaging
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerSftpTargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 22
+      Protocol: TCP
+  # Each data port in the range 8192-8200 that AWS Transfer Family uses needs
+  # its own target group and listener on the NLB
   FtpServerFtpData8192TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Condition: IsStaging
@@ -1810,46 +1857,6 @@ Resources:
       LoadBalancerArn: !Ref FtpServerNlb
       Port: 8200
       Protocol: TCP
-  FtpServerSftpTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
-    DependsOn: FtpServerNlb
-    Properties:
-      HealthCheckIntervalSeconds: 10
-      HealthCheckPort: 22
-      HealthyThresholdCount: 3
-      Port: 22
-      Protocol: TCP
-      Targets:
-        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-      TargetGroupAttributes:
-        - Key: deregistration_delay.timeout_seconds
-          Value: "30"
-      TargetType: ip
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_exchange_sftp" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Exchange }
-      UnhealthyThresholdCount: 3
-      VpcId: !Ref VpcId
-  FtpServerSftpNlbListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref FtpServerSftpTargetGroup
-      LoadBalancerArn: !Ref FtpServerNlb
-      Port: 22
-      Protocol: TCP
-
 Outputs:
   WebTargetGroupFullName:
     Value: !GetAtt WebTargetGroup.TargetGroupFullName
