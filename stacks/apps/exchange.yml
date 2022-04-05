@@ -1272,7 +1272,87 @@ Resources:
           S3_BUCKET_ARN: !Ref TransferS3BucketArn
       Handler: index.handler
       InlineCode: |
-        exports.handler = async (event) => {};
+        const https = require('https');
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          const bucketName = process.env.S3_BUCKET_ARN.split(":")[5];
+
+          const userPolicy = {
+            Statement: [
+              {
+                Action: ["s3:ListBucket"],
+                Condition: {
+                  StringLike: {
+                    "s3:prefix": [event.username, `${event.username}/*`],
+                  },
+                },
+                Effect: "Allow",
+                Resource: [process.env.S3_BUCKET_ARN],
+                Sid: "AllowBucketUserPrefixReadOnly",
+              },
+              {
+                Action: [
+                  "s3:GetObject",
+                  "s3:GetObjectAttributes",
+                  "s3:GetObjectVersion",
+                  "s3:GetObjectVersionAttributes",
+                ],
+                Condition: {
+                  StringLike: {
+                    "s3:prefix": [`${event.username}/*`],
+                  },
+                },
+                Effect: "Allow",
+                Resource: [process.env.S3_BUCKET_ARN],
+                Sid: "AllowObjectUserPrefixReadOnly",
+              },
+            ],
+            Version: "2012-10-17",
+          };
+
+          const homeDirectoryDetails = [
+            {
+              Entry: `/`,
+              Target: `/${bucketName}/${event.username}`,
+            },
+          ];
+
+          const authorization = {
+            Role: process.env.FTP_USER_ACCESS_ROLE,
+            Policy: JSON.stringify(userPolicy),
+            HomeDirectoryType: "LOGICAL",
+            HomeDirectoryDetails: JSON.stringify(homeDirectoryDetails),
+          };
+
+          if (event.password?.length) {
+            // Password-based authentication for FTP and SFTP
+
+            const accountPassword = await new Promise((resolve, reject) => {
+              https.get('https://api.prx.org/todo', (r) => {
+                let data = '';
+                r.on('data', chunk => data += chunk);
+                r.on('end', () => resolve(data));
+              }).on('error', reject);
+            });
+
+            if (accountPassword === event.password) {
+              console.log('Password OK');
+              console.log(JSON.stringify(userPolicy));
+              return authorization;
+            }
+          } else if (event.protocol === "SFTP") {
+            // Key-based authentication for SFTP
+            console.log('Public key OK');
+            authorization.PublicKeys = ['some_key_from_database'];
+            return authorization;
+          } else {
+            // Invalid authentication; do not return any policy
+            console.log('Bad login');
+            return {};
+          }
+        };
       MemorySize: 128
       Runtime: nodejs14.x
       Tags:
