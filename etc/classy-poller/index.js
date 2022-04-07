@@ -21,6 +21,8 @@ const mapping = {
   386768: '#radiotopia-donations',
   389319: '#radiotopia-donations',
   326353: '#earhustle-donations',
+  399428: '#earhustle-donations',
+  400513: '#earhustle-donations',
   368624: '#tw-fall-2021-donations',
   368561: '#tw-fall-2021-donations',
   368367: '#tw-fall-2021-donations',
