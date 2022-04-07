@@ -2,7 +2,7 @@
 // Returns: Error or status message
 //
 // Receives notifications related to CloudFormation stack changes, and prepares
-// Slack messages. for them. The messages are sent to the Slack Message Relay
+// Slack messages for them. The messages are sent to the Slack Message Relay
 // SNS topic in order to be sent to Slack. Messages about the stack being
 // updated directly are sent to the info channel, and other messages are sent
 // to the debug channel
