@@ -1,0 +1,90 @@
+# stacks/shared-kinesis.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates kinesis streams intended to be used by several applications.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+
+Resources:
+  # dovetail3-cdn realtime logs --> dovetail-counts
+  CountsBytesKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 1
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Counts }
+
+
+  # dovetail-counts --> analytics-dynamodb
+  # dovetail-router --> analytics-dynamodb
+  AnalyticsDynamoDBKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 2
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
+  # analytics-dynamodb --> analytics-bigquery
+  # analytics-dynamodb --> analytics-pingbacks
+  # analytics-dynamodb --> analytics-redis
+  # analytics-dynamodb --> dovetail-traffic (TEMP)
+  AnalyticsMetricsKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 2
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
+Outputs:
+  CountsBytesKinesisStreamName:
+    Value: !Ref CountsBytesKinesisStream
+  CountsBytesKinesisStreamArn:
+    Value: !GetAtt CountsBytesKinesisStream.Arn
+  AnalyticsDynamoDBKinesisStreamName:
+    Value: !Ref AnalyticsDynamoDBKinesisStream
+  AnalyticsDynamoDBKinesisStreamArn:
+    Value: !GetAtt AnalyticsDynamoDBKinesisStream.Arn
+  AnalyticsMetricsKinesisStreamName:
+    Value: !Ref AnalyticsMetricsKinesisStream
+  AnalyticsMetricsKinesisStreamArn:
+    Value: !GetAtt AnalyticsMetricsKinesisStream.Arn

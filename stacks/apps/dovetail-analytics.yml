@@ -26,10 +26,14 @@ Parameters:
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
+  AnalyticsMetricsKinesisStreamArn: { Type: String }
+  AnalyticsMetricsKinesisStreamName: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
+  AnalyticsDynamoDBKinesisStreamArn: { Type: String }
+  AnalyticsDynamoDBKinesisStreamName: { Type: String }
   DynamoDbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbTtl: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
@@ -38,39 +42,6 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  AnalyticsDynamoDBKinesisStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 2
-      StreamModeDetails:
-        StreamMode: PROVISIONED
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Analytics }
-  AnalyticsMetricsKinesisStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 2
-      StreamModeDetails:
-        StreamMode: PROVISIONED
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Analytics }
-
   ParameterStoreReadPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -111,7 +82,7 @@ Resources:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
-            Stream: !GetAtt AnalyticsMetricsKinesisStream.Arn
+            Stream: !Ref AnalyticsMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -413,7 +384,7 @@ Resources:
             BatchSize: 50
             Enabled: true
             StartingPosition: LATEST
-            Stream: !GetAtt AnalyticsDynamoDBKinesisStream.Arn
+            Stream: !Ref AnalyticsDynamoDBKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -509,7 +480,7 @@ Resources:
                   - kinesis:DescribeStream
                   - kinesis:PutRecord
                   - kinesis:PutRecords
-                Resource: !GetAtt AnalyticsMetricsKinesisStream.Arn
+                Resource: !Ref AnalyticsMetricsKinesisStreamArn
             Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -524,7 +495,7 @@ Resources:
     # Send impression data from DynamoDB Lambda function's logs to Kinesis
     Type: AWS::Logs::SubscriptionFilter
     Properties:
-      DestinationArn: !GetAtt AnalyticsMetricsKinesisStream.Arn
+      DestinationArn: !Ref AnalyticsMetricsKinesisStreamArn
       FilterPattern: "{$.msg = impression}"
       LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
       RoleArn: !GetAtt AnalyticsDynamoDbFunctionLogGroupToKinesisSubscriptionFilterRole.Arn
@@ -700,7 +671,7 @@ Resources:
             BatchSize: 25
             Enabled: true
             StartingPosition: LATEST
-            Stream: !GetAtt AnalyticsMetricsKinesisStream.Arn
+            Stream: !Ref AnalyticsMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 2048
@@ -1002,7 +973,7 @@ Resources:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
-            Stream: !GetAtt AnalyticsMetricsKinesisStream.Arn
+            Stream: !Ref AnalyticsMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -1449,6 +1420,6 @@ Resources:
               }
             ]
           }
-        - DdbStreamName: !Ref AnalyticsDynamoDBKinesisStream
-          MetricsStreamName: !Ref AnalyticsMetricsKinesisStream
+        - DdbStreamName: !Ref AnalyticsDynamoDBKinesisStreamName
+          MetricsStreamName: !Ref AnalyticsMetricsKinesisStreamName
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Analytics

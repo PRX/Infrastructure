@@ -34,7 +34,8 @@ Parameters:
   DovetailS3Bucket: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailS3ObjectStitchPrefix: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailCdnLogsKinesisArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
-  DovetailCountedBytesKinesisArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: route from analytics-ingest stack
+  CountsBytesKinesisStreamArn: { Type: String }
+  AnalyticsDynamoDBKinesisStreamArn: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -43,23 +44,6 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
-  CountsBytesKinesisStream:
-    Type: AWS::Kinesis::Stream
-    Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 1
-      StreamModeDetails:
-        StreamMode: PROVISIONED
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Counts }
-
   CountsFunctionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -97,7 +81,7 @@ Resources:
           ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
           ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
-          KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedBytesKinesisArn
+          KINESIS_IMPRESSION_STREAM: !Ref AnalyticsDynamoDBKinesisStreamArn
           REDIS_URL: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           S3_BUCKET: !Ref DovetailS3Bucket
           S3_PREFIX: !Ref DovetailS3ObjectStitchPrefix
@@ -114,7 +98,7 @@ Resources:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
-            Stream: !GetAtt CountsBytesKinesisStream.Arn
+            Stream: !Ref CountsBytesKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       Layers:
@@ -140,7 +124,7 @@ Resources:
                 - kinesis:PutRecord
                 - kinesis:PutRecords
               Effect: Allow
-              Resource: !Ref DovetailCountedBytesKinesisArn
+              Resource: !Ref AnalyticsDynamoDBKinesisStreamArn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
