@@ -86,7 +86,7 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailCountedKinesisStreamArn: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedGlueDatabaseName: { Type: String }
@@ -1158,7 +1158,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Router }
 
-  # Subscription filter (send logged impression data to Kinesis)
+  # Subscription filter (send logged redirect data to Kinesis)
   SubscriptionFilterRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1178,7 +1178,7 @@ Resources:
                   - kinesis:PutRecord
                   - kinesis:PutRecords
                 Effect: Allow
-                Resource: !Ref DynamoDbKinesisStreamArn
+                Resource: !Ref DovetailCountedKinesisStreamArn
             Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1192,7 +1192,7 @@ Resources:
   SubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
     Properties:
-      DestinationArn: !Ref DynamoDbKinesisStreamArn
+      DestinationArn: !Ref DovetailCountedKinesisStreamArn
       FilterPattern: '{ $.msg = "impression" }'
       LogGroupName: !Ref TaskLogGroup
       RoleArn: !GetAtt SubscriptionFilterRole.Arn

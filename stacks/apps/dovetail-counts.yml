@@ -34,8 +34,8 @@ Parameters:
   DovetailS3Bucket: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailS3ObjectStitchPrefix: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailCdnLogsKinesisArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
-  CountsBytesKinesisStreamArn: { Type: String }
-  AnalyticsDynamoDBKinesisStreamArn: { Type: String }
+  DovetailCdnLogsKinesisStreamArn: { Type: String }
+  DovetailCountedKinesisStreamArn: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -81,7 +81,7 @@ Resources:
           ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
           ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
-          KINESIS_IMPRESSION_STREAM: !Ref AnalyticsDynamoDBKinesisStreamArn
+          KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedKinesisStreamArn
           REDIS_URL: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           S3_BUCKET: !Ref DovetailS3Bucket
           S3_PREFIX: !Ref DovetailS3ObjectStitchPrefix
@@ -98,7 +98,7 @@ Resources:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
-            Stream: !Ref CountsBytesKinesisStreamArn
+            Stream: !Ref DovetailCdnLogsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       Layers:
@@ -124,7 +124,7 @@ Resources:
                 - kinesis:PutRecord
                 - kinesis:PutRecords
               Effect: Allow
-              Resource: !Ref AnalyticsDynamoDBKinesisStreamArn
+              Resource: !Ref DovetailCountedKinesisStreamArn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"

@@ -1,8 +1,9 @@
-# stacks/shared-kinesis.yml
+# stacks/shared-dovetail-kinesis.yml
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
-  Creates kinesis streams intended to be used by several applications.
+  Creates kinesis streams used across multiple dovetail apps to enable processing
+  download and impression metrics.
 
 Parameters:
   EnvironmentType: { Type: String }
@@ -10,8 +11,10 @@ Parameters:
   RootStackId: { Type: String }
 
 Resources:
+  # realtime cloudfront logs, including bytes-downloaded by listeners
+  #
   # dovetail3-cdn realtime logs --> dovetail-counts
-  CountsBytesKinesisStream:
+  DovetailCdnLogsKinesisStream:
     Type: AWS::Kinesis::Stream
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -30,9 +33,12 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Counts }
 
+  # IAB2 counted segment-numbers
+  # but ALSO dovetail-router redirect data TODO: move this
+  #
   # dovetail-counts --> analytics-dynamodb
   # dovetail-router --> analytics-dynamodb
-  AnalyticsDynamoDBKinesisStream:
+  DovetailCountedKinesisStream:
     Type: AWS::Kinesis::Stream
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -51,11 +57,13 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Analytics }
 
+  # IAB2 verified episode downloads and ad-impressions
+  #
   # analytics-dynamodb --> analytics-bigquery
   # analytics-dynamodb --> analytics-pingbacks
   # analytics-dynamodb --> analytics-redis
   # analytics-dynamodb --> dovetail-traffic (TEMP)
-  AnalyticsMetricsKinesisStream:
+  DovetailVerifiedMetricsKinesisStream:
     Type: AWS::Kinesis::Stream
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -75,15 +83,17 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
 
 Outputs:
-  CountsBytesKinesisStreamName:
-    Value: !Ref CountsBytesKinesisStream
-  CountsBytesKinesisStreamArn:
-    Value: !GetAtt CountsBytesKinesisStream.Arn
-  AnalyticsDynamoDBKinesisStreamName:
-    Value: !Ref AnalyticsDynamoDBKinesisStream
-  AnalyticsDynamoDBKinesisStreamArn:
-    Value: !GetAtt AnalyticsDynamoDBKinesisStream.Arn
-  AnalyticsMetricsKinesisStreamName:
-    Value: !Ref AnalyticsMetricsKinesisStream
-  AnalyticsMetricsKinesisStreamArn:
-    Value: !GetAtt AnalyticsMetricsKinesisStream.Arn
+  DovetailCdnLogsKinesisStreamName:
+    Value: !Ref DovetailCdnLogsKinesisStream
+  DovetailCdnLogsKinesisStreamArn:
+    Value: !GetAtt DovetailCdnLogsKinesisStream.Arn
+
+  DovetailCountedKinesisStreamName:
+    Value: !Ref DovetailCountedKinesisStream
+  DovetailCountedKinesisStreamArn:
+    Value: !GetAtt DovetailCountedKinesisStream.Arn
+
+  DovetailVerifiedMetricsKinesisStreamName:
+    Value: !Ref DovetailVerifiedMetricsKinesisStream
+  DovetailVerifiedMetricsKinesisStreamArn:
+    Value: !GetAtt DovetailVerifiedMetricsKinesisStream.Arn
