@@ -116,6 +116,7 @@ Resources:
       # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-policy.html#routing-policy-latency
       # https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/resource-record-sets-values-latency-alias.html
       ServiceDomain: !Sub dovetail-router-alb-latency-group.${EnvironmentTypeAbbreviation}.prx.tech
+      VanityDomain: !If [IsProduction, !Sub "dovetail-router.${AWS::Region}.prx.tech", !Sub "dovetail-router.staging.${AWS::Region}.prx.tech"]
 
   Certificate:
     # This certificate does not include an entry for the service domain, since
@@ -170,6 +171,25 @@ Resources:
           Name: !GetAtt Constants.ServiceDomain
           Region: !Ref AWS::Region
           SetIdentifier: !Ref AWS::StackName
+          Type: A
+
+  VanityRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for regional Dovetail Router ALBs
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.VanityDomain
+          Type: AAAA
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !GetAtt Constants.VanityDomain
           Type: A
 
   AccessLogsBucket:
