@@ -25,11 +25,15 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
+  DovetailVerifiedMetricsKinesisStreamArn: { Type: String }
+  DovetailVerifiedMetricsKinesisStreamName: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
-  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
+  DovetailCountedKinesisStreamArn: { Type: String }
+  DovetailCountedKinesisStreamName: { Type: String }
   DynamoDbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbTtl: { Type: AWS::SSM::Parameter::Value<String> }
   DynamoDbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
@@ -66,12 +70,19 @@ Resources:
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
       Events:
-        KinesisTrigger:
+        KinesisTrigger: # TODO: remove
           Properties:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
             Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+        MetricsKinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -361,12 +372,19 @@ Resources:
           DDB_ROLE: !Ref DynamoDbAccessRoleArn
           DDB_TTL: !Ref DynamoDbTtl
       Events:
-        KinesisTrigger:
+        KinesisTrigger: # TODO: remove
           Properties:
             BatchSize: 50
             Enabled: true
             StartingPosition: LATEST
             Stream: !Ref DynamoDbKinesisStreamArn
+          Type: Kinesis
+        DynamodbKinesisTrigger:
+          Properties:
+            BatchSize: 50
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCountedKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -462,7 +480,7 @@ Resources:
                   - kinesis:DescribeStream
                   - kinesis:PutRecord
                   - kinesis:PutRecords
-                Resource: !Ref MetricsKinesisStreamArn
+                Resource: !Ref DovetailVerifiedMetricsKinesisStreamArn
             Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -477,7 +495,7 @@ Resources:
     # Send impression data from DynamoDB Lambda function's logs to Kinesis
     Type: AWS::Logs::SubscriptionFilter
     Properties:
-      DestinationArn: !Ref MetricsKinesisStreamArn
+      DestinationArn: !Ref DovetailVerifiedMetricsKinesisStreamArn
       FilterPattern: "{$.msg = impression}"
       LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
       RoleArn: !GetAtt AnalyticsDynamoDbFunctionLogGroupToKinesisSubscriptionFilterRole.Arn
@@ -606,7 +624,8 @@ Resources:
           MetricValue: $.rows
 
   AnalyticsDynamoDbFunctionLookupsMetricFilter:
-    # I don't know what this one does
+    # Count the number of redirect-datas we've looked up and shuffeld along to
+    # the metrics-kinesis stream
     Type: AWS::Logs::MetricFilter
     Properties:
       FilterPattern: '{ $.dest = "kinesis*" }'
@@ -640,12 +659,19 @@ Resources:
         Variables:
           PINGBACKS: "true"
       Events:
-        KinesisTrigger:
+        KinesisTrigger: # TODO: remove
           Properties:
             BatchSize: 25
             Enabled: true
             StartingPosition: LATEST
             Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+        MetricsKinesisTrigger:
+          Properties:
+            BatchSize: 25
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 2048
@@ -935,12 +961,19 @@ Resources:
           REDIS_IMPRESSIONS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_IMPRESSIONS_TTL: "90000"
       Events:
-        KinesisTrigger:
+        KinesisTrigger: # TODO: remove
           Properties:
             BatchSize: 100
             Enabled: true
             StartingPosition: LATEST
             Stream: !Ref MetricsKinesisStreamArn
+          Type: Kinesis
+        MetricsKinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       MemorySize: 512
@@ -1387,6 +1420,6 @@ Resources:
               }
             ]
           }
-        - DdbStreamName: !Select [1, !Split [":stream/", !Ref DynamoDbKinesisStreamArn]]
-          MetricsStreamName: !Select [1, !Split [":stream/", !Ref MetricsKinesisStreamArn]]
+        - DdbStreamName: !Ref DovetailCountedKinesisStreamName
+          MetricsStreamName: !Ref DovetailVerifiedMetricsKinesisStreamName
       DashboardName: !Sub ${RootStackName}-${AWS::Region}-Dovetail-Analytics

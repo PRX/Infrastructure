@@ -33,8 +33,9 @@ Parameters:
   ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailS3Bucket: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailS3ObjectStitchPrefix: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailCdnLogsKinesisArn: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailCountedBytesKinesisArn: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailCdnLogsKinesisArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
+  DovetailCdnLogsKinesisStreamArn: { Type: String }
+  DovetailCountedKinesisStreamArn: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -80,7 +81,7 @@ Resources:
           ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
           ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
-          KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedBytesKinesisArn
+          KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedKinesisStreamArn
           REDIS_URL: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           S3_BUCKET: !Ref DovetailS3Bucket
           S3_PREFIX: !Ref DovetailS3ObjectStitchPrefix
@@ -91,6 +92,13 @@ Resources:
             Enabled: true
             StartingPosition: LATEST
             Stream: !Ref DovetailCdnLogsKinesisArn
+          Type: Kinesis
+        CountsBytesKinesisTrigger:
+          Properties:
+            BatchSize: 100
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCdnLogsKinesisStreamArn
           Type: Kinesis
       Handler: index.handler
       Layers:
@@ -116,7 +124,7 @@ Resources:
                 - kinesis:PutRecord
                 - kinesis:PutRecords
               Effect: Allow
-              Resource: !Ref DovetailCountedBytesKinesisArn
+              Resource: !Ref DovetailCountedKinesisStreamArn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"

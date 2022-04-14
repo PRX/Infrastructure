@@ -1,0 +1,99 @@
+# stacks/shared-dovetail-kinesis.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates kinesis streams used across multiple dovetail apps to enable processing
+  download and impression metrics.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+
+Resources:
+  # realtime cloudfront logs, including bytes-downloaded by listeners
+  #
+  # dovetail3-cdn realtime logs --> dovetail-counts
+  DovetailCdnLogsKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 1
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Counts }
+
+  # IAB2 counted segment-numbers
+  # but ALSO dovetail-router redirect data TODO: move this
+  #
+  # dovetail-counts --> analytics-dynamodb
+  # dovetail-router --> analytics-dynamodb
+  DovetailCountedKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 2
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
+  # IAB2 verified episode downloads and ad-impressions
+  #
+  # analytics-dynamodb --> analytics-bigquery
+  # analytics-dynamodb --> analytics-pingbacks
+  # analytics-dynamodb --> analytics-redis
+  # analytics-dynamodb --> dovetail-traffic (TEMP)
+  DovetailVerifiedMetricsKinesisStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: 24
+      ShardCount: 2
+      StreamModeDetails:
+        StreamMode: PROVISIONED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
+Outputs:
+  DovetailCdnLogsKinesisStreamName:
+    Value: !Ref DovetailCdnLogsKinesisStream
+  DovetailCdnLogsKinesisStreamArn:
+    Value: !GetAtt DovetailCdnLogsKinesisStream.Arn
+
+  DovetailCountedKinesisStreamName:
+    Value: !Ref DovetailCountedKinesisStream
+  DovetailCountedKinesisStreamArn:
+    Value: !GetAtt DovetailCountedKinesisStream.Arn
+
+  DovetailVerifiedMetricsKinesisStreamName:
+    Value: !Ref DovetailVerifiedMetricsKinesisStream
+  DovetailVerifiedMetricsKinesisStreamArn:
+    Value: !GetAtt DovetailVerifiedMetricsKinesisStream.Arn
