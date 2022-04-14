@@ -22,7 +22,6 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
-  DovetailVerifiedMetricsKinesisStreamArn: { Type: String }
 
 Resources:
   TrafficSqsQueue:
@@ -54,13 +53,6 @@ Resources:
           SQS_QUEUE_URL: !Ref TrafficSqsQueue
           SQS_QUEUE_REGION: !Ref AWS::Region
       Events:
-        KinesisTrigger:
-          Properties:
-            BatchSize: 1000
-            Enabled: true
-            StartingPosition: LATEST
-            Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
-          Type: Kinesis
         SqsTrigger:
           Properties:
             Queue: !GetAtt TrafficSqsQueue.Arn
@@ -76,7 +68,6 @@ Resources:
       MemorySize: 256
       Runtime: nodejs14.x
       Policies:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
         - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
         - Statement:
             - Action: sqs:SendMessage
