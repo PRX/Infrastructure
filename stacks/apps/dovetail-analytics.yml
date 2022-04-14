@@ -25,13 +25,11 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  MetricsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
   DovetailVerifiedMetricsKinesisStreamArn: { Type: String }
   DovetailVerifiedMetricsKinesisStreamName: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
-  DynamoDbKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> } # TODO: remove
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
   DynamoDbTableName: { Type: AWS::SSM::Parameter::Value<String> }
@@ -70,13 +68,6 @@ Resources:
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
       Events:
-        KinesisTrigger: # TODO: remove
-          Properties:
-            BatchSize: 100
-            Enabled: true
-            StartingPosition: LATEST
-            Stream: !Ref MetricsKinesisStreamArn
-          Type: Kinesis
         MetricsKinesisTrigger:
           Properties:
             BatchSize: 100
@@ -372,13 +363,6 @@ Resources:
           DDB_ROLE: !Ref DynamoDbAccessRoleArn
           DDB_TTL: !Ref DynamoDbTtl
       Events:
-        KinesisTrigger: # TODO: remove
-          Properties:
-            BatchSize: 50
-            Enabled: true
-            StartingPosition: LATEST
-            Stream: !Ref DynamoDbKinesisStreamArn
-          Type: Kinesis
         DynamodbKinesisTrigger:
           Properties:
             BatchSize: 50
@@ -659,13 +643,6 @@ Resources:
         Variables:
           PINGBACKS: "true"
       Events:
-        KinesisTrigger: # TODO: remove
-          Properties:
-            BatchSize: 25
-            Enabled: true
-            StartingPosition: LATEST
-            Stream: !Ref MetricsKinesisStreamArn
-          Type: Kinesis
         MetricsKinesisTrigger:
           Properties:
             BatchSize: 25
@@ -961,13 +938,6 @@ Resources:
           REDIS_IMPRESSIONS_HOST: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
           REDIS_IMPRESSIONS_TTL: "90000"
       Events:
-        KinesisTrigger: # TODO: remove
-          Properties:
-            BatchSize: 100
-            Enabled: true
-            StartingPosition: LATEST
-            Stream: !Ref MetricsKinesisStreamArn
-          Type: Kinesis
         MetricsKinesisTrigger:
           Properties:
             BatchSize: 100
