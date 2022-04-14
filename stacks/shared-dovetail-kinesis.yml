@@ -10,6 +10,9 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
 
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
 Resources:
   # realtime cloudfront logs, including bytes-downloaded by listeners
   #
@@ -19,8 +22,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 1
+      RetentionPeriodHours: !If [IsProduction, 48, 24]
+      ShardCount: !If [IsProduction, 1, 1]
       StreamModeDetails:
         StreamMode: PROVISIONED
       Tags:
@@ -43,8 +46,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 2
+      RetentionPeriodHours: !If [IsProduction, 48, 24]
+      ShardCount: !If [IsProduction, 2, 1]
       StreamModeDetails:
         StreamMode: PROVISIONED
       Tags:
@@ -67,8 +70,8 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      RetentionPeriodHours: 24
-      ShardCount: 2
+      RetentionPeriodHours: !If [IsProduction, 48, 24]
+      ShardCount: !If [IsProduction, 2, 1]
       StreamModeDetails:
         StreamMode: PROVISIONED
       Tags:
