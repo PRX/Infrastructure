@@ -13,15 +13,32 @@ Metadata:
       - Label:
           default: Distribution Parameters
         Parameters:
-          - OriginBucket
           - DistributionDomain
           - ExpiredRedirectPrefix
           - OriginRequestFunctionArn
           - EnvironmentTypeAbbreviation
+      - Label:
+          default: Primary Region
+        Parameters:
+          - OriginBucket
           - RealtimeLogKinesisStreamArn
+      - Label:
+          default: Secondary Region (optional)
+        Parameters:
+          - OriginBucket2
+          - RealtimeLogKinesisStreamArn2
+      - Label:
+          default: Tertiary Region (optional)
+        Parameters:
+          - OriginBucket3
+          - RealtimeLogKinesisStreamArn3
     ParameterLabels:
       OriginBucket:
-        default: Primary dovetail-cdn-arranger S3 Bucket
+        default: Primary region's dovetail-cdn-arranger S3 Bucket
+      OriginBucket2:
+        default: Secondary region's dovetail-cdn-arranger S3 Bucket
+      OriginBucket3:
+        default: Tertiary region's dovetail-cdn-arranger S3 Bucket
       DistributionDomain:
         default: Domain Name
       ExpiredRedirectPrefix:
@@ -31,10 +48,20 @@ Metadata:
       EnvironmentTypeAbbreviation:
         default: Environment type used in naming things
       RealtimeLogKinesisStreamArn:
-        default: Kinesis stream for realtime logs
+        default: Primary region's kinesis stream for realtime logs
+      RealtimeLogKinesisStreamArn2:
+        default: Secondary region's kinesis stream for realtime logs
+      RealtimeLogKinesisStreamArn3:
+        default: Tertiary region's kinesis stream for realtime logs
 
 Parameters:
   OriginBucket:
+    Type: String
+    Description: eg. some-bucket-name.s3.amazonaws.com
+  OriginBucket2:
+    Type: String
+    Description: eg. some-bucket-name.s3.amazonaws.com
+  OriginBucket3:
     Type: String
     Description: eg. some-bucket-name.s3.amazonaws.com
   DistributionDomain:
@@ -60,6 +87,16 @@ Parameters:
   RealtimeLogKinesisStreamArn:
     Type: String
     Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogKinesisStreamArn2:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogKinesisStreamArn3:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+
+Conditions:
+  HasSecondaryRegion: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn2, ""]]
+  HasTertiaryRegion: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn3, ""]]
 
 Resources:
   Certificate:
@@ -188,6 +225,58 @@ Resources:
       DistributionConfig:
         Aliases:
           - !Ref DistributionDomain
+        CacheBehaviors:
+          - AllowedMethods: [HEAD, GET]
+            CachedMethods: [HEAD, GET]
+            CachePolicyId: !Ref CloudFrontCachePolicy
+            Compress: false
+            FunctionAssociations:
+              - EventType: viewer-request
+                FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+            LambdaFunctionAssociations:
+              - EventType: origin-request
+                LambdaFunctionARN: !Ref OriginRequestFunctionArn
+            OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+            PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn]], "/"]]
+            RealtimeLogConfigArn: !Ref RealtimeLogConfig
+            TargetOriginId: dovetail3-stitch-s3
+            ViewerProtocolPolicy: allow-all
+          - !If
+            - HasSecondaryRegion
+            - AllowedMethods: [HEAD, GET]
+              CachedMethods: [HEAD, GET]
+              CachePolicyId: !Ref CloudFrontCachePolicy
+              Compress: false
+              FunctionAssociations:
+                - EventType: viewer-request
+                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+              LambdaFunctionAssociations:
+                - EventType: origin-request
+                  LambdaFunctionARN: !Ref OriginRequestFunctionArn
+              OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+              PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn2]], "/"]]
+              RealtimeLogConfigArn: !Ref RealtimeLogConfig2
+              TargetOriginId: dovetail3-stitch-s3-2
+              ViewerProtocolPolicy: allow-all
+            - !Ref AWS::NoValue
+          - !If
+            - HasTertiaryRegion
+            - AllowedMethods: [HEAD, GET]
+              CachedMethods: [HEAD, GET]
+              CachePolicyId: !Ref CloudFrontCachePolicy
+              Compress: false
+              FunctionAssociations:
+                - EventType: viewer-request
+                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+              LambdaFunctionAssociations:
+                - EventType: origin-request
+                  LambdaFunctionARN: !Ref OriginRequestFunctionArn
+              OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+              PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn3]], "/"]]
+              RealtimeLogConfigArn: !Ref RealtimeLogConfig3
+              TargetOriginId: dovetail3-stitch-s3-3
+              ViewerProtocolPolicy: allow-all
+            - !Ref AWS::NoValue
         Comment: !Ref DistributionDomain
         CustomErrorResponses:
           # dovetail uploaded, but file wasn't there!
@@ -230,17 +319,28 @@ Resources:
         HttpVersion: http2
         IPV6Enabled: true
         Logging:
-          # TODO: non us-east-1 bucket
           Bucket: prx-dovetail.s3.amazonaws.com
           IncludeCookies: false
           Prefix: !Sub "dt3-logs-${EnvironmentTypeAbbreviation}"
         Origins:
-          # TODO: multiple dovetail-cdn-arranger S3 bucket origins, in case
-          # lambda executions fail for some reason
           - DomainName: !Ref OriginBucket
             Id: dovetail3-stitch-s3
             S3OriginConfig:
               OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+          - !If
+            - HasSecondaryRegion
+            - DomainName: !Ref OriginBucket2
+              Id: dovetail3-stitch-s3-2
+              S3OriginConfig:
+                OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+            - !Ref AWS::NoValue
+          - !If
+            - HasTertiaryRegion
+            - DomainName: !Ref OriginBucket3
+              Id: dovetail3-stitch-s3-3
+              S3OriginConfig:
+                OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+            - !Ref AWS::NoValue
         PriceClass: PriceClass_200
         ViewerCertificate:
           AcmCertificateArn: !Ref Certificate
@@ -275,7 +375,10 @@ Resources:
                   - kinesis:PutRecord
                   - kinesis:PutRecords
                 Effect: Allow
-                Resource: !Ref RealtimeLogKinesisStreamArn
+                Resource:
+                  - !Ref RealtimeLogKinesisStreamArn
+                  - !If [HasSecondaryRegion, !Ref RealtimeLogKinesisStreamArn2, AWS::NoValue]
+                  - !If [HasTertiaryRegion, !Ref RealtimeLogKinesisStreamArn3, AWS::NoValue]
       Tags:
         - { Key: Name, Value: !Sub "${AWS::StackName}" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -305,6 +408,52 @@ Resources:
         - sc-range-start
         - sc-range-end
       Name: !Sub dt3-realtime-logs-${EnvironmentTypeAbbreviation}
+      SamplingRate: 100
+  RealtimeLogConfig2:
+    Condition: HasSecondaryRegion
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn2
+          StreamType: Kinesis
+      Fields:
+        - timestamp
+        - c-ip
+        - sc-status
+        - cs-method
+        - cs-uri-stem
+        - cs-user-agent
+        - cs-referer
+        - x-forwarded-for
+        - sc-content-len
+        - sc-range-start
+        - sc-range-end
+      Name: !Sub dt3-realtime-logs-${EnvironmentTypeAbbreviation}-2
+      SamplingRate: 100
+  RealtimeLogConfig3:
+    Condition: HasTertiaryRegion
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn3
+          StreamType: Kinesis
+      Fields:
+        - timestamp
+        - c-ip
+        - sc-status
+        - cs-method
+        - cs-uri-stem
+        - cs-user-agent
+        - cs-referer
+        - x-forwarded-for
+        - sc-content-len
+        - sc-range-start
+        - sc-range-end
+      Name: !Sub dt3-realtime-logs-${EnvironmentTypeAbbreviation}-3
       SamplingRate: 100
 
   CloudFrontOriginAccessIdentity:
