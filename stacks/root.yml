@@ -118,6 +118,7 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+  IsUsWest2: !Equals [!Ref "AWS::Region", us-west-2]
   HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   HasAllSharedAuroraEndpoints: !And [!Condition HasSharedAuroraMysqlEndpoint, !Condition HasSharedAuroraPostgresqlEndpoint]
@@ -128,6 +129,8 @@ Conditions:
   CreateJumpServerStack: !Condition CreateApplicationStacks
   # Dashboard requires that application stacks have been created
   CreateDashboardsStack: !Condition CreateApplicationStacks
+  # TODO: temporary stack for us-west-2 dovetail
+  CreateTemporaryDovetailStack: !And [!Condition IsStaging, !Condition IsUsWest2]
 
 Mappings:
   EnvironmentTypeMap:
@@ -965,10 +968,10 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
 
-  # TODO: temporary. And requires ...?
+  # TODO: temporary. And requires everything above but not MySQL/PostgreSQL
   Apps500AStack:
     Type: AWS::CloudFormation::Stack
-    Condition: IsStaging
+    Condition: CreateTemporaryDovetailStack
     Properties:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
