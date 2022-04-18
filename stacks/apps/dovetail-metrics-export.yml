@@ -15,20 +15,20 @@ Parameters:
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: String }
 
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
 Resources:
-  DownloadsExportFunction:
+  ExportFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
-      Description: !Sub ${EnvironmentType} Dovetail Traffic generator
-      # Environment:
-      #   Variables:
-      #     DOWNLOADER_BATCH_SIZE: !Ref kDownloaderBatchSize
-      #     SCHEDULE_INTERVAL_MINUTES: !Ref kScheduleIntervalMinutes
-      #     SQS_QUEUE_URL: !Ref TrafficSqsQueue
-      #     SQS_QUEUE_REGION: !Ref AWS::Region
+      Description: !Sub ${EnvironmentType} tktktk
+      Environment:
+        Variables:
+          GCP_EXPORT_BUCKET: !If [IsProduction, prx-metrics-export-prod, prx-metrics-export-stag]
       # Events:
       #   SqsTrigger:
       #     Properties:
@@ -41,15 +41,13 @@ Resources:
       #       Schedule: !Sub rate(${kScheduleIntervalMinutes} minutes)
       #       Enabled: true
       #     Type: Schedule
-      Handler: downloads.handler
+      Handler: src/index.handler
       MemorySize: 128
       Runtime: nodejs14.x
       Policies:
         - Statement:
             - Action:
-                - ssm:DescribeParameters
-                - ssm:GetParameters
-                - ssm:GetParametersByPath
+                - ssm:Get*
               Effect: Allow
               Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/*
       Tags:
@@ -62,16 +60,16 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Metrics Export
       Timeout: 60
-  DownloadsExportFunctionLogGroup:
+  ExportFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${DownloadsExportFunction}
+      LogGroupName: !Sub /aws/lambda/${ExportFunction}
       RetentionInDays: 14
-  DownloadsExportFunctionLogGroupTags:
+  ExportFunctionLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
-      LogGroupName: !Ref DownloadsExportFunctionLogGroup
+      LogGroupName: !Ref ExportFunctionLogGroup
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -81,7 +79,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Metrics Export }
-  DownloadsExportFunctionElevatedErrorAlarm:
+  ExportFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub WARN [Dovetail-Metrics Export] Downloads function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
@@ -91,7 +89,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Ref DownloadsExportFunction
+          Value: !Ref ExportFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -99,11 +97,11 @@ Resources:
       Statistic: Sum
       Threshold: 0
       TreatMissingData: notBreaching
-  DownloadsExportFunctionElevatedErrorAlarmTags:
+  ExportFunctionElevatedErrorAlarmTags:
     Type: Custom::CloudWatchAlarmTags
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt DownloadsExportFunctionElevatedErrorAlarm.Arn
+      AlarmArn: !GetAtt ExportFunctionElevatedErrorAlarm.Arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
