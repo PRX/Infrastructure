@@ -17,7 +17,6 @@ Metadata:
           - ExpiredRedirectPrefix
           - OriginRequestFunctionArn
           - EnvironmentType
-          - EnvironmentTypeAbbreviation
       - Label:
           default: Primary Region
         Parameters:
@@ -51,8 +50,6 @@ Metadata:
         default: Dovetail origin request lambda
       EnvironmentType:
         default: Environment Type
-      EnvironmentTypeAbbreviation:
-        default: Environment Type Abbreviation
       CacheBehaviorPrefix:
         default: Primary region's path prefix
       CacheBehaviorPrefix2:
@@ -92,13 +89,6 @@ Parameters:
       - Testing
       - Staging
       - Production
-  EnvironmentTypeAbbreviation:
-    Type: String
-    Description: Must match above
-    AllowedValues:
-      - test
-      - stag
-      - prod
   CacheBehaviorPrefix:
     Type: String
     Description: eg. use1/, us-west-2/
@@ -211,7 +201,7 @@ Resources:
       FunctionConfig:
         Comment: Handle viewer-requests for Dovetail 3 CDN
         Runtime: cloudfront-js-1.0
-      Name: !Sub "dt3-viewer-request-${EnvironmentTypeAbbreviation}"
+      Name: !Sub ${AWS::StackName}-viewer-request
 
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
@@ -257,7 +247,7 @@ Resources:
             Compress: false
             FunctionAssociations:
               - EventType: viewer-request
-                FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+                FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/${AWS::StackName}-viewer-request
             LambdaFunctionAssociations:
               - EventType: origin-request
                 LambdaFunctionARN: !Ref OriginRequestFunctionArn
@@ -274,7 +264,7 @@ Resources:
               Compress: false
               FunctionAssociations:
                 - EventType: viewer-request
-                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/${AWS::StackName}-viewer-request
               LambdaFunctionAssociations:
                 - EventType: origin-request
                   LambdaFunctionARN: !Ref OriginRequestFunctionArn
@@ -292,7 +282,7 @@ Resources:
               Compress: false
               FunctionAssociations:
                 - EventType: viewer-request
-                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+                  FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/${AWS::StackName}-viewer-request
               LambdaFunctionAssociations:
                 - EventType: origin-request
                   LambdaFunctionARN: !Ref OriginRequestFunctionArn
@@ -329,7 +319,7 @@ Resources:
           Compress: false
           FunctionAssociations:
             - EventType: viewer-request
-              FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/dt3-viewer-request-${EnvironmentTypeAbbreviation}
+              FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/${AWS::StackName}-viewer-request
               # TODO: this is stalling CFN updates for like ... no reason.
               # FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
           LambdaFunctionAssociations:
@@ -346,7 +336,7 @@ Resources:
         Logging:
           Bucket: prx-dovetail.s3.amazonaws.com
           IncludeCookies: false
-          Prefix: !Sub "dt3-logs-${EnvironmentTypeAbbreviation}"
+          Prefix: !Sub "${AWS::StackName}-logs"
         Origins:
           - DomainName: !Ref OriginBucket
             Id: dovetail3-stitch-s3
