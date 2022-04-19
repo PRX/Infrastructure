@@ -91,13 +91,13 @@ Parameters:
       - Production
   CacheBehaviorPrefix:
     Type: String
-    Description: eg. use1/, us-west-2/
+    Description: eg. /use1/*, /us-west-2/*
   CacheBehaviorPrefix2:
     Type: String
-    Description: eg. use1/, us-west-2/
+    Description: eg. /use1/*, /us-west-2/*
   CacheBehaviorPrefix3:
     Type: String
-    Description: eg. use1/, us-west-2/
+    Description: eg. /use1/*, /us-west-2/*
   RealtimeLogKinesisStreamArn:
     Type: String
     Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
@@ -193,7 +193,7 @@ Resources:
       ServiceToken: !GetAtt CloudFrontFunctionCodeFetcherFunction.Arn
       Cycle: 2 # Change this when the code in GitHub changes
 
-  ViewerRequestFunction:
+  ViewerRequestFunction1:
     Type: AWS::CloudFront::Function
     Properties:
       AutoPublish: true # TODO
@@ -235,7 +235,7 @@ Resources:
           QueryStringBehavior: none
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
-    DependsOn: ViewerRequestFunction
+    DependsOn: ViewerRequestFunction1
     Properties:
       DistributionConfig:
         Aliases:
@@ -321,7 +321,7 @@ Resources:
             - EventType: viewer-request
               FunctionARN: !Sub arn:aws:cloudfront::${AWS::AccountId}:function/${AWS::StackName}-viewer-request
               # TODO: this is stalling CFN updates for like ... no reason.
-              # FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+              # FunctionARN: !GetAtt ViewerRequestFunction1.FunctionMetadata.FunctionARN
           LambdaFunctionAssociations:
             - EventType: origin-request
               LambdaFunctionARN: !Ref OriginRequestFunctionArn
