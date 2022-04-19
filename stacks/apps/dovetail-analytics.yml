@@ -38,7 +38,6 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   ParameterStoreReadPolicy:
@@ -350,7 +349,6 @@ Resources:
   # DynamoDB
   AnalyticsDynamoDbTable:
     Type: AWS::DynamoDB::Table
-    Condition: IsStaging
     Properties:
       AttributeDefinitions:
         - AttributeName: id
@@ -376,7 +374,6 @@ Resources:
         Enabled: true
   AnalyticsDynamoDbTableWriteScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: IsStaging
     Properties:
       MaxCapacity: 1000
       MinCapacity: !If [IsProduction, 215, 1]
@@ -386,7 +383,6 @@ Resources:
       ServiceNamespace: dynamodb
   AnalyticsDynamoDbTableWriteScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: IsStaging
     Properties:
       PolicyName: TableWriteCapacityScalingPolicy
       PolicyType: TargetTrackingScaling
@@ -399,7 +395,6 @@ Resources:
         TargetValue: 82
   AnalyticsDynamoDbTableReadScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: IsStaging
     Properties:
       MaxCapacity: 1000
       MinCapacity: 1
@@ -409,7 +404,6 @@ Resources:
       ServiceNamespace: dynamodb
   AnalyticsDynamoDbTableReadScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: IsStaging
     Properties:
       PolicyName: TableReadCapacityScalingPolicy
       PolicyType: TargetTrackingScaling
@@ -422,7 +416,6 @@ Resources:
         TargetValue: 82
   AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsStaging
     Properties:
       AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> BATCH GET ITEM THROTTLING (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB BatchGetItem operations are being throttled
@@ -441,7 +434,6 @@ Resources:
       TreatMissingData: notBreaching
   AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsStaging
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarm.Arn
@@ -456,7 +448,6 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
   AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsStaging
     Properties:
       AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> BATCH WRITE ITEM THROTTLING (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB BatchWriteItem operations are being throttled
@@ -475,7 +466,6 @@ Resources:
       TreatMissingData: notBreaching
   AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsStaging
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarm.Arn
@@ -490,7 +480,6 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
   AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsStaging
     Properties:
       AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> UPDATE ITEM THROTTLING (${RootStackName})
       AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB UpdateItem operations are being throttled
@@ -509,7 +498,6 @@ Resources:
       TreatMissingData: notBreaching
   AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsStaging
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarm.Arn
@@ -526,7 +514,6 @@ Resources:
   # TODO: this is a temporary function to clone to new table. remove!
   AnalyticsTemporaryFunction:
     Type: AWS::Serverless::Function
-    Condition: IsStaging
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
@@ -580,13 +567,11 @@ Resources:
       Timeout: 30
   AnalyticsTemporaryFunctionLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: IsStaging
     Properties:
       LogGroupName: !Sub /aws/lambda/${AnalyticsTemporaryFunction}
       RetentionInDays: 14
   AnalyticsTemporaryFunctionLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
-    Condition: IsStaging
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
       LogGroupName: !Ref AnalyticsTemporaryFunctionLogGroup
