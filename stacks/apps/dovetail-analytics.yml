@@ -38,6 +38,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   ParameterStoreReadPolicy:
@@ -347,6 +348,258 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
 
   # DynamoDB
+  AnalyticsDynamoDbTable:
+    Type: AWS::DynamoDB::Table
+    Condition: IsStaging
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PROVISIONED
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: !If [IsProduction, 100, 1]
+        WriteCapacityUnits: !If [IsProduction, 400, 1]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      TimeToLiveSpecification:
+        AttributeName: expiration
+        Enabled: true
+  AnalyticsDynamoDbTableWriteScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: IsStaging
+    Properties:
+      MaxCapacity: 1000
+      MinCapacity: !If [IsProduction, 215, 1]
+      ResourceId: !Sub table/${AnalyticsDynamoDbTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+  AnalyticsDynamoDbTableWriteScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: IsStaging
+    Properties:
+      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AnalyticsDynamoDbTableWriteScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 82
+  AnalyticsDynamoDbTableReadScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: IsStaging
+    Properties:
+      MaxCapacity: 1000
+      MinCapacity: 1
+      ResourceId: !Sub table/${AnalyticsDynamoDbTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+  AnalyticsDynamoDbTableReadScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: IsStaging
+    Properties:
+      PolicyName: TableReadCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AnalyticsDynamoDbTableReadScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 82
+  AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsStaging
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> BATCH GET ITEM THROTTLING (${RootStackName})
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB BatchGetItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref AnalyticsDynamoDbTable
+        - Name: Operation
+          Value: BatchGetItem
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsStaging
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamodbTableBatchGetItemThrottledRequestsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+  AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsStaging
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> BATCH WRITE ITEM THROTTLING (${RootStackName})
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB BatchWriteItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref AnalyticsDynamoDbTable
+        - Name: Operation
+          Value: BatchWriteItem
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsStaging
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamodbTableBatchWriteItemThrottledRequestsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+  AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsStaging
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] DynamoDB Table <${EnvironmentTypeAbbreviation}> UPDATE ITEM THROTTLING (${RootStackName})
+      AlarmDescription: !Sub ${EnvironmentType} Dovetail Analytics DynamoDB UpdateItem operations are being throttled
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref AnalyticsDynamoDbTable
+        - Name: Operation
+          Value: UpdateItem
+      EvaluationPeriods: 1
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsStaging
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AnalyticsDynamodbTableUpdateItemThrottledRequestsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
+  # TODO: this is a temporary function to clone to new table. remove!
+  AnalyticsTemporaryFunction:
+    Type: AWS::Serverless::Function
+    Condition: IsStaging
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Temporary Dovetail Analytics sending data to new DynamoDB
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          DYNAMODB: "true" # set function mode = dynamodb
+          DDB_TABLE: !Ref AnalyticsDynamoDbTable
+          DDB_TTL: !Ref DynamoDbTtl
+      Events:
+        DynamodbKinesisTrigger:
+          Properties:
+            BatchSize: 50
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCountedKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 512
+      Runtime: nodejs12.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - Statement:
+            - Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:ConditionCheck
+                - dynamodb:DeleteItem
+                - dynamodb:DescribeTable
+                - dynamodb:DescribeTimeToLive
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+              Effect: Allow
+              Resource: !GetAtt AnalyticsDynamoDbTable.Arn
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 30
+  AnalyticsTemporaryFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsStaging
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsTemporaryFunction}
+      RetentionInDays: 14
+  AnalyticsTemporaryFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Condition: IsStaging
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref AnalyticsTemporaryFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+
   AnalyticsDynamoDbFunction:
     Type: AWS::Serverless::Function
     Properties:
