@@ -347,6 +347,74 @@ Resources:
         - { Key: prx:dev:application, Value: Analytics }
 
   # DynamoDB
+  AnalyticsDynamoDbTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      BillingMode: PROVISIONED
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: !If [IsProduction, 100, 1]
+        WriteCapacityUnits: !If [IsProduction, 400, 1]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      TimeToLiveSpecification:
+        AttributeName: expiration
+        Enabled: true
+  AnalyticsDynamoDbTableWriteScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 1000
+      MinCapacity: !If [IsProduction, 215, 1]
+      ResourceId: !Sub table/${AnalyticsDynamoDbTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:WriteCapacityUnits
+      ServiceNamespace: dynamodb
+  AnalyticsDynamoDbTableWriteScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: TableWriteCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AnalyticsDynamoDbTableWriteScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBWriteCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 82
+  AnalyticsDynamoDbTableReadScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Properties:
+      MaxCapacity: 1000
+      MinCapacity: 1
+      ResourceId: !Sub table/${AnalyticsDynamoDbTable}
+      RoleARN: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/dynamodb.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_DynamoDBTable
+      ScalableDimension: dynamodb:table:ReadCapacityUnits
+      ServiceNamespace: dynamodb
+  AnalyticsDynamoDbTableReadScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: TableReadCapacityScalingPolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref AnalyticsDynamoDbTableReadScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: DynamoDBReadCapacityUtilization
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        TargetValue: 82
+
   AnalyticsDynamoDbFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -380,6 +448,21 @@ Resources:
             - Action: sts:AssumeRole
               Effect: Allow
               Resource: !Ref DynamoDbAccessRoleArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:ConditionCheck
+                - dynamodb:DeleteItem
+                - dynamodb:DescribeTable
+                - dynamodb:DescribeTimeToLive
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+              Effect: Allow
+              Resource: !GetAtt AnalyticsDynamoDbTable.Arn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
