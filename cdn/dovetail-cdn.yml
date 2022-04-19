@@ -16,6 +16,7 @@ Metadata:
           - DistributionDomain
           - ExpiredRedirectPrefix
           - OriginRequestFunctionArn
+          - EnvironmentType
           - EnvironmentTypeAbbreviation
       - Label:
           default: Primary Region
@@ -45,8 +46,10 @@ Metadata:
         default: Prefix for redirecting back to Dovetail
       OriginRequestFunctionArn:
         default: Dovetail origin request lambda
+      EnvironmentType:
+        default: Environment Type
       EnvironmentTypeAbbreviation:
-        default: Environment type used in naming things
+        default: Environment Type Abbreviation
       RealtimeLogKinesisStreamArn:
         default: Primary region's kinesis stream for realtime logs
       RealtimeLogKinesisStreamArn2:
@@ -75,11 +78,14 @@ Parameters:
     Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
   EnvironmentType:
     Type: String
+    Description: Only deploy this stack once per environment
     AllowedValues:
+      - Testing
       - Staging
       - Production
   EnvironmentTypeAbbreviation:
     Type: String
+    Description: Must match above
     AllowedValues:
       - test
       - stag
@@ -97,6 +103,7 @@ Parameters:
 Conditions:
   HasSecondaryRegion: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn2, ""]]
   HasTertiaryRegion: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn3, ""]]
+  CreateAlarms: !Not [!Equals [!Ref EnvironmentType, Testing]]
 
 Resources:
   Certificate:
@@ -377,8 +384,8 @@ Resources:
                 Effect: Allow
                 Resource:
                   - !Ref RealtimeLogKinesisStreamArn
-                  - !If [HasSecondaryRegion, !Ref RealtimeLogKinesisStreamArn2, AWS::NoValue]
-                  - !If [HasTertiaryRegion, !Ref RealtimeLogKinesisStreamArn3, AWS::NoValue]
+                  - !If [HasSecondaryRegion, !Ref RealtimeLogKinesisStreamArn2, !Ref AWS::NoValue]
+                  - !If [HasTertiaryRegion, !Ref RealtimeLogKinesisStreamArn3, !Ref AWS::NoValue]
       Tags:
         - { Key: Name, Value: !Sub "${AWS::StackName}" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -464,6 +471,7 @@ Resources:
 
   CloudFrontDistribution400Alarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 4XX ERRORS (${AWS::StackName})
       AlarmDescription: !Sub >-
@@ -486,6 +494,7 @@ Resources:
       Unit: Percent
   CloudFrontDistribution500Alarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${AWS::StackName})
       AlarmDescription: !Sub >-
@@ -508,6 +517,7 @@ Resources:
       Unit: Percent
   CloudFrontDistributionFatal500Alarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       AlarmName: !Sub FATAL [Dovetail-CDN] CDN <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${AWS::StackName})
       AlarmDescription: !Sub >-
@@ -530,6 +540,7 @@ Resources:
       Unit: Percent
   CloudFrontDistributionLambdaExecutionErrorAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
     Properties:
       AlarmName: !Sub WARN [Dovetail-CDN] Edge Lambda <${EnvironmentTypeAbbreviation}> EXECUTION ERRORS (${AWS::StackName})
       AlarmDescription: !Sub >-
