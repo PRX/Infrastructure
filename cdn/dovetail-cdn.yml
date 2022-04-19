@@ -21,16 +21,19 @@ Metadata:
       - Label:
           default: Primary Region
         Parameters:
+          - CacheBehaviorPrefix
           - OriginBucket
           - RealtimeLogKinesisStreamArn
       - Label:
           default: Secondary Region (optional)
         Parameters:
+          - CacheBehaviorPrefix2
           - OriginBucket2
           - RealtimeLogKinesisStreamArn2
       - Label:
           default: Tertiary Region (optional)
         Parameters:
+          - CacheBehaviorPrefix3
           - OriginBucket3
           - RealtimeLogKinesisStreamArn3
     ParameterLabels:
@@ -50,6 +53,12 @@ Metadata:
         default: Environment Type
       EnvironmentTypeAbbreviation:
         default: Environment Type Abbreviation
+      CacheBehaviorPrefix:
+        default: Primary region's path prefix
+      CacheBehaviorPrefix2:
+        default: Secondary region's path prefix
+      CacheBehaviorPrefix3:
+        default: Tertiary region's path prefix
       RealtimeLogKinesisStreamArn:
         default: Primary region's kinesis stream for realtime logs
       RealtimeLogKinesisStreamArn2:
@@ -72,7 +81,7 @@ Parameters:
     Description: eg. dovetail3-cdn.prxu.org
   ExpiredRedirectPrefix:
     Type: String
-    Description: eg. https://dovetail.prxu.org/_
+    Description: eg. https://dovetail.prxu.org
   OriginRequestFunctionArn:
     Type: String
     Description: eg. arn:aws:lambda:<region>:<account>:function:<name>:<version>
@@ -90,6 +99,15 @@ Parameters:
       - test
       - stag
       - prod
+  CacheBehaviorPrefix:
+    Type: String
+    Description: eg. use1/, us-west-2/
+  CacheBehaviorPrefix2:
+    Type: String
+    Description: eg. use1/, us-west-2/
+  CacheBehaviorPrefix3:
+    Type: String
+    Description: eg. use1/, us-west-2/
   RealtimeLogKinesisStreamArn:
     Type: String
     Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
@@ -244,7 +262,7 @@ Resources:
               - EventType: origin-request
                 LambdaFunctionARN: !Ref OriginRequestFunctionArn
             OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
-            PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn]], "/"]]
+            PathPattern: !Ref CacheBehaviorPrefix
             RealtimeLogConfigArn: !Ref RealtimeLogConfig
             TargetOriginId: dovetail3-stitch-s3
             ViewerProtocolPolicy: allow-all
@@ -261,7 +279,7 @@ Resources:
                 - EventType: origin-request
                   LambdaFunctionARN: !Ref OriginRequestFunctionArn
               OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
-              PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn2]], "/"]]
+              PathPattern: !Ref CacheBehaviorPrefix2
               RealtimeLogConfigArn: !Ref RealtimeLogConfig2
               TargetOriginId: dovetail3-stitch-s3-2
               ViewerProtocolPolicy: allow-all
@@ -279,7 +297,7 @@ Resources:
                 - EventType: origin-request
                   LambdaFunctionARN: !Ref OriginRequestFunctionArn
               OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
-              PathPattern: !Join ["", [!Select [3, !Split [":", !Ref RealtimeLogKinesisStreamArn3]], "/"]]
+              PathPattern: !Ref CacheBehaviorPrefix3
               RealtimeLogConfigArn: !Ref RealtimeLogConfig3
               TargetOriginId: dovetail3-stitch-s3-3
               ViewerProtocolPolicy: allow-all
