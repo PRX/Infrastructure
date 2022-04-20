@@ -17,6 +17,7 @@ Metadata:
           - ExpiredRedirectPrefix
           - OriginRequestFunctionArn
           - EnvironmentType
+          - RealtimeLogFields
       - Label:
           default: Primary Region
         Parameters:
@@ -62,6 +63,8 @@ Metadata:
         default: Secondary region's kinesis stream for realtime logs
       RealtimeLogKinesisStreamArn3:
         default: Tertiary region's kinesis stream for realtime logs
+      RealtimeLogFields:
+        default: Fields to include in realtime logs
 
 Parameters:
   OriginBucket:
@@ -106,6 +109,9 @@ Parameters:
   RealtimeLogKinesisStreamArn3:
     Type: String
     Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogFields:
+    Type: String
+    Default: timestamp,c-ip,sc-status,cs-method,cs-uri-stem,cs-user-agent,cs-referer,x-forwarded-for,sc-content-len,sc-range-start,sc-range-end
 
 Conditions:
   HasSecondaryRegion: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn2, ""]]
@@ -409,18 +415,7 @@ Resources:
             RoleArn: !GetAtt RealtimeLogRole.Arn
             StreamArn: !Ref RealtimeLogKinesisStreamArn
           StreamType: Kinesis
-      Fields:
-        - timestamp
-        - c-ip
-        - sc-status
-        - cs-method
-        - cs-uri-stem
-        - cs-user-agent
-        - cs-referer
-        - x-forwarded-for
-        - sc-content-len
-        - sc-range-start
-        - sc-range-end
+      Fields: !Split [",", !Ref RealtimeLogFields]
       Name: !Sub ${AWS::StackName}-RealtimeLogConfig
       SamplingRate: 100
   RealtimeLogConfig2:
@@ -432,18 +427,7 @@ Resources:
             RoleArn: !GetAtt RealtimeLogRole.Arn
             StreamArn: !Ref RealtimeLogKinesisStreamArn2
           StreamType: Kinesis
-      Fields:
-        - timestamp
-        - c-ip
-        - sc-status
-        - cs-method
-        - cs-uri-stem
-        - cs-user-agent
-        - cs-referer
-        - x-forwarded-for
-        - sc-content-len
-        - sc-range-start
-        - sc-range-end
+      Fields: !Split [",", !Ref RealtimeLogFields]
       Name: !Sub ${AWS::StackName}-RealtimeLogConfig2
       SamplingRate: 100
   RealtimeLogConfig3:
@@ -455,18 +439,7 @@ Resources:
             RoleArn: !GetAtt RealtimeLogRole.Arn
             StreamArn: !Ref RealtimeLogKinesisStreamArn3
           StreamType: Kinesis
-      Fields:
-        - timestamp
-        - c-ip
-        - sc-status
-        - cs-method
-        - cs-uri-stem
-        - cs-user-agent
-        - cs-referer
-        - x-forwarded-for
-        - sc-content-len
-        - sc-range-start
-        - sc-range-end
+      Fields: !Split [",", !Ref RealtimeLogFields]
       Name: !Sub ${AWS::StackName}-RealtimeLogConfig3
       SamplingRate: 100
 
