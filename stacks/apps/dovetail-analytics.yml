@@ -514,6 +514,7 @@ Resources:
   # TODO: this is a temporary function to clone to new table. remove!
   AnalyticsTemporaryFunction:
     Type: AWS::Serverless::Function
+    Condition: IsProduction
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
@@ -567,11 +568,13 @@ Resources:
       Timeout: 30
   AnalyticsTemporaryFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: IsProduction
     Properties:
       LogGroupName: !Sub /aws/lambda/${AnalyticsTemporaryFunction}
       RetentionInDays: 14
   AnalyticsTemporaryFunctionLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
+    Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
       LogGroupName: !Ref AnalyticsTemporaryFunctionLogGroup
@@ -597,8 +600,8 @@ Resources:
         Variables:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
           DYNAMODB: "true" # set function mode = dynamodb
-          DDB_TABLE: !Ref DynamoDbTableName
-          DDB_ROLE: !Ref DynamoDbAccessRoleArn
+          DDB_TABLE: !If [IsProduction, !Ref DynamoDbTableName, !Ref AnalyticsDynamoDbTable]
+          DDB_ROLE: !If [IsProduction, !Ref DynamoDbAccessRoleArn, ""]
           DDB_TTL: !Ref DynamoDbTtl
       Events:
         DynamodbKinesisTrigger:
@@ -618,6 +621,21 @@ Resources:
             - Action: sts:AssumeRole
               Effect: Allow
               Resource: !Ref DynamoDbAccessRoleArn
+          Version: "2012-10-17"
+        - Statement:
+            - Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:ConditionCheck
+                - dynamodb:DeleteItem
+                - dynamodb:DescribeTable
+                - dynamodb:DescribeTimeToLive
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+              Effect: Allow
+              Resource: !GetAtt AnalyticsDynamoDbTable.Arn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
