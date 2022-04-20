@@ -122,8 +122,6 @@ Conditions:
   CreateDatabaseDependentResources: !Condition HasAllSharedAuroraEndpoints
   # Application stacks require external MySQL/PostgreSQL databases
   CreateApplicationStacks: !Condition CreateDatabaseDependentResources
-  # Jump server requires that application stacks have been created
-  CreateJumpServerStack: !Condition CreateApplicationStacks
   # Dashboard requires that application stacks have been created
   CreateDashboardsStack: !Condition CreateApplicationStacks
 
@@ -935,10 +933,9 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
 
-  # Requires VPC, Redis and DB SGs, and Castle
+  # Requires VPC, Redis and DB SGs
   JumpServerStack:
     Type: AWS::CloudFormation::Stack
-    Condition: CreateJumpServerStack
     Properties:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
@@ -948,7 +945,7 @@ Resources:
         KeyPairName: !Ref AsgKeyPairName
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        CastlePostgresClientSecurityGroupId: !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId
+        CastlePostgresClientSecurityGroupId: !If [CreateApplicationStacks, !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId, ""]
         SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
         SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
         SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
