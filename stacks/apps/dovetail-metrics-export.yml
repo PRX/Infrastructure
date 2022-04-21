@@ -31,6 +31,7 @@ Resources:
       Environment:
         Variables:
           GCP_EXPORT_BUCKET: !If [IsProduction, prx-metrics-export-prod, prx-metrics-export-stag]
+          PORTER_SNS_TOPIC: !Ref PorterJobExecutionSnsTopicArn
       Handler: src/index.handler
       MemorySize: 128
       Runtime: nodejs14.x
@@ -39,7 +40,14 @@ Resources:
             - Action:
                 - ssm:Get*
               Effect: Allow
+              # TODO Update with more modern parameter naming
               Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/*
+              Sid: AllowParameterReadOnly
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref PorterJobExecutionSnsTopicArn
+              Sid: AllowPorterJobPublish
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
