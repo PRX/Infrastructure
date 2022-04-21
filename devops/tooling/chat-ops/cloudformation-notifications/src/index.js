@@ -42,6 +42,7 @@ function colorForResourceStatus(status) {
   const red = [
     'CREATE_FAILED',
     'DELETE_FAILED',
+    'UPDATE_FAILED',
     'ROLLBACK_FAILED',
     'UPDATE_ROLLBACK_FAILED',
     'UPDATE_ROLLBACK_IN_PROGRESS',
@@ -82,7 +83,9 @@ function messageForEvent(event) {
   const resourceType = note.match(/ResourceType='([a-zA-Z0-9-:]+)'\n/)?.[1];
   const resourceId = note.match(/LogicalResourceId='(.+)'\n/)?.[1];
   const resourceStatus = note.match(/ResourceStatus='([a-zA-Z_]+)'\n/)?.[1];
-  const resourceReason = note.match(/ResourceStatusReason='([\S\s]*)'\n/)?.[1];
+  const resourceReason = note.match(
+    /ResourceStatusReason=''\n|ResourceStatusReason='([\S\s]*?)'\n/,
+  )?.[1];
   // This seems optional
   const physicalResourceId = note.match(/PhysicalResourceId='(.+)'\n/)?.[1];
 
@@ -107,7 +110,7 @@ function messageForEvent(event) {
             value: resourceId,
           },
         ],
-        text: resourceReason ? `_${resourceReason}_` : '',
+        text: resourceReason ? `\`\`\`\n${resourceReason}\n\`\`\`` : '',
         fallback: `${resourceStatus}: ${stackName}:::${resourceId}`,
       },
     ],
