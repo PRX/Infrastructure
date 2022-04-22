@@ -297,6 +297,7 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
+                # TODO Update with more modern parameter naming
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
@@ -1289,14 +1290,29 @@ Resources:
         Variables:
           FTP_USER_ACCESS_ROLE: !GetAtt FtpUserAccessRole.Arn
           S3_BUCKET_ARN: !Ref TransferS3BucketArn
+          FTP_AUTH_TOKEN_PARAMETER_ARN: !GetAtt Constants.FtpAuthTokenParameterArn
+          EXCHANGE_HOSTNAME: !Ref ExchangeHostname
       Handler: index.handler
       InlineCode: |
         const https = require('https');
+        const AWS = require('aws-sdk');
+
+        const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
+
+        const ENV = process.env;
 
         exports.handler = async (event) => {
           console.log(JSON.stringify(event));
 
-          const bucketName = process.env.S3_BUCKET_ARN.split(":")[5];
+          // TODO Move outside of handler for better performance
+          const param = await ssm
+            .getParameter({
+              Name: ENV.FTP_AUTH_TOKEN_PARAMETER_ARN,
+            })
+            .promise();
+          const token = param.Parameter.Value;
+
+          const bucketName = ENV.S3_BUCKET_ARN.split(":")[5];
 
           const userPolicy = {
             Statement: [
@@ -1308,7 +1324,7 @@ Resources:
                   },
                 },
                 Effect: "Allow",
-                Resource: [process.env.S3_BUCKET_ARN],
+                Resource: [ENV.S3_BUCKET_ARN],
                 Sid: "AllowBucketUserPrefixReadOnly",
               },
               {
@@ -1324,48 +1340,61 @@ Resources:
                   },
                 },
                 Effect: "Allow",
-                Resource: [process.env.S3_BUCKET_ARN],
+                Resource: [ENV.S3_BUCKET_ARN],
                 Sid: "AllowObjectUserPrefixReadOnly",
               },
             ],
             Version: "2012-10-17",
           };
 
-          const homeDirectoryDetails = [
-            {
-              Entry: `/`,
-              Target: `/${bucketName}/${event.username}`,
-            },
-          ];
-
           const authorization = {
-            Role: process.env.FTP_USER_ACCESS_ROLE,
+            Role: ENV.FTP_USER_ACCESS_ROLE,
             Policy: JSON.stringify(userPolicy),
             HomeDirectoryType: "LOGICAL",
-            HomeDirectoryDetails: JSON.stringify(homeDirectoryDetails),
+            HomeDirectoryDetails: JSON.stringify([
+              {
+                Entry: `/`,
+                Target: `/${bucketName}/${event.username}`,
+              },
+            ]),
           };
 
           if (event.password?.length) {
             // Password-based authentication for FTP and SFTP
 
-            const accountPassword = await new Promise((resolve, reject) => {
-              https.get('https://api.prx.org/todo', (r) => {
-                let data = '';
-                r.on('data', chunk => data += chunk);
-                r.on('end', () => resolve(data));
+            const authed = await new Promise((resolve, reject) => {
+              const body = JSON.stringify({
+                token,
+                user: event.username,
+                password: event.password,
+              });
+
+              const req = https.request({
+                host: ENV.EXCHANGE_HOSTNAME,
+                path: '/ftp/auth',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                }
+              }, (r) => {
+                r.on('end', () => r.statusCode === 200 ? resolve(true) : resolve(false));
               }).on('error', reject);
+
+              req.write(body);
+              req.end();
             });
 
-            if (accountPassword === event.password) {
+            if (authed) {
               console.log('Password OK');
               console.log(JSON.stringify(userPolicy));
               return authorization;
+            } else {
+              console.log('Bad password');
+              return {};
             }
           } else if (event.protocol === "SFTP") {
             // Key-based authentication for SFTP
-            console.log('Public key OK');
-            authorization.PublicKeys = ['some_key_from_database'];
-            return authorization;
           } else {
             // Invalid authentication; do not return any policy
             console.log('Bad login');
