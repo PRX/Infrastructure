@@ -51,6 +51,8 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  IsPrimaryRegion: !Equals [!Ref "AWS::Region", us-east-1]
+  KeepAsgAlive: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
 
 Resources:
   InstanceProfile:
@@ -684,7 +686,7 @@ Resources:
       MaxSize: !If [IsProduction, "75", "20"]
       MetricsCollection:
         - Granularity: 1Minute
-      MinSize: !If [IsProduction, "7", "0"]
+      MinSize: !If [KeepAsgAlive, "7", "0"]
       NewInstancesProtectedFromScaleIn: false
       Tags:
         - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
