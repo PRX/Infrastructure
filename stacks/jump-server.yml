@@ -20,6 +20,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasCastleSecurityGroup: !Not [!Equals [!Ref CastlePostgresClientSecurityGroupId, ""]]
 
 Resources:
   InstanceProfile:
@@ -138,7 +139,7 @@ Resources:
           DeviceIndex: 0
           GroupSet:
             - !GetAtt SecurityGroup.GroupId
-            - !Ref CastlePostgresClientSecurityGroupId
+            - !If [HasCastleSecurityGroup, !Ref CastlePostgresClientSecurityGroupId, !Ref AWS::NoValue]
             - !Ref SharedMysqlClientSecurityGroupId
             - !Ref SharedPostgresqlClientSecurityGroupId
             - !Ref SharedRedisClientSecurityGroupId
@@ -194,6 +195,18 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+
+  VanityJumpRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for regional EC2 jump servers
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: CNAME
+          Name: !If [IsProduction, !Sub "jump.${AWS::Region}.prx.tech", !Sub "jump.staging.${AWS::Region}.prx.tech"]
+          ResourceRecords:
+            - !Ref ElasticIP
+          TTL: "3600"
 
 Outputs:
   ElasticIP:
