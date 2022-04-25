@@ -22,6 +22,59 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
+  StackIdHash4:
+    Type: Custom::HashString
+    Properties:
+      ServiceToken: !Ref HashStringServiceToken
+      InputString: !Ref AWS::StackId
+      Length: "4"
+
+  # Because this role is used as an external identity for accessing GCP via
+  # workload federation, and because there is a limitation with how long the
+  # "subject" of an external identity can be (which in this case is the
+  # assumed role's ARN), it needs to have a fairly short name. So this gives
+  # the role an explicit, short name.
+  ExportFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowJobPublish
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:Get*
+                Effect: Allow
+                # TODO Update with more modern parameter naming
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/*
+                Sid: AllowParameterReadOnly
+            Version: "2012-10-17"
+          PolicyName: Porter
+      RoleName: !Sub X-${StackIdHash4}
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Metrics Export }
+
   ExportFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -35,19 +88,8 @@ Resources:
           PORTER_SNS_TOPIC: !Ref PorterJobExecutionSnsTopicArn
       Handler: src/index.handler
       MemorySize: 128
+      Role: !GetAtt ExportFunctionRole.Arn
       Runtime: nodejs14.x
-      Policies:
-        - Statement:
-            - Action: ssm:Get*
-              Effect: Allow
-              # TODO Update with more modern parameter naming
-              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/*
-              Sid: AllowParameterReadOnly
-        - Statement:
-            - Action: sns:Publish
-              Effect: Allow
-              Resource: !Ref PorterJobExecutionSnsTopicArn
-              Sid: AllowPorterJobPublish
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
