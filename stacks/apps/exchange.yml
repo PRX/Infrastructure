@@ -84,6 +84,7 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       # Provides a namespace for Exchange-specific queues
       SqsQueuePrefix: !Sub ${AnnounceResourcePrefix}_exchange_
+      FtpAuthTokenParameterArn: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/FTP_AUTH_TOKEN
 
   ExchangeWildcardHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -291,6 +292,16 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                # TODO Update with more modern parameter naming
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -469,6 +480,9 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: FTP_AUTH_TOKEN
+              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -613,6 +627,9 @@ Resources:
           Memory: !If [IsProduction, 2000, 1000]
           MemoryReservation: !If [IsProduction, 1000, 500]
           Name: !Ref kWorkerContainerName
+          Secrets:
+            - Name: FTP_AUTH_TOKEN
+              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -872,6 +889,9 @@ Resources:
               awslogs-stream-prefix: ecs
           Memory: 400 # TODO
           Name: !Ref kSayWhenContainerName
+          Secrets:
+            - Name: FTP_AUTH_TOKEN
+              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -1233,24 +1253,27 @@ Resources:
             Principal:
               Service: transfer.amazonaws.com
         Version: "2012-10-17"
-      # Policies:
-      #   - PolicyDocument:
-      #       Statement:
-      #         - Action:
-      #             - s3:ListBucket
-      #           Effect: Allow
-      #           Resource: !Ref TransferS3BucketArn
-      #           Sid: AllowBucketReadOnly
-      #         - Action:
-      #             - s3:GetObject
-      #             - s3:GetObjectAttributes
-      #             - s3:GetObjectVersion
-      #             - s3:GetObjectVersionAttributes
-      #           Effect: Allow
-      #           Resource: !Sub ${TransferS3BucketArn}/*
-      #           Sid: AllowObjectReadOnly
-      #       Version: "2012-10-17"
-      #     PolicyName: TransferUserBasePolicy
+      Policies:
+        # The interection of these policies and the policies retured by the
+        # auth function determine a session's permissions. The function alone
+        # cannot provide access to the bucket.
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:ListBucket
+                Effect: Allow
+                Resource: !Ref TransferS3BucketArn
+                Sid: AllowBucketReadOnly
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectAttributes
+                  - s3:GetObjectVersion
+                  - s3:GetObjectVersionAttributes
+                Effect: Allow
+                Resource: !Sub ${TransferS3BucketArn}/*
+                Sid: AllowObjectReadOnly
+            Version: "2012-10-17"
+          PolicyName: TransferUserBasePolicy
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1270,83 +1293,109 @@ Resources:
         Variables:
           FTP_USER_ACCESS_ROLE: !GetAtt FtpUserAccessRole.Arn
           S3_BUCKET_ARN: !Ref TransferS3BucketArn
+          FTP_AUTH_TOKEN_PARAMETER_ARN: !GetAtt Constants.FtpAuthTokenParameterArn
+          EXCHANGE_HOSTNAME: !Ref ExchangeHostname
       Handler: index.handler
       InlineCode: |
         const https = require('https');
+        const AWS = require('aws-sdk');
+
+        const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
+
+        const ENV = process.env;
 
         exports.handler = async (event) => {
-          console.log(JSON.stringify(event));
+          // TODO Move outside of handler for better performance
+          const param = await ssm
+            .getParameter({
+              Name: ENV.FTP_AUTH_TOKEN_PARAMETER_ARN.split(':parameter')[1],
+            })
+            .promise();
+          const token = param.Parameter.Value;
 
-          const bucketName = process.env.S3_BUCKET_ARN.split(":")[5];
+          const bucketName = ENV.S3_BUCKET_ARN.split(':')[5];
 
           const userPolicy = {
             Statement: [
               {
-                Action: ["s3:ListBucket"],
+                Action: ['s3:ListBucket'],
                 Condition: {
                   StringLike: {
-                    "s3:prefix": [event.username, `${event.username}/*`],
+                    's3:prefix': [event.username, `${event.username}/*`],
                   },
                 },
-                Effect: "Allow",
-                Resource: [process.env.S3_BUCKET_ARN],
-                Sid: "AllowBucketUserPrefixReadOnly",
+                Effect: 'Allow',
+                Resource: [ENV.S3_BUCKET_ARN],
+                Sid: 'AllowBucketUserPrefixReadOnly',
               },
               {
                 Action: [
-                  "s3:GetObject",
-                  "s3:GetObjectAttributes",
-                  "s3:GetObjectVersion",
-                  "s3:GetObjectVersionAttributes",
+                  's3:GetObject',
+                  's3:GetObjectAttributes',
+                  's3:GetObjectVersion',
+                  's3:GetObjectVersionAttributes',
                 ],
-                Condition: {
-                  StringLike: {
-                    "s3:prefix": [`${event.username}/*`],
-                  },
-                },
-                Effect: "Allow",
-                Resource: [process.env.S3_BUCKET_ARN],
-                Sid: "AllowObjectUserPrefixReadOnly",
+                Effect: 'Allow',
+                Resource: [`${ENV.S3_BUCKET_ARN}/*`],
+                Sid: 'AllowObjectUserPrefixReadOnly',
               },
             ],
-            Version: "2012-10-17",
+            Version: '2012-10-17',
           };
 
-          const homeDirectoryDetails = [
-            {
-              Entry: `/`,
-              Target: `/${bucketName}/${event.username}`,
-            },
-          ];
-
           const authorization = {
-            Role: process.env.FTP_USER_ACCESS_ROLE,
+            Role: ENV.FTP_USER_ACCESS_ROLE,
             Policy: JSON.stringify(userPolicy),
-            HomeDirectoryType: "LOGICAL",
-            HomeDirectoryDetails: JSON.stringify(homeDirectoryDetails),
+            HomeDirectoryType: 'LOGICAL',
+            HomeDirectoryDetails: JSON.stringify([
+              {
+                // Exposes the contents of a folder in S3 as the root file
+                // system for the user's session. Examples do not include a
+                // trailing slash. If wxyz/audio.mp2 exists in the bucket,
+                // when wxyz logs in they will see audio.mp2 in the root of
+                // the FTP server.
+                Entry: `/`,
+                Target: `/${bucketName}/${event.username}`,
+              },
+            ]),
           };
 
           if (event.password?.length) {
             // Password-based authentication for FTP and SFTP
 
-            const accountPassword = await new Promise((resolve, reject) => {
-              https.get('https://api.prx.org/todo', (r) => {
-                let data = '';
-                r.on('data', chunk => data += chunk);
-                r.on('end', () => resolve(data));
+            const isAuthed = await new Promise((resolve, reject) => {
+              const body = JSON.stringify({
+                token,
+                user: event.username,
+                password: event.password,
+              });
+
+              const req = https.request({
+                host: ENV.EXCHANGE_HOSTNAME,
+                path: '/ftp/auth',
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Content-Length': Buffer.byteLength(body),
+                }
+              }, (r) => {
+                r.on('data', () => {});
+                r.on('end', () => r.statusCode === 200 ? resolve(true) : resolve(false));
               }).on('error', reject);
+
+              req.write(body);
+              req.end();
             });
 
-            if (accountPassword === event.password) {
+            if (isAuthed) {
               console.log('Password OK');
-              console.log(JSON.stringify(userPolicy));
               return authorization;
+            } else {
+              console.log('Bad password');
+              return {};
             }
-          } else if (event.protocol === "SFTP") {
+          // } else if (event.protocol === 'SFTP') {
             // Key-based authentication for SFTP
-            console.log('Public key OK');
-            authorization.PublicKeys = ['some_key_from_database'];
-            return authorization;
           } else {
             // Invalid authentication; do not return any policy
             console.log('Bad login');
@@ -1354,6 +1403,13 @@ Resources:
           }
         };
       MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: ssm:Get*
+              Effect: Allow
+              # TODO Update with more modern parameter naming
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
+              Sid: AllowParameterReadOnly
       Runtime: nodejs14.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"

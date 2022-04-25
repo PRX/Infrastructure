@@ -125,8 +125,6 @@ Conditions:
   CreateDatabaseDependentResources: !Condition HasAllSharedAuroraEndpoints
   # Application stacks require external MySQL/PostgreSQL databases
   CreateApplicationStacks: !Condition CreateDatabaseDependentResources
-  # Jump server requires that application stacks have been created
-  CreateJumpServerStack: !Condition CreateApplicationStacks
   # Dashboard requires that application stacks have been created
   CreateDashboardsStack: !Condition CreateApplicationStacks
   # TODO: temporary stack for us-west-2 dovetail
@@ -490,6 +488,7 @@ Resources:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
+        RegionMode: !Ref RegionMode
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackName
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
@@ -946,6 +945,7 @@ Resources:
         SecretsStackName: !Ref SecretsStackName
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
+        PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
 
         # App-specific parameters
 
@@ -967,7 +967,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
-
   # TODO: temporary. And requires everything above but not MySQL/PostgreSQL
   Apps500AStack:
     Type: AWS::CloudFormation::Stack
@@ -1036,10 +1035,9 @@ Resources:
       TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-500A-tmp.yml
       TimeoutInMinutes: 40
 
-  # Requires VPC, Redis and DB SGs, and Castle
+  # Requires VPC, Redis and DB SGs
   JumpServerStack:
     Type: AWS::CloudFormation::Stack
-    Condition: CreateJumpServerStack
     Properties:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
@@ -1049,7 +1047,7 @@ Resources:
         KeyPairName: !Ref AsgKeyPairName
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        CastlePostgresClientSecurityGroupId: !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId
+        CastlePostgresClientSecurityGroupId: !If [CreateApplicationStacks, !GetAtt Apps200AStack.Outputs.CastlePostgresClientSecurityGroupId, ""]
         SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
         SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
         SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId

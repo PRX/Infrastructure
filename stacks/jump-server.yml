@@ -6,12 +6,15 @@ Description: >-
   Also, you know, whatever other random things we want to run.
 
 Parameters:
+  kImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-kernel-5.10-hvm-arm64-gp2
   AuthorizedKeys: { Type: CommaDelimitedList }
   EnvironmentType: { Type: String }
   KeyPairName: { Type: AWS::EC2::KeyPair::KeyName }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
-  CastlePostgresClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  CastlePostgresClientSecurityGroupId: { Type: String }
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedPostgresqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -20,6 +23,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasCastleSecurityGroup: !Not [!Equals [!Ref CastlePostgresClientSecurityGroupId, ""]]
 
 Resources:
   InstanceProfile:
@@ -128,7 +132,7 @@ Resources:
         CPUCredits: unlimited
       DisableApiTermination: true
       IamInstanceProfile: !Ref InstanceProfile
-      ImageId: ami-0789681fae8b18e56
+      ImageId: !Ref kImageId
       InstanceInitiatedShutdownBehavior: stop
       InstanceType: !If [IsProduction, t4g.small, t4g.micro]
       KeyName: !Ref KeyPairName
@@ -138,7 +142,7 @@ Resources:
           DeviceIndex: 0
           GroupSet:
             - !GetAtt SecurityGroup.GroupId
-            - !Ref CastlePostgresClientSecurityGroupId
+            - !If [HasCastleSecurityGroup, !Ref CastlePostgresClientSecurityGroupId, !Ref AWS::NoValue]
             - !Ref SharedMysqlClientSecurityGroupId
             - !Ref SharedPostgresqlClientSecurityGroupId
             - !Ref SharedRedisClientSecurityGroupId
@@ -194,6 +198,18 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+
+  VanityJumpRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Record sets for regional EC2 jump servers
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - Type: CNAME
+          Name: !If [IsProduction, !Sub "jump.${AWS::Region}.prx.tech", !Sub "jump.staging.${AWS::Region}.prx.tech"]
+          ResourceRecords:
+            - !Ref ElasticIP
+          TTL: "3600"
 
 Outputs:
   ElasticIP:
