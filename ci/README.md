@@ -79,6 +79,8 @@ If you opt in to using the common CI support code, the project must execute the 
 
 A Lambda function that watches for successful builds in CodeBuild extracts information from the details of the build, and updates the staging environemnt's configuration values used within the CD system as necessary (e.g., updates the ECR image version to deploy for the app code that was built).
 
+The `PRX_CI_PUBLISH` will result in code being published and the staging environment being updated. It should only be set to `true` if both of those actions are desired. If you need code to be published without the environment being updated, like from a feature branch, you should set `PRX_CI_PRERELEASE` to the string value of `true`.
+
 ### ECS Targets
 
 For apps that run on Docker through ECS, the `post_build` script can push build docker images to a repository in ECR. In such cases, the callback Lambda function will update metadata used by CD to keep the deployed applications in sync with the new images in ECR.

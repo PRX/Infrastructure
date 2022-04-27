@@ -135,6 +135,11 @@ init() {
             push_to_ecr
             push_to_s3_lambda
             push_to_s3_static
+        elif [ "$PRX_CI_PRERELEASE" = "true" ]
+            echo "Pushing pre-release code..."
+            push_to_ecr
+            push_to_s3_lambda
+            push_to_s3_static
         else
             echo "Code publishing is not enabled for this build"
         fi
