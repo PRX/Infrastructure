@@ -294,7 +294,7 @@ async function buildMessage(job) {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `${userParameters.Stage} deploy`,
+          text: `${userParameters.Stage} deploy – ${process.env.AWS_REGION}`,
           emoji: true,
         },
       },
