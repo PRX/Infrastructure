@@ -71,7 +71,6 @@ Parameters:
   TheCastleHostname: { Type: String }
 
 Conditions:
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
@@ -1496,7 +1495,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServer:
     Type: AWS::Transfer::Server
-    Condition: IsStaging
     Properties:
       Domain: S3
       EndpointDetails:
@@ -1530,7 +1528,6 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
   FtpServerLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: IsStaging
     Properties:
       LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
       RetentionInDays: 14
@@ -1539,7 +1536,6 @@ Resources:
   # requests to a private server.
   FtpServerNlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: IsStaging
     Properties:
       IpAddressType: dualstack
       Scheme: internet-facing
@@ -1557,14 +1553,12 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
       Type: network
   FtpServerIpAddresses:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsStaging
+    Type: Custom::TransferServerIpFinder
     Properties:
       ServiceToken: !Ref TransferServerIpFinderServiceToken
       ServerId: !GetAtt FtpServer.ServerId
   FtpServerFtpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1593,7 +1587,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpNlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1603,7 +1596,6 @@ Resources:
       Protocol: TCP
   FtpServerSftpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1632,7 +1624,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerSftpNlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1644,7 +1635,6 @@ Resources:
   # its own target group and listener on the NLB
   FtpServerFtpData8192TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1673,7 +1663,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8192NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1683,7 +1672,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8193TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1712,7 +1700,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8193NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1722,7 +1709,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8194TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1751,7 +1737,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8194NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1761,7 +1746,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8195TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1790,7 +1774,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8195NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1800,7 +1783,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8196TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1829,7 +1811,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8196NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1839,7 +1820,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8197TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1868,7 +1848,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8197NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1878,7 +1857,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8198TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1907,7 +1885,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8198NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1917,7 +1894,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8199TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1946,7 +1922,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8199NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1956,7 +1931,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8200TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1985,7 +1959,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8200NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
