@@ -75,6 +75,8 @@ Resources:
     Properties:
       ServiceToken: !Ref EchoServiceToken
       ActualsIngestJobInvocationCountMetricName: !Sub ActualsIngestJobInvocationCountNewCluster${EnvironmentType}
+      JobErrorsCountMetricName: !Sub JobErrorsCountNewCluster${EnvironmentType}
+      TargetingRecordCacheSizeMetricsName: !Sub TargetingRecordCacheSize${EnvironmentType}
       AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
 
   HostHeaderListenerRule:
@@ -518,6 +520,26 @@ Resources:
         - MetricName: !Sub InventoryUpdateJobElapsed${EnvironmentType}
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.elapsed
+  WorkerJobErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "*Error performing*" }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !GetAtt Constants.JobErrorsCountMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  TargetingRecordCacheSizeMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.type = "inventory.allocation_caching_states" }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Constants.TargetingRecordCacheSizeMetricsName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.max_flight_allocation_cache_entries.acs_entry_count
   AuguryActualsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -534,6 +556,34 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: breaching
+  AuguryJobsProducedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Worker <${EnvironmentTypeAbbreviation}> IS THROWING THE ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's worker task has raised an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: WorkerJobErrorsMetricFilter
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+  AuguryExpandedAllocationCacheSizeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Allocation Targeting Record Cache <${EnvironmentTypeAbbreviation}> IS LARGE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's expanded allocation cache is big for some  flight(s). Check the logs and the TruncateExpiredDataJob job.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: TargetingRecordCacheSizeMetricFilter
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Maximum
+      Threshold: 1000
+      TreatMissingData: notBreaching
   AuguryActualsAreBehindAlarmTags:
     Type: Custom::CloudWatchAlarmTags
     Condition: IsProduction
