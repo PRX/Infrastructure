@@ -15,6 +15,11 @@ Metadata:
           - PrimaryType
           - ExpirationField
       - Label:
+          default: Optional Regions
+        Parameters:
+          - Region2
+          - Region3
+      - Label:
           default: Optional Permissions
         Parameters:
           - ForeignAccountId
@@ -47,6 +52,10 @@ Metadata:
         default: Primary key type
       ExpirationField:
         default: Field to enable expiration on
+      Region2:
+        default: Secondary region name
+      Region3:
+        default: Tertiary region name
       ForeignAccountId:
         default: Foreign account id
       ForeignRoleName:
@@ -95,13 +104,18 @@ Parameters:
   ExpirationField:
     Type: String
     Description: Optionally enable Time-To-Live on this field
+  Region2:
+    Type: String
+    Description: Optional secondary region to clone table to.
+  Region3:
+    Type: String
+    Description: Optional tertiary region to clone table to.
   ForeignAccountId:
     Type: String
     Description: Optional account to enable write access to
   ForeignRoleName:
     Type: String
     Description: Optional role name within that account (MUST EXIST)
-
   EnvironmentType:
     Type: String
     Description: Environment this table is used by.
@@ -160,6 +174,8 @@ Parameters:
 
 Conditions:
   HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
+  HasSecondaryRegion: !Not [!Equals [!Ref Region2, ""]]
+  HasTertiaryRegion: !Not [!Equals [!Ref Region3, ""]]
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
   HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
   HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
@@ -196,7 +212,7 @@ Resources:
                   ScaleOutCooldown: !Ref AutoScalingCooldown
                   TargetValue: !Ref ReadUtilizationScalingTarget
             - !Ref AWS::NoValue
-          Region: us-east-1
+          Region: !Ref AWS::Region
           Tags:
             - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
             - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -204,25 +220,50 @@ Resources:
             - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
             - { Key: prx:dev:family, Value: !Ref FamilyTag }
             - { Key: prx:dev:application, Value: !Ref ApplicationTag }
-        - ReadProvisionedThroughputSettings: !If
-            - HasProvisionedBilling
-            - ReadCapacityAutoScalingSettings:
-                MaxCapacity: !Ref ReadCapacityMax
-                MinCapacity: !Ref ReadCapacityMin
-                SeedCapacity: !Ref ReadCapacitySeed
-                TargetTrackingScalingPolicyConfiguration:
-                  ScaleInCooldown: !Ref AutoScalingCooldown
-                  ScaleOutCooldown: !Ref AutoScalingCooldown
-                  TargetValue: !Ref ReadUtilizationScalingTarget
+        - Fn::If:
+            - HasSecondaryRegion
+            - ReadProvisionedThroughputSettings: !If
+                - HasProvisionedBilling
+                - ReadCapacityAutoScalingSettings:
+                    MaxCapacity: !Ref ReadCapacityMax
+                    MinCapacity: !Ref ReadCapacityMin
+                    SeedCapacity: !Ref ReadCapacitySeed
+                    TargetTrackingScalingPolicyConfiguration:
+                      ScaleInCooldown: !Ref AutoScalingCooldown
+                      ScaleOutCooldown: !Ref AutoScalingCooldown
+                      TargetValue: !Ref ReadUtilizationScalingTarget
+                - !Ref AWS::NoValue
+              Region: !Ref Region2
+              Tags:
+                - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+                - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+                - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+                - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+                - { Key: prx:dev:family, Value: !Ref FamilyTag }
+                - { Key: prx:dev:application, Value: !Ref ApplicationTag }
             - !Ref AWS::NoValue
-          Region: us-west-2
-          Tags:
-            - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-            - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-            - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-            - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-            - { Key: prx:dev:family, Value: !Ref FamilyTag }
-            - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+        - Fn::If:
+            - HasTertiaryRegion
+            - ReadProvisionedThroughputSettings: !If
+                - HasProvisionedBilling
+                - ReadCapacityAutoScalingSettings:
+                    MaxCapacity: !Ref ReadCapacityMax
+                    MinCapacity: !Ref ReadCapacityMin
+                    SeedCapacity: !Ref ReadCapacitySeed
+                    TargetTrackingScalingPolicyConfiguration:
+                      ScaleInCooldown: !Ref AutoScalingCooldown
+                      ScaleOutCooldown: !Ref AutoScalingCooldown
+                      TargetValue: !Ref ReadUtilizationScalingTarget
+                - !Ref AWS::NoValue
+              Region: !Ref Region3
+              Tags:
+                - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+                - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+                - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+                - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+                - { Key: prx:dev:family, Value: !Ref FamilyTag }
+                - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+            - !Ref AWS::NoValue
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
       TableName: !Ref TableName
@@ -282,6 +323,112 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: !Ref FamilyTag }
         - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+
+  # Alarms
+  # ScanThrottledRequestsAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Condition: CreateAlarms
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub ${AWS::StackName} Scan throttling
+  #     AlarmActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     AlarmDescription: Scan operations are being throttled
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ThrottledRequests
+  #     Namespace: AWS/DynamoDB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: TableName
+  #         Value: !Ref DynamoDBTable
+  #       - Name: Operation
+  #         Value: Scan
+  # BatchGetItemThrottledRequestsAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Condition: CreateAlarms
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub ${AWS::StackName} BatchGetItem throttling
+  #     AlarmActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     AlarmDescription: BatchGetItem operations are being throttled
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ThrottledRequests
+  #     Namespace: AWS/DynamoDB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: TableName
+  #         Value: !Ref DynamoDBTable
+  #       - Name: Operation
+  #         Value: BatchGetItem
+  # BatchWriteItemThrottledRequestsAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Condition: CreateAlarms
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub ${AWS::StackName} BatchWriteItem throttling
+  #     AlarmActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     AlarmDescription: BatchWriteItem operations are being throttled
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ThrottledRequests
+  #     Namespace: AWS/DynamoDB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: TableName
+  #         Value: !Ref DynamoDBTable
+  #       - Name: Operation
+  #         Value: BatchWriteItem
+  # UpdateItemThrottledRequestsAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Condition: CreateAlarms
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: !Sub ${AWS::StackName} UpdateItem throttling
+  #     AlarmActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     InsufficientDataActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     OKActions:
+  #       - !Ref WarnMessagesSnsTopicArn
+  #     AlarmDescription: UpdateItem operations are being throttled
+  #     ComparisonOperator: GreaterThanThreshold
+  #     EvaluationPeriods: 1
+  #     MetricName: ThrottledRequests
+  #     Namespace: AWS/DynamoDB
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 0
+  #     TreatMissingData: notBreaching
+  #     Dimensions:
+  #       - Name: TableName
+  #         Value: !Ref DynamoDBTable
+  #       - Name: Operation
+  #         Value: UpdateItem
 Outputs:
   RoleArn:
     Condition: HasForeignAccount
