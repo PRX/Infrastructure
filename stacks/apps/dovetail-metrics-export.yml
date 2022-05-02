@@ -149,7 +149,8 @@ Resources:
     Properties:
       Description: Sample data export from staging metrics
       RoleArn: !GetAtt RulesRole.Arn
-      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      # ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      ScheduleExpression: cron(0 18 * * ? *) # 00:15 UTC every day
       State: ENABLED
       Targets:
         - Arn: !GetAtt ExportFunction.Arn
@@ -157,12 +158,19 @@ Resources:
           Input: |-
             {
               "PodcastIDs": [815],
-              "ObjectPrefix": "BqExportTemp/",
+              "ObjectPrefix": "staging-sample/",
               "Copies": [
                 {
                   "Mode": "AWS/S3",
-                  "BucketName": "prx-porter-sandbox",
-                  "DestinationPrefix": "dev/"
+                  "BucketName": "prx-porter-sandbox"
                 }
               ]
             }
+  StagingSampleJobInvokePermission:
+    Condition: IsStaging
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StagingSampleJob.Arn
