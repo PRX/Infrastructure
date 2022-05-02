@@ -143,14 +143,13 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Metrics Export }
 
-  StagingSampleJob:
+  StagingSampleExport:
     Type: AWS::Events::Rule
     Condition: IsStaging
     Properties:
       Description: Sample data export from staging metrics
       RoleArn: !GetAtt RulesRole.Arn
-      # ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
-      ScheduleExpression: cron(0 18 * * ? *) # 00:15 UTC every day
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
       State: ENABLED
       Targets:
         - Arn: !GetAtt ExportFunction.Arn
@@ -166,11 +165,64 @@ Resources:
                 }
               ]
             }
-  StagingSampleJobInvokePermission:
+  StagingSampleExportInvokePermission:
     Condition: IsStaging
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
       FunctionName: !Ref ExportFunction
       Principal: events.amazonaws.com
-      SourceArn: !GetAtt StagingSampleJob.Arn
+      SourceArn: !GetAtt StagingSampleExport.Arn
+
+  TedNetworkExport:
+    Type: AWS::Events::Rule
+    Condition: IsProduction
+    Properties:
+      Description: TED network data export
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ExportFunction.Arn
+          Id: !Sub "${RootStackName}.Export.TEDNetwork"
+          Input: |-
+            {
+              "PodcastIDs": [
+                70,
+                131,
+                384,
+                179,
+                357,
+                298,
+                316,
+                315,
+                341,
+                588,
+                350,
+                343,
+                124,
+                415,
+                116,
+                421,
+                368,
+                292,
+                301,
+                144
+              ],
+              "ObjectPrefix": "TED/Network/",
+              "Copies": [
+                {
+                  "Mode": "AWS/S3",
+                  "BucketName": "ted-conferences-prx",
+                  "DestinationFormat": "dev/TED/Network/%TYPE/%RANGE_START_ISO-%RANGE_END_ISO/%REQUEST_TIME/%REQUEST_ID.ndjson.gz"
+                }
+              ]
+            }
+  TedNetworkExportInvokePermission:
+    Condition: IsProduction
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt TedNetworkExport.Arn
