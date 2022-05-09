@@ -27,10 +27,10 @@ Parameters:
   CloudFrontOai: { Type: String }
   DovetailRouterHostname: { Type: String }
   DovetailRouterToken: { Type: AWS::SSM::Parameter::Value<String> }
-  ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<CommaDelimitedList> }
-  ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<CommaDelimitedList> }
+  ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
+  ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbTtl: { Type: AWS::SSM::Parameter::Value<String> }
-  ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<CommaDelimitedList> }
+  ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -97,9 +97,9 @@ Resources:
         audio files
       Environment:
         Variables:
-          ARRANGEMENTS_DDB_ACCESS_ROLE: !Join [",", !Ref ArrangementsDynamodbAccessRoleArn]
-          ARRANGEMENTS_DDB_REGION: !Join [",", !Ref ArrangementsDynamodbRegion]
-          ARRANGEMENTS_DDB_TABLE: !Join [",", !Ref ArrangementsDynamodbTableName]
+          ARRANGEMENTS_DDB_ACCESS_ROLE: !Ref ArrangementsDynamodbAccessRoleArn
+          ARRANGEMENTS_DDB_REGION: !Ref ArrangementsDynamodbRegion
+          ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
           ARRANGEMENTS_DDB_TTL: !Ref ArrangementsDynamodbTtl
           DOVETAIL_HOST: !Ref DovetailRouterHostname
           DOVETAIL_TOKEN: !Ref DovetailRouterToken
@@ -129,12 +129,12 @@ Resources:
                     - inner:
                         Fn::Join:
                           - ",arn:${AWS::Partition}:dynamodb:*:*:table/"
-                          - Ref: ArrangementsDynamodbTableName
+                          - !Split [",", !Ref ArrangementsDynamodbTableName]
           Version: "2012-10-17"
         - Statement:
             - Action: sts:AssumeRole
               Effect: Allow
-              Resource: !Ref ArrangementsDynamodbAccessRoleArn
+              Resource: !Split [",", !Ref ArrangementsDynamodbAccessRoleArn]
           Version: "2012-10-17"
         - Statement:
             - Action: s3:ListBucket
