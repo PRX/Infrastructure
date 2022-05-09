@@ -1,0 +1,337 @@
+# db/dynamodb-global-table.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Create a global primary-key-lookup DynamoDB table
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Table Definition
+        Parameters:
+          - TableName
+          - PrimaryKey
+          - PrimaryType
+          - ExpirationField
+      - Label:
+          default: Optional Regions
+        Parameters:
+          - Region2
+          - Region3
+      - Label:
+          default: Optional Permissions
+        Parameters:
+          - ForeignAccountId
+          - ForeignRoleName
+      - Label:
+          default: Autoscaling
+        Parameters:
+          - BillingMode
+          - ReadCapacitySeed
+          - ReadCapacityMin
+          - ReadCapacityMax
+          - ReadUtilizationScalingTarget
+          - WriteCapacitySeed
+          - WriteCapacityMin
+          - WriteCapacityMax
+          - WriteUtilizationScalingTarget
+          - AutoScalingCooldown
+      - Label:
+          default: Metadata
+        Parameters:
+          - EnvironmentType
+          - FamilyTag
+          - ApplicationTag
+    ParameterLabels:
+      TableName:
+        default: Table name
+      PrimaryKey:
+        default: Primary key field
+      PrimaryType:
+        default: Primary key type
+      ExpirationField:
+        default: Field to enable expiration on
+      Region2:
+        default: Secondary region name
+      Region3:
+        default: Tertiary region name
+      ForeignAccountId:
+        default: Foreign account id
+      ForeignRoleName:
+        default: Role name in foreign account
+      EnvironmentType:
+        default: Environment type
+      FamilyTag:
+        default: Family tag
+      ApplicationTag:
+        default: Application tag
+      BillingMode:
+        default: Billing mode
+      ReadCapacitySeed:
+        default: Read capacity seed (RCU)
+      ReadCapacityMin:
+        default: Read capacity minimum (RCU)
+      ReadCapacityMax:
+        default: Read capacity maximum (RCU)
+      ReadUtilizationScalingTarget:
+        default: Read capacity utilization scaling target (%)
+      WriteCapacitySeed:
+        default: Write capacity seed (WCU)
+      WriteCapacityMin:
+        default: Write capacity minimum (WCU)
+      WriteCapacityMax:
+        default: Write capacity maximum (WCU)
+      WriteUtilizationScalingTarget:
+        default: Write capacity utilization scaling target (%)
+      AutoScalingCooldown:
+        default: Auto scaling cooldown period
+
+Parameters:
+  TableName:
+    Type: String
+    Description: The unique DynamoDB table name.
+  PrimaryKey:
+    Type: String
+    Description: The name of the primary key field
+  PrimaryType:
+    Type: String
+    Description: The type of the primary key field
+    AllowedValues:
+      - String
+      - Numeric
+      - Binary
+  ExpirationField:
+    Type: String
+    Description: Optionally enable Time-To-Live on this field
+  Region2:
+    Type: String
+    Description: Optional secondary region to clone table to.
+  Region3:
+    Type: String
+    Description: Optional tertiary region to clone table to.
+  ForeignAccountId:
+    Type: String
+    Description: Optional account to enable write access to
+  ForeignRoleName:
+    Type: String
+    Description: Optional role name within that account (MUST EXIST)
+  EnvironmentType:
+    Type: String
+    Description: Environment this table is used by.
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+  FamilyTag:
+    Type: String
+    Description: The value used for the Family tag on resources that support tagging.
+  ApplicationTag:
+    Type: String
+    Description: The value used for the Application tag on resources that support tagging.
+  BillingMode:
+    Type: String
+    AllowedValues:
+      - PAY_PER_REQUEST
+      - PROVISIONED
+    Default: PAY_PER_REQUEST
+  ReadCapacitySeed:
+    Type: Number
+    Default: 1
+    Description: Initial read capacity when creating or switching to provisioned billing
+  ReadCapacityMin:
+    Type: Number
+    Default: 1
+    Description: Only used under provisioned billing
+  ReadCapacityMax:
+    Type: Number
+    Default: 1
+    Description: Only used under provisioned billing
+  ReadUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing
+  WriteCapacitySeed:
+    Type: Number
+    Default: 1
+    Description: Initial read capacity when creating or switching to provisioned billing
+  WriteCapacityMin:
+    Type: Number
+    Default: 1
+    Description: Only used under provisioned billing
+  WriteCapacityMax:
+    Type: Number
+    Default: 1
+    Description: Only used under provisioned billing
+  WriteUtilizationScalingTarget:
+    Type: Number
+    Default: 70
+    Description: Only used under provisioned billing
+  AutoScalingCooldown:
+    Type: Number
+    Default: 60
+    Description: Only used under provisioned billing
+
+Conditions:
+  HasExpirationField: !Not [!Equals [!Ref ExpirationField, ""]]
+  HasSecondaryRegion: !Not [!Equals [!Ref Region2, ""]]
+  HasTertiaryRegion: !Not [!Equals [!Ref Region3, ""]]
+  HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
+  HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
+  HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
+
+Mappings:
+  DataTypesMap:
+    String:
+      Symbol: S
+    Numeric:
+      Symbol: N
+    Binary:
+      Symbol: B
+
+Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::GlobalTable
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: !Ref PrimaryKey
+          AttributeType: !FindInMap [DataTypesMap, !Ref PrimaryType, Symbol]
+      BillingMode: !Ref BillingMode
+      KeySchema:
+        - AttributeName: !Ref PrimaryKey
+          KeyType: HASH
+      Replicas:
+        - ReadProvisionedThroughputSettings: !If
+            - HasProvisionedBilling
+            - ReadCapacityAutoScalingSettings:
+                MaxCapacity: !Ref ReadCapacityMax
+                MinCapacity: !Ref ReadCapacityMin
+                SeedCapacity: !Ref ReadCapacitySeed
+                TargetTrackingScalingPolicyConfiguration:
+                  ScaleInCooldown: !Ref AutoScalingCooldown
+                  ScaleOutCooldown: !Ref AutoScalingCooldown
+                  TargetValue: !Ref ReadUtilizationScalingTarget
+            - !Ref AWS::NoValue
+          Region: !Ref AWS::Region
+          Tags:
+            - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+            - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+            - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+            - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+            - { Key: prx:dev:family, Value: !Ref FamilyTag }
+            - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+        - Fn::If:
+            - HasSecondaryRegion
+            - ReadProvisionedThroughputSettings: !If
+                - HasProvisionedBilling
+                - ReadCapacityAutoScalingSettings:
+                    MaxCapacity: !Ref ReadCapacityMax
+                    MinCapacity: !Ref ReadCapacityMin
+                    SeedCapacity: !Ref ReadCapacitySeed
+                    TargetTrackingScalingPolicyConfiguration:
+                      ScaleInCooldown: !Ref AutoScalingCooldown
+                      ScaleOutCooldown: !Ref AutoScalingCooldown
+                      TargetValue: !Ref ReadUtilizationScalingTarget
+                - !Ref AWS::NoValue
+              Region: !Ref Region2
+              Tags:
+                - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+                - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+                - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+                - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+                - { Key: prx:dev:family, Value: !Ref FamilyTag }
+                - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+            - !Ref AWS::NoValue
+        - Fn::If:
+            - HasTertiaryRegion
+            - ReadProvisionedThroughputSettings: !If
+                - HasProvisionedBilling
+                - ReadCapacityAutoScalingSettings:
+                    MaxCapacity: !Ref ReadCapacityMax
+                    MinCapacity: !Ref ReadCapacityMin
+                    SeedCapacity: !Ref ReadCapacitySeed
+                    TargetTrackingScalingPolicyConfiguration:
+                      ScaleInCooldown: !Ref AutoScalingCooldown
+                      ScaleOutCooldown: !Ref AutoScalingCooldown
+                      TargetValue: !Ref ReadUtilizationScalingTarget
+                - !Ref AWS::NoValue
+              Region: !Ref Region3
+              Tags:
+                - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+                - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+                - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+                - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+                - { Key: prx:dev:family, Value: !Ref FamilyTag }
+                - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+            - !Ref AWS::NoValue
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      TableName: !Ref TableName
+      TimeToLiveSpecification:
+        AttributeName: !If [HasExpirationField, !Ref ExpirationField, !Ref AWS::NoValue]
+        Enabled: !If [HasExpirationField, true, false]
+      WriteProvisionedThroughputSettings: !If
+        - HasProvisionedBilling
+        - WriteCapacityAutoScalingSettings:
+            MaxCapacity: !Ref WriteCapacityMax
+            MinCapacity: !Ref WriteCapacityMin
+            SeedCapacity: !Ref WriteCapacitySeed
+            TargetTrackingScalingPolicyConfiguration:
+              ScaleInCooldown: !Ref AutoScalingCooldown
+              ScaleOutCooldown: !Ref AutoScalingCooldown
+              TargetValue: !Ref WriteUtilizationScalingTarget
+        - !Ref AWS::NoValue
+
+  # allow other accounts access to this table
+  CrossAccountAccessRole:
+    Type: AWS::IAM::Role
+    Condition: HasForeignAccount
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal: !If
+              - HasForeignRole
+              - AWS: !Sub arn:aws:iam::${ForeignAccountId}:role/${ForeignRoleName}
+              - AWS: !Ref ForeignAccountId
+      Path: /
+      Policies:
+        - PolicyName: DynamoDBWritePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:ConditionCheck
+                  - dynamodb:DeleteItem
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeTimeToLive
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub arn:aws:dynamodb:*:${AWS::AccountId}:table/${DynamoDBTable}
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: !Ref FamilyTag }
+        - { Key: prx:dev:application, Value: !Ref ApplicationTag }
+
+  # Alarms
+  # TODO: provisioned billing might benefit from alarms - but they might have
+  # to exist in multiple regions to cover all these tables
+Outputs:
+  RoleArn:
+    Condition: HasForeignAccount
+    Description: The created DynamoDB table ARN
+    Value: !GetAtt CrossAccountAccessRole.Arn
+  TableName:
+    Description: The created DynamoDB table name
+    Value: !Ref DynamoDBTable
