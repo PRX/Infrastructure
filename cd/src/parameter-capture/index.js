@@ -31,8 +31,6 @@ const cloudformationClient = new CloudFormationClient({
 const codepipelineClient = new CodePipelineClient({ apiVersion: '2015-07-09' });
 const s3Client = new S3Client({ apiVersion: '2006-03-01' });
 
-const rootStackName = 'infrastructure-cd-root-staging';
-
 /**
  * Returns an array of all stacks that are related to some root stack through
  * nesting, including the root stack. The elements of the array are the objects
@@ -92,15 +90,17 @@ export const handler = async (event, context) => {
   const job = event['CodePipeline.job'];
 
   try {
+    const rootStackName =
+      job.data.actionConfiguration.configuration.UserParameters;
+
     const allStacks = await getStackFamily(rootStackName);
     const resolvedParams = getAllResolveParameters(allStacks);
 
     console.log(JSON.stringify(resolvedParams));
 
-    // Snapshots are named with a timestamp, eg staging/123456.json
-    const env = 'dev';
+    // Snapshots are named with a timestamp, eg infra-staging/123456.json
     const ts = Date.now();
-    const key = `${env}/${ts}.json`;
+    const key = `${rootStackName}/${ts}.json`;
 
     await s3Client.send(
       new PutObjectCommand({
