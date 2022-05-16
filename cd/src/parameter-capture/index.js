@@ -95,6 +95,8 @@ exports.handler = async (event, context) => {
     const allStacks = await getStackFamily(rootStackName);
     const resolvedParams = getAllResolveParameters(allStacks);
 
+    console.log(JSON.stringify(resolvedParams));
+
     // Snapshots are named with a timestamp, eg staging/123456.json
     const env = 'dev';
     const ts = Date.now();
