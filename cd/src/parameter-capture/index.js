@@ -88,7 +88,7 @@ function getAllResolveParameters(stacks) {
     );
 }
 
-exports.handler = async (event, context) => {
+export const handler = async (event) => {
   const job = event['CodePipeline.job'];
 
   try {
