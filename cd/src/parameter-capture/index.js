@@ -10,7 +10,6 @@ import {
 } from '@aws-sdk/client-codepipeline';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
-import { Upload } from '@aws-sdk/lib-storage';
 
 const MAXIMUM_ATTEMPTS = 6;
 const MAXIMUM_RETRY_DELAY = 10000;
