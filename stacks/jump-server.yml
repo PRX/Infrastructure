@@ -96,9 +96,6 @@ Resources:
                   echo "Adding developer public keys to authorized_keys"
                   echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
                 - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
-            02_load_prx_env:
-              command: |-
-                printf "\n# Load PRX environment variables\nif [ -f ~/.prxenv ]; then\n  . ~/.prxenv\nfi\n" >> .bash_profile
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
@@ -119,7 +116,7 @@ Resources:
                 path=Resources.JumpServer.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource JumpServer
                 runas=root
-            /home/ec2-user/.prxenv:
+            /etc/profile.d/prxenv.sh:
               content: !Sub |
                 export PRX_REGION=${AWS::Region}
                 export PRX_ENVIRONMENT=${EnvironmentType}
@@ -132,9 +129,6 @@ Resources:
                 export PRX_SHARED_REDIS_PORT=${SharedRedisReplicationGroupEndpointPort}
                 export PRX_CASTLE_POSTGRES_HOST=${CastlePostgresInstanceEndpointAddress}
                 export PRX_CASTLE_POSTGRES_PORT=${CastlePostgresInstanceEndpointPort}
-              group: ec2-user
-              mode: "000644"
-              owner: ec2-user
           packages:
             yum:
               jq: []
