@@ -719,6 +719,19 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/*
+                Sid: AllowAppParameterRead
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/*
+                Sid: AllowGlobalParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -806,6 +819,21 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/secret-key-base
+            - Name: ADMIN_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-salt
+            - Name: ADMIN_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-user
+            - Name: ADMIN_PASS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-password
+            - Name: AUGURY_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/augury-token
+            - Name: FEEDER_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/feeder-token
+            - Name: MAXMIND_LICENSE_KEY
+              ValueFrom: /prx/global/Spire/maxmind/license-key
           Ulimits:
             - HardLimit: 8192
               Name: nofile
