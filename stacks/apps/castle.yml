@@ -176,6 +176,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -267,6 +276,23 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/secret-key-base
+            - Name: BQ_CLIENT_EMAIL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/bigquery-client-email
+            - Name: BQ_PRIVATE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/bigquery-client-key
+            - Name: CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/id-auth-client-id
+            - Name: CLIENT_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/id-auth-client-secret
+            - Name: PG_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/database-name
+            - Name: PG_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/database-password
+            - Name: PG_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/database-username
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
