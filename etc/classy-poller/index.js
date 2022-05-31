@@ -23,10 +23,11 @@ const mapping = {
   326353: '#earhustle-donations',
   399428: '#earhustle-donations',
   400513: '#earhustle-donations',
-  368624: '#tw-fall-2021-donations',
-  368561: '#tw-fall-2021-donations',
-  368367: '#tw-fall-2021-donations',
-  // 999999: '#tw-fall-2021-donations',
+  368624: '#tw-donations',
+  368561: '#tw-donations',
+  368367: '#tw-donations',
+  409824: '#tw-donations',
+  // 999999: '#tw-donations',
 };
 
 function getAccessToken() {
