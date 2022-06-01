@@ -15,9 +15,18 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CastlePostgresClientSecurityGroupId: { Type: String }
+  CastlePostgresInstanceEndpointAddress: { Type: String }
+  CastlePostgresInstanceEndpointPort: { Type: String }
+  SharedAuroraMysqlEndpoint: { Type: String }
+  SharedAuroraMysqlPort: { Type: String }
+  SharedAuroraPostgresqlEndpoint: { Type: String }
+  SharedAuroraPostgresqlPort: { Type: String }
+  SharedEcsClusterName: { Type: String }
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedPostgresqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedRedisReplicationGroupEndpointAddress: { Type: String }
+  SharedRedisReplicationGroupEndpointPort: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
 
@@ -95,7 +104,6 @@ Resources:
                 [main]
                 stack=${AWS::StackId}
                 region=${AWS::Region}
-              mode: "000400"
               owner: root
               group: root
             /etc/cfn/hooks.d/cfn-auto-reloader.conf:
@@ -108,6 +116,19 @@ Resources:
                 path=Resources.JumpServer.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource JumpServer
                 runas=root
+            /etc/profile.d/prxenv.sh:
+              content: !Sub |
+                export PRX_REGION=${AWS::Region}
+                export PRX_ENVIRONMENT=${EnvironmentType}
+                export PRX_ECS_CLUSTER_NAME=${SharedEcsClusterName}
+                export PRX_SHARED_MYSQL_HOST=${SharedAuroraMysqlEndpoint}
+                export PRX_SHARED_MYSQL_PORT=${SharedAuroraMysqlPort}
+                export PRX_SHARED_POSTGRES_HOST=${SharedAuroraPostgresqlEndpoint}
+                export PRX_SHARED_POSTGRES_PORT=${SharedAuroraPostgresqlPort}
+                export PRX_SHARED_REDIS_HOST=${SharedRedisReplicationGroupEndpointAddress}
+                export PRX_SHARED_REDIS_PORT=${SharedRedisReplicationGroupEndpointPort}
+                export PRX_CASTLE_POSTGRES_HOST=${CastlePostgresInstanceEndpointAddress}
+                export PRX_CASTLE_POSTGRES_PORT=${CastlePostgresInstanceEndpointPort}
           packages:
             yum:
               jq: []
@@ -130,7 +151,7 @@ Resources:
             VolumeSize: 100
       CreditSpecification:
         CPUCredits: unlimited
-      DisableApiTermination: true
+      DisableApiTermination: false
       IamInstanceProfile: !Ref InstanceProfile
       ImageId: !Ref kImageId
       InstanceInitiatedShutdownBehavior: stop

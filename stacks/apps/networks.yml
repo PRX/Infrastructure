@@ -59,6 +59,8 @@ Parameters:
   NetworksHostname: { Type: String }
   NetworksS3BucketArn: { Type: String }
   AnnounceResourcePrefix: { Type: String }
+  ExchangeHostname: { Type: String }
+  ExchangeApiHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -275,6 +277,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Networks/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -364,6 +375,12 @@ Resources:
               Value: !GetAtt Constants.NetworksS3BucketName
             - Name: SQS_PREFIX
               Value: !GetAtt Constants.SqsQueuePrefix
+            - Name: CACHE_STORE
+              Value: mem_cache_store
+            - Name: SSO_BASE_URL
+              Value: !Sub https://${ExchangeHostname}/sso/user/
+            - Name: PRX_API_BASE_URL
+              Value: !Sub https://${ExchangeApiHostname}/
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -380,6 +397,27 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-username
+            - Name: FIXER_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/fixer-api-key
+            - Name: FIXER_API_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/fixer-api-secret
+            - Name: INDEX_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/index-token
+            - Name: PRX_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/prx-api-key
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/rails-session-secret
       ExecutionRoleArn: !GetAtt PublicWebExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -647,6 +685,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Networks/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -739,6 +786,12 @@ Resources:
               Value: !GetAtt Constants.NetworksS3BucketName
             - Name: SQS_PREFIX
               Value: !GetAtt Constants.SqsQueuePrefix
+            - Name: CACHE_STORE
+              Value: mem_cache_store
+            - Name: SSO_BASE_URL
+              Value: !Sub https://${ExchangeHostname}/sso/user/
+            - Name: PRX_API_BASE_URL
+              Value: !Sub https://${ExchangeApiHostname}/
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -755,6 +808,27 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
             - ContainerPort: !Ref kSphinxPort
+          Secrets:
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/database-username
+            - Name: FIXER_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/fixer-api-key
+            - Name: FIXER_API_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/fixer-api-secret
+            - Name: INDEX_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/index-token
+            - Name: PRX_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/prx-api-key
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Networks/rails-session-secret
       ExecutionRoleArn: !GetAtt SphinxServerExecutionRole.Arn
       NetworkMode: awsvpc
       Tags:

@@ -1,14 +1,35 @@
-const AWS = require('aws-sdk');
+import {
+  CloudFormationClient,
+  DescribeStacksCommand,
+  ListStackResourcesCommand,
+} from '@aws-sdk/client-cloudformation';
+import {
+  CodePipelineClient,
+  PutJobFailureResultCommand,
+  PutJobSuccessResultCommand,
+} from '@aws-sdk/client-codepipeline';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { StandardRetryStrategy } from '@aws-sdk/middleware-retry';
 
-const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
-const cloudformation = new AWS.CloudFormation({
+const MAXIMUM_ATTEMPTS = 6;
+const MAXIMUM_RETRY_DELAY = 10000;
+const customRetryStrategy = new StandardRetryStrategy(
+  async () => MAXIMUM_ATTEMPTS,
+  {
+    delayDecider: (_, attempts) =>
+      Math.floor(
+        Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+      ),
+  },
+);
+
+const cloudformationClient = new CloudFormationClient({
   apiVersion: '2010-05-15',
-  maxRetries: 5,
-  retryDelayOptions: { base: 1100 },
+  maxAttempts: MAXIMUM_ATTEMPTS,
+  retryStrategy: customRetryStrategy,
 });
-
-const rootStackName = 'infrastructure-cd-root-staging';
+const codepipelineClient = new CodePipelineClient({ apiVersion: '2015-07-09' });
+const s3Client = new S3Client({ apiVersion: '2006-03-01' });
 
 /**
  * Returns an array of all stacks that are related to some root stack through
@@ -18,18 +39,18 @@ const rootStackName = 'infrastructure-cd-root-staging';
  * @returns {Promise<AWS.CloudFormation.Stacks>}
  */
 async function getStackFamily(stackId) {
-  const stackDesc = await cloudformation
-    .describeStacks({ StackName: stackId })
-    .promise();
+  const stackDesc = await cloudformationClient.send(
+    new DescribeStacksCommand({ StackName: stackId }),
+  );
 
-  // Start with an arry containing only the root stack
+  // Start with an array containing only the root stack
   let stacks = stackDesc.Stacks;
 
   // Query all the resources in the given stack, and look for any nested
   // CloudFormation stacks
-  const resourceList = await cloudformation
-    .listStackResources({ StackName: stackId })
-    .promise();
+  const resourceList = await cloudformationClient.send(
+    new ListStackResourcesCommand({ StackName: stackId }),
+  );
 
   const resourceSummaries = resourceList.StackResourceSummaries;
   const nestedStackSummaries = resourceSummaries.filter(
@@ -48,7 +69,8 @@ async function getStackFamily(stackId) {
 /**
  * Returns an object, where each key is the name of a parameter in Parameter
  * Store, and each value is the value of that parameter at the time
- * CloudFormation resolved it.
+ * CloudFormation resolved it. This includes all parameter store-based stack
+ * parameters for all stacks in the array being passed in.
  * @param {AWS.CloudFormation.Stacks} stacks
  * @returns {Object}
  */
@@ -64,36 +86,45 @@ function getAllResolveParameters(stacks) {
     );
 }
 
-exports.handler = async (event, context) => {
+export const handler = async (event, context) => {
   const job = event['CodePipeline.job'];
 
   try {
+    const rootStackName =
+      job.data.actionConfiguration.configuration.UserParameters;
+
     const allStacks = await getStackFamily(rootStackName);
     const resolvedParams = getAllResolveParameters(allStacks);
 
-    // await s3
-    //   .putObject({
-    //     Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
-    //     Key: key,
-    //     Body: JSON.stringify(resolvedParams),
-    //   })
-    //   .promise();
+    console.log(JSON.stringify(resolvedParams));
 
-    await codepipeline
-      .putJobSuccessResult({
+    // Snapshots are named with a timestamp, eg infra-staging/123456.json
+    const ts = Date.now();
+    const key = `${rootStackName}/${ts}.json`;
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
+        Key: key,
+        Body: JSON.stringify(resolvedParams),
+      }),
+    );
+
+    await codepipelineClient.send(
+      new PutJobSuccessResultCommand({
         jobId: job.id,
-      })
-      .promise();
+      }),
+    );
   } catch (error) {
-    await codepipeline
-      .putJobFailureResult({
+    await codepipelineClient.send(
+      new PutJobFailureResultCommand({
         jobId: job.id,
         failureDetails: {
           message: JSON.stringify(error),
           type: 'JobFailed',
           externalExecutionId: context.invokeid,
         },
-      })
-      .promise();
+      }),
+    );
   }
 };

@@ -23,7 +23,6 @@ module.exports = {
   },
   /**
    * Returns an assumed Organization data sharing role from the given account
-   * @param {string} awsAccountId
    * @returns {Promise<AWS.STS.AssumeRoleResponse>}
    */
   async orgSharingRole() {

@@ -25,7 +25,7 @@ Parameters:
   CodeS3ObjectKey: { Type: String }
   LambdaLayerS3Bucket: { Type: String }
   CloudFrontOai: { Type: String }
-  DovetailRouterHostname: { Type: String }
+  DovetailRouterHostname: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterToken: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
@@ -122,12 +122,20 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:PutItem
               Effect: Allow
-              Resource: !Sub arn:${AWS::Partition}:dynamodb:*:*:table/${ArrangementsDynamodbTableName}
+              # TODO: can this be done with an AWS::Partition Sub?
+              Resource: !Split
+                - ","
+                - Fn::Sub:
+                    - arn:aws:dynamodb:*:*:table/${inner}
+                    - inner:
+                        Fn::Join:
+                          - ",arn:aws:dynamodb:*:*:table/"
+                          - !Split [",", !Ref ArrangementsDynamodbTableName]
           Version: "2012-10-17"
         - Statement:
             - Action: sts:AssumeRole
               Effect: Allow
-              Resource: !Ref ArrangementsDynamodbAccessRoleArn
+              Resource: !Split [",", !Ref ArrangementsDynamodbAccessRoleArn]
           Version: "2012-10-17"
         - Statement:
             - Action: s3:ListBucket
@@ -192,7 +200,6 @@ Resources:
       TreatMissingData: notBreaching
   ArrangerFunctionElevatedErrorAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt ArrangerFunctionElevatedErrorAlarm.Arn
@@ -232,7 +239,6 @@ Resources:
       TreatMissingData: notBreaching
   ArrangerFunctionLoggedWarnAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt ArrangerFunctionLoggedWarnAlarm.Arn
@@ -273,7 +279,6 @@ Resources:
       TreatMissingData: notBreaching
   ArrangerFunctionLoggedErrorAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt ArrangerFunctionLoggedErrorAlarm.Arn

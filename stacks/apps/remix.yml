@@ -150,6 +150,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Remix/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -314,6 +323,16 @@ Resources:
               Value: !Select [5, !Split [":", !Ref RemixS3BucketArn]]
             - Name: REMIX_HOST
               Value: !Ref RemixHostname
+            - Name: REMIX_ACCOUNT_ID
+              Value: "98822"
+            - Name: REMIX_SERIES_ID
+              Value: "31702"
+            - Name: REMIX_SERIES_START_AT
+              Value: "2010-06-19T00:00:00-04:00"
+            - Name: REMIX_SELECT_SERIES_ID
+              Value: "32346"
+            - Name: REMIX_SELECT_SERIES_START_AT
+              Value: "2011-05-10T12:00:00-00:00"
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -330,6 +349,23 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: DB_ENV_POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-name
+            - Name: DB_ENV_POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-password
+            - Name: DB_ENV_POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-user
+            - Name: PRX_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/prx-key
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/prx-secret
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/secret-key-base
+            - Name: SHORT_URL_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/short-url-salt
+            - Name: PORTER_CALLBACK_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/porter-callback-token
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -403,6 +439,20 @@ Resources:
               Value: !Select [5, !Split [":", !Ref RemixS3BucketArn]]
             - Name: REMIX_HOST
               Value: !Ref RemixHostname
+            - Name: RACK_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: REMIX_ACCOUNT_ID
+              Value: "98822"
+            - Name: REMIX_SERIES_ID
+              Value: "31702"
+            - Name: REMIX_SERIES_START_AT
+              Value: "2010-06-19T00:00:00-04:00"
+            - Name: REMIX_SELECT_SERIES_ID
+              Value: "32346"
+            - Name: REMIX_SELECT_SERIES_START_AT
+              Value: "2011-05-10T12:00:00-00:00"
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -419,6 +469,23 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: DB_ENV_POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-name
+            - Name: DB_ENV_POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-password
+            - Name: DB_ENV_POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/database-user
+            - Name: PRX_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/prx-key
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/prx-secret
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/secret-key-base
+            - Name: SHORT_URL_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/short-url-salt
+            - Name: PORTER_CALLBACK_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/porter-callback-token
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

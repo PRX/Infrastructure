@@ -166,6 +166,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -217,6 +226,8 @@ Resources:
               Value: !Ref IdHostname
             - Name: CASTLE_HOST
               Value: !Ref CastleHostname
+            - Name: GA_KEY
+              Value: !If [IsProduction, UA-164824-61, ""]
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -232,6 +243,13 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics/id-auth-client-id
+            - Name: GOOGLE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics/google-api-key
+            - Name: GOOGLE_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics/google-client-id
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

@@ -436,6 +436,20 @@ Resources:
       IpProtocol: tcp
       ToPort: 65535
 
+  # AsgInstanceKeyPair:
+  #   Type: AWS::EC2::KeyPair
+  #   Properties:
+  #     KeyName: !Sub ${RootStackName}-asg-2022-05
+  #     KeyType: ed25519
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+  #       - { Key: prx:dev:application, Value: Infrastructure }
+
   # If the logical ID of this resource changes, it needs to be changed in the
   # user data and metadata as well
   # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-optimized_AMI.html
@@ -530,8 +544,10 @@ Resources:
           files:
             /etc/ecs/ecs.config:
               # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-agent-config.html
+              # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/specifying-sensitive-data-parameters.html#secrets-iam-parameters
               content: !Sub |
                 ECS_CLUSTER=${EcsClusterName}
+                ECS_ENABLE_AWSLOGS_EXECUTIONROLE_OVERRIDE=true
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
               # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file

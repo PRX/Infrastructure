@@ -54,12 +54,20 @@ Resources:
         - Statement:
             - Action: lambda:InvokeFunction
               Effect: Allow
-              Resource: !Ref ArrangerFunctionArn # TODO multiple region arrangers
+              Resource:
+                # explicit reference to this-region's arranger. in case the
+                # wildcard version breaks due to a resource name changing.
+                - !Ref ArrangerFunctionArn
+                - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*ArrangerFunction*
           Version: "2012-10-17"
         - Statement:
             - Action: s3:GetObject
               Effect: Allow
-              Resource: !Sub ${ArrangerWorkspaceBucketArn}/* # TODO multiple region arrangers
+              Resource:
+                # explicit reference to this-region's S3 workspace. in case the
+                # wildcard version breaks due to a resource name changing.
+                - !Sub ${ArrangerWorkspaceBucketArn}/*
+                - !Sub arn:${AWS::Partition}:s3:::*dtcdnarrangerworkspace*
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"

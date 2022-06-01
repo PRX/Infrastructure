@@ -129,6 +129,7 @@ Resources:
       DomainName: !If [IsProduction, dovetail.prxu.org, dovetail.staging.prxu.org]
       SubjectAlternativeNames:
         - !If [IsProduction, dovetail-router.prxu.org, dovetail-router.staging.prxu.org]
+        - !GetAtt Constants.VanityDomain
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_dovetail_${Alb.LoadBalancerName}" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -504,7 +505,7 @@ Resources:
       MetricName: TargetResponseTime
       Namespace: AWS/ApplicationELB
       Period: 300
-      Threshold: 0.4 # TODO Bring back to ~.2 once things are optimzed
+      Threshold: 0.5 # TODO Bring back to ~.2 once things are optimzed
       TreatMissingData: notBreaching
       Unit: Seconds
   AlbResponseTimeP95AlarmTags:
@@ -718,6 +719,19 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/*
+                Sid: AllowAppParameterRead
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/*
+                Sid: AllowGlobalParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -774,7 +788,7 @@ Resources:
             - Name: REDIS_NAMESPACE
               Value: dovetail
             - Name: REDIS_POOL_SIZE
-              Value: "4"
+              Value: "10"
             - Name: PORT
               Value: !Ref kApplicationPort
             - Name: REDIRECT_HOST
@@ -805,6 +819,21 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/secret-key-base
+            - Name: ADMIN_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-salt
+            - Name: ADMIN_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-user
+            - Name: ADMIN_PASS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/admin-password
+            - Name: AUGURY_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/augury-token
+            - Name: FEEDER_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/feeder-token
+            - Name: MAXMIND_LICENSE_KEY
+              ValueFrom: /prx/global/Spire/maxmind/license-key
           Ulimits:
             - HardLimit: 8192
               Name: nofile

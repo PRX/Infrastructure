@@ -27,6 +27,7 @@ Parameters:
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   SecretsVersion: { Type: String }
+  NewRelicApiKeyPrxLite: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
   SecretsStackName: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
@@ -175,6 +176,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Publish/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -244,8 +254,12 @@ Resources:
               Value: !Ref PlayHostname
             - Name: NEW_RELIC_APP_NAME
               Value: !If [IsProduction, Publish Production, Publish Staging]
+            - Name: NEW_RELIC_LICENSE_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
             - Name: UPLOAD_BUCKET_FOLDER
               Value: !If [IsProduction, prod, staging]
+            - Name: GA_KEY
+              Value: !If [IsProduction, UA-164824-57, UA-164824-58]
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -261,6 +275,9 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Publish/id-auth-client-id
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

@@ -238,7 +238,7 @@ Resources:
               Effect: Allow
               Resource: "*"
           Version: "2012-10-17"
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -392,6 +392,7 @@ Resources:
                 Resource:
                   - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
+                  - !GetAtt ParameterCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
                   - !GetAtt ChangeSetDeltaNotificationFunction.Arn
             Version: "2012-10-17"
@@ -553,6 +554,16 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 4
+            - Name: CaptureStagingParams
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ParameterCaptureFunction
+                UserParameters: !Sub ${AWS::StackName}-root-staging
+              RunOrder: 4
         - Name: Testing
           Actions:
             - Name: Acceptance
@@ -695,6 +706,16 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 5
+            - Name: CaptureProductionParams
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ParameterCaptureFunction
+                UserParameters: !Sub ${AWS::StackName}-root-production
+              RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -724,14 +745,12 @@ Resources:
               source:
                 - aws.codepipeline
           Type: EventBridgeRule
-      # Handler: lambda_function.lambda_handler
       Handler: index.handler
       MemorySize: 128
       Policies:
         - !Ref CodePipelineStateReadOnlyAccessPolicy
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      # Runtime: python3.8
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1115,7 +1134,7 @@ Resources:
         - !Ref CloudFormationReadOnlyAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1166,7 +1185,7 @@ Resources:
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref ProductionConfigObjectReadOnlyAccessPolicy
         - !Ref SnapshotsBucketWriteAccessPolicy
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1216,7 +1235,7 @@ Resources:
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref ProductionConfigObjectReadWriteAccessPolicy
         - !Ref StagingConfigObjectReadOnlyAccessPolicy
-      Runtime: python3.8
+      Runtime: python3.9
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1263,7 +1282,7 @@ Resources:
         - !Ref ArtifactBucketReadOnlyAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref SourceBucketWriteAccessPolicy
-      Runtime: python3.8
+      Runtime: python3.9
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1309,7 +1328,8 @@ Resources:
       Policies:
         - !Ref CloudFormationReadOnlyAccessPolicy
         - !Ref SnapshotsBucketWriteAccessPolicy
-      Runtime: nodejs14.x
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName

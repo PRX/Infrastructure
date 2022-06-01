@@ -2,7 +2,7 @@ module.exports = {
   /**
    * Returns a URL to CloudWatch Alarms console for the alarm that triggered
    * the event.
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
+   * @param {*} alarmDetail
    * @returns {String}
    */
   alarmConsole(alarmDetail) {

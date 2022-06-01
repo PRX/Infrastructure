@@ -35,6 +35,7 @@ Parameters:
   EcsClusterName: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  EnvironmentTypeLowercase: { Type: String }
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -63,6 +64,7 @@ Parameters:
   PorterJobExecutionSnsTopicArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
   TransferS3BucketArn: { Type: String }
+  FixerHostname: { Type: String }
   IdHostname: { Type: String }
   CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
@@ -71,7 +73,6 @@ Parameters:
   TheCastleHostname: { Type: String }
 
 Conditions:
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
@@ -464,6 +465,24 @@ Resources:
               Value: "5"
             - Name: NEW_RELIC_LICENSE_KEY
               Value: !Ref NewRelicApiKeyPrxLite
+            - Name: CMS_API_VERSION
+              Value: v1
+            - Name: DATABASE_SOCKET
+              Value: ""
+            - Name: FIXER_HOST
+              Value: !Ref FixerHostname
+            - Name: FIXER_PORT
+              Value: "80"
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: NEW_HOMEPAGE
+              Value: "true"
+            - Name: CACHE_STORE
+              Value: mem_cache_store
+            - Name: PAYPAL_ACTION_URL
+              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
+            - Name: COUNT_HOST_NEW # TODO
+              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -614,6 +633,24 @@ Resources:
               Value: "5"
             - Name: NEW_RELIC_LICENSE_KEY
               Value: !Ref NewRelicApiKeyPrxLite
+            - Name: CMS_API_VERSION
+              Value: v1
+            - Name: DATABASE_SOCKET
+              Value: ""
+            - Name: FIXER_HOST
+              Value: !Ref FixerHostname
+            - Name: FIXER_PORT
+              Value: "80"
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: NEW_HOMEPAGE
+              Value: "true"
+            - Name: CACHE_STORE
+              Value: mem_cache_store
+            - Name: PAYPAL_ACTION_URL
+              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
+            - Name: COUNT_HOST_NEW # TODO
+              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -877,6 +914,24 @@ Resources:
               Value: "5"
             - Name: NEW_RELIC_LICENSE_KEY
               Value: !Ref NewRelicApiKeyPrxLite
+            - Name: CMS_API_VERSION
+              Value: v1
+            - Name: DATABASE_SOCKET
+              Value: ""
+            - Name: FIXER_HOST
+              Value: !Ref FixerHostname
+            - Name: FIXER_PORT
+              Value: "80"
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: NEW_HOMEPAGE
+              Value: "true"
+            - Name: CACHE_STORE
+              Value: mem_cache_store
+            - Name: PAYPAL_ACTION_URL
+              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
+            - Name: COUNT_HOST_NEW # TODO
+              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -1496,7 +1551,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServer:
     Type: AWS::Transfer::Server
-    Condition: IsStaging
     Properties:
       Domain: S3
       EndpointDetails:
@@ -1530,7 +1584,6 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
   FtpServerLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: IsStaging
     Properties:
       LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
       RetentionInDays: 14
@@ -1539,7 +1592,6 @@ Resources:
   # requests to a private server.
   FtpServerNlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Condition: IsStaging
     Properties:
       IpAddressType: dualstack
       Scheme: internet-facing
@@ -1557,14 +1609,12 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
       Type: network
   FtpServerIpAddresses:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsStaging
+    Type: Custom::CloudWatchAlarmTags # TODO This is a mistake
     Properties:
       ServiceToken: !Ref TransferServerIpFinderServiceToken
       ServerId: !GetAtt FtpServer.ServerId
   FtpServerFtpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1593,7 +1643,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpNlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1603,7 +1652,6 @@ Resources:
       Protocol: TCP
   FtpServerSftpTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1632,7 +1680,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerSftpNlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1644,7 +1691,6 @@ Resources:
   # its own target group and listener on the NLB
   FtpServerFtpData8192TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1673,7 +1719,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8192NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1683,7 +1728,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8193TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1712,7 +1756,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8193NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1722,7 +1765,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8194TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1751,7 +1793,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8194NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1761,7 +1802,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8195TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1790,7 +1830,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8195NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1800,7 +1839,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8196TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1829,7 +1867,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8196NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1839,7 +1876,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8197TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1868,7 +1904,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8197NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1878,7 +1913,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8198TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1907,7 +1941,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8198NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1917,7 +1950,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8199TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1946,7 +1978,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8199NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
@@ -1956,7 +1987,6 @@ Resources:
       Protocol: TCP
   FtpServerFtpData8200TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Condition: IsStaging
     DependsOn: FtpServerNlb
     Properties:
       HealthCheckIntervalSeconds: 10
@@ -1985,7 +2015,6 @@ Resources:
       VpcId: !Ref VpcId
   FtpServerFtpData8200NlbListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
-    Condition: IsStaging
     Properties:
       DefaultActions:
         - Type: forward
