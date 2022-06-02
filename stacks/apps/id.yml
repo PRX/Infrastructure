@@ -172,6 +172,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/ID/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -271,6 +280,31 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: ALGORITHM
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/algorithm
+            - Name: CERT_STRING
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/certificate
+            - Name: CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/client-id
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-username
+            - Name: PRIVATE_KEY_STRING
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/private-key
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/secret-key-base
+            - Name: SECRET_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/secret-token
+            - Name: SESSION_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/session-key
+            - Name: GOOGLE_OAUTH2_APP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/google-oauth-app-id
+            - Name: GOOGLE_OAUTH2_APP_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/google-oauth-app-secret
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
