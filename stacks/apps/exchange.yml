@@ -85,7 +85,6 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       # Provides a namespace for Exchange-specific queues
       SqsQueuePrefix: !Sub ${AnnounceResourcePrefix}_exchange_
-      FtpAuthTokenParameterArn: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/FTP_AUTH_TOKEN
 
   ExchangeWildcardHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -298,8 +297,7 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                # TODO Update with more modern parameter naming
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -501,7 +499,86 @@ Resources:
               HostPort: 0
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -666,7 +743,86 @@ Resources:
           Name: !Ref kWorkerContainerName
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -946,7 +1102,86 @@ Resources:
           Name: !Ref kSayWhenContainerName
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -1348,7 +1583,7 @@ Resources:
         Variables:
           FTP_USER_ACCESS_ROLE: !GetAtt FtpUserAccessRole.Arn
           S3_BUCKET_ARN: !Ref TransferS3BucketArn
-          FTP_AUTH_TOKEN_PARAMETER_ARN: !GetAtt Constants.FtpAuthTokenParameterArn
+          FTP_AUTH_TOKEN_PARAMETER_ARN: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
           EXCHANGE_HOSTNAME: !Ref ExchangeHostname
       Handler: index.handler
       InlineCode: |
@@ -1364,6 +1599,7 @@ Resources:
           const param = await ssm
             .getParameter({
               Name: ENV.FTP_AUTH_TOKEN_PARAMETER_ARN.split(':parameter')[1],
+              WithDecryption: true,
             })
             .promise();
           const token = param.Parameter.Value;
