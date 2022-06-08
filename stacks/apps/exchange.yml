@@ -44,6 +44,9 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   CodeS3Bucket: { Type: String }
@@ -57,6 +60,8 @@ Parameters:
   TransferServerIpFinderServiceToken: { Type: String }
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
+  SystemManagerEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
@@ -1639,6 +1644,14 @@ Resources:
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:application: Exchange
       Timeout: 30
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SharedMysqlClientSecurityGroupId
+          - !Ref SystemManagerEndpointAccessSecurityGroupId
+        SubnetIds:
+          - !Ref VpcPrivateSubnet1Id
+          - !Ref VpcPrivateSubnet2Id
+          - !Ref VpcPrivateSubnet3Id
   FtpServerAuthorizerFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
