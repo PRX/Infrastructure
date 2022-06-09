@@ -979,6 +979,38 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Augury
       Timeout: 5
+  SlowWorkerRelayFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Augury] Slow worker relay function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury slow worker relay function is failing, which
+        could be preventing some forecasts from running.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlowWorkerRelayFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  SlowWorkerRelayFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt SlowWorkerRelayFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   # Forecast task timings
   ForecastJobMetricFilter:
