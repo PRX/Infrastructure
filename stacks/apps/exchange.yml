@@ -1838,437 +1838,437 @@ Resources:
   # AWS Transfer Family does not allow public servers with insecure FTP
   # enabled. Putting the server behind an NLB allows forwarding of public FTP
   # requests to a private server.
-  # FtpServerNlb:
-  #   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-  #   Properties:
-  #     IpAddressType: ipv4
-  #     Scheme: internet-facing
-  #     SubnetMappings:
-  #       - AllocationId: !GetAtt FtpServerNblElasticIp.AllocationId
-  #         SubnetId: !Ref VpcPublicSubnet1Id
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     Type: network
-  # FtpServerIpAddresses:
-  #   Type: Custom::TransferServerIpFinder
-  #   Properties:
-  #     ServiceToken: !Ref TransferServerIpFinderServiceToken
-  #     ServerId: !GetAtt FtpServer.ServerId
-  # FtpServerFtpTargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 21
-  #     Protocol: TCP
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpNlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpTargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 21
-  #     Protocol: TCP
-  # FtpServerSftpTargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 22
-  #     HealthyThresholdCount: 3
-  #     Port: 22
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_sftp" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerSftpNlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerSftpTargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 22
-  #     Protocol: TCP
-  # # Each data port in the range 8192-8200 that AWS Transfer Family uses needs
-  # # its own target group and listener on the NLB
-  # FtpServerFtpData8192TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8192
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8192" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8192NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8192TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8192
-  #     Protocol: TCP
-  # FtpServerFtpData8193TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8193
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8193" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8193NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8193TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8193
-  #     Protocol: TCP
-  # FtpServerFtpData8194TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8194
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8194" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8194NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8194TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8194
-  #     Protocol: TCP
-  # FtpServerFtpData8195TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8195
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8195" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8195NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8195TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8195
-  #     Protocol: TCP
-  # FtpServerFtpData8196TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8196
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8196" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8196NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8196TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8196
-  #     Protocol: TCP
-  # FtpServerFtpData8197TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8197
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8197" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8197NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8197TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8197
-  #     Protocol: TCP
-  # FtpServerFtpData8198TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8198
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8198" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8198NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8198TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8198
-  #     Protocol: TCP
-  # FtpServerFtpData8199TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8199
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8199" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8199NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8199TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8199
-  #     Protocol: TCP
-  # FtpServerFtpData8200TargetGroup:
-  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
-  #   DependsOn: FtpServerNlb
-  #   Properties:
-  #     HealthCheckIntervalSeconds: 10
-  #     HealthCheckPort: 21
-  #     HealthyThresholdCount: 3
-  #     Port: 8200
-  #     Protocol: TCP
-  #     Targets:
-  #       - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #       - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
-  #     TargetGroupAttributes:
-  #       - Key: deregistration_delay.timeout_seconds
-  #         Value: "30"
-  #     TargetType: ip
-  #     Tags:
-  #       - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8200" }
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Exchange }
-  #     UnhealthyThresholdCount: 3
-  #     VpcId: !Ref VpcId
-  # FtpServerFtpData8200NlbListener:
-  #   Type: AWS::ElasticLoadBalancingV2::Listener
-  #   Properties:
-  #     DefaultActions:
-  #       - Type: forward
-  #         TargetGroupArn: !Ref FtpServerFtpData8200TargetGroup
-  #     LoadBalancerArn: !Ref FtpServerNlb
-  #     Port: 8200
-  #     Protocol: TCP
+  FtpServerNlb:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SubnetMappings:
+        - AllocationId: !GetAtt FtpServerNblElasticIp.AllocationId
+          SubnetId: !Ref VpcPublicSubnet1Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      Type: network
+  FtpServerIpAddresses:
+    Type: Custom::TransferServerIpFinder
+    Properties:
+      ServiceToken: !Ref TransferServerIpFinderServiceToken
+      ServerId: !GetAtt FtpServer.ServerId
+  FtpServerFtpTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 21
+      Protocol: TCP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpTargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 21
+      Protocol: TCP
+  FtpServerSftpTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 22
+      HealthyThresholdCount: 3
+      Port: 22
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_sftp" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerSftpNlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerSftpTargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 22
+      Protocol: TCP
+  # Each data port in the range 8192-8200 that AWS Transfer Family uses needs
+  # its own target group and listener on the NLB
+  FtpServerFtpData8192TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8192
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8192" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8192NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8192TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8192
+      Protocol: TCP
+  FtpServerFtpData8193TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8193
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8193" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8193NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8193TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8193
+      Protocol: TCP
+  FtpServerFtpData8194TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8194
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8194" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8194NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8194TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8194
+      Protocol: TCP
+  FtpServerFtpData8195TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8195
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8195" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8195NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8195TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8195
+      Protocol: TCP
+  FtpServerFtpData8196TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8196
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8196" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8196NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8196TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8196
+      Protocol: TCP
+  FtpServerFtpData8197TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8197
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8197" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8197NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8197TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8197
+      Protocol: TCP
+  FtpServerFtpData8198TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8198
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8198" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8198NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8198TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8198
+      Protocol: TCP
+  FtpServerFtpData8199TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8199
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8199" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8199NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8199TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8199
+      Protocol: TCP
+  FtpServerFtpData8200TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: FtpServerNlb
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPort: 21
+      HealthyThresholdCount: 3
+      Port: 8200
+      Protocol: TCP
+      Targets:
+        - Id: !Select [0, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [1, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+        - Id: !Select [2, !GetAtt FtpServerIpAddresses.PrivateIpAddresses]
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-8200" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  FtpServerFtpData8200NlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref FtpServerFtpData8200TargetGroup
+      LoadBalancerArn: !Ref FtpServerNlb
+      Port: 8200
+      Protocol: TCP
 Outputs:
   WebTargetGroupFullName:
     Value: !GetAtt WebTargetGroup.TargetGroupFullName
