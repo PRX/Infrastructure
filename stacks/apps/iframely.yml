@@ -23,11 +23,8 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
-  SecretsVersion: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
-  SecretsStackName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -206,9 +203,6 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
-      ManagedPolicyArns:
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -230,10 +224,6 @@ Resources:
               Value: iframely
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
           Essential: true

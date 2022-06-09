@@ -37,9 +37,6 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   TheCountLogsFileSystemId: { Type: String }
   EcrImageTag: { Type: String }
-  SecretsStackName: { Type: String }
-  SecretsVersion: { Type: String }
-  SecretsBase: { Type: String }
   NewRelicApiKeyPrxLite: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
@@ -177,9 +174,6 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
-      ManagedPolicyArns:
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Policies:
         - PolicyDocument:
             Statement:
@@ -263,10 +257,6 @@ Resources:
               Value: thecastle
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: NEW_RELIC_KEY
@@ -304,7 +294,7 @@ Resources:
           Memory: !If [IsProduction, 400, 200]
           MountPoints:
             # This matches the default where the app expects count files
-            # Override in secrets: COUNT_FILES=/app/count_files
+            # Override in Environment above: COUNT_FILES=/app/count_files
             - ContainerPath: /app/count_files
               SourceVolume: !Ref kLogsVolumeName
           Name: !Ref kWebContainerName
@@ -375,10 +365,6 @@ Resources:
               Value: thecastle
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: NEW_RELIC_KEY
@@ -417,7 +403,7 @@ Resources:
           MemoryReservation: !If [IsProduction, 1000, 500]
           MountPoints:
             # This matches the default where the app expects count files
-            # Override in secrets: COUNT_FILES=/app/count_files
+            # Override in Environment above: COUNT_FILES=/app/count_files
             - ContainerPath: /app/count_files
               SourceVolume: !Ref kLogsVolumeName
           Name: !Ref kWorkerContainerName
