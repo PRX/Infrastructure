@@ -114,6 +114,17 @@ Resources:
             Effect: Allow
             Resource: "*"
         Version: "2012-10-17"
+  CloudFormationCreateChangeSetPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:CreateChangeSet
+              - cloudformation:DescribeChangeSet
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
   CloudWatchMetricWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -503,6 +514,23 @@ Resources:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
+            - Name: CustomCreateStagingChangeSet
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ChangeSetCreateFunction
+                UserParameters: !Sub |
+                  {
+                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
+                  }
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 1
+
             - Name: StagingDeltaNotification
               ActionTypeId:
                 Category: Invoke
@@ -764,6 +792,9 @@ Resources:
         The error rate on the pipeline events handler lambda has exceeded
         0 in the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CdPipelineEventsTargetFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -771,9 +802,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CdPipelineEventsTargetFunction
 
   # Pipeline S3 Trigger
   CdPipelineS3TriggerTrailStore:
@@ -1111,6 +1139,49 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
 
   # Custom Lambda Actions
+  ChangeSetCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/change-set-create/
+      Description: >-
+        Creates change sets
+      Handler: index.handler
+      MemorySize: 256
+      Policies:
+        - !Ref CloudFormationCreateChangeSetPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 10
+  ChangeSetCreateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ChangeSetCreateFunction}
+      RetentionInDays: 14
+  ChangeSetCreateNotificationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Changeset create <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the change set create lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChangeSetCreateFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
   ChangeSetDeltaNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1148,6 +1219,9 @@ Resources:
         The error rate on the diff notification lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChangeSetDeltaNotificationFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1155,9 +1229,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ChangeSetDeltaNotificationFunction
 
   EnvironmentStateCaptureFunction:
     Type: AWS::Serverless::Function
@@ -1199,6 +1270,9 @@ Resources:
         The error rate on the state capture lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EnvironmentStateCaptureFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1208,7 +1282,6 @@ Resources:
       TreatMissingData: notBreaching
       Dimensions:
         - Name: FunctionName
-          Value: !Ref EnvironmentStateCaptureFunction
 
   ProductionConfigPseudoSourceFunction:
     Type: AWS::Serverless::Function
@@ -1249,6 +1322,9 @@ Resources:
         The error rate on the pseudo source lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProductionConfigPseudoSourceFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1256,9 +1332,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ProductionConfigPseudoSourceFunction
 
   InfrastructureRepoSourceS3SyncFunction:
     Type: AWS::Serverless::Function
@@ -1296,6 +1369,9 @@ Resources:
         The error rate on the S3 Sync lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureRepoSourceS3SyncFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1303,9 +1379,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFunction
 
   ParameterCaptureFunction:
     Type: AWS::Serverless::Function
