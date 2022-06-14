@@ -514,22 +514,31 @@ Resources:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            - Name: CustomCreateStagingChangeSet
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref ChangeSetCreateFunction
-                UserParameters: !Sub |
-                  {
-                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}"
-                  }
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 1
+            # - Name: CustomCreateStagingChangeSet
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref ChangeSetCreateFunction
+            #     UserParameters: !Sub |
+            #       {
+            #         "StackName": "${AWS::StackName}-root-staging",
+            #         "ChangeSetName": "cd-pipeline-nested",
+            #         "RoleArn": "${CloudFormationIamRole.Arn}",
+            #         "ParameterOverrides": {
+            #           "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
+            #           "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+            #           "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
+            #           "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
+            #           "EnvironmentType": "Staging"
+            #         }
+            #       }
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 1
             - Name: StagingDeltaNotification
               ActionTypeId:
                 Category: Invoke
