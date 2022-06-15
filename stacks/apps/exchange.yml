@@ -63,6 +63,7 @@ Parameters:
   SharedMemcachedEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
+  SlackMessageRelaySnsTopicArn: { Type: String }
   EchoServiceToken: { Type: String }
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
@@ -449,6 +450,14 @@ Resources:
               Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: PORTER_AUDIO_PROCESSING
               Value: "true"
+            - Name: PORTER_DELIVERIES
+              Value: "false"
+            - Name: PORTER_DELIVERY_BUCKET
+              Value: !If [IsProduction, "production.prxtransfer.org", "testing.prxtransfer.org"]
+            - Name: SAY_WHEN_THREAD
+              Value: "false"
+            - Name: SLACK_SNS_TOPIC
+              Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: RAILS_LOG_STDOUT
               Value: "true"
             - Name: MODEL_SITE_HOST
@@ -467,12 +476,8 @@ Resources:
               Value: "80"
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
-            - Name: NEW_HOMEPAGE
-              Value: "true"
             - Name: CACHE_STORE
               Value: mem_cache_store
-            - Name: PAYPAL_ACTION_URL
-              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
             - Name: COUNT_HOST_NEW # TODO
               Value: thecount.prx.org
           Essential: true
@@ -517,24 +522,6 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
             - Name: GOOGLE_MAPS_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_API_KEY
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_LIST_ID
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
-                - !Ref AWS::NoValue
-            - Name: PAYPAL_BUSINESS_ADDRESS
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
-            - Name: PAYPAL_CERTIFICATE_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
-            - Name: PAYPAL_NOTIFY_HOST
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
-            - Name: PMP_OP_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
             - Name: PUBLIC_URL_SECRET
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
             - Name: RAILS_SECRET
@@ -555,22 +542,12 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
             - Name: RECAPTCHA_SITE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
-            - Fn::If:
-                - IsProduction
-                - Name: REDIS_URL
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
-                - !Ref AWS::NoValue
             - Name: SOLR_URL
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
             - Name: STRIPE_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
             - Name: STRIPE_PUBLISHABLE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
-            - Fn::If:
-                - IsProduction
-                - Name: USE_REPLICA
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
-                - !Ref AWS::NoValue
             - Name: WHATS_INSIDE_PLAYLIST_ID
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
             - Fn::If:
@@ -702,6 +679,14 @@ Resources:
               Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: PORTER_AUDIO_PROCESSING
               Value: "true"
+            - Name: PORTER_DELIVERIES
+              Value: "false"
+            - Name: PORTER_DELIVERY_BUCKET
+              Value: !If [IsProduction, "production.prxtransfer.org", "testing.prxtransfer.org"]
+            - Name: SAY_WHEN_THREAD
+              Value: !If [IsProduction, "false", "true"]
+            - Name: SLACK_SNS_TOPIC
+              Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: RAILS_LOG_STDOUT
               Value: "true"
             - Name: MODEL_SITE_HOST
@@ -720,12 +705,8 @@ Resources:
               Value: "80"
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
-            - Name: NEW_HOMEPAGE
-              Value: "true"
             - Name: CACHE_STORE
               Value: mem_cache_store
-            - Name: PAYPAL_ACTION_URL
-              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
             - Name: COUNT_HOST_NEW # TODO
               Value: thecount.prx.org
           Essential: true
@@ -767,24 +748,6 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
             - Name: GOOGLE_MAPS_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_API_KEY
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_LIST_ID
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
-                - !Ref AWS::NoValue
-            - Name: PAYPAL_BUSINESS_ADDRESS
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
-            - Name: PAYPAL_CERTIFICATE_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
-            - Name: PAYPAL_NOTIFY_HOST
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
-            - Name: PMP_OP_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
             - Name: PUBLIC_URL_SECRET
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
             - Name: RAILS_SECRET
@@ -805,22 +768,12 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
             - Name: RECAPTCHA_SITE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
-            - Fn::If:
-                - IsProduction
-                - Name: REDIS_URL
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
-                - !Ref AWS::NoValue
             - Name: SOLR_URL
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
             - Name: STRIPE_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
             - Name: STRIPE_PUBLISHABLE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
-            - Fn::If:
-                - IsProduction
-                - Name: USE_REPLICA
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
-                - !Ref AWS::NoValue
             - Name: WHATS_INSIDE_PLAYLIST_ID
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
             - Fn::If:
@@ -1022,8 +975,6 @@ Resources:
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: MEMCACHED_PORT_11211_TCP_PORT
               Value: !Ref SharedMemcachedEndpointPort
-            - Name: SAY_WHEN_THREAD
-              Value: "true"
             - Name: SMTP_ADDRESS
               Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
             - Name: SMTP_AUTHENTICATION
@@ -1068,6 +1019,14 @@ Resources:
               Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: PORTER_AUDIO_PROCESSING
               Value: "true"
+            - Name: PORTER_DELIVERIES
+              Value: "false"
+            - Name: PORTER_DELIVERY_BUCKET
+              Value: !If [IsProduction, "production.prxtransfer.org", "testing.prxtransfer.org"]
+            - Name: SAY_WHEN_THREAD
+              Value: "true"
+            - Name: SLACK_SNS_TOPIC
+              Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: RAILS_LOG_STDOUT
               Value: "true"
             - Name: MODEL_SITE_HOST
@@ -1086,12 +1045,8 @@ Resources:
               Value: "80"
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
-            - Name: NEW_HOMEPAGE
-              Value: "true"
             - Name: CACHE_STORE
               Value: mem_cache_store
-            - Name: PAYPAL_ACTION_URL
-              Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
             - Name: COUNT_HOST_NEW # TODO
               Value: thecount.prx.org
           Essential: true
@@ -1132,24 +1087,6 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
             - Name: GOOGLE_MAPS_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_API_KEY
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsProduction
-                - Name: MAILCHIMP_LIST_ID
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
-                - !Ref AWS::NoValue
-            - Name: PAYPAL_BUSINESS_ADDRESS
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
-            - Name: PAYPAL_CERTIFICATE_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
-            - Name: PAYPAL_NOTIFY_HOST
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
-            - Name: PMP_OP_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
             - Name: PUBLIC_URL_SECRET
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
             - Name: RAILS_SECRET
@@ -1170,22 +1107,12 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
             - Name: RECAPTCHA_SITE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
-            - Fn::If:
-                - IsProduction
-                - Name: REDIS_URL
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
-                - !Ref AWS::NoValue
             - Name: SOLR_URL
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
             - Name: STRIPE_API_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
             - Name: STRIPE_PUBLISHABLE_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
-            - Fn::If:
-                - IsProduction
-                - Name: USE_REPLICA
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
-                - !Ref AWS::NoValue
             - Name: WHATS_INSIDE_PLAYLIST_ID
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
             - Fn::If:
@@ -1537,7 +1464,7 @@ Resources:
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 345600 # 4 days
-      QueueName: !Sub ${Constants.SqsQueuePrefix}_exchange_porter_callback
+      QueueName: !Sub ${Constants.SqsQueuePrefix}porter_callback
       ReceiveMessageWaitTimeSeconds: 0
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
