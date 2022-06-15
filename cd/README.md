@@ -102,7 +102,7 @@ In order for an application, service, or any AWS resource to be deployed and man
 
 As an example, the [Publish](https://github.com/prx/publish.prx.org) app is managed through CD. It has its own [template](https://github.com/PRX/Infrastructure/blob/master/stacks/publish.prx.org.yml), which creates a number AWS resources necessary for deploying the app: log groups, ALB listener rules, ECS task definition and service, etc. The publish template is used with a nested stack resource in `root.yml`, so any time the root stack is updated, any changes that have been made to the publish template or its parameters will also be deployed.
 
-**NOTE** As of now, CloudFormation templates deployed through CodePipeline are limited by the 51,200 byte limit on CloudFomation body requests. There is a higher limit when templates are deployed directly from a location in S3, but that's not currently possible with CodePipeline. In order to avoid this limit, several layers of nesting should be used, to keep the number of resources in the top-level root stack at a minimum.
+**NOTE** As of now, CloudFormation templates deployed through CodePipeline are limited by the 51,200 byte limit on CloudFormation body requests. There is a higher limit when templates are deployed directly from a location in S3, but that's not currently possible with CodePipeline. In order to avoid this limit, several layers of nesting should be used, to keep the number of resources in the top-level root stack at a minimum.
 
 When creating to managing an application or set of resources, there are few hard-and-fast rules about how that should be done. But you should keep in mind the following as you work on templates that CD uses.
 
