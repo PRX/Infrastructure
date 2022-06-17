@@ -28,6 +28,8 @@ Parameters:
   NewRelicApiKeyPrxLite: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
+  SharedAuroraPostgresqlEndpoint: { Type: String }
+  SharedAuroraPostgresqlPort: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   ExchangeHostname: { Type: String }
 
@@ -38,6 +40,14 @@ Parameters:
 
   TheCastleEcrImageTag: { Type: String }
   TheCastleSharedAlbListenerRulePriorityPrefix: { Type: String }
+
+  WfmtEcrImageTag: { Type: String }
+  WfmtSharedAlbListenerRulePriorityPrefix: { Type: String }
+  WfmtHostname:  { Type: String }
+  WfmtServicesS3BucketArn:  { Type: String }
+  S3SigningEndpointUrl: { Type: String }
+  S3SigningAccessKeyId: { Type: String }
+  AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
 
 Resources:
   BacksawStack:
@@ -129,6 +139,45 @@ Resources:
         - { Key: prx:dev:application, Value: Metrics Export }
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-metrics-export.yml
       TimeoutInMinutes: 10
+
+  WfmtStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      NotificationARNs:
+        - !Ref CloudFormationNotificationArn
+      Parameters:
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RegionMode: !Ref RegionMode
+        CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+        CloudWatchLogGroupTaggerServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+        VpcId: !Ref VpcId
+        EcsClusterArn: !Ref EcsClusterArn
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        AlbInsecureHttpListenerArn: !Ref AlbInsecureHttpListenerArn
+        AlbListenerRulePriorityPrefix: !Ref WfmtSharedAlbListenerRulePriorityPrefix
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken 
+        EcrImageTag: !Ref WfmtEcrImageTag
+        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
+        SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
+        SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
+        WfmtHostname: !Ref WfmtHostname
+        WfmtServicesS3BucketArn: !Ref WfmtServicesS3BucketArn
+        S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
+        S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Wfmt }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/wfmt.yml
+      TimeoutInMinutes: 30
 
 Outputs:
   BacksawDeployBucketRegionalDomainName:
