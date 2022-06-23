@@ -620,6 +620,34 @@ Resources:
         - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
+  AuguryExpandedAllocationCacheSizeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Allocation Targeting Record Cache <${EnvironmentTypeAbbreviation}> IS LARGE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's expanded allocation cache is big for some flight(s). Check the logs and the TruncateExpiredDataJob job.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !Sub Constants.TargetingRecordCacheSizeMetricsName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Maximum
+      Threshold: 1000
+      TreatMissingData: notBreaching
+  AuguryJobsProducedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Worker <${EnvironmentTypeAbbreviation}> IS THROWING THE ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's worker task has raised an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.JobErrorsCountMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
   AuguryForecastsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -650,34 +678,6 @@ Resources:
         - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-  AuguryExpandedAllocationCacheSizeAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ERROR [Augury] Allocation Targeting Record Cache <${EnvironmentTypeAbbreviation}> IS LARGE (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Augury's expanded allocation cache is big for some flight(s). Check the logs and the TruncateExpiredDataJob job.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 3
-      MetricName: !Sub Constants.TargetingRecordCacheSizeMetricsName
-      Namespace: !Ref kMetricFilterNamespace
-      Period: 300
-      Statistic: Maximum
-      Threshold: 1000
-      TreatMissingData: notBreaching
-  AuguryJobsProducedErrorsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ERROR [Augury] Worker <${EnvironmentTypeAbbreviation}> IS THROWING THE ERRORS (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Augury's worker task has raised an error. Check the logs!
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 3
-      MetricName: !GetAtt Constants.JobErrorsCountMetricName
-      Namespace: !Ref kMetricFilterNamespace
-      Period: 300
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
 
   # Some Augury jobs are marked as "slow", which indicates they should not be
   # completed in the standard ECS service instance. These jobs are added to a
