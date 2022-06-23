@@ -22,21 +22,16 @@ Parameters:
   SharedAuroraMysqlPort: { Type: String, Default: "3306" }
   SharedAuroraPostgresqlEndpoint: { Type: String, Default: "" }
   SharedAuroraPostgresqlPort: { Type: String, Default: "3306" }
-  NewRelicApiKeyPrxLite: { Type: String, Default: "" }
+  NewRelicApiKeyPrxLite: { Type: AWS::SSM::Parameter::Value<String>, Default: /prx/global/Spire/new-relic-lite-api-key }
   CastlePostgresUsername: { Type: String, Default: "" }
   CastlePostgresUserPassword: { Type: String, Default: "", NoEcho: true }
-  AuthorizedKeys: { Type: CommaDelimitedList, Default: "", NoEcho: true }
+  AuthorizedKeys: { Type: AWS::SSM::Parameter::Value<List<String>>, Default: /prx/global/Spire/authorized-keys, NoEcho: true }
   # Required
   AsgKeyPairName:
     Description: >
       The EC2 key pair used for instances in the Auto Scaling
       group (region-specific)
     Type: AWS::EC2::KeyPair::KeyName
-  EnvironmentType:
-    Type: String
-    AllowedValues:
-      - Staging
-      - Production
   RegionMode:
     Type: String
     AllowedValues:
@@ -49,44 +44,26 @@ Parameters:
       must be a /16 private network
   CloudFormationNotificationsSnsTopicArn: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
-  SharedResourceSharePrincipals: { Type: CommaDelimitedList }
   FeedsS3BucketArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
   NetworksS3BucketArn: { Type: String }
   WfmtServicesS3BucketArn: { Type: String }
-  AdFilesS3BucketArn: { Type: String }
-  RemixS3BucketArn: { Type: String }
   TransferS3BucketArn: { Type: String }
   # Application Specific
   AuguryEcrImageTag: { Type: String, Default: "" }
-  AugurySecretsVersion: { Type: String, Default: "" }
   RemixEcrImageTag: { Type: String, Default: "" }
-  RemixSecretsVersion: { Type: String, Default: "" }
   NetworksEcrImageTag: { Type: String, Default: "" }
-  NetworksSecretsVersion: { Type: String, Default: "" }
   MetricsEcrImageTag: { Type: String, Default: "" }
-  MetricsSecretsVersion: { Type: String, Default: "" }
-  StyleguideEcrImageTag: { Type: String, Default: "" }
-  StyleguideSecretsVersion: { Type: String, Default: "" }
   CastleEcrImageTag: { Type: String, Default: "" }
-  CastleSecretsVersion: { Type: String, Default: "" }
   CmsEcrImageTag: { Type: String, Default: "" }
-  CmsSecretsVersion: { Type: String, Default: "" }
   DovetailRouterEcrImageTag: { Type: String, Default: "" }
-  DovetailrouterSecretsVersion: { Type: String, Default: "" }
   ExchangeEcrImageTag: { Type: String, Default: "" }
-  ExchangeSecretsVersion: { Type: String, Default: "" }
   FeederEcrImageTag: { Type: String, Default: "" }
-  FeederSecretsVersion: { Type: String, Default: "" }
   IdEcrImageTag: { Type: String, Default: "" }
-  IdSecretsVersion: { Type: String, Default: "" }
   PlayEcrImageTag: { Type: String, Default: "" }
-  PlaySecretsVersion: { Type: String, Default: "" }
   PlayProxyEcrImageTag: { Type: String, Default: "" }
   PublishEcrImageTag: { Type: String, Default: "" }
-  PublishSecretsVersion: { Type: String, Default: "" }
   IframelyEcrImageTag: { Type: String, Default: "" }
-  IframelySecretsVersion: { Type: String, Default: "" }
   RadiotopiaTowerLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   UploadLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   AnalyticsIngestLambdaCodeS3ObjectKey: { Type: String, Default: "" }
@@ -105,14 +82,18 @@ Parameters:
   TheWorldSearchGoogleCustomSearchApiKey: { Type: String, Default: "" }
   TheCountLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   TheCastleEcrImageTag: { Type: String, Default: "" }
-  ThecastleSecretsVersion: { Type: String, Default: "" }
   DovetailMetricsExportCodeS3ObjectKey: { Type: String, Default: "" }
+  ExchangeFtpAuthorizerLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   # Parameter Overrides from the CodePipeline action
   InfrastructureStorageStackName: { Type: String }
-  SecretsStackName: { Type: String }
   InfrastructureGitCommit: { Type: String }
   PipelineExecutionNonce: { Type: String }
   SlackMessageRelaySnsTopicArn: { Type: String }
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -193,8 +174,9 @@ Resources:
       TemplateURL:
         Fn::Sub:
           - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/custom-resources.yml
-          - SourceBucketName:
-              Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+          - SourceBucketName: !Sub prx-infrastructure-${AWS::Region}-source
+          # - SourceBucketName:
+          #     Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       TimeoutInMinutes: 5
 
   Constants:
@@ -207,23 +189,22 @@ Resources:
       EnvironmentTypeLowercase: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, lowercase]
       SupportBucketName:
         Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-      SourceBucketName:
-        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      # SourceBucketName:
+      #   Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       DeploymentPackageBucketName:
         Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
-      SecretsBaseRegion:
-        Fn::ImportValue: !Sub ${SecretsStackName}-SecretsBaseRegion
-      TemplateUrlBase:
-        # This is a URL including the hostname of the source bucket, and the
-        # path starting with a Git commit hash for the Infrastructure
-        # repository. Some or all of the contents of the repo live under that
-        # path.
-        # It does not include a trailing slash.
-        # e.g., https://prx-infrastructure-us-east-1-source.s3.us-east-1.amazonaws.com/000e4f9a6b3836efbfc722fe7d2fd598b03edfd4
-        Fn::Sub:
-          - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
-          - SourceBucketName:
-              Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      # TemplateUrlBase:
+      #   # This is a URL including the hostname of the source bucket, and the
+      #   # path starting with a Git commit hash for the Infrastructure
+      #   # repository. Some or all of the contents of the repo live under that
+      #   # path.
+      #   # It does not include a trailing slash.
+      #   # e.g., https://prx-infrastructure-us-east-1-source.s3.us-east-1.amazonaws.com/000e4f9a6b3836efbfc722fe7d2fd598b03edfd4
+      #   Fn::Sub:
+      #     - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
+      #     - SourceBucketName: !Sub prx-infrastructure-${AWS::Region}-source
+      #     # - SourceBucketName:
+      #     #     Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       # Public application hostnames
       AuguryHostname: !If [IsProduction, augury.prx.org, augury.staging.prx.tech]
       BetaHostname: !If [IsProduction, beta.prx.org, beta.staging.prx.tech]
@@ -244,7 +225,7 @@ Resources:
       PublishHostname: !If [IsProduction, publish.prx.org, publish.staging.prx.tech]
       RemixHostname: !If [IsProduction, www.prx.mx, remix.staging.prx.tech]
       TheCastleHostname: !If [IsProduction, thecastle.prx.org, thecastle.staging.prx.tech]
-      TheCountHostname: !If [IsProduction, count.prx.org, thecount.staging.prx.tech] # TODO Update prod to thecount.prx.org
+      TheCountHostname: !If [IsProduction, thecount.prx.org, thecount.staging.prx.tech]
       TheWorldSearchHostname: !If [IsProduction, search.theworld.org, search.staging.theworld.org]
       # Internal application hostname
       FeederAuthProxyInternalHostname: !If [IsProduction, p.u.prx.tech, p.staging.u.prx.tech]
@@ -273,7 +254,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/resource-groups.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/resource-groups.yml
       TimeoutInMinutes: 10
 
   SharedGlueDatabaseStack:
@@ -292,7 +273,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-glue-database.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-glue-database.yml
       TimeoutInMinutes: 10
 
   SharedAnnounceStack:
@@ -314,7 +295,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-announce.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-announce.yml
       TimeoutInMinutes: 10
 
   SharedDovetailKinesisStack:
@@ -334,7 +315,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-dovetail-kinesis.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-dovetail-kinesis.yml
       TimeoutInMinutes: 60
 
   SharedEcsClusterStack:
@@ -354,7 +335,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/ecs-cluster.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/ecs-cluster.yml
       TimeoutInMinutes: 20
 
   SharedVpcStack:
@@ -367,7 +348,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         Ec2ResourceTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.Ec2ResourceTaggerServiceToken
@@ -380,7 +361,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-vpc.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc.yml
       TimeoutInMinutes: 20
 
   # Requires VPC
@@ -393,7 +374,6 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        SharedResourceSharePrincipals: !Join [",", !Ref SharedResourceSharePrincipals]
         VpcPrivateSubnet1: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VpcPrivateSubnet2: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
@@ -405,7 +385,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-resource-share.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-resource-share.yml
       TimeoutInMinutes: 20
 
   # Requires VPC
@@ -419,7 +399,7 @@ Resources:
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackName
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-        SharedVpcCidrBlock: !Ref SharedVpcCidrBlock
+        SharedVpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
       Tags:
@@ -430,7 +410,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-db-sg.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-db-sg.yml
       TimeoutInMinutes: 20
 
   # Requires VPC and shared Glue DB
@@ -458,7 +438,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-alb.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-alb.yml
       TimeoutInMinutes: 40
 
   # Requires VPC and ALB
@@ -481,7 +461,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/asg-sg.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/asg-sg.yml
       TimeoutInMinutes: 20
   # Requires VPC, ALB, and more
   SharedEcsAsgStack:
@@ -521,7 +501,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-ecs/asg.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/asg.yml
       TimeoutInMinutes: 1440
 
   # Requires VPC and ECS ASG SG
@@ -551,7 +531,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-memcached.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
   # Requires VPC
@@ -573,7 +553,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-redis/security-groups.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-redis/security-groups.yml
       TimeoutInMinutes: 20
   # Requires VPC and Redis SG
   SharedRedisStack:
@@ -599,7 +579,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/shared-redis/cluster.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-redis/cluster.yml
       TimeoutInMinutes: 60
 
   # Requires everything above, AND external MySQL/PostgreSQL databases
@@ -610,15 +590,13 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !GetAtt Constants.SecretsBaseRegion
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.EnvironmentTypeLowercase
@@ -662,7 +640,6 @@ Resources:
         # App-specific parameters
 
         CmsEcrImageTag: !Ref CmsEcrImageTag
-        CmsSecretsVersion: !Ref CmsSecretsVersion
         CmsSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Cms, prefix]
 
         DovetailCdnArrangerLambdaCodeS3ObjectKey: !Ref DovetailCdnArrangerCodeS3ObjectKey
@@ -673,15 +650,12 @@ Resources:
         DovetailTrafficLambdaCodeS3ObjectKey: !Ref DovetailTrafficLambdaCodeS3ObjectKey
 
         IdEcrImageTag: !Ref IdEcrImageTag
-        IdSecretsVersion: !Ref IdSecretsVersion
         IdSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Id, prefix]
 
         IframelyEcrImageTag: !Ref IframelyEcrImageTag
-        IframelySecretsVersion: !Ref IframelySecretsVersion
         IframelySharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Iframely, prefix]
 
         PlayEcrImageTag: !Ref PlayEcrImageTag
-        PlaySecretsVersion: !Ref PlaySecretsVersion
         PlayProxyEcrImageTag: !Ref PlayProxyEcrImageTag
         PlaySharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Play, prefix]
 
@@ -689,8 +663,6 @@ Resources:
 
         S3SigningLambdaCodeS3ObjectKey: !Ref UploadLambdaCodeS3ObjectKey
 
-        StyleguideEcrImageTag: !Ref StyleguideEcrImageTag
-        StyleguideSecretsVersion: !Ref StyleguideSecretsVersion
         StyleguideSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Styleguide, prefix]
 
         TheWorldSearchGoogleCustomSearchEngineId: !Ref TheWorldSearchGoogleCustomSearchEngineId
@@ -704,7 +676,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-100A.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-100A.yml
       TimeoutInMinutes: 40
   Apps200AStack:
     Type: AWS::CloudFormation::Stack
@@ -713,7 +685,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
@@ -724,8 +696,6 @@ Resources:
         VpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
         VpcIpv6CidrBlocks: !GetAtt SharedVpcStack.Outputs.VpcIpv6CidrBlocks
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !GetAtt Constants.SecretsBaseRegion
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.EnvironmentTypeLowercase
@@ -748,6 +718,7 @@ Resources:
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         TransferServerIpFinderServiceToken: !GetAtt CustomResourcesStack.Outputs.TransferServerIpFinderServiceToken
         EcsLaunchEndpointsAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
+        SystemManagerEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.SystemManagerEndpointAccessSecurityGroupId
         KmsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KmsEndpointAccessSecurityGroupId
         SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
         SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
@@ -785,7 +756,6 @@ Resources:
         FeedsS3BucketArn: !Ref FeedsS3BucketArn
         MediajointS3BucketArn: !Ref MediajointS3BucketArn
         NetworksS3BucketArn: !Ref NetworksS3BucketArn
-        RemixS3BucketArn: !Ref RemixS3BucketArn
         TransferS3BucketArn: !Ref TransferS3BucketArn
 
         # App-specific parameters
@@ -794,7 +764,6 @@ Resources:
         BetaPrxOrgCloudFrontOai: !Ref BetaPrxOrgCloudFrontOai
 
         CastleEcrImageTag: !Ref CastleEcrImageTag
-        CastleSecretsVersion: !Ref CastleSecretsVersion
         CastleSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Castle, prefix]
         CastlePostgresUsername: !Ref CastlePostgresUsername
         CastlePostgresUserPassword: !Ref CastlePostgresUserPassword
@@ -802,23 +771,19 @@ Resources:
         DovetailCdnOriginRequestLambdaCodeS3ObjectKey: !Ref DovetailCdnOriginRequestCodeS3ObjectKey
 
         ExchangeEcrImageTag: !Ref ExchangeEcrImageTag
-        ExchangeSecretsVersion: !Ref ExchangeSecretsVersion
         ExchangeSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Exchange, prefix]
+        ExchangeFtpAuthorizerLambdaCodeS3ObjectKey: !Ref ExchangeFtpAuthorizerLambdaCodeS3ObjectKey
 
         FeederEcrImageTag: !Ref FeederEcrImageTag
-        FeederSecretsVersion: !Ref FeederSecretsVersion
         FeederSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Feeder, prefix]
 
         NetworksEcrImageTag: !Ref NetworksEcrImageTag
-        NetworksSecretsVersion: !Ref NetworksSecretsVersion
         NetworksSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Networks, prefix]
 
         PublishEcrImageTag: !Ref PublishEcrImageTag
-        PublishSecretsVersion: !Ref PublishSecretsVersion
         PublishSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Publish, prefix]
 
         RemixEcrImageTag: !Ref RemixEcrImageTag
-        RemixSecretsVersion: !Ref RemixSecretsVersion
         RemixSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Remix, prefix]
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -828,7 +793,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-200A.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-200A.yml
       TimeoutInMinutes: 40
   Apps300AStack:
     Type: AWS::CloudFormation::Stack
@@ -837,16 +802,14 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-        SecretsBase: !GetAtt Constants.SecretsBaseRegion
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.EnvironmentTypeLowercase
@@ -860,6 +823,7 @@ Resources:
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
         EcsLaunchEndpointsAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
+        SystemManagerEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.SystemManagerEndpointAccessSecurityGroupId
         KmsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KmsEndpointAccessSecurityGroupId
         DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
         EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
@@ -887,7 +851,6 @@ Resources:
         DovetailCdnHostname: !GetAtt Constants.DovetailCdnHostname
         DovetailRouterHostname: !GetAtt Constants.DovetailRouterHostname
         SharedGlueDatabaseName: !GetAtt SharedGlueDatabaseStack.Outputs.SharedGlueDatabaseName
-        AdFilesS3BucketArn: !Ref AdFilesS3BucketArn
         FeedsS3BucketArn: !Ref FeedsS3BucketArn
         DovetailCountedKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamArn
         DovetailCountedKinesisStreamName: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamName
@@ -897,16 +860,13 @@ Resources:
         # App-specific parameters
 
         AuguryEcrImageTag: !Ref AuguryEcrImageTag
-        AugurySecretsVersion: !Ref AugurySecretsVersion
         AugurySharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Augury, prefix]
 
         DovetailAnalyticsLambdaCodeS3ObjectKey: !Ref AnalyticsIngestLambdaCodeS3ObjectKey
 
         DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
-        DovetailRouterSecretsVersion: !Ref DovetailrouterSecretsVersion
 
         MetricsEcrImageTag: !Ref MetricsEcrImageTag
-        MetricsSecretsVersion: !Ref MetricsSecretsVersion
         MetricsSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Metrics, prefix]
 
         ProxyLambdaCodeS3ObjectKey: !Ref ProxyPrxOrgCodeS3ObjectKey
@@ -920,7 +880,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-300A.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-300A.yml
       TimeoutInMinutes: 40
   Apps400AStack:
     Type: AWS::CloudFormation::Stack
@@ -929,7 +889,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
@@ -947,9 +907,7 @@ Resources:
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         AlbInsecureHttpListenerArn: !GetAtt SharedAlbStack.Outputs.InsecureHttpListenerArn
-        SecretsBase: !GetAtt Constants.SecretsBaseRegion
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsStackName: !Ref SecretsStackName
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
         PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
@@ -963,7 +921,6 @@ Resources:
         DovetailMetricsExportCodeS3ObjectKey: !Ref DovetailMetricsExportCodeS3ObjectKey
 
         TheCastleEcrImageTag: !Ref TheCastleEcrImageTag
-        TheCastleSecretsVersion: !Ref ThecastleSecretsVersion
         TheCastleSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, TheCastle, prefix]
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -973,7 +930,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-400A.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
   # TODO: temporary. And requires everything above but not MySQL/PostgreSQL
   Apps500AStack:
@@ -983,7 +940,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub ${Constants.TemplateUrlBase}/stacks/apps
+        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
@@ -993,8 +950,6 @@ Resources:
         RootStackId: !GetAtt Constants.RootStackId
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !GetAtt Constants.SecretsBaseRegion
-        SecretsStackName: !Ref SecretsStackName
         VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
         VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
         VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
@@ -1003,6 +958,7 @@ Resources:
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
         KinesisStreamsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KinesisStreamsEndpointAccessSecurityGroupId
         StsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.StsEndpointAccessSecurityGroupId
+        SystemManagerEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.SystemManagerEndpointAccessSecurityGroupId
         CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
@@ -1031,7 +987,6 @@ Resources:
         DovetailCdnArrangerCloudFrontOai: !Ref DovetailCdnArrangerCloudFrontOai
         DovetailCountsLambdaCodeS3ObjectKey: !Ref DovetailCountsLambdaCodeS3ObjectKey
         DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
-        DovetailRouterSecretsVersion: !Ref DovetailrouterSecretsVersion
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1040,7 +995,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/apps-500A-tmp.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-500A-tmp.yml
       TimeoutInMinutes: 40
 
   # Requires VPC, Redis and DB SGs
@@ -1078,7 +1033,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/jump-server.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/jump-server.yml
       TimeoutInMinutes: 10
 
   # Assumed to require all possible requirements
@@ -1138,6 +1093,10 @@ Resources:
         DovetailTargetGroupFullName: !GetAtt Apps300AStack.Outputs.DovetailTargetGroupFullName
 
         ExchangeWebTargetGroupFullName: !GetAtt Apps200AStack.Outputs.ExchangeWebTargetGroupFullName
+        ExchangeFtpServerId: !GetAtt Apps200AStack.Outputs.ExchangeFtpServerId
+        ExchangeFtpServerPublicIp: !GetAtt Apps200AStack.Outputs.ExchangeFtpServerPublicIp
+        ExchangeFtpServerPublicIpAllocationId: !GetAtt Apps200AStack.Outputs.ExchangeFtpServerPublicIpAllocationId
+        ExchangeFtpServerNlbName: !GetAtt Apps200AStack.Outputs.ExchangeFtpServerNlbName
 
         FeederAuthProxyApiId: !GetAtt Apps200AStack.Outputs.FeederAuthProxyApiId
         FeederWebTargetGroupFullName: !GetAtt Apps200AStack.Outputs.FeederWebTargetGroupFullName
@@ -1176,7 +1135,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${Constants.TemplateUrlBase}/stacks/dashboards.yml
+      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/dashboards.yml
       TimeoutInMinutes: 10
 
 Outputs:

@@ -35,11 +35,8 @@ Parameters:
   VpcId: { Type: AWS::EC2::VPC::Id }
   VpcCidrBlock: { Type: String }
   VpcIpv6CidrBlocks: { Type: String }
-  SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
-  SecretsVersion: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
-  SecretsStackName: { Type: String }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -83,12 +80,6 @@ Resources:
     # roles, and the user should be removed
     Type: AWS::IAM::User
     Properties:
-      ManagedPolicyArns:
-        # When the user key/secret are passed into the task def, they are
-        # available when aws-secrets runs, so they'll be used for those calls,
-        # rather than the task role.
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Policies:
         - PolicyDocument:
             Statement:
@@ -304,9 +295,6 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
-      ManagedPolicyArns:
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -329,10 +317,6 @@ Resources:
               Value: !Ref EnvironmentTypeLowercase
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: SIGNER_URL
@@ -712,9 +696,6 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
-      ManagedPolicyArns:
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -740,12 +721,6 @@ Resources:
               Value: !Ref EnvironmentTypeLowercase
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
-            - Name: AWS_DEFAULT_REGION
-              Value: !Ref AWS::Region
             - Name: SIGNER_URL
               Value: !Ref S3SigningEndpointUrl
             - Name: SIGNER_ACCESS_KEY

@@ -143,6 +143,27 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
       VpcId: !Ref VpcId
+  SystemManagerEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to System Manager VPC Endpoints
+        in ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt SystemManagerEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_kinesis-streams-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
   EcsLaunchEndpointsAccessSecurityGroup:
     # This security group is intented to be used by EC2 instances, ECS
     # services, etc. Resources that belong to this group will be able to send
@@ -489,7 +510,7 @@ Resources:
 
   KinesisStreamsEndpointInboundTrafficSecurityGroup:
     # This security group is associated with the Kinesis Streams VPC Endpoint.
-    # Other security group that have egress rules to this group will have
+    # Other security groups that have egress rules to this group will have
     # Kinesis Streams access.
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -543,6 +564,63 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
+  SystemManagerEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the System Manager VPC Endpoint.
+    # Other security groups that have egress rules to this group will have
+    # System Manager access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the SystemManagerEndpointAccessSecurityGroup
+        to flow into the STS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_system-manager-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  SystemManagerEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt SystemManagerEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt SystemManagerEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
+  SystemManagerVpcEndpoint:
+    # https://docs.aws.amazon.com/systems-manager/latest/userguide/setup-create-vpc.html
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
+        - !Ref SystemManagerEndpointInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  SystemManagerVpcEndpointTags:
+    Type: Custom::Ec2ResourceTags
+    Properties:
+      ServiceToken: !Ref Ec2ResourceTaggerServiceToken
+      ResourceId: !Ref SystemManagerVpcEndpoint
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_system-manager" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
 Outputs:
   EcsLaunchEndpointsAccessSecurityGroupId:
     Value: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
@@ -554,3 +632,5 @@ Outputs:
     Value: !GetAtt CloudWatchLogsEndpointAccessSecurityGroup.GroupId
   KinesisStreamsEndpointAccessSecurityGroupId:
     Value: !GetAtt KinesisStreamsEndpointAccessSecurityGroup.GroupId
+  SystemManagerEndpointAccessSecurityGroupId:
+    Value: !GetAtt SystemManagerEndpointAccessSecurityGroup.GroupId

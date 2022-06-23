@@ -44,17 +44,21 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  SecretsBase: { Type: String }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   EcrImageTag: { Type: String }
-  SecretsVersion: { Type: String }
+  CodeS3Bucket: { Type: String }
+  FtpAuthorizerLambdaCodeS3ObjectKey: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
-  SecretsStackName: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   TransferServerIpFinderServiceToken: { Type: String }
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
+  SystemManagerEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedMemcachedEndpointAddress: { Type: String }
   SharedMemcachedEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
@@ -85,7 +89,6 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       # Provides a namespace for Exchange-specific queues
       SqsQueuePrefix: !Sub ${AnnounceResourcePrefix}_exchange_
-      FtpAuthTokenParameterArn: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/FTP_AUTH_TOKEN
 
   ExchangeWildcardHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -214,12 +217,6 @@ Resources:
     # role, and the user should be removed
     Type: AWS::IAM::User
     Properties:
-      ManagedPolicyArns:
-        # When the user key/secret are passed into the task def, they are
-        # available when aws-secrets runs, so they'll be used for those calls,
-        # rather than the task role.
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Policies:
         - PolicyDocument:
             Statement:
@@ -298,8 +295,7 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                # TODO Update with more modern parameter naming
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -395,10 +391,6 @@ Resources:
               Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: AWS_SIGNER_URL
@@ -481,8 +473,6 @@ Resources:
               Value: mem_cache_store
             - Name: PAYPAL_ACTION_URL
               Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
-            - Name: COUNT_HOST_NEW # TODO
-              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -501,7 +491,96 @@ Resources:
               HostPort: 0
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_CLIENT_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-client-certificate
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_VALIDATION_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
+                - !Ref AWS::NoValue
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -563,10 +642,6 @@ Resources:
               Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: AWS_SIGNER_URL
@@ -649,8 +724,6 @@ Resources:
               Value: mem_cache_store
             - Name: PAYPAL_ACTION_URL
               Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
-            - Name: COUNT_HOST_NEW # TODO
-              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -666,7 +739,96 @@ Resources:
           Name: !Ref kWorkerContainerName
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_CLIENT_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-client-certificate
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_VALIDATION_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
+                - !Ref AWS::NoValue
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -842,10 +1004,6 @@ Resources:
               Value: exchange
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: AWS_SIGNER_URL
@@ -930,8 +1088,6 @@ Resources:
               Value: mem_cache_store
             - Name: PAYPAL_ACTION_URL
               Value: !If [IsProduction, https://www.paypal.com/cgi-bin/webscr, https://www.sandbox.paypal.com/cgi-bin/webscr]
-            - Name: COUNT_HOST_NEW # TODO
-              Value: thecount.prx.org
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -946,7 +1102,96 @@ Resources:
           Name: !Ref kSayWhenContainerName
           Secrets:
             - Name: FTP_AUTH_TOKEN
-              ValueFrom: !GetAtt Constants.FtpAuthTokenParameterArn
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+            - Name: AUTH_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
+            - Name: CASTLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
+            - Name: CASTLE_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+            - Fn::If:
+                - IsProduction
+                - Name: FEATURED_SERIES_PLAYLIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
+                - !Ref AWS::NoValue
+            - Name: FIXER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
+            - Name: FIXER_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
+            - Name: GOOGLE_MAPS_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_API_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-api-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: MAILCHIMP_LIST_ID
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/mailchimp-list-id
+                - !Ref AWS::NoValue
+            - Name: PAYPAL_BUSINESS_ADDRESS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-business-address
+            - Name: PAYPAL_CERTIFICATE_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-certificate-id
+            - Name: PAYPAL_NOTIFY_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/paypal-notify-host
+            - Name: PMP_OP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/pmp-op-id
+            - Name: PUBLIC_URL_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
+            - Name: RAILS_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
+            - Name: RAILS_SESSION_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PRIVATE_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: RECAPTCHA_PUBLIC_KEY
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
+                - !Ref AWS::NoValue
+            - Name: RECAPTCHA_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
+            - Name: RECAPTCHA_SITE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
+            - Fn::If:
+                - IsProduction
+                - Name: REDIS_URL
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/redis-url
+                - !Ref AWS::NoValue
+            - Name: SOLR_URL
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
+            - Name: STRIPE_API_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
+            - Name: STRIPE_PUBLISHABLE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
+            - Fn::If:
+                - IsProduction
+                - Name: USE_REPLICA
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/use-replica
+                - !Ref AWS::NoValue
+            - Name: WHATS_INSIDE_PLAYLIST_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_CLIENT_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-client-certificate
+                - !Ref AWS::NoValue
+            - Fn::If:
+                - IsProduction
+                - Name: CHEF_VALIDATION_CERT
+                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
+                - !Ref AWS::NoValue
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -1337,135 +1582,54 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
+  FtpServerAuthorizerFunctionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} FTP Authorizer
+        Lambda function that allows all outbound traffic
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+        - CidrIpv6: ::/0
+          IpProtocol: "-1"
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-auth-function" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      VpcId: !Ref VpcId
+
   FtpServerAuthorizerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      # CodeUri:
-      #   Bucket: !Ref CodeS3Bucket
-      #   Key: !Ref CodeS3ObjectKey
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref FtpAuthorizerLambdaCodeS3ObjectKey
       Description: !Sub ${EnvironmentType} FTP transfer server authorizer
       Environment:
         Variables:
           FTP_USER_ACCESS_ROLE: !GetAtt FtpUserAccessRole.Arn
           S3_BUCKET_ARN: !Ref TransferS3BucketArn
-          FTP_AUTH_TOKEN_PARAMETER_ARN: !GetAtt Constants.FtpAuthTokenParameterArn
+          FTP_AUTH_TOKEN_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
+          DB_NAME_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+          DB_USERNAME_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+          DB_PASSWORD_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
           EXCHANGE_HOSTNAME: !Ref ExchangeHostname
+          MYSQL_ENDPOINT: !Ref SharedAuroraMysqlEndpoint
       Handler: index.handler
-      InlineCode: |
-        const https = require('https');
-        const AWS = require('aws-sdk');
-
-        const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
-
-        const ENV = process.env;
-
-        exports.handler = async (event) => {
-          // TODO Move outside of handler for better performance
-          const param = await ssm
-            .getParameter({
-              Name: ENV.FTP_AUTH_TOKEN_PARAMETER_ARN.split(':parameter')[1],
-            })
-            .promise();
-          const token = param.Parameter.Value;
-
-          const bucketName = ENV.S3_BUCKET_ARN.split(':')[5];
-
-          const userPolicy = {
-            Statement: [
-              {
-                Action: ['s3:ListBucket'],
-                Condition: {
-                  StringLike: {
-                    's3:prefix': [event.username, `${event.username}/*`],
-                  },
-                },
-                Effect: 'Allow',
-                Resource: [ENV.S3_BUCKET_ARN],
-                Sid: 'AllowBucketUserPrefixReadOnly',
-              },
-              {
-                Action: [
-                  's3:GetObject',
-                  's3:GetObjectAttributes',
-                  's3:GetObjectVersion',
-                  's3:GetObjectVersionAttributes',
-                ],
-                Effect: 'Allow',
-                Resource: [`${ENV.S3_BUCKET_ARN}/*`],
-                Sid: 'AllowObjectUserPrefixReadOnly',
-              },
-            ],
-            Version: '2012-10-17',
-          };
-
-          const authorization = {
-            Role: ENV.FTP_USER_ACCESS_ROLE,
-            Policy: JSON.stringify(userPolicy),
-            HomeDirectoryType: 'LOGICAL',
-            HomeDirectoryDetails: JSON.stringify([
-              {
-                // Exposes the contents of a folder in S3 as the root file
-                // system for the user's session. Examples do not include a
-                // trailing slash. If wxyz/audio.mp2 exists in the bucket,
-                // when wxyz logs in they will see audio.mp2 in the root of
-                // the FTP server.
-                Entry: `/`,
-                Target: `/${bucketName}/${event.username}`,
-              },
-            ]),
-          };
-
-          if (event.password?.length) {
-            // Password-based authentication for FTP and SFTP
-
-            const isAuthed = await new Promise((resolve, reject) => {
-              const body = JSON.stringify({
-                token,
-                user: event.username,
-                password: event.password,
-              });
-
-              const req = https.request({
-                host: ENV.EXCHANGE_HOSTNAME,
-                path: '/ftp/auth',
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Content-Length': Buffer.byteLength(body),
-                }
-              }, (r) => {
-                r.on('data', () => {});
-                r.on('end', () => r.statusCode === 200 ? resolve(true) : resolve(false));
-              }).on('error', reject);
-
-              req.write(body);
-              req.end();
-            });
-
-            if (isAuthed) {
-              console.log('Password OK');
-              return authorization;
-            } else {
-              console.log('Bad password');
-              return {};
-            }
-          // } else if (event.protocol === 'SFTP') {
-            // Key-based authentication for SFTP
-          } else {
-            // Invalid authentication; do not return any policy
-            console.log('Bad login');
-            return {};
-          }
-        };
       MemorySize: 128
       Policies:
         - Statement:
             - Action: ssm:Get*
               Effect: Allow
-              # TODO Update with more modern parameter naming
-              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/exchange/*
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
               Sid: AllowParameterReadOnly
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1474,7 +1638,49 @@ Resources:
         prx:cloudformation:root-stack-id: !Ref RootStackId
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:application: Exchange
-      Timeout: 5
+      Timeout: 30
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt FtpServerAuthorizerFunctionSecurityGroup.GroupId
+          - !Ref SharedMysqlClientSecurityGroupId
+          - !Ref SystemManagerEndpointAccessSecurityGroupId
+        SubnetIds:
+          - !Ref VpcPrivateSubnet1Id
+          - !Ref VpcPrivateSubnet2Id
+          - !Ref VpcPrivateSubnet3Id
+  FtpServerAuthorizerFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Exchange] FTP authorizer function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Exchange FTP Server authorizer Lambda function is
+        failing, which could be preventing stations from pulling audio files.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FtpServerAuthorizerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  FtpServerAuthorizerFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt FtpServerAuthorizerFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
   FtpServerAuthorizerFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -1568,8 +1774,8 @@ Resources:
       LoggingRole: !GetAtt FtpServerLoggingRole.Arn
       PostAuthenticationLoginBanner: "For use by authorized PRX users only. "
       PreAuthenticationLoginBanner: "Hello. "
-      # ProtocolDetails:
-      #   ProtocolDetails
+      ProtocolDetails:
+        PassiveIp: !Ref FtpServerNblElasticIp
       Protocols:
         - SFTP
         - FTP
@@ -1587,18 +1793,32 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
       RetentionInDays: 14
+  # In order to return the correct IP from PASV commands, the NLB must have a
+  # single IP that is configured as the FTP server's PassiveIP.
+  FtpServerNblElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp-nlb" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
   # AWS Transfer Family does not allow public servers with insecure FTP
   # enabled. Putting the server behind an NLB allows forwarding of public FTP
   # requests to a private server.
   FtpServerNlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      IpAddressType: dualstack
+      IpAddressType: ipv4
       Scheme: internet-facing
-      Subnets:
-        - !Ref VpcPublicSubnet1Id
-        - !Ref VpcPublicSubnet2Id
-        - !Ref VpcPublicSubnet3Id
+      SubnetMappings:
+        - AllocationId: !GetAtt FtpServerNblElasticIp.AllocationId
+          SubnetId: !Ref VpcPublicSubnet1Id
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1609,7 +1829,7 @@ Resources:
         - { Key: prx:dev:application, Value: Exchange }
       Type: network
   FtpServerIpAddresses:
-    Type: Custom::CloudWatchAlarmTags # TODO This is a mistake
+    Type: Custom::TransferServerIpFinder
     Properties:
       ServiceToken: !Ref TransferServerIpFinderServiceToken
       ServerId: !GetAtt FtpServer.ServerId
@@ -2022,6 +2242,15 @@ Resources:
       LoadBalancerArn: !Ref FtpServerNlb
       Port: 8200
       Protocol: TCP
+
 Outputs:
   WebTargetGroupFullName:
     Value: !GetAtt WebTargetGroup.TargetGroupFullName
+  FtpServerId:
+    Value: !GetAtt FtpServer.ServerId
+  FtpServerPublicIp:
+    Value: !Ref FtpServerNblElasticIp
+  FtpServerPublicIpAllocationId:
+    Value: !GetAtt FtpServerNblElasticIp.AllocationId
+  FtpServerNlbName:
+    Value: !GetAtt FtpServerNlb.LoadBalancerName

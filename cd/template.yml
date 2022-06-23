@@ -26,7 +26,6 @@ Metadata:
           default: Stack Dependencies
         Parameters:
           - InfrastructureStorageStackName
-          - SecretsStackName
           - CodeStarConnectionArn
       - Label:
           default: Infrastructure Config
@@ -36,8 +35,6 @@ Metadata:
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
-      SecretsStackName:
-        default: Secrets stack name
       InfrastructureConfigStagingKey:
         default: Staging S3 object key
       InfrastructureConfigProductionKey:
@@ -49,10 +46,6 @@ Parameters:
   InfrastructureStorageStackName:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
-    Type: String
-  SecretsStackName:
-    Default: infrastructure-secrets
-    Description: The name of a previously launched secrets stack
     Type: String
   InfrastructureConfigStagingKey:
     Default: template-config-staging.zip
@@ -118,6 +111,17 @@ Resources:
               - cloudformation:DescribeStacks
               - cloudformation:DescribeStackResource
               - cloudformation:ListStackResources
+            Effect: Allow
+            Resource: "*"
+        Version: "2012-10-17"
+  CloudFormationCreateChangeSetPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:CreateChangeSet
+              - cloudformation:DescribeChangeSet
             Effect: Allow
             Resource: "*"
         Version: "2012-10-17"
@@ -259,6 +263,9 @@ Resources:
         The error rate on the approval notification handler lambda has exceeded
         0 in the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PipelineApprovalNotificationHandlerFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -266,9 +273,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref PipelineApprovalNotificationHandlerFunction
 
   # Pipeline
   ArtifactStore:
@@ -395,6 +399,7 @@ Resources:
                   - !GetAtt ParameterCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
                   - !GetAtt ChangeSetDeltaNotificationFunction.Arn
+                  - !GetAtt ChangeSetCreateFunction.Arn
             Version: "2012-10-17"
           PolicyName: LambdaRolePolicy
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
@@ -499,10 +504,10 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}"
+                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
+                    "EnvironmentType": "Staging"
                   }
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
@@ -510,6 +515,31 @@ Resources:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
+            # - Name: CustomCreateStagingChangeSet
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref ChangeSetCreateFunction
+            #     UserParameters: !Sub |
+            #       {
+            #         "StackName": "${AWS::StackName}-root-staging",
+            #         "ChangeSetName": "cd-pipeline-nested",
+            #         "RoleArn": "${CloudFormationIamRole.Arn}",
+            #         "ParameterOverrides": {
+            #           "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
+            #           "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+            #           "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
+            #           "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
+            #           "EnvironmentType": "Staging"
+            #         }
+            #       }
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 1
             - Name: StagingDeltaNotification
               ActionTypeId:
                 Category: Invoke
@@ -554,16 +584,16 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 4
-            - Name: CaptureStagingParams
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref ParameterCaptureFunction
-                UserParameters: !Sub ${AWS::StackName}-root-staging
-              RunOrder: 4
+            # - Name: CaptureStagingParams
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref ParameterCaptureFunction
+            #     UserParameters: !Sub ${AWS::StackName}-root-staging
+            #   RunOrder: 4
         - Name: Testing
           Actions:
             - Name: Acceptance
@@ -632,10 +662,10 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "SecretsStackName": "${SecretsStackName}",
                     "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}"
+                    "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
+                    "EnvironmentType": "Production"
                   }
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: !Sub ${AWS::StackName}-root-production
@@ -771,6 +801,9 @@ Resources:
         The error rate on the pipeline events handler lambda has exceeded
         0 in the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CdPipelineEventsTargetFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -778,9 +811,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CdPipelineEventsTargetFunction
 
   # Pipeline S3 Trigger
   CdPipelineS3TriggerTrailStore:
@@ -1042,7 +1072,7 @@ Resources:
         # Need read access to SSM system parameters
         - PolicyDocument:
             Statement:
-              - Action: ssm:GetParameters
+              - Action: ssm:Get*
                 Effect: Allow
                 Resource: "*" # This is sort of safe
             Version: "2012-10-17"
@@ -1118,6 +1148,57 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
 
   # Custom Lambda Actions
+  ChangeSetCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/change-set-create/
+      Description: >-
+        Creates change sets
+      Handler: index.handler
+      MemorySize: 256
+      Policies:
+        - !Ref CloudFormationCreateChangeSetPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref ArtifactBucketReadWriteAccessPolicy
+        - Statement:
+            - Action: iam:PassRole
+              Effect: Allow
+              Resource: !GetAtt CloudFormationIamRole.Arn
+              Sid: AllowPassingCfnRole
+          Version: "2012-10-17"
+
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 300
+  ChangeSetCreateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ChangeSetCreateFunction}
+      RetentionInDays: 14
+  ChangeSetCreateNotificationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Changeset create <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the change set create lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChangeSetCreateFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
   ChangeSetDeltaNotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1155,6 +1236,9 @@ Resources:
         The error rate on the diff notification lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ChangeSetDeltaNotificationFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1162,9 +1246,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ChangeSetDeltaNotificationFunction
 
   EnvironmentStateCaptureFunction:
     Type: AWS::Serverless::Function
@@ -1206,6 +1287,9 @@ Resources:
         The error rate on the state capture lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EnvironmentStateCaptureFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1213,9 +1297,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref EnvironmentStateCaptureFunction
 
   ProductionConfigPseudoSourceFunction:
     Type: AWS::Serverless::Function
@@ -1256,6 +1337,9 @@ Resources:
         The error rate on the pseudo source lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProductionConfigPseudoSourceFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1263,9 +1347,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ProductionConfigPseudoSourceFunction
 
   InfrastructureRepoSourceS3SyncFunction:
     Type: AWS::Serverless::Function
@@ -1303,6 +1384,9 @@ Resources:
         The error rate on the S3 Sync lambda has exceeded 0 in
         the last minute.
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureRepoSourceS3SyncFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1310,9 +1394,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFunction
 
   ParameterCaptureFunction:
     Type: AWS::Serverless::Function

@@ -21,8 +21,6 @@ Parameters:
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
-  SecretsBase: { Type: String }
-  SecretsStackName: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -30,6 +28,7 @@ Parameters:
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SystemManagerEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   DeploymentPackageBucketName: { Type: String }
   EchoServiceToken: { Type: String }
@@ -57,7 +56,6 @@ Parameters:
   TheCountHostname: { Type: String }
   DovetailRouterHostname: { Type: String }
   SharedGlueDatabaseName: { Type: String }
-  AdFilesS3BucketArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
@@ -65,16 +63,13 @@ Parameters:
   DovetailVerifiedMetricsKinesisStreamName: { Type: String }
 
   AuguryEcrImageTag: { Type: String }
-  AugurySecretsVersion: { Type: String }
   AugurySharedAlbListenerRulePriorityPrefix: { Type: String }
 
   DovetailAnalyticsLambdaCodeS3ObjectKey: { Type: String }
 
   DovetailRouterEcrImageTag: { Type: String }
-  DovetailRouterSecretsVersion: { Type: String }
 
   MetricsEcrImageTag: { Type: String }
-  MetricsSecretsVersion: { Type: String }
   MetricsSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   ProxyLambdaCodeS3ObjectKey: { Type: String }
@@ -93,11 +88,8 @@ Resources:
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref AuguryEcrImageTag
-        SecretsVersion: !Ref AugurySecretsVersion
         AlbListenerRulePriorityPrefix: !Ref AugurySharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
@@ -124,7 +116,7 @@ Resources:
         CastleHostname: !Ref CastleHostname
         CmsHostname: !Ref CmsHostname
         DovetailRouterHostname: !Ref DovetailRouterHostname
-        AdFilesS3BucketArn: !Ref AdFilesS3BucketArn
+        AdFilesS3BucketArn: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/${AWS::Region}/ad-files-s3-bucket-arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -155,6 +147,7 @@ Resources:
         VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
         VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
         VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
+        SystemManagerEndpointAccessSecurityGroupId: !Ref SystemManagerEndpointAccessSecurityGroupId
         DovetailVerifiedMetricsKinesisStreamArn: !Ref DovetailVerifiedMetricsKinesisStreamArn
         DovetailVerifiedMetricsKinesisStreamName: !Ref DovetailVerifiedMetricsKinesisStreamName
         SharedRedisClientSecurityGroupId: !Ref SharedRedisClientSecurityGroupId
@@ -184,10 +177,7 @@ Resources:
         EcsClusterName: !Ref EcsClusterName
         VpcId: !Ref VpcId
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref DovetailRouterEcrImageTag
-        SecretsVersion: !Ref DovetailRouterSecretsVersion
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
@@ -229,11 +219,8 @@ Resources:
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref MetricsEcrImageTag
-        SecretsVersion: !Ref MetricsSecretsVersion
         AlbListenerRulePriorityPrefix: !Ref MetricsSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName

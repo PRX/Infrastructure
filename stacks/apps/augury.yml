@@ -39,11 +39,8 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
-  SecretsBase: { Type: String }
   EcrImageTag: { Type: String }
   AlbListenerRulePriorityPrefix: { Type: String }
-  SecretsVersion: { Type: String }
-  SecretsStackName: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -61,7 +58,7 @@ Parameters:
   CastleHostname: { Type: String }
   CmsHostname: { Type: String }
   DovetailRouterHostname: { Type: String }
-  AdFilesS3BucketArn: { Type: String }
+  AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -163,9 +160,6 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
-      ManagedPolicyArns:
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceDecryptPolicyArn
-        - Fn::ImportValue: !Sub ${SecretsStackName}-SecretsInstanceAccessPolicyArn
       Policies:
         - PolicyDocument:
             Statement:
@@ -196,6 +190,15 @@ Resources:
         Version: "2012-10-17"
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/*
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -283,10 +286,6 @@ Resources:
               Value: augury
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
@@ -349,6 +348,33 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/secret-key-base
+            - Name: RAILS_MASTER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/rails-master-key
+            - Name: POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-name
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-username
+            - Name: CASTLE_POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-name
+            - Name: CASTLE_POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-username
+            - Name: CASTLE_POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-password
+            - Name: PRX_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-id
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-secret
+            - Name: AUGURY_ADMIN_ACCOUNTS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/admin-account-ids
+            - Name: SCHEDULES_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/schedule-token
+            - Name: BIGQUERY_CREDENTIALS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/bigquery-credentials
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -392,10 +418,6 @@ Resources:
               Value: augury
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
@@ -446,6 +468,33 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/secret-key-base
+            - Name: RAILS_MASTER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/rails-master-key
+            - Name: POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-name
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-username
+            - Name: CASTLE_POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-name
+            - Name: CASTLE_POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-username
+            - Name: CASTLE_POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-password
+            - Name: PRX_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-id
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-secret
+            - Name: AUGURY_ADMIN_ACCOUNTS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/admin-account-ids
+            - Name: SCHEDULES_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/schedule-token
+            - Name: BIGQUERY_CREDENTIALS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/bigquery-credentials
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -665,10 +714,6 @@ Resources:
               Value: augury
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_SECRETS_BASE
-              Value: !Ref SecretsBase
-            - Name: AWS_SECRETS_VERSION
-              Value: !Ref SecretsVersion
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: POSTGRES_HOST
@@ -712,6 +757,33 @@ Resources:
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: fargate
           Name: augury-workslow
+          Secrets:
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/secret-key-base
+            - Name: RAILS_MASTER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/rails-master-key
+            - Name: POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-name
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/database-username
+            - Name: CASTLE_POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-name
+            - Name: CASTLE_POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-username
+            - Name: CASTLE_POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/castle-database-password
+            - Name: PRX_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-id
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/id-auth-client-secret
+            - Name: AUGURY_ADMIN_ACCOUNTS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/admin-account-ids
+            - Name: SCHEDULES_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/schedule-token
+            - Name: BIGQUERY_CREDENTIALS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Augury/bigquery-credentials
       Cpu: "4096"
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       Memory: "16384"
@@ -935,6 +1007,39 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Augury
       Timeout: 5
+  SlowWorkerRelayFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Augury] Slow worker relay function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury slow worker relay function is failing, which
+        could be preventing some forecasts, inventory, availability, etc from
+        updating.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlowWorkerRelayFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  SlowWorkerRelayFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt SlowWorkerRelayFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   # Forecast task timings
   ForecastJobMetricFilter:

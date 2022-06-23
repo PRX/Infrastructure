@@ -24,8 +24,6 @@ Parameters:
   VpcCidrBlock: { Type: String }
   VpcIpv6CidrBlocks: { Type: String }
   NewRelicApiKeyPrxLite: { Type: String }
-  SecretsBase: { Type: String }
-  SecretsStackName: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -42,6 +40,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   TransferServerIpFinderServiceToken: { Type: String }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SystemManagerEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -79,14 +78,12 @@ Parameters:
   FeedsS3BucketArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
   NetworksS3BucketArn: { Type: String }
-  RemixS3BucketArn: { Type: String }
   TransferS3BucketArn: { Type: String }
 
   BetaPrxOrgArchiveS3ObjectKey: { Type: String }
   BetaPrxOrgCloudFrontOai: { Type: String }
 
   CastleEcrImageTag: { Type: String }
-  CastleSecretsVersion: { Type: String }
   CastleSharedAlbListenerRulePriorityPrefix: { Type: String }
   CastlePostgresUsername: { Type: String }
   CastlePostgresUserPassword: { Type: String, NoEcho: true }
@@ -94,23 +91,19 @@ Parameters:
   DovetailCdnOriginRequestLambdaCodeS3ObjectKey: { Type: String }
 
   ExchangeEcrImageTag: { Type: String }
-  ExchangeSecretsVersion: { Type: String }
   ExchangeSharedAlbListenerRulePriorityPrefix: { Type: String }
+  ExchangeFtpAuthorizerLambdaCodeS3ObjectKey: { Type: String }
 
   FeederEcrImageTag: { Type: String }
-  FeederSecretsVersion: { Type: String }
   FeederSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   NetworksEcrImageTag: { Type: String }
-  NetworksSecretsVersion: { Type: String }
   NetworksSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   PublishEcrImageTag: { Type: String }
-  PublishSecretsVersion: { Type: String }
   PublishSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   RemixEcrImageTag: { Type: String }
-  RemixSecretsVersion: { Type: String }
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
 
 Conditions:
@@ -155,11 +148,8 @@ Resources:
         VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
         VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref CastleEcrImageTag
-        SecretsVersion: !Ref CastleSecretsVersion
         AlbListenerRulePriorityPrefix: !Ref CastleSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
@@ -228,11 +218,13 @@ Resources:
         VpcPublicSubnet1Id: !Ref VpcPublicSubnet1Id
         VpcPublicSubnet2Id: !Ref VpcPublicSubnet2Id
         VpcPublicSubnet3Id: !Ref VpcPublicSubnet3Id
-        SecretsBase: !Ref SecretsBase
+        VpcPrivateSubnet1Id: !Ref VpcPrivateSubnet1Id
+        VpcPrivateSubnet2Id: !Ref VpcPrivateSubnet2Id
+        VpcPrivateSubnet3Id: !Ref VpcPrivateSubnet3Id
         EcrImageTag: !Ref ExchangeEcrImageTag
-        SecretsVersion: !Ref ExchangeSecretsVersion
+        CodeS3Bucket: !Ref DeploymentPackageBucketName
+        FtpAuthorizerLambdaCodeS3ObjectKey: !Ref ExchangeFtpAuthorizerLambdaCodeS3ObjectKey
         AlbListenerRulePriorityPrefix: !Ref ExchangeSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
@@ -246,6 +238,8 @@ Resources:
         TransferServerIpFinderServiceToken: !Ref TransferServerIpFinderServiceToken
         S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
         S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
+        SystemManagerEndpointAccessSecurityGroupId: !Ref SystemManagerEndpointAccessSecurityGroupId
+        SharedMysqlClientSecurityGroupId: !Ref SharedMysqlClientSecurityGroupId
         SharedMemcachedEndpointAddress: !Ref SharedMemcachedEndpointAddress
         SharedMemcachedEndpointPort: !Ref SharedMemcachedEndpointPort
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
@@ -283,10 +277,7 @@ Resources:
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref FeederEcrImageTag
-        SecretsVersion: !Ref FeederSecretsVersion
-        SecretsStackName: !Ref SecretsStackName
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
         AlbListenerRulePriorityPrefix: !Ref FeederSharedAlbListenerRulePriorityPrefix
         EnvironmentType: !Ref EnvironmentType
@@ -334,11 +325,8 @@ Resources:
         VpcId: !Ref VpcId
         VpcCidrBlock: !Ref VpcCidrBlock
         VpcIpv6CidrBlocks: !Ref VpcIpv6CidrBlocks
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref NetworksEcrImageTag
-        SecretsVersion: !Ref NetworksSecretsVersion
         AlbListenerRulePriorityPrefix: !Ref NetworksSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
@@ -386,11 +374,8 @@ Resources:
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref PublishEcrImageTag
-        SecretsVersion: !Ref PublishSecretsVersion
         AlbListenerRulePriorityPrefix: !Ref PublishSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
@@ -431,11 +416,8 @@ Resources:
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        SecretsBase: !Ref SecretsBase
         EcrImageTag: !Ref RemixEcrImageTag
-        SecretsVersion: !Ref RemixSecretsVersion
         AlbListenerRulePriorityPrefix: !Ref RemixSharedAlbListenerRulePriorityPrefix
-        SecretsStackName: !Ref SecretsStackName
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
@@ -447,7 +429,7 @@ Resources:
         SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
         PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
-        RemixS3BucketArn: !Ref RemixS3BucketArn
+        RemixS3BucketArn: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/${AWS::Region}/s3-bucket-arn
         TransferS3BucketArn: !Ref TransferS3BucketArn
         RemixHostname: !Ref RemixHostname
         ExchangeHostname: !Ref ExchangeHostname
@@ -479,6 +461,14 @@ Outputs:
 
   ExchangeWebTargetGroupFullName:
     Value: !GetAtt ExchangeStack.Outputs.WebTargetGroupFullName
+  ExchangeFtpServerId:
+    Value: !GetAtt ExchangeStack.Outputs.FtpServerId
+  ExchangeFtpServerPublicIp:
+    Value: !GetAtt ExchangeStack.Outputs.FtpServerPublicIp
+  ExchangeFtpServerPublicIpAllocationId:
+    Value: !GetAtt ExchangeStack.Outputs.FtpServerPublicIpAllocationId
+  ExchangeFtpServerNlbName:
+    Value: !GetAtt ExchangeStack.Outputs.FtpServerNlbName
 
   FeederAuthProxyApiId:
     Value: !GetAtt FeederStack.Outputs.AuthApiId
