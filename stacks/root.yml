@@ -64,6 +64,7 @@ Parameters:
   PlayProxyEcrImageTag: { Type: String, Default: "" }
   PublishEcrImageTag: { Type: String, Default: "" }
   IframelyEcrImageTag: { Type: String, Default: "" }
+  WfmtEcrImageTag: { Type: String, Default: "" }
   RadiotopiaTowerLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   UploadLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   AnalyticsIngestLambdaCodeS3ObjectKey: { Type: String, Default: "" }
@@ -234,6 +235,7 @@ Resources:
       AdFilesHostname: a.prxu.org
       MetaHostname: meta.prx.org
       PublicFeedsHostname: !If [IsProduction, f.prxu.org, f-staging.prxu.org]
+      WfmtHostname: !If [IsProduction, wfmt.prx.org, wfmt.staging.prx.tech]
 
   # TODO This is failing in us-west-2; "duplicate key" error
   ResourceGroupsStack:
@@ -912,6 +914,9 @@ Resources:
         SharedAuroraMysqlPort: !Ref SharedAuroraMysqlPort
         PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
         ExchangeHostname: !GetAtt Constants.ExchangeHostname
+        S3SigningEndpointUrl: !GetAtt Apps100AStack.Outputs.S3SigningEndpointUrl
+        S3SigningAccessKeyId: !GetAtt Apps100AStack.Outputs.S3SigningAccessKeyId
+        AmazonSesSmtpCredentialsGeneratorServiceToken: !GetAtt CustomResourcesStack.Outputs.AmazonSesSmtpCredentialsGeneratorServiceToken
 
         # App-specific parameters
 
@@ -922,6 +927,10 @@ Resources:
 
         TheCastleEcrImageTag: !Ref TheCastleEcrImageTag
         TheCastleSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, TheCastle, prefix]
+
+        WfmtHostname: !GetAtt Constants.WfmtHostname
+        WfmtServicesS3BucketArn: !Ref WfmtServicesS3BucketArn
+        WfmtEcrImageTag: !Ref WfmtEcrImageTag
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1077,6 +1086,8 @@ Resources:
         SharedVpcFlowLogsLogGroupName: !GetAtt SharedVpcStack.Outputs.FlowLogsLogGroupName
 
         AuguryTargetGroupFullName: !GetAtt Apps300AStack.Outputs.AuguryTargetGroupFullName
+
+        WfmtTargetGroupFullName: !GetAtt Apps400AStack.Outputs.WfmtTargetGroupFullName
 
         BacksawDeployBucketRegionalDomainName: !GetAtt Apps400AStack.Outputs.BacksawDeployBucketRegionalDomainName
 
