@@ -36,6 +36,8 @@ Parameters:
   SharedRedisReplicationGroupEndpointPort: { Type: String }
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
+  DovetailRouterHosts: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -816,6 +818,8 @@ Resources:
       Environment:
         Variables:
           PINGBACKS: "true"
+          DOVETAIL_ROUTER_HOSTS: !Ref DovetailRouterHosts
+          DOVETAIL_ROUTER_API_TOKENS: !Ref DovetailRouterApiTokens
       Events:
         MetricsKinesisTrigger:
           Properties:
@@ -1115,7 +1119,7 @@ Resources:
         MetricsKinesisTrigger:
           Properties:
             BatchSize: 100
-            Enabled: true
+            Enabled: false
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis

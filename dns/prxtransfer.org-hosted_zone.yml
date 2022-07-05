@@ -1,7 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Hosted zone and record sets for prxtransfer.org and the associated health
-  checks
+  Hosted zone and record sets for prxtransfer.org
 
 Parameters:
   Domain:
@@ -10,79 +9,6 @@ Parameters:
     Type: String
 
 Resources:
-  East2HealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        FailureThreshold: 3
-        FullyQualifiedDomainName: !Sub east2.${Domain}
-        Inverted: false
-        MeasureLatency: false
-        Port: 21
-        RequestInterval: 30
-        Type: TCP
-      HealthCheckTags:
-        - { Key: Name, Value: Broadcast FTP east2 instance }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Broadcast Delivery }
-  East3HealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        FailureThreshold: 3
-        FullyQualifiedDomainName: !Sub east3.${Domain}
-        Inverted: false
-        MeasureLatency: false
-        Port: 21
-        RequestInterval: 30
-        Type: TCP
-      HealthCheckTags:
-        - { Key: Name, Value: Broadcast FTP east3 instance }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Broadcast Delivery }
-  West3HealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        FailureThreshold: 3
-        FullyQualifiedDomainName: !Sub west3.${Domain}
-        Inverted: false
-        MeasureLatency: false
-        Port: 21
-        RequestInterval: 30
-        Type: TCP
-      HealthCheckTags:
-        - { Key: Name, Value: Broadcast FTP west3 instance }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Broadcast Delivery }
-  West4HealthCheck:
-    Type: AWS::Route53::HealthCheck
-    Properties:
-      HealthCheckConfig:
-        FailureThreshold: 3
-        FullyQualifiedDomainName: !Sub west4.${Domain}
-        Inverted: false
-        MeasureLatency: false
-        Port: 21
-        RequestInterval: 30
-        Type: TCP
-      HealthCheckTags:
-        - { Key: Name, Value: Broadcast FTP west4 instance }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: Broadcast Delivery }
-
   HostedZone:
     Type: AWS::Route53::HostedZone
     Properties:
@@ -96,218 +22,74 @@ Resources:
         - { Key: prx:dev:application, Value: Broadcast Delivery }
       Name: !Ref Domain
 
-  # These are records for individual EC2 instances, i.e., per-instance
-  # subdomains being associated with specific static IP addresses
-  Servers:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: FTP servers
-      HostedZoneId: !GetAtt HostedZone.Id
-      RecordSets:
-        - Name: !Sub east2.${Domain}
-          ResourceRecords:
-            - "54.146.231.29"
-          TTL: "10"
-          Type: A
-        - Name: !Sub east3.${Domain}
-          ResourceRecords:
-            - "107.20.242.177"
-          TTL: "10"
-          Type: A
-        - Name: !Sub west3.${Domain}
-          ResourceRecords:
-            - "54.215.117.139"
-          TTL: "10"
-          Type: A
-        - Name: !Sub west4.${Domain}
-          ResourceRecords:
-            - "54.203.196.133"
-          TTL: "10"
-          Type: A
-
-  # These records handle the balancing and failover routing policies for the
-  # domain. Most traffic is handled by `*.{domain}` (e.g.,
-  # wxyz.prxtransfer.org).
-  Routing:
+  TransferFamily:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Primary routing policy records
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
-        # Apex and wildcard domains ALIAS to `balanced.{domain}`
+        # Production wildcard traffic
+        # - prxtransfer.org
+        # - *.prxtransfer.org
+        # - *.station.prxtransfer.org
+        # - *.east.prxtransfer.org
         - Name: !Ref Domain
           AliasTarget:
-            DNSName: !Sub balanced.${Domain}
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
         - Name: !Sub "*.${Domain}"
           AliasTarget:
-            DNSName: !Sub balanced.${Domain}
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
-
-        # CNAME for `www.{domain}`
-        - Name: !Sub www.${Domain}
-          ResourceRecords:
-            - !Ref Domain
-          TTL: "86400"
-          Type: CNAME
-
-        # `balanced.{domain}` is a latency routing group that will spread
-        # traffic to various regions or instances
-        - Name: !Sub balanced.${Domain}
+        - Name: !Sub "*.station.${Domain}"
           AliasTarget:
-            DNSName: !Sub east.${Domain}
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
-          Region: us-east-1 # N. Virginia
-          SetIdentifier: balanced-latency-east
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
-        - Name: !Sub balanced.${Domain}
-          AliasTarget:
-            DNSName: !Sub west3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          HealthCheckId: !GetAtt West3HealthCheck.HealthCheckId
-          Region: us-west-1 # N. California
-          SetIdentifier: balanced-latency-west3
-          Type: A
-        - Name: !Sub balanced.${Domain}
-          AliasTarget:
-            DNSName: !Sub west4.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          HealthCheckId: !GetAtt West4HealthCheck.HealthCheckId
-          Region: us-west-2 # Oregon
-          SetIdentifier: balanced-latency-west4
-          Type: A
-
-        # `east.{domain}` is one of the latency targets of `balanced.{domain}`,
-        # and is a weighted routing policy group
-        - Name: !Sub east.${Domain}
-          AliasTarget:
-            DNSName: !Sub east2.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          HealthCheckId: !GetAtt East2HealthCheck.HealthCheckId
-          SetIdentifier: east-weighted-east2
-          Type: A
-          Weight: 1
-        - Name: !Sub east.${Domain}
-          AliasTarget:
-            DNSName: !Sub east3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          SetIdentifier: east-weighted-east3
-          Type: A
-          Weight: 1
-
-        # Regional wildcards. I don't think these are really in use
         - Name: !Sub "*.east.${Domain}"
           AliasTarget:
-            DNSName: !Sub east.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            EvaluateTargetHealth: true
+            HostedZoneId: Z26RNL4JYFTOTI
+          Type: A
+        - Name: !Sub "*.west.${Domain}"
+          AliasTarget:
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            EvaluateTargetHealth: true
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
         - Name: !Sub "*.west1.${Domain}"
           AliasTarget:
-            DNSName: !Sub west3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          Type: A
-        - Name: !Sub "*.west.${Domain}"
-          AliasTarget:
-            DNSName: !Sub west4.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: PRIMARY
-          HealthCheckId: !GetAtt West4HealthCheck.HealthCheckId
-          SetIdentifier: west-wildcard-failover-west4
-          Type: A
-        - Name: !Sub "*.west.${Domain}"
-          AliasTarget:
-            DNSName: !Sub west3.${Domain}
+            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: SECONDARY
-          HealthCheckId: !GetAtt West3HealthCheck.HealthCheckId
-          SetIdentifier: west-wildcard-failover-west3
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
-
-  # Override to make WFCR hit east3 by default
-  Wfcr:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: WFCR-specific records
-      HostedZoneId: !GetAtt HostedZone.Id
-      RecordSets:
-        - Name: !Sub wfcr.${Domain}
+        # Staging traffic
+        # - staging.prxtransfer.org
+        # - *.staging.prxtransfer.org
+        # - *.station.staging.prxtransfer.org
+        # Does NOT support regional wildcard domains that used to be used in
+        # production, such as *.east.staging.prxtransfer.org
+        - Name: !Sub staging.${Domain}
           AliasTarget:
-            DNSName: !Sub east3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: PRIMARY
-          HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          SetIdentifier: wfcr-primary
-          Type: A
-        - Name: !Sub wfcr.${Domain}
-          AliasTarget:
-            DNSName: !Sub balanced.${Domain}
+            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: SECONDARY
-          SetIdentifier: wfcr-secondary
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
-
-  # Override to make WGUC hit east3 by default
-  Wguc:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: WGUC-specific records
-      HostedZoneId: !GetAtt HostedZone.Id
-      RecordSets:
-        - Name: !Sub wguc.${Domain}
+        - Name: !Sub "*.staging.${Domain}"
           AliasTarget:
-            DNSName: !Sub east3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: PRIMARY
-          HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          SetIdentifier: wguc-primary
-          Type: A
-        - Name: !Sub wguc.${Domain}
-          AliasTarget:
-            DNSName: !Sub balanced.${Domain}
+            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: SECONDARY
-          SetIdentifier: wguc-secondary
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
-
-  # Override to make WKSU hit east3 by default
-  Wksu:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: WKSU-specific records
-      HostedZoneId: !GetAtt HostedZone.Id
-      RecordSets:
-        - Name: !Sub wksu.${Domain}
+        - Name: !Sub "*.station.staging.${Domain}"
           AliasTarget:
-            DNSName: !Sub east3.${Domain}
-            EvaluateTargetHealth: false
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: PRIMARY
-          HealthCheckId: !GetAtt East3HealthCheck.HealthCheckId
-          SetIdentifier: wksu-primary
-          Type: A
-        - Name: !Sub wksu.${Domain}
-          AliasTarget:
-            DNSName: !Sub balanced.${Domain}
+            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
             EvaluateTargetHealth: true
-            HostedZoneId: !GetAtt HostedZone.Id
-          Failover: SECONDARY
-          SetIdentifier: wksu-secondary
+            HostedZoneId: Z26RNL4JYFTOTI
           Type: A
