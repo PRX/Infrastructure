@@ -51,7 +51,8 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
-  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
+  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion, !Condition IsProduction]
+  EnableWeb: !And [!Condition HasAuroraEndpoint, !Condition IsProduction]
 
 Resources:
   HostHeaderListenerRule:
@@ -350,7 +351,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 15
-      HealthCheckPath: /api/v1
+      HealthCheckPath: /users/sign_in
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 3
       Port: 80
@@ -408,7 +409,7 @@ Resources:
 
   WebEcsService:
     Type: AWS::ECS::Service
-    Condition: HasAuroraEndpoint # See README
+    Condition: EnableWeb
     Properties:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -510,7 +511,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: S3_BUCKET_PATH
-              Value: wfmt-staging
+              Value: !If [IsProduction, wfmt-staging, wfmt-test]
             - Name: S3_BUCKET
               Value: !Select [5, !Split [":", !Ref WfmtS3BucketArn]]
             - Name: WORKER_PAUSE
@@ -664,7 +665,7 @@ Resources:
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: S3_BUCKET_PATH
-              Value: wfmt-staging
+              Value: !If [IsProduction, wfmt-staging, wfmt-test]
             - Name: S3_BUCKET
               Value: !Select [5, !Split [":", !Ref WfmtS3BucketArn]]
             - Name: WORKER_PAUSE
