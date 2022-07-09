@@ -26,8 +26,7 @@ push_to_ecr() {
             echo "ECR Repository already exists"
         else
             echo "Creating ECR repository"
-            # TODO
-            # aws ecr create-repository --repository-name "$safe_ecr_repo_name"
+            aws ecr create-repository --repository-name "$safe_ecr_repo_name"
         fi
         set -e
 
