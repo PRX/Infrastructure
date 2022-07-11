@@ -9,7 +9,7 @@ Applications, as well as the systems designed to test and deploy those applicati
 
 ## CI/CD
 
-Together, the [CI](https://github.com/PRX/Infrastructure/tree/master/ci) and [CD](https://github.com/PRX/Infrastructure/tree/master/cd) systems support continuous integration and continuous delivery and deployment. They are independent systems, but are designed to work in close coordination. CI/CD require a pre-existing [storage](https://github.com/PRX/Infrastructure/tree/master/storage) and [notification](https://github.com/PRX/Infrastructure/tree/master/notifications) stack to exist before either can be launched from their templates.
+Together, the [CI](https://github.com/PRX/Infrastructure/tree/main/ci) and [CD](https://github.com/PRX/Infrastructure/tree/main/cd) systems support continuous integration and continuous delivery and deployment. They are independent systems, but are designed to work in close coordination. CI/CD require a pre-existing [storage](https://github.com/PRX/Infrastructure/tree/main/storage) and [notification](https://github.com/PRX/Infrastructure/tree/main/notifications) stack to exist before either can be launched from their templates.
 
 There is a draw.io file (`System Diagram.xml`) that gives a good overview of how many of the main pieces of the CI and CD systems fit together.
 

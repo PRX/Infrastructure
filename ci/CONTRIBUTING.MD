@@ -20,9 +20,9 @@ The continuous integration platform is intended to be managed and launched throu
 
 Sensitive information, such as API keys, should be managed through [Parameter Store](http://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-paramstore.html) when possible. In cases where that's not possible, the values can be passed in to the CloudFormation stack as normal [stack parameters](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/parameters-section-structure.html).
 
-When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/master/ci/README.md) should include information to help with getting those dependencies set up.
+When there are external dependencies, such as the configuration of GitHub Webhooks, the [README](https://github.com/PRX/Infrastructure/blob/main/ci/README.md) should include information to help with getting those dependencies set up.
 
-Deployment of the CI stack is generally handled automatically by a [GitHub action](https://github.com/PRX/Infrastructure/blob/master/.github/workflows/deploy-ci-stack.yml), which deploys using the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli). If necesary, the stack can also be updated manually using the AWS SAM CLI locally.
+Deployment of the CI stack is generally handled automatically by a [GitHub action](https://github.com/PRX/Infrastructure/blob/main/.github/workflows/deploy-ci-stack.yml), which deploys using the [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-reference.html#serverless-sam-cli). If necesary, the stack can also be updated manually using the AWS SAM CLI locally.
 
 ## Code Review
 
@@ -32,8 +32,8 @@ It is still a good idea to have code reviewed, even if the changes have already 
 
 ## Code Standards
 
-Be sure to follow any coding standards outlined in the [CONTRIBUTING](https://github.com/PRX/Infrastructure/blob/master/CONTRIBUTING.md) file in the root of this repository.
+Be sure to follow any coding standards outlined in the [CONTRIBUTING](https://github.com/PRX/Infrastructure/blob/main/CONTRIBUTING.md) file in the root of this repository.
 
 ## Documentation
 
-The [README](https://github.com/PRX/Infrastructure/blob/master/ci/README.md) should always be kept up to date. As you make changes to parts of the system, make sure you are simultaneously updating or adding to the README. In some cases, like with AWS Lambda functions, there may be some duplication of documentation. You may find that you are updating docs in the README, in the Lambda code file, and inline in the CloudFormation template. If you are reviewing changes, it's helpful to check any places that documentation may need to be updated to ensure that the repository stays in good shape.
+The [README](https://github.com/PRX/Infrastructure/blob/main/ci/README.md) should always be kept up to date. As you make changes to parts of the system, make sure you are simultaneously updating or adding to the README. In some cases, like with AWS Lambda functions, there may be some duplication of documentation. You may find that you are updating docs in the README, in the Lambda code file, and inline in the CloudFormation template. If you are reviewing changes, it's helpful to check any places that documentation may need to be updated to ensure that the repository stays in good shape.
