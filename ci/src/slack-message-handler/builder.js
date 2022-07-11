@@ -40,8 +40,8 @@ module.exports = {
     };
 
     // e.g.,
-    // Building PRX/Infrastructure master branch with commit be8e83b
-    // Built PRX/Infrastructure master branch with commit 674811e
+    // Building PRX/Infrastructure main branch with commit be8e83b
+    // Built PRX/Infrastructure main branch with commit 674811e
     // Building PRX/Infrastructure #582 with commit 26fad6b
     const line1 = [
       `<${codebuildUrl(event)}|${verb[event.detail['build-status']]}>`,
