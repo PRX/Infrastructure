@@ -22,17 +22,23 @@ Resources:
         - { Key: prx:dev:application, Value: Broadcast Delivery }
       Name: !Ref Domain
 
-  TransferFamily:
+  ProductionWildcards:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: Primary routing policy records
+      Comment: Production FTP domains
       HostedZoneId: !GetAtt HostedZone.Id
       RecordSets:
-        # Production wildcard traffic
-        # - prxtransfer.org
-        # - *.prxtransfer.org
-        # - *.station.prxtransfer.org
-        # - *.east.prxtransfer.org
+        # Production wildcard traffic. All production traffic from stations
+        # would be expected to handled by one of these.
+        #
+        # THEY ALL RESOLVE TO THE SAME NETWORK LOAD BALANCER!!
+        #
+        # - prxtransfer.org (shouldn't be in use by anyone)
+        # - *.prxtransfer.org (all legacy traffic)
+        # - *.station.prxtransfer.org (stations that opted in to Transfer Family early)
+        # - *.east.prxtransfer.org (Legacy routing for a few stations to hit specific server locations)
+        # - *.west.prxtransfer.org (Legacy routing for a few stations to hit specific server location)
+        # - *.west1.prxtransfer.org (Legacy routing for a few stations to hit specific server locations)
         - Name: !Ref Domain
           AliasTarget:
             DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
@@ -69,12 +75,22 @@ Resources:
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
           Type: A
+
+  StagingWildcards:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Staging FTP domains
+      HostedZoneId: !GetAtt HostedZone.Id
+      RecordSets:
         # Staging traffic
         # - staging.prxtransfer.org
         # - *.staging.prxtransfer.org
         # - *.station.staging.prxtransfer.org
         # Does NOT support regional wildcard domains that used to be used in
-        # production, such as *.east.staging.prxtransfer.org
+        # production, such as *.east.staging.prxtransfer.org.
+        #
+        # No one should be using staging domains except for us for internal
+        # testing
         - Name: !Sub staging.${Domain}
           AliasTarget:
             DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
