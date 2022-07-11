@@ -27,7 +27,7 @@ for stack in stacks["Stacks"]:
 
 # Template continuity
 # Compares the template for certain stacks, as they exist in CloudFormation,
-# to your local copy. If you are on master these should not have any
+# to your local copy. If you are on main branch these should not have any
 # differences. The first line each template should contain a relative path
 # to the file in the Infrastructure repo. If that path appears to be missing,
 # this will report a warning

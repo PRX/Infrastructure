@@ -32,7 +32,7 @@ The code for AWS Lambda functions likewise will not deploy automatically, even i
 
 At this time, there is no native support for testing the CD system. That is to say, it can be hard to test changes outside of the primary deployment. Even though the CD system and the environment stacks that it creates or updates are not dependent on each other, it's very possible to make changes to CD that could negatively impact a previously-launched stack, or the processes that we use to manage production stacks.
 
-As such, it is a good idea to have code reviewed, even if the changes have already been deployed and appear to be working. If you're working on feature branches and deploying code that isn't yet committed to `master`, there is the potential that others are also deploying changes that don't include your changes. Good communication is the best method for handling this.
+As such, it is a good idea to have code reviewed, even if the changes have already been deployed and appear to be working. If you're working on feature branches and deploying code that isn't yet committed to `main`, there is the potential that others are also deploying changes that don't include your changes. Good communication is the best method for handling this.
 
 ## Code Standards
 

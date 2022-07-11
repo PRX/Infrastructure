@@ -30,8 +30,8 @@ The following describes many aspects of the CD pipeline in the order that they u
 
 The CodePipeline pipeline has three triggers:
 
-- pushes to the `master` branch of the [Infrastructure](https://github.com/PRX/Infrastructure) GitHub repository
-- pushes to the `master` branch of the [meta.prx.org](https://github.com/prx/meta.prx.org) GitHub repository
+- pushes to the `main` branch of the [Infrastructure](https://github.com/PRX/Infrastructure) GitHub repository
+- pushes to the `main` branch of the [meta.prx.org](https://github.com/prx/meta.prx.org) GitHub repository
 - new versions of the [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) in S3 used for the staging environment (the bucket name and object ID for this file are determined by stack parameters on the CD stack).
 
 These triggers are defined as `source` actions in the first stage of the pipeline.

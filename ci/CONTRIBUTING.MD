@@ -28,7 +28,7 @@ Deployment of the CI stack is generally handled automatically by a [GitHub actio
 
 At this time, there is no native support for testing the CI system. That is to say, it can be hard to test changes outside of the primary deployment. In most cases, other than breaking the system itself, there is little risk in pushing changes, though. The exception to this would be code that helps CI integrate with CD. Extra care should be used when altering those functions and related IAM permissions.
 
-It is still a good idea to have code reviewed, even if the changes have already been deployed and appear to be working. If you're working on feature branches and deploying code that isn't yet committed to `master`, there is the potential that others are also deploying changes that don't include your changes. Good communication is the best method for handling this.
+It is still a good idea to have code reviewed, even if the changes have already been deployed and appear to be working. If you're working on feature branches and deploying code that isn't yet committed to `main`, there is the potential that others are also deploying changes that don't include your changes. Good communication is the best method for handling this.
 
 ## Code Standards
 
