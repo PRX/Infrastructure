@@ -10,6 +10,8 @@ subdomains = [
 
 changes = []
 
+name = "infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com"
+
 for subdomain in subdomains:
     changes.append(
         {
@@ -19,7 +21,7 @@ for subdomain in subdomains:
                 "Type": "A",
                 "AliasTarget": {
                     "HostedZoneId": "Z26RNL4JYFTOTI",
-                    "DNSName": "infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com",
+                    "DNSName": name,
                     "EvaluateTargetHealth": False,
                 },
             },
