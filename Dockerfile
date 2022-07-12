@@ -8,7 +8,7 @@
 
 # Should use an image that matches the Node.js and Python versions listed in
 # .tool-versions and .python-version
-FROM nikolaik/python-nodejs:python3.9-nodejs14-alpine
+FROM nikolaik/python-nodejs:python3.10-nodejs16-alpine
 
 WORKDIR /app
 COPY . .
