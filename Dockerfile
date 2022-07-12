@@ -16,4 +16,4 @@ COPY . .
 RUN npm install
 RUN pip install -r requirements.txt
 
-CMD npm test
+ENTRYPOINT [ "npm" ]
