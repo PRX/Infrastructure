@@ -6,6 +6,8 @@
 #
 # `make check` should run the entire test suite.
 
+# Should use an image that matches the Node.js and Python versions listed in
+# .tool-versions and .python-version
 FROM nikolaik/python-nodejs:python3.9-nodejs14-alpine
 
 WORKDIR /app
@@ -14,4 +16,4 @@ COPY . .
 RUN yarn install
 RUN pip install -r requirements.txt
 
-CMD ["make", "check"]
+CMD make check
