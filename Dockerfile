@@ -4,7 +4,7 @@
 # The resulting Docker image is intended to be run in a continuous integration
 # service, like AWS CodeBuild.
 #
-# `make check` should run the entire test suite.
+# `npm test` should run the entire test suite, even non-Node tests.
 
 # Should use an image that matches the Node.js and Python versions listed in
 # .tool-versions and .python-version
@@ -13,7 +13,7 @@ FROM nikolaik/python-nodejs:python3.9-nodejs14-alpine
 WORKDIR /app
 COPY . .
 
-RUN yarn install
+RUN npm install
 RUN pip install -r requirements.txt
 
-CMD make check
+CMD npm test
