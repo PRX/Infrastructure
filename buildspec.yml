@@ -3,20 +3,7 @@ env:
   variables:
     PRX_NULL: "null"
 phases:
-  install:
-    runtime-versions:
-      python: 3.8
-      nodejs: 16
-    commands:
-      - "cd devops/tooling/chat-ops/slack-app && npm install && cd ../../../../"
-      - "npm install"
-      - "rm .python-version"
-      - "pip3 install -r requirements.txt"
   build:
     commands:
-      - 'find . -name "*.yml" -type f ! -path "*/node_modules/*" ! -path "./.github/*" -mindepth 2 -print0 | xargs -0 -n1 cfn-lint --template'
-      - "python3.8 -m black --check ./"
-      - "python3.8 -m flake8"
-      - "npm run tsc"
-      - 'npm run eslint -- "**/*.js"'
-      - 'npm run prettier -- --check "**/*.{js,json,yml}"'
+      - docker build -t ci .
+      - docker run ci test
