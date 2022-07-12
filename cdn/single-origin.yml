@@ -34,7 +34,11 @@ Conditions:
   HasCloudFrontCompress: !Equals [!Ref CloudFrontCompress, "True"]
   HasCloudFrontDefaultTtl: !Not [!Equals [!Ref CloudFrontDefaultTtl, ""]]
   HasCloudFrontForwardedHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedHeaders], ""]]
+  HasCloudFrontForwardQueryStrings: !Equals [!Ref CloudFrontForwardQueryStrings, "True"]
   HasCloudFrontForwardedQueryStrings: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedQueryStrings], ""]]
+  ForwardQueryStrings: !Or
+    - !Condition HasCloudFrontForwardQueryStrings
+    - !Condition HasCloudFrontForwardedQueryStrings
   HasCloudFrontForwardedCookies: !Not [!Equals [!Join ["", !Ref CloudFrontForwardedCookies], ""]]
   HasCloudFrontMinTtl: !Not [!Equals [!Ref CloudFrontMinTtl, ""]]
   HasCloudFrontMaxTtl: !Not [!Equals [!Ref CloudFrontMaxTtl, ""]]
@@ -101,6 +105,7 @@ Metadata:
           - CloudFrontCachedMethods
           - CloudFrontAllowedMethods
           - CloudFrontForwardedHeaders
+          - CloudFrontForwardQueryStrings
           - CloudFrontForwardedQueryStrings
           - CloudFrontForwardedCookies
           - CloudFrontCompress
@@ -158,6 +163,8 @@ Metadata:
         default: Cached methods
       CloudFrontForwardedHeaders:
         default: Forwarded Headers
+      CloudFrontForwardQueryStrings:
+        default: Forward query strings
       CloudFrontForwardedQueryStrings:
         default: Forwarded query strings
       CloudFrontForwardedCookies:
@@ -292,6 +299,18 @@ Parameters:
       those headers' values in the viewer request. Provide a comma-delimited
       list (e.g. "Origin,Access-Control-Request-Headers,
       Access-Control-Request-Method")
+  CloudFrontForwardQueryStrings:
+    Type: String
+    Description: >-
+      Indicates whether you want CloudFront to forward query strings to the
+      origin that is associated with this cache behavior and cache based on the
+      query string parameters. If any query strings are listed, forwarding and
+      caching will always occur. If this is set to True and no query strings
+      are listed, all query strings will be forwarded and cached.
+    Default: "Automatic"
+    AllowedValues:
+      - "True"
+      - "Automatic"
   CloudFrontForwardedQueryStrings:
     Type: CommaDelimitedList
     Description: >-
@@ -443,6 +462,7 @@ Parameters:
       (optional) ARN for the ACM certificate that will be used with the
       CloudFront distribution. If no value is supplied, a new certificate will
       be created.
+
 Resources:
   # ACM Certificate
   # This gets created when no ARN for a pre-existing certificate is provided
@@ -487,7 +507,7 @@ Resources:
                 WhitelistedNames: !Ref CloudFrontForwardedCookies
               - !Ref AWS::NoValue
             Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
-            QueryString: !If [HasCloudFrontForwardedQueryStrings, true, false]
+            QueryString: !If [ForwardQueryStrings, true, false]
             QueryStringCacheKeys: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
           # LambdaFunctionAssociations:
           MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
