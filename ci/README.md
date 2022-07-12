@@ -73,7 +73,9 @@ CI will attempt to run if the following conditions are met:
 
 Beyond this, there are no technical requirements necessary to be compatible with the CI system. It will happily run any buildspec that it sees, making it possible to write entirely custom build processes project-by-project.
 
-In general, though, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
+All builds take place within Linux environment where a fairly modern version of Docker is available. Beyond that, the specifics of the environment are not guaranteed. It's strongly recommended that the application's build and test processes happen in Docker, rather than directly in the Linux environment, to avoid issues if the build environment changes over time.
+
+In general, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
 
 If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. The script will only attempt to publish code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The build handler Lambda will set that by default for default branch events.
 
