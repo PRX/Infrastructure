@@ -1,5 +1,6 @@
 import boto3
 
+boto3.setup_default_session(profile_name="prx-legacy")
 client = boto3.client("route53")
 
 
