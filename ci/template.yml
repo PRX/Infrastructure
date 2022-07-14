@@ -223,7 +223,7 @@ Resources:
               Effect: Allow
               Resource: "*"
           Version: "2012-10-17"
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -290,7 +290,7 @@ Resources:
               Effect: Allow
               Resource: !GetAtt CiCodeBuildProject.Arn
           Version: "2012-10-17"
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -405,10 +405,10 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
 
-  ParameterStoreHandlerFunction:
+  ParameterStoreUpdaterFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/parameter-store-handler/
+      CodeUri: src/parameter-store-updater/
       Description: >-
         Listens for successful CI CodeBuild builds on EventBridge, and updates
         Parameter Store parameters with new code package identifiers when
@@ -427,7 +427,7 @@ Resources:
               source:
                 - aws.codebuild
           Type: EventBridgeRule
-      Handler: lambda_function.lambda_handler
+      Handler: index.handler
       MemorySize: 192
       Policies:
         - Statement:
@@ -435,7 +435,7 @@ Resources:
               Effect: Allow
               Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/stag/Spire/*
           Version: "2012-10-17"
-      Runtime: python3.9
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -443,10 +443,10 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CI
       Timeout: 10
-  ParameterStoreHandlerLogGroup:
+  ParameterStoreUpdaterLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${ParameterStoreHandlerFunction}
+      LogGroupName: !Sub /aws/lambda/${ParameterStoreUpdaterFunction}
       RetentionInDays: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -454,10 +454,10 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CI }
-  ParameterStoreHandlerErrorAlarm:
+  ParameterStoreUpdaterErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [CI] Parameter store <prod> FUNCTION ERRORS (${AWS::StackName})
+      AlarmName: !Sub WARN [CI] Parameter store updater <prod> FUNCTION ERRORS (${AWS::StackName})
       AlarmDescription: >-
         The Lambda function that updates parameter store values for the staging
         root stack based on CI build artifacts is failing, so some new app
@@ -465,7 +465,7 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Ref ParameterStoreHandlerFunction
+          Value: !Ref ParameterStoreUpdaterFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -505,7 +505,7 @@ Resources:
               Effect: Allow
               Resource: !Ref SlackMessageRelaySnsTopicArn
           Version: "2012-10-17"
-      Runtime: nodejs14.x
+      Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
