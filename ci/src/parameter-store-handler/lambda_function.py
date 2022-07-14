@@ -30,6 +30,7 @@ def update_ssm_parameters(event, env_vars):
                 if parameter_name.startswith("/prx/stag/Spire/"):
                     print(f"...{parameter_name}={ecr_image_name}")
                     ssm.put_parameter(
+                        Type="String",
                         Name=parameter_name.strip(),
                         Value=ecr_image_name,
                         Overwrite=True,
@@ -50,7 +51,10 @@ def update_ssm_parameters(event, env_vars):
                 if parameter_name.startswith("/prx/stag/Spire/"):
                     print(f"...{parameter_name.strip()}={new_s3_object_key}...")
                     ssm.put_parameter(
-                        Name=parameter_name, Value=new_s3_object_key, Overwrite=True
+                        Type="String",
+                        Name=parameter_name,
+                        Value=new_s3_object_key,
+                        Overwrite=True,
                     )
 
         if (
@@ -67,7 +71,10 @@ def update_ssm_parameters(event, env_vars):
                 if parameter_name.startswith("/prx/stag/Spire/"):
                     print(f"...{parameter_name.strip()}={new_s3_object_key}...")
                     ssm.put_parameter(
-                        Name=parameter_name, Value=new_s3_object_key, Overwrite=True
+                        Type="String",
+                        Name=parameter_name,
+                        Value=new_s3_object_key,
+                        Overwrite=True,
                     )
 
 
