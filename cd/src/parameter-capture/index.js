@@ -99,8 +99,8 @@ export const handler = async (event, context) => {
     console.log(JSON.stringify(resolvedParams));
 
     // Snapshots are named with a timestamp, eg infra-staging/123456.json
-    const ts = Date.now();
-    const key = `${rootStackName}/${ts}.json`;
+    const iso8601 = new Date().toISOString();
+    const key = `${rootStackName}/${iso8601}.json`;
 
     await s3Client.send(
       new PutObjectCommand({
