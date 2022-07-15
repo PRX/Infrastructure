@@ -20,12 +20,6 @@ s3 = boto3.client("s3", config=Config(signature_version="s3v4"))
 code_pipeline = boto3.client("codepipeline")
 
 
-def put_job_success(job, message):
-    print("Putting job success")
-    print(message)
-    code_pipeline.put_job_success_result(jobId=job["id"])
-
-
 def put_job_failure(job, message):
     print("Putting job failure")
     print(message)
@@ -34,48 +28,54 @@ def put_job_failure(job, message):
     )
 
 
-def sync_source(job):
-    print("...Syncing repository source...")
-
-    input_artifact = job["data"]["inputArtifacts"][0]
-
-    sha = input_artifact["revision"]
-
-    input_location = input_artifact["location"]["s3Location"]
-    input_bucket = input_location["bucketName"]
-    input_key = input_location["objectKey"]
-    input_id = input_key.split("/")[-1]
-
-    archive_path = "/tmp/{0}".format(input_id)
-
-    print(f"...Getting artifact from {input_bucket}/{input_key}...")
-    print(f"...Writing artifact to {archive_path}...")
-
-    output_bucket = os.environ["INFRASTRUCTURE_SOURCE_BUCKET"]
-
-    s3.download_file(input_bucket, input_key, archive_path)
-
-    archive = zipfile.ZipFile(archive_path, "r")
-    names = archive.namelist()
-    for name in names:
-        if f"{name}".startswith("stacks/"):
-            print(f"...Uploading {name}...")
-
-            f = archive.open(name)
-
-            output_key = "{0}/{1}".format(sha, name)
-            s3.upload_fileobj(f, output_bucket, output_key)
-
-
 def lambda_handler(event, context):
     try:
         print("Starting sync...")
 
         job = event["CodePipeline.job"]
 
-        sync_source(job)
+        print("...Syncing repository source...")
 
-        put_job_success(job, "")
+        if len(job["data"]["inputArtifacts"]) != 1:
+            raise Exception("Expected exactly 1 input artifact")
+
+        input_artifact = job["data"]["inputArtifacts"][0]
+
+        commit_hash = input_artifact["revision"]
+
+        input_location = input_artifact["location"]["s3Location"]
+        input_bucket = input_location["bucketName"]
+        input_key = input_location["objectKey"]
+        input_id = input_key.split("/")[-1]
+
+        archive_path = "/tmp/{0}".format(input_id)
+
+        print(f"...Getting artifact from {input_bucket}/{input_key}...")
+        print(f"...Writing artifact to {archive_path}...")
+
+        output_bucket_name = os.environ["TEMPLATE_COPY_BUCKET_NAME"]
+
+        s3.download_file(input_bucket, input_key, archive_path)
+
+        archive = zipfile.ZipFile(archive_path, "r")
+        names = archive.namelist()
+        for name in names:
+            if f"{name}".startswith("stacks/"):
+                print(f"...Uploading {name}...")
+
+                f = archive.open(name)
+
+                output_key = "{0}/{1}".format(commit_hash, name)
+                s3.upload_fileobj(f, output_bucket_name, output_key)
+
+        region = os.environ["AWS_REGION"]
+        template_url_lead = (
+            f"https://{output_bucket_name}.s3.{region}.amazonaws.com/{commit_hash}"
+        )
+
+        code_pipeline.put_job_success_result(
+            jobId=job["id"], outputVariables={"TemplateUrlPrefix": template_url_lead}
+        )
 
         return "...Done"
 
