@@ -3,6 +3,43 @@ const AWS = require('aws-sdk');
 const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
 const codepipeline = new AWS.CodePipeline();
 
+/**
+ * Recursively pages through all Parameter Store parameters under a given path
+ * @param {string} path
+ */
+async function getAllParametersByPath(path, nextToken) {
+  return new Promise((resolve, reject) => {
+    const params = {
+      Path: path,
+      Recursive: true,
+      ...(nextToken && { NextToken: nextToken }),
+    };
+
+    ssm.getParametersByPath(params, async (error, data) => {
+      if (error) {
+        reject(error);
+      } else {
+        const results = { Parameters: [] };
+        results.Parameters.push(...data.Parameters);
+
+        if (data.NextToken) {
+          try {
+            const more = await getAllParametersByPath(path, data.NextToken);
+
+            if (more) {
+              results.Parameters.push(...more.Parameters);
+            }
+          } catch (error) {
+            reject(error);
+          }
+        }
+
+        resolve(results);
+      }
+    });
+  });
+}
+
 exports.handler = async (event) => {
   const job = event['CodePipeline.job'];
 
@@ -16,14 +53,18 @@ exports.handler = async (event) => {
     const patterns = [/\/pkg\/docker-image-tag$/, /\/pkg\/s3-object-key$/];
 
     // Get all staging Spire parameters
-    const stagingParameters = await ssm
-      .getParametersByPath({ Path: '/prx/stag/Spire/' })
-      .promise();
+    const stagingParameters = await getAllParametersByPath('/prx/stag/Spire');
+    console.log(
+      `Found ${stagingParameters.Parameters.length} staging parameters`,
+    );
 
     // Get all production Spire parameters
-    const productionParameters = await ssm
-      .getParametersByPath({ Path: '/prx/prod/Spire/' })
-      .promise();
+    const productionParameters = await getAllParametersByPath(
+      '/prx/prod/Spire',
+    );
+    console.log(
+      `Found ${productionParameters.Parameters.length} production parameters`,
+    );
 
     // Filter down to just the parameters matching the above patterns.
     const stagingPkgParameters = stagingParameters.Parameters.filter(
@@ -36,6 +77,9 @@ exports.handler = async (event) => {
 
         return false;
       },
+    );
+    console.log(
+      `Found ${stagingPkgParameters.length} staging package parameters`,
     );
 
     // For each staging package parameter, check if the production value is
@@ -55,7 +99,10 @@ exports.handler = async (event) => {
       // If the staging and production values don't match, assume that the
       // production value is stale, and copy the staging value into the
       // production parameter
-      if (stagingPkgParameter.Value !== productionPkgParameter.Value) {
+      if (stagingPkgParameter.Value !== productionPkgParameter?.Value) {
+        console.log(`Promoting value for: ${prodName}`);
+        console.log(`>> Old: ${productionPkgParameter?.Value}`);
+        console.log(`>> New: ${stagingPkgParameter.Value}`);
         await ssm
           .putParameter({
             Name: prodName,
