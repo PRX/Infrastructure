@@ -325,6 +325,16 @@ async function buildMessage(job) {
   const StackName = userParameters.StackName;
   const ChangeSetName = userParameters.ChangeSetName;
 
+  // TODO
+  // Get new parameter values from change set
+  // const rootChangeSet = await cloudformation
+  //   .describeChangeSet({ StackName, ChangeSetName })
+  //   .promise();
+
+  // for (const iterator of object) {
+  //   c;
+  // }
+
   // Get current stack parameter values
   const stacks = await cloudformation.describeStacks({ StackName }).promise();
   const stack = stacks.Stacks[0];
