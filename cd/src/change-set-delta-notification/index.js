@@ -56,7 +56,11 @@ const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
-const cloudformation = new AWS.CloudFormation({ apiVersion: '2010-05-15' });
+const cloudformation = new AWS.CloudFormation({
+  apiVersion: '2010-05-15',
+  maxRetries: 10,
+  retryDelayOptions: { base: 500 },
+});
 const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
