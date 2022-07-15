@@ -1,6 +1,10 @@
 const AWS = require('aws-sdk');
 
 const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
+const sns = new AWS.SNS({
+  apiVersion: '2010-03-31',
+  region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
+});
 
 /**
  * Updates a Parameter Store parameter with the given value, if the parameter
@@ -17,6 +21,18 @@ async function updateSsmParameter(parameterName, parameterValue) {
         Value: parameterValue,
         Type: 'String',
         Overwrite: true,
+      })
+      .promise();
+
+    await sns
+      .publish({
+        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+        Message: JSON.stringify({
+          username: 'AWS CodeBuild',
+          icon_emoji: ':ops-codebuild:',
+          channel: '#ops-debug',
+          text: `[SSM] Setting: ${parameterName} = ${parameterValue}`,
+        }),
       })
       .promise();
   }

@@ -414,6 +414,9 @@ Resources:
         Listens for successful CI CodeBuild builds on EventBridge, and updates
         Parameter Store parameters with new code package identifiers when
         necessary.
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         CodeBuild:
           Properties:
@@ -431,6 +434,11 @@ Resources:
       Handler: index.handler
       MemorySize: 192
       Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelaySnsTopicArn
+          Version: "2012-10-17"
         - Statement:
             - Action: ssm:PutParameter
               Effect: Allow
