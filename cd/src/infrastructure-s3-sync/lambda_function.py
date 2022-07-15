@@ -74,7 +74,7 @@ def lambda_handler(event, context):
         )
 
         code_pipeline.put_job_success_result(
-            jobId=job["id"], outputVariables={"TemplateUrlPrefix": template_url_base}
+            jobId=job["id"], outputVariables={"TemplateUrlBase": template_url_base}
         )
 
         return "...Done"
