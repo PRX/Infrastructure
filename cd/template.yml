@@ -765,7 +765,66 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
 
-  # TODO Add emergency production-only pipeline
+  EmergencyPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref ArtifactStore
+        Type: S3
+      RoleArn: !GetAtt CdPipelineIamRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: InfrastructureRepo
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: "1"
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: PRX/Infrastructure
+                BranchName: main
+                OutputArtifactFormat: CODE_ZIP
+                DetectChanges: false
+              Namespace: infrastructure_repo
+              OutputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            - Name: StagingConfig
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: "1"
+              Configuration:
+                PollForSourceChanges: false
+                S3Bucket:
+                  Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+                S3ObjectKey: !Ref InfrastructureConfigStagingKey
+              OutputArtifacts:
+                - Name: TemplateConfigStagingZipArtifact
+              RunOrder: 1
+        - Name: Pre-Deploy
+          Actions:
+            - Name: S3-Template-Copy
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              Namespace: s3_template_copy
+              RunOrder: 1
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
 
   # Pipeline Events
   CdPipelineEventsTargetFunction:
