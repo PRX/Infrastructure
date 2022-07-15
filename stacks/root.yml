@@ -91,7 +91,7 @@ Parameters:
   InfrastructureGitCommit: { Type: String }
   PipelineExecutionNonce: { Type: String }
   SlackMessageRelaySnsTopicArn: { Type: String }
-  TemplateUrlPrefix: { Type: String }
+  TemplateUrlBase: { Type: String }
   EnvironmentType:
     Type: String
     AllowedValues:
@@ -175,12 +175,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Infrastructure }
-      TemplateURL:
-        Fn::Sub:
-          - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/custom-resources.yml
-          - SourceBucketName: !Sub prx-infrastructure-${AWS::Region}-source
-          # - SourceBucketName:
-          #     Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/custom-resources.yml
       TimeoutInMinutes: 5
 
   Constants:
@@ -197,18 +192,6 @@ Resources:
       #   Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       DeploymentPackageBucketName:
         Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
-      # TemplateUrlBase:
-      #   # This is a URL including the hostname of the source bucket, and the
-      #   # path starting with a Git commit hash for the Infrastructure
-      #   # repository. Some or all of the contents of the repo live under that
-      #   # path.
-      #   # It does not include a trailing slash.
-      #   # e.g., https://prx-infrastructure-us-east-1-source.s3.us-east-1.amazonaws.com/000e4f9a6b3836efbfc722fe7d2fd598b03edfd4
-      #   Fn::Sub:
-      #     - https://${SourceBucketName}.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}
-      #     - SourceBucketName: !Sub prx-infrastructure-${AWS::Region}-source
-      #     # - SourceBucketName:
-      #     #     Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       # Public application hostnames
       AuguryHostname: !If [IsProduction, augury.prx.org, augury.staging.prx.tech]
       BetaHostname: !If [IsProduction, beta.prx.org, beta.staging.prx.tech]
@@ -259,7 +242,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/resource-groups.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/resource-groups.yml
       TimeoutInMinutes: 10
 
   SharedGlueDatabaseStack:
@@ -278,7 +261,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-glue-database.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-glue-database.yml
       TimeoutInMinutes: 10
 
   SharedAnnounceStack:
@@ -300,7 +283,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-announce.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-announce.yml
       TimeoutInMinutes: 10
 
   SharedDovetailKinesisStack:
@@ -320,7 +303,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-dovetail-kinesis.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-dovetail-kinesis.yml
       TimeoutInMinutes: 60
 
   SharedEcsClusterStack:
@@ -340,7 +323,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/ecs-cluster.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-ecs/ecs-cluster.yml
       TimeoutInMinutes: 20
 
   SharedVpcStack:
@@ -353,7 +336,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !GetAtt Constants.RootStackName
         RootStackId: !GetAtt Constants.RootStackId
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/shared-vpc
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         Ec2ResourceTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.Ec2ResourceTaggerServiceToken
@@ -366,7 +349,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-vpc.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-vpc.yml
       TimeoutInMinutes: 20
 
   # Requires VPC
@@ -390,7 +373,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-resource-share.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-resource-share.yml
       TimeoutInMinutes: 20
 
   # Requires VPC
@@ -415,7 +398,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-db-sg.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-db-sg.yml
       TimeoutInMinutes: 20
 
   # Requires VPC and shared Glue DB
@@ -443,7 +426,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-alb.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-alb.yml
       TimeoutInMinutes: 40
 
   # Requires VPC and ALB
@@ -466,7 +449,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/asg-sg.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-ecs/asg-sg.yml
       TimeoutInMinutes: 20
   # Requires VPC, ALB, and more
   SharedEcsAsgStack:
@@ -506,7 +489,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-ecs/asg.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-ecs/asg.yml
       TimeoutInMinutes: 1440
 
   # Requires VPC and ECS ASG SG
@@ -536,7 +519,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-memcached.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-memcached.yml
       TimeoutInMinutes: 40
 
   # Requires VPC
@@ -558,7 +541,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-redis/security-groups.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-redis/security-groups.yml
       TimeoutInMinutes: 20
   # Requires VPC and Redis SG
   SharedRedisStack:
@@ -584,7 +567,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/shared-redis/cluster.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/shared-redis/cluster.yml
       TimeoutInMinutes: 60
 
   # Requires everything above, AND external MySQL/PostgreSQL databases
@@ -595,7 +578,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
@@ -682,7 +665,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-100A.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-100A.yml
       TimeoutInMinutes: 40
   Apps200AStack:
     Type: AWS::CloudFormation::Stack
@@ -691,7 +674,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
@@ -799,7 +782,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-200A.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-200A.yml
       TimeoutInMinutes: 40
   Apps300AStack:
     Type: AWS::CloudFormation::Stack
@@ -808,7 +791,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
@@ -881,7 +864,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-300A.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-300A.yml
       TimeoutInMinutes: 40
   Apps400AStack:
     Type: AWS::CloudFormation::Stack
@@ -890,7 +873,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
@@ -942,7 +925,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-400A.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
   # TODO: temporary. And requires everything above but not MySQL/PostgreSQL
   Apps500AStack:
@@ -952,7 +935,7 @@ Resources:
       NotificationARNs:
         - !Ref CloudFormationNotificationsSnsTopicArn
       Parameters:
-        TemplateUrlPrefix: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps
+        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
         CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
@@ -1006,7 +989,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/apps-500A-tmp.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-500A-tmp.yml
       TimeoutInMinutes: 40
 
   # Requires VPC, Redis and DB SGs
@@ -1043,7 +1026,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/jump-server.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/jump-server.yml
       TimeoutInMinutes: 10
 
   # Assumed to require all possible requirements
@@ -1147,7 +1130,7 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub https://prx-infrastructure-${AWS::Region}-source.s3.${AWS::Region}.amazonaws.com/${InfrastructureGitCommit}/stacks/dashboards.yml
+      TemplateURL: !Sub ${TemplateUrlBase}/stacks/dashboards.yml
       TimeoutInMinutes: 10
 
 Outputs:
