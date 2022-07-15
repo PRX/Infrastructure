@@ -69,12 +69,12 @@ def lambda_handler(event, context):
                 s3.upload_fileobj(f, output_bucket_name, output_key)
 
         region = os.environ["AWS_REGION"]
-        template_url_lead = (
+        template_url_base = (
             f"https://{output_bucket_name}.s3.{region}.amazonaws.com/{commit_hash}"
         )
 
         code_pipeline.put_job_success_result(
-            jobId=job["id"], outputVariables={"TemplateUrlPrefix": template_url_lead}
+            jobId=job["id"], outputVariables={"TemplateUrlPrefix": template_url_base}
         )
 
         return "...Done"
