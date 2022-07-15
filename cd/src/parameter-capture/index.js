@@ -38,7 +38,7 @@ const s3Client = new S3Client({ apiVersion: '2006-03-01' });
  * @param {*} stackId
  * @returns {Promise<AWS.CloudFormation.Stacks>}
  */
-async function getStackFamily(stackId) {
+async function getStackHierarchy(stackId) {
   const stackDesc = await cloudformationClient.send(
     new DescribeStacksCommand({ StackName: stackId }),
   );
@@ -59,7 +59,7 @@ async function getStackFamily(stackId) {
 
   for (const s of nestedStackSummaries) {
     const nestedStackId = s.PhysicalResourceId;
-    const nestedStackFamily = await getStackFamily(nestedStackId);
+    const nestedStackFamily = await getStackHierarchy(nestedStackId);
     stacks = stacks.concat(nestedStackFamily);
   }
 
@@ -93,7 +93,7 @@ export const handler = async (event, context) => {
     const rootStackName =
       job.data.actionConfiguration.configuration.UserParameters;
 
-    const allStacks = await getStackFamily(rootStackName);
+    const allStacks = await getStackHierarchy(rootStackName);
     const resolvedParams = getAllResolveParameters(allStacks);
 
     console.log(JSON.stringify(resolvedParams));
