@@ -1097,7 +1097,10 @@ Resources:
             Statement:
               - Action: s3:GetObject
                 Effect: Allow
-                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
+                Resource:
+                  # TODO Remove the ImportValue one
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
+                  - !Sub ${TemplateCopyBucket.Arn}/*
             Version: "2012-10-17"
           PolicyName: TemplateBucketAccess
         # Need read access to SSM system parameters
@@ -1452,6 +1455,12 @@ Resources:
         - !Ref ArtifactBucketReadOnlyAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
         - !Ref SourceBucketWriteAccessPolicy
+        - Statement:
+            - Action: s3:PutObject
+              Effect: Allow
+              Resource:
+                - !Sub ${TemplateCopyBucket.Arn}/*
+          Version: "2012-10-17"
       Runtime: python3.9
       Tags:
         prx:meta:tagging-version: "2021-04-07"
