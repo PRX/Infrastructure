@@ -494,9 +494,9 @@ Resources:
               OutputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
-        - Name: Housekeeping
+        - Name: Pre-Deploy
           Actions:
-            - Name: InfrastructureSync
+            - Name: S3-Template-Copy
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -509,7 +509,7 @@ Resources:
               RunOrder: 1
         - Name: Staging
           Actions:
-            - Name: CreateStagingChangeSet
+            - Name: Create-ChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -560,7 +560,7 @@ Resources:
             #     - Name: InfrastructureRepoSourceArtifact
             #     - Name: TemplateConfigStagingZipArtifact
             #   RunOrder: 1
-            - Name: StagingDeltaNotification
+            - Name: Slack-Deltas
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -578,7 +578,7 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 2
-            - Name: ExecuteStagingChangeSet
+            - Name: Deploy-ChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -592,7 +592,7 @@ Resources:
                 StackName: !Sub ${AWS::StackName}-root-staging
               Namespace: staging_deploy
               RunOrder: 3
-            - Name: CaptureStagingState
+            - Name: Capture-State
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -616,7 +616,7 @@ Resources:
             #   RunOrder: 4
         - Name: Testing
           Actions:
-            - Name: Acceptance
+            - Name: Acceptance-Tests
               ActionTypeId:
                 Category: Test
                 Owner: AWS
@@ -669,7 +669,7 @@ Resources:
               OutputArtifacts:
                 - Name: TemplateConfigProductionZipArtifact
               RunOrder: 1
-            - Name: PromoteParameters
+            - Name: Promote-Parameters
               ActionTypeId:
                 Category: Invoke
                 Owner: AWS
@@ -678,7 +678,7 @@ Resources:
               Configuration:
                 FunctionName: !Ref ProductionParameterPromotionFunction
               RunOrder: 1
-            - Name: CreateChangeSet
+            - Name: Create-ChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
@@ -726,7 +726,7 @@ Resources:
             #     - Name: InfrastructureRepoSourceArtifact
             #     - Name: TemplateConfigStagingZipArtifact
             #   RunOrder: 3
-            - Name: ApproveChangeSet
+            - Name: Wait-For-Approval
               ActionTypeId:
                 Category: Approval
                 Owner: AWS
@@ -741,7 +741,7 @@ Resources:
                     "AccountId": "${AWS::AccountId}"
                   }
               RunOrder: 3
-            - Name: ExecuteChangeSet
+            - Name: Deploy-ChangeSet
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
