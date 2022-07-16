@@ -1,6 +1,6 @@
 const AWS = require('aws-sdk');
-const regions = require('../regions');
-const urls = require('../urls');
+const regions = require('../../etc/regions');
+const urls = require('../../etc/urls');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -19,7 +19,7 @@ async function stagingChangesSetDelta(event) {
   await sns.publish({
     TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
     Message: JSON.stringify({
-      channel: '#sandbox2',
+      channel: `#ops-deploys-${event.region}`,
       username: 'AWS CodePipeline',
       icon_emoji: ':ops-codepipeline:',
       attachments: [
@@ -32,7 +32,9 @@ async function stagingChangesSetDelta(event) {
               text: {
                 type: 'mrkdwn',
                 text: `*<${urls.executionConsoleUrl(
-                  event,
+                  event.region,
+                  event.detail.pipeline,
+                  event.detail['execution-id'],
                 )}|${region} » Core CD Pipeline>*`,
               },
             },

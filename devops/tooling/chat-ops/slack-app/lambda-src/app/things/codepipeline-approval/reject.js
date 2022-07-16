@@ -108,29 +108,18 @@ module.exports = {
     // Update approval notification message in Slack
     const msg = history.messages[0];
 
-    msg.blocks[0].text.text = 'Production deploy rejected ❌';
-    msg.blocks[1].text.text = msg.blocks[1].text.text.replace(
-      'is awaiting manual approval',
-      'has been rejected',
-    );
-    msg.blocks.pop();
-    msg.blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `❌ <@${payload.user.id}> rejected this release with the reason:\n> ${value}`,
-      },
-    });
+    // These changes are made to the message constructed in the Spire CD
+    // pipeline events handler Lambda, where the production approval message is
+    // handled
+    msg.attachments[0].color = '#a30200';
+    msg.attachments[0].blocks.splice(2, 1);
+    msg.attachments[0].blocks[1].text.text = `❌ <@${payload.user.id}> rejected this release with the reason:\n> ${value}`;
 
     await web.chat.update({
       channel: channelId,
       ts: messageTs,
-      text: msg.text.replace(
-        'is awaiting manual approval',
-        'has been rejected',
-      ),
       // @ts-ignore
-      blocks: msg.blocks,
+      attachments: msg.attachments,
     });
   },
 };

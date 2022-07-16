@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
-const regions = require('../regions');
-const urls = require('../urls');
+const regions = require('../../etc/regions');
+const urls = require('../../etc/urls');
+const pipelineNames = require('../../etc/pipeline-names');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -9,36 +10,39 @@ const sns = new AWS.SNS({
 
 module.exports = async (event) => {
   const region = regions(event.region);
+  const name = pipelineNames(event.detail.pipeline);
 
   await sns
     .publish({
       TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
       Message: JSON.stringify({
-        channel: '#ops-deploys',
+        channel: `#ops-deploys-${event.region}`,
         username: 'AWS CodePipeline',
         icon_emoji: ':ops-codepipeline:',
         attachments: [
           {
             color: '#f4f323',
-            fallback: `${region} core CD pipeline has started.`,
+            fallback: `${region} ${name} has started.`,
             blocks: [
               {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: `*<${urls.executionConsoleUrl(
-                    event,
-                  )}|${region} » Core CD Pipeline>*`,
+                  text: [
+                    `*<${urls.executionConsoleUrl(
+                      event.region,
+                      event.detail.pipeline,
+                      event.detail['execution-id'],
+                    )}|${region} » ${name}>*`,
+                    `*Execution ID:* \`${event.detail['execution-id']}\``,
+                  ].join('\n'),
                 },
               },
               {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: [
-                    'Pipeline execution has started.',
-                    `*Execution ID:* \`${event.detail['execution-id']}\``,
-                  ].join('\n'),
+                  text: ['Pipeline execution has started.'].join('\n'),
                 },
               },
             ],

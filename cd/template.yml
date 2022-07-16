@@ -205,6 +205,74 @@ Resources:
             Resource: !Sub ${ArtifactStore.Arn}/*
         Version: "2012-10-17"
 
+  # Staging uses an approval action because it passes it provides some useful
+  # values, but it's not meant to be a manual approval, so the Lambda function
+  # that's subscribed to this topic automatically approves it.
+  AutomaticApprovalsSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  StagingDeltasFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/pipeline-events-handler/
+      Description: >-
+        Sends a message about stack changes in a CloudFormation change set
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref AutomaticApprovalsSnsTopic
+          Type: SNS
+      Handler: staging-deltas.handler
+      MemorySize: 128
+      Policies:
+        - !Ref CloudFormationReadOnlyAccessPolicy
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - Statement:
+            - Action: codepipeline:PutApprovalResult
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 10
+  StagingDeltasLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${StagingDeltasFunction}
+      RetentionInDays: 14
+  StagingDeltasNotificationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Staging deltas <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the diff notification lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StagingDeltasFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
   # CodePipeline Approvals
   # Production changeset deploys are behind a manual approval action. That
   # action publishes a message to this SNS topic, of which this Lambda function
@@ -222,7 +290,7 @@ Resources:
   PipelineApprovalNotificationHandlerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/pipeline-approval-notification-handler/
+      CodeUri: src/pipeline-events-handler/
       Description: >-
         Receives notifications from CodePipeline when approval is required, and
         builds a messages to alert externally
@@ -234,7 +302,7 @@ Resources:
           Properties:
             Topic: !Ref CodePipelineApprovalsSnsTopic
           Type: SNS
-      Handler: index.handler
+      Handler: production-approval.handler
       MemorySize: 256
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
@@ -363,7 +431,9 @@ Resources:
             Statement:
               - Action: sns:Publish
                 Effect: Allow
-                Resource: !Ref CodePipelineApprovalsSnsTopic
+                Resource:
+                  - !Ref CodePipelineApprovalsSnsTopic
+                  - !Ref AutomaticApprovalsSnsTopic
             Version: "2012-10-17"
           PolicyName: SnsApprovalsPolicy
         # To allow the pipeline to use a CodeStar Connection
@@ -417,9 +487,10 @@ Resources:
                   - !GetAtt EnvironmentStateCaptureFunction.Arn
                   - !GetAtt ParameterCaptureFunction.Arn
                   - !GetAtt ProductionConfigPseudoSourceFunction.Arn
-                  - !GetAtt ChangeSetDeltaNotificationFunction.Arn
+                  - !GetAtt StagingDeltasFunction.Arn
                   - !GetAtt ChangeSetCreateFunction.Arn
                   - !GetAtt ProductionParameterPromotionFunction.Arn
+                  - !GetAtt EchoFunction.Arn
             Version: "2012-10-17"
           PolicyName: LambdaRolePolicy
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
@@ -508,6 +579,46 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_template_copy
               RunOrder: 1
+            - Name: Stag-Stack-Name
+              # Creates a pipeline variable of the staging stack name, for
+              # convenience and consistency
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref EchoFunction
+                UserParameters: !Sub ${AWS::StackName}-root-staging
+              Namespace: staging_stack_name
+              RunOrder: 1
+            - Name: Prod-Stack-Name
+              # Creates a pipeline variable of the production stack name, for
+              # convenience and consistency
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref EchoFunction
+                UserParameters: !Sub ${AWS::StackName}-root-production
+              Namespace: production_stack_name
+              RunOrder: 1
+            - Name: ChangeSet-Name
+              # Creates a pipeline variable for the name used for change sets
+              # created and executed by the pipeline's action, for
+              # convenience and consistency
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref EchoFunction
+                UserParameters: cd-change-set
+              Namespace: change_set_name
+              RunOrder: 1
         - Name: Staging
           Actions:
             - Name: Create-ChangeSet
@@ -519,9 +630,7 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
-                RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: !Sub ${AWS::StackName}-root-staging
+                ChangeSetName: "#{change_set_name.value}"
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
@@ -531,54 +640,29 @@ Resources:
                     "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
                     "EnvironmentType": "Staging"
                   }
+                RoleArn: !GetAtt CloudFormationIamRole.Arn
+                StackName: "#{staging_stack_name.value}"
                 TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
                 - Name: TemplateConfigStagingZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # - Name: CustomCreateStagingChangeSet
-            #   ActionTypeId:
-            #     Category: Invoke
-            #     Owner: AWS
-            #     Provider: Lambda
-            #     Version: "1"
-            #   Configuration:
-            #     FunctionName: !Ref ChangeSetCreateFunction
-            #     UserParameters: !Sub |
-            #       {
-            #         "StackName": "${AWS::StackName}-root-staging",
-            #         "ChangeSetName": "cd-pipeline-nested",
-            #         "RoleArn": "${CloudFormationIamRole.Arn}",
-            #         "ParameterOverrides": {
-            #           "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-            #           "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
-            #           "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-            #           "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
-            #           "EnvironmentType": "Staging"
-            #         }
-            #       }
-            #   InputArtifacts:
-            #     - Name: InfrastructureRepoSourceArtifact
-            #     - Name: TemplateConfigStagingZipArtifact
-            #   RunOrder: 1
-            - Name: Slack-Deltas
+            - Name: Auto-Approval
               ActionTypeId:
-                Category: Invoke
+                Category: Approval
                 Owner: AWS
-                Provider: Lambda
+                Provider: Manual
                 Version: "1"
               Configuration:
-                FunctionName: !Ref ChangeSetDeltaNotificationFunction
-                UserParameters: !Sub |
+                NotificationArn: !Ref AutomaticApprovalsSnsTopic
+                CustomData: !Sub |
                   {
-                    "StackName": "${AWS::StackName}-root-staging",
-                    "ChangeSetName": "${AWS::StackName}RootStagingChangeSet",
-                    "Stage": "Staging"
+                    "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
+                    "StackName": "#{staging_stack_name.value}",
+                    "ChangeSetName": "#{change_set_name.value}",
+                    "AccountId": "${AWS::AccountId}"
                   }
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
               RunOrder: 2
             - Name: Deploy-ChangeSet
               ActionTypeId:
@@ -589,9 +673,9 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                ChangeSetName: !Sub ${AWS::StackName}RootStagingChangeSet
+                ChangeSetName: "#{change_set_name.value}"
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: !Sub ${AWS::StackName}-root-staging
+                StackName: "#{staging_stack_name.value}"
               Namespace: staging_deploy
               RunOrder: 3
             - Name: Capture-State
@@ -606,16 +690,6 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 4
-            # - Name: CaptureStagingParams
-            #   ActionTypeId:
-            #     Category: Invoke
-            #     Owner: AWS
-            #     Provider: Lambda
-            #     Version: "1"
-            #   Configuration:
-            #     FunctionName: !Ref ParameterCaptureFunction
-            #     UserParameters: !Sub ${AWS::StackName}-root-staging
-            #   RunOrder: 4
         - Name: Testing
           Actions:
             - Name: Acceptance-Tests
@@ -689,7 +763,7 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_REPLACE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: !Sub ${AWS::StackName}RootProductionChangeSet
+                ChangeSetName: "#{change_set_name.value}"
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
@@ -700,7 +774,7 @@ Resources:
                     "EnvironmentType": "Production"
                   }
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: !Sub ${AWS::StackName}-root-production
+                StackName: "#{production_stack_name.value}"
                 TemplateConfiguration: TemplateConfigProductionZipArtifact::production.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
@@ -717,8 +791,9 @@ Resources:
                 NotificationArn: !Ref CodePipelineApprovalsSnsTopic
                 CustomData: !Sub |
                   {
-                    "StackName": "${AWS::StackName}-root-production",
-                    "ChangeSetName": "${AWS::StackName}RootProductionChangeSet",
+                    "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
+                    "StackName": "#{production_stack_name.value}",
+                    "ChangeSetName": "#{change_set_name.value}",
                     "AccountId": "${AWS::AccountId}"
                   }
               RunOrder: 3
@@ -731,9 +806,9 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                ChangeSetName: !Sub ${AWS::StackName}RootProductionChangeSet
+                ChangeSetName: "#{change_set_name.value}"
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: !Sub ${AWS::StackName}-root-production
+                StackName: "#{production_stack_name.value}"
               RunOrder: 4
             - Name: CaptureProductionState
               ActionTypeId:
@@ -746,16 +821,6 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 5
-            # - Name: CaptureProductionParams
-            #   ActionTypeId:
-            #     Category: Invoke
-            #     Owner: AWS
-            #     Provider: Lambda
-            #     Version: "1"
-            #   Configuration:
-            #     FunctionName: !Ref ParameterCaptureFunction
-            #     UserParameters: !Sub ${AWS::StackName}-root-production
-            #   RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -847,7 +912,7 @@ Resources:
               source:
                 - aws.codepipeline
           Type: EventBridgeRule
-      Handler: index.handler
+      Handler: events.handler
       MemorySize: 128
       Policies:
         - !Ref CodePipelineStateReadOnlyAccessPolicy
@@ -1093,7 +1158,6 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
       TimeoutInMinutes: 5
 
-  # CloudFormation Pipeline Actions
   CloudFormationIamRole:
     # This role gets passed to CloudFormation, and is used by CloudFormation to
     # to perform actions against other AWS resources.
@@ -1231,6 +1295,83 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
 
   # Custom Lambda Actions
+  InfrastructureRepoSourceS3SyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/infrastructure-s3-sync/
+      Description: Copies Infrastructure repo artifact to S3
+      Environment:
+        Variables:
+          TEMPLATE_COPY_BUCKET_NAME: !Ref TemplateCopyBucket
+          INFRASTRUCTURE_SOURCE_BUCKET:
+            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Policies:
+        - !Ref ArtifactBucketReadOnlyAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref SourceBucketWriteAccessPolicy
+        - Statement:
+            - Action: s3:PutObject
+              Effect: Allow
+              Resource:
+                - !Sub ${TemplateCopyBucket.Arn}/*
+          Version: "2012-10-17"
+      Runtime: python3.9
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 8
+  InfrastructureRepoSourceS3SyncLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${InfrastructureRepoSourceS3SyncFunction}
+      RetentionInDays: 14
+  InfrastructureRepoSourceS3SyncErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Repo S3 sync <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the S3 Sync lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InfrastructureRepoSourceS3SyncFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  EchoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/echo/
+      Description: tktktk # TODO
+      Handler: index.handler
+      MemorySize: 128
+      Policies:
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 8
+  EchoLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EchoFunction}
+      RetentionInDays: 7
+
   ChangeSetCreateFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1274,54 +1415,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ChangeSetCreateFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
-  ChangeSetDeltaNotificationFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/change-set-delta-notification/
-      Description: >-
-        Sends a message about stack changes in a CloudFormation change set
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-          CD_STACK_NAME: !Ref AWS::StackName
-      Handler: index.handler
-      MemorySize: 128
-      Policies:
-        - !Ref CloudFormationReadOnlyAccessPolicy
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 10
-  ChangeSetDeltaNotificationLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${ChangeSetDeltaNotificationFunction}
-      RetentionInDays: 14
-  ChangeSetDeltaNotificationNotificationErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Changeset delta <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the diff notification lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ChangeSetDeltaNotificationFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1475,60 +1568,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref ProductionConfigPseudoSourceFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
-  InfrastructureRepoSourceS3SyncFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/infrastructure-s3-sync/
-      Description: Copies Infrastructure repo artifact to S3
-      Environment:
-        Variables:
-          TEMPLATE_COPY_BUCKET_NAME: !Ref TemplateCopyBucket
-          INFRASTRUCTURE_SOURCE_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Policies:
-        - !Ref ArtifactBucketReadOnlyAccessPolicy
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref SourceBucketWriteAccessPolicy
-        - Statement:
-            - Action: s3:PutObject
-              Effect: Allow
-              Resource:
-                - !Sub ${TemplateCopyBucket.Arn}/*
-          Version: "2012-10-17"
-      Runtime: python3.9
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 8
-  InfrastructureRepoSourceS3SyncLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${InfrastructureRepoSourceS3SyncFunction}
-      RetentionInDays: 14
-  InfrastructureRepoSourceS3SyncErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Repo S3 sync <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the S3 Sync lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
