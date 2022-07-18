@@ -3,7 +3,7 @@ const regions = require('./etc/regions');
 const urls = require('./etc/urls');
 const pipelineNames = require('./etc/pipeline-names');
 const deltas = require('./deltas/deltas');
-const { CodeBuild } = require('aws-sdk');
+const { emoji } = require('./etc/execution-emoji');
 
 const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
@@ -58,7 +58,9 @@ exports.handler = async (event) => {
                       pipelineName,
                       PipelineExecutionId,
                     )}|${regionName} » ${pipelineName}>*`,
-                    `*Execution ID:* \`${PipelineExecutionId}\``,
+                    `*Execution ID:* \`${PipelineExecutionId}\` ${emoji(
+                      PipelineExecutionId,
+                    )}`,
                   ].join('\n'),
                 },
               },

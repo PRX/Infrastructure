@@ -2,6 +2,7 @@ const AWS = require('aws-sdk');
 const regions = require('../../etc/regions');
 const urls = require('../../etc/urls');
 const pipelineNames = require('../../etc/pipeline-names');
+const { emoji } = require('../../etc/execution-emoji');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -37,7 +38,9 @@ module.exports = async (event) => {
                         event.detail.pipeline,
                         event.detail['execution-id'],
                       )}|${region} » ${name}>*`,
-                      `*Execution ID:* \`${event.detail['execution-id']}\``,
+                      `*Execution ID:* \`${
+                        event.detail['execution-id']
+                      }\` ${emoji(event.detail['execution-id'])}`,
                     ].join('\n'),
                   },
                 },

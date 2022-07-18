@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
 const regions = require('../../etc/regions');
 const urls = require('../../etc/urls');
+const { emoji } = require('../../etc/execution-emoji');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -45,7 +46,9 @@ async function stagingChangesSetDelta(event) {
                 text: [
                   `Staging deploy is starting`,
                   `TKTKTKTK parameter delta`,
-                  `*Execution ID:* \`${event.detail['execution-id']}\``,
+                  `*Execution ID:* \`${event.detail['execution-id']}\` ${emoji(
+                    event.detail['execution-id'],
+                  )}`,
                 ].join('\n'),
               },
             },

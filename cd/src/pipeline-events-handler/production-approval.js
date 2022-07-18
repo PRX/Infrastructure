@@ -15,6 +15,7 @@ const regions = require('./etc/regions');
 const urls = require('./etc/urls');
 const pipelineNames = require('./etc/pipeline-names');
 const deltas = require('./deltas/deltas');
+const { emoji } = require('./etc/execution-emoji');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -87,7 +88,9 @@ async function buildMessage(approvalNotification) {
                   pipelineName,
                   PipelineExecutionId,
                 )}|${regionName} » ${pipelineName}>*`,
-                `*Execution ID:* \`${PipelineExecutionId}\``,
+                `*Execution ID:* \`${PipelineExecutionId}\` ${emoji(
+                  PipelineExecutionId,
+                )}`,
               ].join('\n'),
             },
           },
