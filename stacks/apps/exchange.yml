@@ -1166,6 +1166,39 @@ Resources:
             }
           RoleArn: !GetAtt SayWhenEventsRole.Arn
 
+  SayWhenQueueHighVisibleMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Exchange] SayWhen queue <${EnvironmentTypeAbbreviation}> MANY VISIBLE MESSAGES (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Exchange's SayWhen queue contains an unusually high
+        number of messages, which likely means processing has fallen behind or
+        has stopped entirely.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt SayWhenQueue.QueueName
+      EvaluationPeriods: 12
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 300
+      Statistic: Average
+      Threshold: 50
+      TreatMissingData: notBreaching
+  SayWhenQueueHighVisibleMessagesAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt SayWhenQueueHighVisibleMessagesAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+
   DeliveryUpdateQueueAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
