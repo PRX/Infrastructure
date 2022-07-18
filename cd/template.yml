@@ -761,6 +761,16 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 4
+            - Name: Capture-Params
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ParameterCaptureFunction
+                UserParameters: "#{staging_stack_name.value}"
+              RunOrder: 4
         - Name: Testing
           Actions:
             - Name: Acceptance-Tests
@@ -1455,11 +1465,30 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CD
       Timeout: 120
-  ParameterCaptureFunctionLogGroup:
+  ParameterCaptureLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${ParameterCaptureFunction}
       RetentionInDays: 14
+  ParameterCaptureErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Parameter capture <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The Lambda function that captures Parameter Store values from
+        successful deployments is failing, which could prevent rollbacks from
+        behaving as expected.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ParameterCaptureFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
 
   # Pipeline S3 Trigger
   # TODO Remove all this once we're off template config files
