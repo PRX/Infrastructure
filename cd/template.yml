@@ -205,155 +205,135 @@ Resources:
             Resource: !Sub ${ArtifactStore.Arn}/*
         Version: "2012-10-17"
 
-  # Staging uses an approval action because it passes it provides some useful
-  # values, but it's not meant to be a manual approval, so the Lambda function
-  # that's subscribed to this topic automatically approves it.
-  AutomaticApprovalsSnsTopic:
-    Type: AWS::SNS::Topic
+  # This role gets passed to CloudFormation, and is used by CloudFormation to
+  # to perform actions against other AWS resources.
+  #
+  # This is the role used to launch the root stack, and thus all nested app
+  # and service stacks. It needs permissions to create any of the resources
+  # that those stacks require. Eg, if a stack nested in the root stack
+  # includes an S3 bucket resource, this role needs a policy that allows it
+  # to create S3 buckets.
+  # NOTE This role should not be given to anything other than the CodePipeline
+  # CloudFormation actions! It's very powerful!
+  CloudFormationIamRole:
+    Type: AWS::IAM::Role
     Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  StagingDeltasFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/pipeline-events-handler/
-      Description: >-
-        Sends a message about stack changes in a CloudFormation change set
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-      Events:
-        SnsMessages:
-          Properties:
-            Topic: !Ref AutomaticApprovalsSnsTopic
-          Type: SNS
-      Handler: staging-deltas.handler
-      MemorySize: 128
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
       Policies:
-        - !Ref CloudFormationReadOnlyAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-        - Statement:
-            - Action: codepipeline:PutApprovalResult
-              Effect: Allow
-              Resource: "*"
-          Version: "2012-10-17"
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 10
-  StagingDeltasLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${StagingDeltasFunction}
-      RetentionInDays: 14
-  StagingDeltasNotificationErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Staging deltas <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the diff notification lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref StagingDeltasFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
-  # CodePipeline Approvals
-  # Production changeset deploys are behind a manual approval action. That
-  # action publishes a message to this SNS topic, of which this Lambda function
-  # is a subscriber. The function generates an interactive Slack message to
-  # facilitate the approval.
-  CodePipelineApprovalsSnsTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  PipelineApprovalNotificationHandlerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/pipeline-events-handler/
-      Description: >-
-        Receives notifications from CodePipeline when approval is required, and
-        builds a messages to alert externally
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-      Events:
-        SnsMessages:
-          Properties:
-            Topic: !Ref CodePipelineApprovalsSnsTopic
-          Type: SNS
-      Handler: production-approval.handler
-      MemorySize: 256
-      Policies:
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-        - Statement:
-            - Action:
-                - cloudformation:DescribeChangeSet
-                - cloudformation:DescribeStacks
-              Effect: Allow
-              Resource: "*"
-          Version: "2012-10-17"
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 5
-  PipelineApprovalNotificationHandlerLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${PipelineApprovalNotificationHandlerFunction}
-      RetentionInDays: 14
-  PipelineApprovalNotificationHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Pipeline approval notification <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the approval notification handler lambda has exceeded
-        0 in the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref PipelineApprovalNotificationHandlerFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
-  TemplateCopyBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      LifecycleConfiguration:
-        Rules:
-          - ExpirationInDays: 90
-            Status: Enabled
+        # Lambda functions used by CI/CD; archives are accessed through S3
+        # TODO Is this still necessary?
+        - PolicyDocument:
+            Statement:
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSupportBucket", "/*"]]
+            Version: "2012-10-17"
+          PolicyName: SupportBucketAccess
+        # Lambda application code is accessed through S3
+        # TODO Is this still necessary?
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Effect: Allow
+                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
+            Version: "2012-10-17"
+          PolicyName: CodeBucketAccess
+        # Nested stack templates are accessed through S3
+        - PolicyDocument:
+            Statement:
+              - Action: s3:GetObject
+                Effect: Allow
+                Resource:
+                  # TODO Remove the ImportValue one
+                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
+                  - !Sub ${TemplateCopyBucket.Arn}/*
+            Version: "2012-10-17"
+          PolicyName: TemplateBucketAccess
+        # Need read access to SSM system parameters
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:Get*
+                Effect: Allow
+                Resource: "*" # This is sort of safe
+            Version: "2012-10-17"
+          PolicyName: SsmAccess
+        # Give CloudFormation full access except deleting stacks
+        - PolicyDocument:
+            Statement:
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-staging/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-production/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*
+                  - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+              - Action: cloudformation:DeleteStack
+                Effect: Deny
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: StackManipulationPolicy
+        # Need to CRUD all resources included in root and nested stacks
+        # NOTE: THIS IS VERY POWERFUL
+        - PolicyDocument:
+            Statement:
+              # Never let CloudFormation delete object/buckets from S3
+              - Action:
+                  - s3:DeleteBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Effect: Deny
+                Resource: "*"
+              - Action: s3:*
+                Effect: Allow
+                Resource: "*"
+              # When generating EC2 key pairs via CloudFormation, the private
+              # key is saved to Parameter Store. Parameters are read-only
+              # otherwise within CloudFormation.
+              - Action: ssm:*
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ec2/keypair/*
+              # Only include services that root stack or its nested stacks
+              # actually use
+              - Action:
+                  - acm:*
+                  - apigateway:*
+                  - application-autoscaling:*
+                  - athena:*
+                  - autoscaling:*
+                  - cloudfront:*
+                  - cloudwatch:*
+                  - dynamodb:*
+                  - ec2:*
+                  - ecs:*
+                  - elasticache:*
+                  - elasticfilesystem:*
+                  - elasticloadbalancing:*
+                  - es:*
+                  - events:*
+                  - glue:*
+                  - iam:*
+                  - kinesis:*
+                  - lambda:*
+                  - logs:*
+                  - ram:*
+                  - rds:*
+                  - resource-groups:*
+                  - route53:*
+                  - sns:*
+                  - sqs:*
+                  - transfer:*
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: ResourceManipulationPolicy
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -361,7 +341,7 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
 
-  # Pipeline
+  # Pipelines
   ArtifactStore:
     # The bucket used to store artifacts generated by CodePipeline actions.
     # This bucket is to be used exclusively by AWS; don't use it to store any
@@ -373,6 +353,25 @@ Resources:
       LifecycleConfiguration:
         Rules:
           - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  TemplateCopyBucket:
+    # Some or all of the Infrastructure repository is copied to this bucket as
+    # part of each pipeline execution so that the files are available in S3
+    # later in the pipeline, which is necessary for nested CloudFormation
+    # stacks.
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
             Status: Enabled
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -432,8 +431,8 @@ Resources:
               - Action: sns:Publish
                 Effect: Allow
                 Resource:
-                  - !Ref CodePipelineApprovalsSnsTopic
-                  - !Ref AutomaticApprovalsSnsTopic
+                  - !Ref StagingApprovalsSnsTopic
+                  - !Ref ProductionApprovalsSnsTopic
             Version: "2012-10-17"
           PolicyName: SnsApprovalsPolicy
         # To allow the pipeline to use a CodeStar Connection
@@ -655,7 +654,7 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                NotificationArn: !Ref AutomaticApprovalsSnsTopic
+                NotificationArn: !Ref StagingApprovalsSnsTopic
                 CustomData: !Sub |
                   {
                     "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
@@ -788,7 +787,7 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                NotificationArn: !Ref CodePipelineApprovalsSnsTopic
+                NotificationArn: !Ref ProductionApprovalsSnsTopic
                 CustomData: !Sub |
                   {
                     "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
@@ -827,7 +826,6 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
-
   EmergencyPipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -889,7 +887,152 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
 
-  # Pipeline Events
+  # The staging deploy stage of the pipeline includes an approval action
+  # between the change set and deploy actions. This is not meant to actually
+  # require manual approval. The approval action is used because it passes
+  # useful data to the Lambda, which the basic custom Lambda action type does
+  # not. The main point of this action is to send a Slack message that lists
+  # the changes included in the deployment. It automatically approves itself.
+  StagingApprovalsSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  StagingDeltasFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/pipeline-events-handler/
+      Description: >-
+        Sends a message about stack changes in a CloudFormation change set, and
+        also automatically approves the invoking approval action in the
+        pipeline
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref StagingApprovalsSnsTopic
+          Type: SNS
+      Handler: staging-deltas.handler
+      MemorySize: 128
+      Policies:
+        - !Ref CloudFormationReadOnlyAccessPolicy
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - Statement:
+            - Action: codepipeline:PutApprovalResult
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 10
+  StagingDeltasLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${StagingDeltasFunction}
+      RetentionInDays: 14
+  StagingDeltasNotificationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Staging deltas <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the diff notification lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StagingDeltasFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  # The production deploy stage of the pipeline includes a manual approval
+  # action. This is meant to actually require human approval for all production
+  # change sets. The Lambda function sends a message to Slack with a list of
+  # changes, and a button that will approve the deploy.
+  ProductionApprovalsSnsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  ProductionApprovalsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/pipeline-events-handler/
+      Description: >-
+        Receives notifications from CodePipeline when approval is required, and
+        builds a messages to alert externally
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+      Events:
+        SnsMessages:
+          Properties:
+            Topic: !Ref ProductionApprovalsSnsTopic
+          Type: SNS
+      Handler: production-approval.handler
+      MemorySize: 256
+      Policies:
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - Statement:
+            - Action:
+                - cloudformation:DescribeChangeSet
+                - cloudformation:DescribeStacks
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 5
+  ProductionApprovalsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ProductionApprovalsFunction}
+      RetentionInDays: 14
+  ProductionApprovalsErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Production approvals <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the approval notification handler lambda has exceeded
+        0 in the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProductionApprovalsFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  # Watches for certain events in EventBridge related to the pipelines in this
+  # stack.
   CdPipelineEventsTargetFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -948,131 +1091,6 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-
-  # Pipeline S3 Trigger
-  CdPipelineS3TriggerTrailStore:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      LifecycleConfiguration:
-        Rules:
-          - ExpirationInDays: 14
-            Status: Enabled
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerTrailStoreBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CdPipelineS3TriggerTrailStore
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}
-            Sid: AWSCloudTrailAclCheck
-          - Action: s3:PutObject
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}/AWSLogs/${AWS::AccountId}/*
-            Sid: AWSCloudTrailWrite
-        Version: "2012-10-17"
-  CdPipelineS3TriggerTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - CdPipelineS3TriggerTrailStoreBucketPolicy
-    Properties:
-      EventSelectors:
-        - DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - Fn::Sub:
-                    - arn:aws:s3:::${BucketName}/
-                    - BucketName:
-                        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          IncludeManagementEvents: false
-          ReadWriteType: WriteOnly
-      IsLogging: true
-      IsMultiRegionTrail: false
-      S3BucketName: !Ref CdPipelineS3TriggerTrailStore
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action: codepipeline:StartPipelineExecution
-                Effect: Allow
-                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-            Version: "2012-10-17"
-          PolicyName: LambdaPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: >-
-        Triggers CD CodePipeline when CloudTrail sees changes in S3 on the
-        staging template config
-      EventPattern:
-        source:
-          - aws.s3
-        detail-type:
-          - AWS API Call via CloudTrail
-        detail:
-          eventSource:
-            - s3.amazonaws.com
-          eventName:
-            - PutObject
-            - CopyObject
-          userIdentity:
-            sessionContext:
-              sessionIssuer:
-                arn:
-                  # CodePipeline does a CopyObject when it pulls in an S3
-                  # object as part of a Source action, using the pipeline's
-                  # role. To prevent an infinite loop, those events need to be
-                  # filtered out
-                  - anything-but: !GetAtt CdPipelineIamRole.Arn
-          resources:
-            ARN:
-              - Fn::Sub:
-                  - arn:aws:s3:::${BucketName}/${ObjectId}
-                  - ObjectId: !Ref InfrastructureConfigStagingKey
-                    BucketName:
-                      Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-      State: ENABLED
-      Targets:
-        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-          Id: !Sub ${AWS::StackName}.CdPipelineS3Trigger
-          RoleArn: !GetAtt CdPipelineS3TriggerIamRole.Arn
 
   # Acceptance Test Pipeline Action
   AcceptanceTestsCodeBuildIamRole:
@@ -1158,143 +1176,7 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
       TimeoutInMinutes: 5
 
-  CloudFormationIamRole:
-    # This role gets passed to CloudFormation, and is used by CloudFormation to
-    # to perform actions against other AWS resources.
-    #
-    # This is the role used to launch the root stack, and thus all nested app
-    # and service stacks. It needs permissions to create any of the resources
-    # that those stacks require. Eg, if a stack nested in the root stack
-    # includes an S3 bucket resource, this role needs a policy that allows it
-    # to create S3 buckets.
-    # NOTE This role should not be given to anything other than the CodePipeline
-    # CloudFormation actions! It's very powerful!
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: cloudformation.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        # Lambda functions used by CI/CD; archives are accessed through S3
-        # TODO Is this still necessary?
-        - PolicyDocument:
-            Statement:
-              - Action: s3:GetObject
-                Effect: Allow
-                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSupportBucket", "/*"]]
-            Version: "2012-10-17"
-          PolicyName: SupportBucketAccess
-        # Lambda application code is accessed through S3
-        # TODO Is this still necessary?
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Effect: Allow
-                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket", "/*"]]
-            Version: "2012-10-17"
-          PolicyName: CodeBucketAccess
-        # Nested stack templates are accessed through S3
-        - PolicyDocument:
-            Statement:
-              - Action: s3:GetObject
-                Effect: Allow
-                Resource:
-                  # TODO Remove the ImportValue one
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
-                  - !Sub ${TemplateCopyBucket.Arn}/*
-            Version: "2012-10-17"
-          PolicyName: TemplateBucketAccess
-        # Need read access to SSM system parameters
-        - PolicyDocument:
-            Statement:
-              - Action: ssm:Get*
-                Effect: Allow
-                Resource: "*" # This is sort of safe
-            Version: "2012-10-17"
-          PolicyName: SsmAccess
-        # Give CloudFormation full access except deleting stacks
-        - PolicyDocument:
-            Statement:
-              - Action: cloudformation:*
-                Effect: Allow
-                Resource:
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-staging/*
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AWS::StackName}-root-production/*
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:changeSet/*
-                  - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
-              - Action: cloudformation:DeleteStack
-                Effect: Deny
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: StackManipulationPolicy
-        # Need to CRUD all resources included in root and nested stacks
-        # NOTE: THIS IS VERY POWERFUL
-        - PolicyDocument:
-            Statement:
-              # Never let CloudFormation delete object/buckets from S3
-              - Action:
-                  - s3:DeleteBucket
-                  - s3:DeleteObject
-                  - s3:DeleteObjectVersion
-                Effect: Deny
-                Resource: "*"
-              - Action: s3:*
-                Effect: Allow
-                Resource: "*"
-              # When generating EC2 key pairs via CloudFormation, the private
-              # key is saved to Parameter Store. Parameters are read-only
-              # otherwise within CloudFormation.
-              - Action: ssm:*
-                Effect: Allow
-                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ec2/keypair/*
-              # Only include services that root stack or its nested stacks
-              # actually use
-              - Action:
-                  - acm:*
-                  - apigateway:*
-                  - application-autoscaling:*
-                  - athena:*
-                  - autoscaling:*
-                  - cloudfront:*
-                  - cloudwatch:*
-                  - dynamodb:*
-                  - ec2:*
-                  - ecs:*
-                  - elasticache:*
-                  - elasticfilesystem:*
-                  - elasticloadbalancing:*
-                  - es:*
-                  - events:*
-                  - glue:*
-                  - iam:*
-                  - kinesis:*
-                  - lambda:*
-                  - logs:*
-                  - ram:*
-                  - rds:*
-                  - resource-groups:*
-                  - route53:*
-                  - sns:*
-                  - sqs:*
-                  - transfer:*
-                Effect: Allow
-                Resource: "*"
-            Version: "2012-10-17"
-          PolicyName: ResourceManipulationPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-
-  # Custom Lambda Actions
+  # Pipeline Custom Lambda Actions
   InfrastructureRepoSourceS3SyncFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1423,57 +1305,6 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
-  EnvironmentStateCaptureFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/environment-state-capture/
-      Description: >-
-        Capture template and config version data for deployed environments
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
-      Handler: index.handler
-      MemorySize: 256
-      Policies:
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
-        - !Ref SnapshotsBucketWriteAccessPolicy
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 5
-  EnvironmentStateCaptureLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${EnvironmentStateCaptureFunction}
-      RetentionInDays: 14
-  EnvironmentStateCaptureErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] State capture <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the state capture lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref EnvironmentStateCaptureFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
   ProductionParameterPromotionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1526,6 +1357,162 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
+  ParameterCaptureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/parameter-capture/
+      Description: TKTKTK
+      Handler: index.handler
+      Environment:
+        Variables:
+          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
+            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
+      MemorySize: 256
+      Policies:
+        - !Ref CloudFormationReadOnlyAccessPolicy
+        - !Ref SnapshotsBucketWriteAccessPolicy
+        - !Ref CodePipelineJobResultWriteAccessPolicy
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 120
+  ParameterCaptureFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${ParameterCaptureFunction}
+      RetentionInDays: 14
+
+  # Pipeline S3 Trigger
+  # TODO Remove all this once we're off template config files
+  CdPipelineS3TriggerTrailStore:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  CdPipelineS3TriggerTrailStoreBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CdPipelineS3TriggerTrailStore
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}
+            Sid: AWSCloudTrailAclCheck
+          - Action: s3:PutObject
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}/AWSLogs/${AWS::AccountId}/*
+            Sid: AWSCloudTrailWrite
+        Version: "2012-10-17"
+  CdPipelineS3TriggerTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CdPipelineS3TriggerTrailStoreBucketPolicy
+    Properties:
+      EventSelectors:
+        - DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - Fn::Sub:
+                    - arn:aws:s3:::${BucketName}/
+                    - BucketName:
+                        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          IncludeManagementEvents: false
+          ReadWriteType: WriteOnly
+      IsLogging: true
+      IsMultiRegionTrail: false
+      S3BucketName: !Ref CdPipelineS3TriggerTrailStore
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  CdPipelineS3TriggerIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: codepipeline:StartPipelineExecution
+                Effect: Allow
+                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+            Version: "2012-10-17"
+          PolicyName: LambdaPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  CdPipelineS3TriggerEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: >-
+        Triggers CD CodePipeline when CloudTrail sees changes in S3 on the
+        staging template config
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - AWS API Call via CloudTrail
+        detail:
+          eventSource:
+            - s3.amazonaws.com
+          eventName:
+            - PutObject
+            - CopyObject
+          userIdentity:
+            sessionContext:
+              sessionIssuer:
+                arn:
+                  # CodePipeline does a CopyObject when it pulls in an S3
+                  # object as part of a Source action, using the pipeline's
+                  # role. To prevent an infinite loop, those events need to be
+                  # filtered out
+                  - anything-but: !GetAtt CdPipelineIamRole.Arn
+          resources:
+            ARN:
+              - Fn::Sub:
+                  - arn:aws:s3:::${BucketName}/${ObjectId}
+                  - ObjectId: !Ref InfrastructureConfigStagingKey
+                    BucketName:
+                      Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+      State: ENABLED
+      Targets:
+        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+          Id: !Sub ${AWS::StackName}.CdPipelineS3Trigger
+          RoleArn: !GetAtt CdPipelineS3TriggerIamRole.Arn
+
+  # TODO Remove once we're off template config files
   ProductionConfigPseudoSourceFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1576,21 +1563,26 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
-  ParameterCaptureFunction:
+  # TODO Remoe once we're off template config files
+  EnvironmentStateCaptureFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/parameter-capture/
-      Description: TKTKTK
-      Handler: index.handler
+      CodeUri: src/environment-state-capture/
+      Description: >-
+        Capture template and config version data for deployed environments
       Environment:
         Variables:
+          INFRASTRUCTURE_CONFIG_BUCKET:
+            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
           INFRASTRUCTURE_SNAPSHOTS_BUCKET:
             Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
+      Handler: index.handler
       MemorySize: 256
       Policies:
-        - !Ref CloudFormationReadOnlyAccessPolicy
-        - !Ref SnapshotsBucketWriteAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
+        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
+        - !Ref SnapshotsBucketWriteAccessPolicy
       Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -1598,9 +1590,27 @@ Resources:
         prx:cloudformation:stack-id: !Ref AWS::StackId
         prx:ops:environment: Production
         prx:dev:application: CD
-      Timeout: 120
-  ParameterCaptureFunctionLogGroup:
+      Timeout: 5
+  EnvironmentStateCaptureLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/${ParameterCaptureFunction}
+      LogGroupName: !Sub /aws/lambda/${EnvironmentStateCaptureFunction}
       RetentionInDays: 14
+  EnvironmentStateCaptureErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] State capture <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The error rate on the state capture lambda has exceeded 0 in
+        the last minute.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref EnvironmentStateCaptureFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
