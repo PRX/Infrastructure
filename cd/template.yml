@@ -352,15 +352,15 @@ Resources:
       Environment:
         Variables:
           SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+          PIPELINE_NAME: !Ref Pipeline
       Events:
-        StoreChange:
+        ParamChanges:
           Properties:
             Pattern:
               detail:
                 name:
-                  - prefix:
-                      - /prx/stag/Spire
-                      - /prx/global/Spire
+                  - prefix: /prx/stag/Spire
+                  - prefix: /prx/global/Spire
               detail-type:
                 - Parameter Store Change
               source:
@@ -370,6 +370,12 @@ Resources:
       MemorySize: 128
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - Statement:
+            - Action:
+                - codepipeline:StartPipelineExecution
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+          Version: "2012-10-17"
       Runtime: nodejs16.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
