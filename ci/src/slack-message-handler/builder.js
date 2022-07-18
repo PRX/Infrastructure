@@ -58,7 +58,42 @@ module.exports = {
 
     let moreLines = [];
 
+    // For builds with ECR artifacts, link to the images in ECR
+    if (allEnvVars.PRX_SPIRE_ECR_PKG_PARAMETERS) {
+      // raw will be like:
+      // "MY_APP=/ssm/parameter/path", or
+      // "MY_APP=/ssm/parameter/path;APP_TWO=/some/path"
+      const raw = allEnvVars.PRX_SPIRE_ECR_PKG_PARAMETERS;
+      const images = raw.split(';');
+
+      // For each label=parameter(s) entry, get the envar that matches the
+      // label, which will be a Docker image+tag
+      for (const image of images) {
+        // image will be like:
+        // "MY_APP=/ssm/parameter/path", or
+        // "MY_APP=/ssm/parameter/path,/another/ssm/path"
+        const parts = image.split('=');
+
+        if (parts.length === 2) {
+          // e.g., "MY_APP"
+          const imageEnvarName = parts[0];
+          const imageName = allEnvVars[imageEnvarName];
+
+          const region = imageName.match(/dkr\.ecr\.(.*)\.amazonaws\.com/)[1];
+          const accountId = imageName.match(/^([0-9]+)\./)[1];
+          const repoName = imageName.match(/\/([^:]+):/)[1];
+          const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
+
+          const ecrUrl = `https://console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
+          moreLines.push(
+            `» Docker image pushed to <${ecrUrl}|ECR> with tag \`${tag}…\``,
+          );
+        }
+      }
+    }
+
     // For builds with ECR artifacts, link to the image in ECR
+    // TODO This is the legacy way of doing it
     if (allEnvVars.PRX_ECR_IMAGE) {
       const imageName = allEnvVars.PRX_ECR_IMAGE;
 
