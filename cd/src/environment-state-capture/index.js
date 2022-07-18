@@ -24,7 +24,7 @@
 const AWS = require('aws-sdk');
 
 const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
-const codepipeline = new AWS.CodePipeline({apiVersion: '2015-07-09'});
+const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
 function failPipelineAction(job, context, callback, err) {
   console.log('...Notifying CodePipeline job of failure!');
