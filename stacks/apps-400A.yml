@@ -17,7 +17,6 @@ Parameters:
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   DeploymentPackageBucketName: { Type: String }
-  S3StaticSiteDeployServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   TheCountLogsFileSystemId: { Type: String }
@@ -38,9 +37,6 @@ Parameters:
 
   ExchangeHostname: { Type: String }
 
-  BacksawArchiveS3ObjectKey: { Type: String }
-  BacksawCloudFrontOai: { Type: String }
-
   DovetailMetricsExportCodeS3ObjectKey: { Type: String }
 
   TheCastleEcrImageTag: { Type: String }
@@ -52,31 +48,6 @@ Parameters:
   WfmtServicesS3BucketArn: { Type: String }
 
 Resources:
-  BacksawStack:
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationArn
-      Parameters:
-        S3StaticSiteDeployServiceToken: !Ref S3StaticSiteDeployServiceToken
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        CodeS3Bucket: !Ref DeploymentPackageBucketName
-        StaticSiteArchiveS3ObjectKey: !Ref BacksawArchiveS3ObjectKey
-        EnvironmentType: !Ref EnvironmentType
-        StaticSiteCloudFrontOai: !Ref BacksawCloudFrontOai
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Backsaw }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/backsaw.yml
-      TimeoutInMinutes: 5
-
   TheCastleStack:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -185,8 +156,6 @@ Resources:
       TimeoutInMinutes: 30
 
 Outputs:
-  BacksawDeployBucketRegionalDomainName:
-    Value: !GetAtt BacksawStack.Outputs.DeployBucketRegionalDomainName
   TheCastleTargetGroupFullName:
     Value: !GetAtt TheCastleStack.Outputs.TargetGroupFullName
   WfmtTargetGroupFullName:
