@@ -43,7 +43,7 @@ push_to_ecr() {
             # and whose value is the full image name with tag
             # e.g., if there's a LABEL org.prx.spire.publish.docker="WEB_SERVER"
             # this would set WEB_SERVER=1234.dkr.ecr.us-eas-1.amazonaws.com...
-            declare -x "$label"="$ecr_image_name"
+            declare -gx "$label"="$ecr_image_name"
 
             echo "> Pushing image $image_id to ECR $ecr_image_name"
             docker tag $image_id $ecr_image_name
