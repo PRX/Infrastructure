@@ -1,4 +1,5 @@
 const AWS = require('aws-sdk');
+
 const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
 // Returns the value of the action's UserParameters (always a string) as an
