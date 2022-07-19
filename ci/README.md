@@ -136,7 +136,7 @@ At the end of a build, if the `post_build` script is invoked, ZIP files resultin
 
 The files will be pushed to S3 objects that correspond to their source GitHub repository and commit. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an S3 object named `GitHub/PRX/my-app/a1b2c3.zip`. The S3 bucket these files are pushed to is configured on the CI stack.
 
-The file that gets pushed to S3 will be copied out of the labeled Docker image. The location of the file within the image is defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which defaults to `/.prxci/build.zip`. If your built ZIP file is located elsewhere in the Docker image, set `PRX_LAMBDA_ARCHIVE_BUILD_PATH` to that location in the `buildspec.yml`.
+The file that gets pushed to S3 will be copied out of the labeled Docker image. The location of the file within the image is defined by the `PRX_S3_ARCHIVE_BUILD_PATH` environment variable, which defaults to `/.prxci/build.zip`. If your built ZIP file is located elsewhere in the Docker image, set `PRX_S3_ARCHIVE_BUILD_PATH` to that location in the `buildspec.yml`.
 
 How the code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the ZIP file. The implementation details of those steps are left up to you. You can reference existing projects for guidance.
 
