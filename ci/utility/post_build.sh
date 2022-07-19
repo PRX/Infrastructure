@@ -53,6 +53,44 @@ push_to_ecr() {
     fi
 }
 
+# Look for any Docker images labeled with "org.prx.spire.publish.s3"
+push_to_s3() {
+    echo ">>> Looking for publishable ZIP files"
+    image_ids=$(docker images --filter "label=org.prx.spire.publish.s3" --format "{{.ID}}")
+
+    if [ -z "$image_ids" ]; then
+        echo "< No Docker images found. Set the org.prx.spire.publish.s3 LABEL in a Dockerfile to publish a ZIP file."
+    else
+        for image_id in $image_ids; do
+            echo "> Publishing ZIP file from Docker image: $image_id..."
+
+            label=$(docker inspect --format '{{ index .Config.Labels "org.prx.spire.publish.s3"}}' "$image_id")
+
+            if [ -z "$PRX_S3_ARCHIVE_BUILD_PATH" ]; then export PRX_S3_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
+
+            # Create a container from the image that was made during the build.
+            # The code will be somewhere in that image as a ZIP file.
+            container_id=$(docker create $image_id)
+
+            # Copy the ZIP file out of the container into the local environment
+            # in a file called: send-to-s3.zip
+            echo "> Copying ZIP file $PRX_S3_ARCHIVE_BUILD_PATH from container $container_id"
+            docker cp $container_id:$PRX_S3_ARCHIVE_BUILD_PATH send-to-s3.zip
+
+            cleaned=`docker rm $container_id`
+
+            # Send send-to-s3.zip to S3 as a new object (not a version)
+            echo "> Sending ZIP file to S3"
+            key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+
+            aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body send-to-s3.zip
+            echo "< Finished publishing ZIP file"
+
+            declare -gx "$label"="$key"
+        done
+    fi
+}
+
 # Look for any Docker images labeled with "org.prx.app"
 push_to_ecr_legacy() {
     echo ">>> Looking for publishable Docker images"
@@ -188,6 +226,7 @@ init() {
         then
             echo "> Publishing code"
             push_to_ecr
+            push_to_s3
             push_to_ecr_legacy
             push_to_s3_lambda
             push_to_s3_static
@@ -195,6 +234,7 @@ init() {
         then
             echo "> Pushing pre-release code"
             push_to_ecr
+            push_to_s3
             push_to_ecr_legacy
             push_to_s3_lambda
             push_to_s3_static

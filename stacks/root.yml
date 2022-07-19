@@ -27,11 +27,6 @@ Parameters:
   CastlePostgresUserPassword: { Type: String, Default: "", NoEcho: true }
   AuthorizedKeys: { Type: AWS::SSM::Parameter::Value<List<String>>, Default: /prx/global/Spire/authorized-keys, NoEcho: true }
   # Required
-  AsgKeyPairName:
-    Description: >
-      The EC2 key pair used for instances in the Auto Scaling
-      group (region-specific)
-    Type: AWS::EC2::KeyPair::KeyName
   RegionMode:
     Type: String
     AllowedValues:
@@ -74,8 +69,6 @@ Parameters:
   ProxyPrxOrgCodeS3ObjectKey: { Type: String, Default: "" }
   BetaPrxOrgArchiveS3ObjectKey: { Type: String, Default: "" }
   BetaPrxOrgCloudFrontOai: { Type: String, Default: "" }
-  BacksawArchiveS3ObjectKey: { Type: String, Default: "" }
-  BacksawCloudFrontOai: { Type: String, Default: "" }
   TheWorldSearchCodeS3ObjectKey: { Type: String, Default: "" }
   TheCountLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   TheCastleEcrImageTag: { Type: String, Default: "" }
@@ -98,9 +91,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  IsUsWest2: !Equals [!Ref "AWS::Region", us-west-2]
   HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   HasAllSharedAuroraEndpoints: !And [!Condition HasSharedAuroraMysqlEndpoint, !Condition HasSharedAuroraPostgresqlEndpoint]
@@ -109,8 +100,6 @@ Conditions:
   CreateApplicationStacks: !Condition CreateDatabaseDependentResources
   # Dashboard requires that application stacks have been created
   CreateDashboardsStack: !Condition CreateApplicationStacks
-  # TODO: temporary stack for us-west-2 dovetail
-  CreateTemporaryDovetailStack: !And [!Condition IsStaging, !Condition IsUsWest2]
 
 Mappings:
   EnvironmentTypeMap:
@@ -463,7 +452,6 @@ Resources:
         RootStackId: !GetAtt Constants.RootStackName
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelaySnsTopicArn
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
-        KeyPairName: !Ref AsgKeyPairName
         AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
         VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
         VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
@@ -878,7 +866,6 @@ Resources:
         RootStackId: !GetAtt Constants.RootStackId
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
-        S3StaticSiteDeployServiceToken: !GetAtt CustomResourcesStack.Outputs.S3StaticSiteDeployServiceToken
         CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
         CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
         TheCountLogsFileSystemId: !GetAtt Apps300AStack.Outputs.TheCountLogsFileSystemId
@@ -900,9 +887,6 @@ Resources:
 
         # App-specific parameters
 
-        BacksawArchiveS3ObjectKey: !Ref BacksawArchiveS3ObjectKey
-        BacksawCloudFrontOai: !Ref BacksawCloudFrontOai
-
         DovetailMetricsExportCodeS3ObjectKey: !Ref DovetailMetricsExportCodeS3ObjectKey
 
         TheCastleEcrImageTag: !Ref TheCastleEcrImageTag
@@ -923,69 +907,69 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-400A.yml
       TimeoutInMinutes: 40
   # TODO: temporary. And requires everything above but not MySQL/PostgreSQL
-  Apps500AStack:
-    Type: AWS::CloudFormation::Stack
-    Condition: CreateTemporaryDovetailStack
-    Properties:
-      NotificationARNs:
-        - !Ref CloudFormationNotificationsSnsTopicArn
-      Parameters:
-        TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
-        CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
-        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
-        EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
-        RootStackName: !GetAtt Constants.RootStackName
-        RootStackId: !GetAtt Constants.RootStackId
-        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
-        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
-        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
-        VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-        VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-        VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
-        KinesisStreamsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KinesisStreamsEndpointAccessSecurityGroupId
-        StsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.StsEndpointAccessSecurityGroupId
-        CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
-        CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
-        SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
-        SupportBucketName: !GetAtt Constants.SupportBucketName
-        DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
-        EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
-        SharedGlueDatabaseName: !GetAtt SharedGlueDatabaseStack.Outputs.SharedGlueDatabaseName
+  # Apps500AStack:
+  #   Type: AWS::CloudFormation::Stack
+  #   Condition: CreateTemporaryDovetailStack
+  #   Properties:
+  #     NotificationARNs:
+  #       - !Ref CloudFormationNotificationsSnsTopicArn
+  #     Parameters:
+  #       TemplateUrlPrefix: !Sub ${TemplateUrlBase}/stacks/apps
+  #       CloudFormationNotificationArn: !Ref CloudFormationNotificationsSnsTopicArn
+  #       EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+  #       EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
+  #       EnvironmentType: !Ref EnvironmentType
+  #       EnvironmentTypeAbbreviation: !GetAtt Constants.EnvironmentTypeAbbreviation
+  #       RootStackName: !GetAtt Constants.RootStackName
+  #       RootStackId: !GetAtt Constants.RootStackId
+  #       VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+  #       NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
+  #       VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+  #       VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+  #       VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
+  #       VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
+  #       VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
+  #       VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
+  #       KinesisStreamsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KinesisStreamsEndpointAccessSecurityGroupId
+  #       StsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.StsEndpointAccessSecurityGroupId
+  #       CloudWatchAlarmTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchAlarmTaggerServiceToken
+  #       CloudWatchLogGroupTaggerServiceToken: !GetAtt CustomResourcesStack.Outputs.CloudWatchLogGroupTaggerServiceToken
+  #       SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
+  #       SupportBucketName: !GetAtt Constants.SupportBucketName
+  #       DeploymentPackageBucketName: !GetAtt Constants.DeploymentPackageBucketName
+  #       EchoServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
+  #       SharedGlueDatabaseName: !GetAtt SharedGlueDatabaseStack.Outputs.SharedGlueDatabaseName
 
-        SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
-        SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
-        SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
+  #       SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
+  #       SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
+  #       SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
 
-        DovetailCdnLogsKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCdnLogsKinesisStreamArn
-        DovetailCountedKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamArn
-        DovetailCountedKinesisStreamName: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamName
-        DovetailVerifiedMetricsKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailVerifiedMetricsKinesisStreamArn
-        DovetailVerifiedMetricsKinesisStreamName: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailVerifiedMetricsKinesisStreamName
+  #       DovetailCdnLogsKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCdnLogsKinesisStreamArn
+  #       DovetailCountedKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamArn
+  #       DovetailCountedKinesisStreamName: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailCountedKinesisStreamName
+  #       DovetailVerifiedMetricsKinesisStreamArn: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailVerifiedMetricsKinesisStreamArn
+  #       DovetailVerifiedMetricsKinesisStreamName: !GetAtt SharedDovetailKinesisStack.Outputs.DovetailVerifiedMetricsKinesisStreamName
 
-        AuguryHostname: !GetAtt Constants.AuguryHostname
-        DovetailCdnHostname: !GetAtt Constants.DovetailCdnHostname
-        FeederHostname: !GetAtt Constants.FeederHostname
-        FeedsS3BucketArn: !Ref FeedsS3BucketArn
+  #       AuguryHostname: !GetAtt Constants.AuguryHostname
+  #       DovetailCdnHostname: !GetAtt Constants.DovetailCdnHostname
+  #       FeederHostname: !GetAtt Constants.FeederHostname
+  #       FeedsS3BucketArn: !Ref FeedsS3BucketArn
 
-        DovetailAnalyticsLambdaCodeS3ObjectKey: !Ref AnalyticsIngestLambdaCodeS3ObjectKey
-        DovetailCdnArrangerLambdaCodeS3ObjectKey: !Ref DovetailCdnArrangerCodeS3ObjectKey
-        DovetailCdnArrangerCloudFrontOai: !Ref DovetailCdnArrangerCloudFrontOai
-        DovetailCountsLambdaCodeS3ObjectKey: !Ref DovetailCountsLambdaCodeS3ObjectKey
-        DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-500A-tmp.yml
-      TimeoutInMinutes: 40
+  #       DovetailAnalyticsLambdaCodeS3ObjectKey: !Ref AnalyticsIngestLambdaCodeS3ObjectKey
+  #       DovetailCdnArrangerLambdaCodeS3ObjectKey: !Ref DovetailCdnArrangerCodeS3ObjectKey
+  #       DovetailCdnArrangerCloudFrontOai: !Ref DovetailCdnArrangerCloudFrontOai
+  #       DovetailCountsLambdaCodeS3ObjectKey: !Ref DovetailCountsLambdaCodeS3ObjectKey
+  #       DovetailRouterEcrImageTag: !Ref DovetailRouterEcrImageTag
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:cloudformation:root-stack-name, Value: !GetAtt Constants.RootStackName }
+  #       - { Key: prx:cloudformation:root-stack-id, Value: !GetAtt Constants.RootStackId }
+  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+  #       - { Key: prx:dev:application, Value: Common }
+  #     TemplateURL: !Sub ${TemplateUrlBase}/stacks/apps-500A-tmp.yml
+  #     TimeoutInMinutes: 40
 
   # Requires VPC, Redis and DB SGs
   JumpServerStack:
@@ -1067,8 +1051,6 @@ Resources:
         AuguryTargetGroupFullName: !GetAtt Apps300AStack.Outputs.AuguryTargetGroupFullName
 
         WfmtTargetGroupFullName: !GetAtt Apps400AStack.Outputs.WfmtTargetGroupFullName
-
-        BacksawDeployBucketRegionalDomainName: !GetAtt Apps400AStack.Outputs.BacksawDeployBucketRegionalDomainName
 
         BetaDeployBucketRegionalDomainName: !GetAtt Apps200AStack.Outputs.BetaDeployBucketRegionalDomainName
 
@@ -1206,3 +1188,6 @@ Outputs:
   RemixHostname: { Value: !GetAtt Constants.RemixHostname }
   S3SigningHostname: { Value: !If [CreateApplicationStacks, !GetAtt Apps100AStack.Outputs.S3SigningDomain, ""] }
   TheWorldSearchHostname: { Value: !GetAtt Constants.TheWorldSearchHostname }
+
+  PorterStateMachineArn: { Value: !Ref PorterStateMachineArn }
+  PorterJobExecutionSnsTopicArn: { Value: !Ref PorterJobExecutionSnsTopicArn }
