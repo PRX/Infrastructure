@@ -975,6 +975,45 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_template_copy
               RunOrder: 1
+            - Name: Prod-Stack-Name
+              # Creates a pipeline variable of the production stack name, for
+              # convenience and consistency
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref EchoFunction
+                UserParameters: !Sub ${AWS::StackName}-root-production
+              Namespace: production_stack_name
+              RunOrder: 1
+            - Name: ChangeSet-Name
+              # Creates a pipeline variable for the name used for change sets
+              # created and executed by the pipeline's action, for
+              # convenience and consistency
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref EchoFunction
+                UserParameters: cd-change-set
+              Namespace: change_set_name
+              RunOrder: 1
+        - Name: Production
+          Actions:
+            - Name: Capture-Params
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref ParameterCaptureFunction
+                UserParameters: "#{production_stack_name.value}"
+              RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
