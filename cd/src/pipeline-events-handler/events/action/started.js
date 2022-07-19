@@ -1,6 +1,7 @@
 const AWS = require('aws-sdk');
-const regions = require('../regions');
-const urls = require('../urls');
+const regions = require('../../etc/regions');
+const urls = require('../../etc/urls');
+const { emoji } = require('../../etc/execution-emoji');
 
 const sns = new AWS.SNS({
   apiVersion: '2010-03-31',
@@ -8,31 +9,33 @@ const sns = new AWS.SNS({
 });
 
 /**
- * Runs when the staging CreateStagingChangeSet action has succeeded, which
- * happens immeidately before a staging deploy starts. This is effectively a
- * notification that a staging deploy is starting
+ * Runs when the production deploy approval action starts, meaning it's
+ * waiting for approval. It should send a Slack message with buttons to
+ * approve or reject the deploy
  * @param {*} event
  */
-async function stagingChangesSetDelta(event) {
+async function productionDeployApproval(event) {
   const region = regions(event.region);
 
   await sns.publish({
     TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
     Message: JSON.stringify({
-      channel: '#sandbox2',
+      channel: `#ops-deploys-${event.region}`,
       username: 'AWS CodePipeline',
       icon_emoji: ':ops-codepipeline:',
       attachments: [
         {
           color: '#2eb886',
-          fallback: `${region} core CD staging deploy is starting.`,
+          fallback: `${region} core CD production deploy needs approval.`,
           blocks: [
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
                 text: `*<${urls.executionConsoleUrl(
-                  event,
+                  event.region,
+                  event.detail.pipeline,
+                  event.detail['execution-id'],
                 )}|${region} » Core CD Pipeline>*`,
               },
             },
@@ -41,9 +44,11 @@ async function stagingChangesSetDelta(event) {
               text: {
                 type: 'mrkdwn',
                 text: [
-                  `Staging deploy is starting`,
+                  `Prod deploy needs approval`,
                   `TKTKTKTK parameter delta`,
-                  `*Execution ID:* \`${event.detail['execution-id']}\``,
+                  `*Execution ID:* \`${event.detail['execution-id']}\` ${emoji(
+                    event.detail['execution-id'],
+                  )}`,
                 ].join('\n'),
               },
             },
@@ -56,9 +61,9 @@ async function stagingChangesSetDelta(event) {
 
 module.exports = async (event) => {
   if (
-    event.detail.stage === 'Staging' &&
-    event.detail.action === 'CreateStagingChangeSet'
+    event.detail.stage === 'Production' &&
+    event.detail.action === 'ApproveChangeSet'
   ) {
-    await stagingChangesSetDelta(event);
+    await productionDeployApproval(event);
   }
 };

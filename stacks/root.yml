@@ -42,8 +42,6 @@ Parameters:
     AllowedPattern: ^(10|172|192).[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}\/16$
     ConstraintDescription: >-
       must be a /16 private network
-  CloudFormationNotificationsSnsTopicArn: { Type: String }
-  PorterJobExecutionSnsTopicArn: { Type: String }
   FeedsS3BucketArn: { Type: String }
   MediajointS3BucketArn: { Type: String }
   NetworksS3BucketArn: { Type: String }
@@ -62,7 +60,6 @@ Parameters:
   IdEcrImageTag: { Type: String, Default: "" }
   PlayEcrImageTag: { Type: String, Default: "" }
   PlayNextjsEcrImageTag: { Type: String, Default: "" }
-  PlayProxyEcrImageTag: { Type: String, Default: "" }
   PublishEcrImageTag: { Type: String, Default: "" }
   IframelyEcrImageTag: { Type: String, Default: "" }
   WfmtEcrImageTag: { Type: String, Default: "" }
@@ -80,8 +77,6 @@ Parameters:
   BacksawArchiveS3ObjectKey: { Type: String, Default: "" }
   BacksawCloudFrontOai: { Type: String, Default: "" }
   TheWorldSearchCodeS3ObjectKey: { Type: String, Default: "" }
-  TheWorldSearchGoogleCustomSearchEngineId: { Type: String, Default: "" }
-  TheWorldSearchGoogleCustomSearchApiKey: { Type: String, Default: "" }
   TheCountLambdaCodeS3ObjectKey: { Type: String, Default: "" }
   TheCastleEcrImageTag: { Type: String, Default: "" }
   DovetailMetricsExportCodeS3ObjectKey: { Type: String, Default: "" }
@@ -97,6 +92,9 @@ Parameters:
     AllowedValues:
       - Staging
       - Production
+  PorterStateMachineArn: { Type: AWS::SSM::Parameter::Value<String> }
+  PorterJobExecutionSnsTopicArn: { Type: AWS::SSM::Parameter::Value<String> }
+  CloudFormationNotificationsSnsTopicArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -645,7 +643,6 @@ Resources:
 
         PlayEcrImageTag: !Ref PlayEcrImageTag
         PlayNextjsEcrImageTag: !Ref PlayNextjsEcrImageTag
-        PlayProxyEcrImageTag: !Ref PlayProxyEcrImageTag
         PlaySharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Play, prefix]
 
         RadiotopiaTowerLambdaCodeS3ObjectKey: !Ref RadiotopiaTowerLambdaCodeS3ObjectKey
@@ -654,8 +651,6 @@ Resources:
 
         StyleguideSharedAlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Styleguide, prefix]
 
-        TheWorldSearchGoogleCustomSearchEngineId: !Ref TheWorldSearchGoogleCustomSearchEngineId
-        TheWorldSearchGoogleCustomSearchApiKey: !Ref TheWorldSearchGoogleCustomSearchApiKey
         TheWorldSearchCodeS3ObjectKey: !Ref TheWorldSearchCodeS3ObjectKey
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }

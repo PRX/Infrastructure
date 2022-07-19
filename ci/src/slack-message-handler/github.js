@@ -1,6 +1,8 @@
 const https = require('https');
 
 module.exports = {
+  // https://docs.github.com/en/rest/commits/commits#compare-two-commits
+  // Returns information comparing two commits for a given repository
   async compare(ownerAndRepo, before, after) {
     return new Promise((resolve, reject) => {
       const gitHubToken = process.env.GITHUB_ACCESS_TOKEN;

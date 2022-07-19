@@ -1,8 +1,8 @@
-const pipelineStarted = require('./pipeline/started');
-const stageSucceeded = require('./stage/succeeded');
-const actionFailed = require('./action/failed');
-const actionStarted = require('./action/started');
-const actionSucceeded = require('./action/succeeded');
+const pipelineStarted = require('./events/pipeline/started');
+const stageSucceeded = require('./events/stage/succeeded');
+const actionFailed = require('./events/action/failed');
+const actionStarted = require('./events/action/started');
+const actionSucceeded = require('./events/action/succeeded');
 
 // https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html#detect-state-events-types
 exports.handler = async (event) => {

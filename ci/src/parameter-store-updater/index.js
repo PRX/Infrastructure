@@ -40,30 +40,40 @@ async function updateSsmParameter(parameterName, parameterValue) {
 
 /**
  * @param {object} environmentVariables - All environment variables present in a build result
- * @param {string} parameterListKey - The name of an envionment variable whose value is a comma delimited list of Parameter Store parameter names
- * @param {string} parameterValueKey - The name of an environment variable whose value is the identifier of some newly-created code artifact (like an ECR image tag, or S3 object key)
+ * @param {string} environmentVariableName - The name of the environment variable to inspect for parameter mappings
  */
-async function updateParameters(
-  environmentVariables,
-  parameterListKey,
-  parameterValueKey,
-) {
-  // If the values for both environment variables are set, that means there is
-  // a list of parameters to update, and a value to update them with.
-  if (
-    environmentVariables[parameterListKey]?.length &&
-    environmentVariables[parameterValueKey]?.length
-  ) {
-    // Get the new value
-    const newValue = environmentVariables[parameterValueKey];
+async function updateParameters(environmentVariables, environmentVariableName) {
+  if (environmentVariables[environmentVariableName]?.length) {
+    // raw will be like:
+    // "MY_APP=/ssm/parameter/path", or
+    // "MY_APP=/ssm/parameter/path;APP_TWO=/some/path"
+    const raw = environmentVariables[environmentVariableName];
+    const images = raw.split(';');
 
-    // Get the parameter names from the list
-    const paramList = environmentVariables[parameterListKey];
-    const paramNames = paramList.split(',');
+    for (const image of images) {
+      // image will be like:
+      // "MY_APP=/ssm/parameter/path", or
+      // "MY_APP=/ssm/parameter/path,/another/ssm/path"
+      const parts = image.split('=');
 
-    // Update each parameter with the new value
-    for (const parameterName of paramNames) {
-      await updateSsmParameter(parameterName, newValue);
+      if (parts.length === 2) {
+        // e.g., "MY_APP"
+        const imageEnvarName = parts[0];
+        // e.g., "/ssm/parameter/path,/another/ssm/path"
+        const parameterNamesList = parts[1];
+
+        const parameterNames = parameterNamesList.split(',');
+
+        for (const parameterName of parameterNames) {
+          // parameterName is the name of a Parameter Store parameter that
+          // needs to be updtaed
+
+          // An environment variable was exported from the CodeBuild build
+          // with the value that the parameter should be updated to.
+          const newValue = environmentVariables[imageEnvarName];
+          await updateSsmParameter(parameterName, newValue);
+        }
+      }
     }
   }
 }
@@ -98,22 +108,7 @@ exports.handler = async (event) => {
       'Artifacts were published for this build. Checking for parameters to update.',
     );
 
-    await updateParameters(
-      allEnvars,
-      'PRX_SPIRE_SSM_PARAMETERS_ECR_TAG',
-      'PRX_ECR_IMAGE',
-    );
-
-    await updateParameters(
-      allEnvars,
-      'PRX_SPIRE_SSM_PARAMETERS_LAMBDA_S3_KEY',
-      'PRX_LAMBDA_CODE_CONFIG_VALUE',
-    );
-
-    await updateParameters(
-      allEnvars,
-      'PRX_SPIRE_SSM_PARAMETERS_STATIC_S3_KEY',
-      'PRX_S3_STATIC_CONFIG_VALUE',
-    );
+    await updateParameters(allEnvars, 'PRX_SPIRE_ECR_PKG_PARAMETERS');
+    await updateParameters(allEnvars, 'PRX_SPIRE_S3_PKG_PARAMETERS');
   }
 };

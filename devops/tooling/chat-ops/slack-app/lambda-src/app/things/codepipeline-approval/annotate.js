@@ -124,29 +124,18 @@ module.exports = {
     // Update approval notification message in Slack
     const msg = history.messages[0];
 
-    msg.blocks[0].text.text = 'Production deploy approved ✅';
-    msg.blocks[1].text.text = msg.blocks[1].text.text.replace(
-      'is awaiting manual approval',
-      'has been approved',
-    );
-    msg.blocks.pop();
-    msg.blocks.push({
-      type: 'section',
-      text: {
-        type: 'mrkdwn',
-        text: `✅ <@${payload.user.id}> approved this release with these notes:\n> ${value}`,
-      },
-    });
+    // These changes are made to the message constructed in the Spire CD
+    // pipeline events handler Lambda, where the production approval message is
+    // handled
+    msg.attachments[0].color = '#2eb886';
+    msg.attachments[0].blocks.splice(2, 1);
+    msg.attachments[0].blocks[1].text.text = `✅ <@${payload.user.id}> approved this release with these notes:\n> ${value}`;
 
     await web.chat.update({
       channel: channelId,
       ts: messageTs,
-      text: msg.text.replace(
-        'is awaiting manual approval',
-        'has been approved',
-      ),
       // @ts-ignore
-      blocks: msg.blocks,
+      attachments: msg.attachments,
     });
 
     await publishReleaseNotes(payload.user.id, value);
