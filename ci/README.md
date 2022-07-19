@@ -54,7 +54,7 @@ CodeBuild natively supports updating the code's build status in GitHub.
 
 Several additional Lambda functions are configured as targets for EventBridge rules that watch for state changes on the CodeBuild project. These functions are responsible for handling some or all of the various stages of a build (start, success, fail, etc). The purpose of these functions are things like sending a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible.
 
-Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update a [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) in a predefined location, which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/main/cd) system to manage app deployments.
+Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update values in [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html), which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/main/cd) system to manage app deployments.
 
 ### Auxiliary Components
 
@@ -71,9 +71,9 @@ CI will attempt to run if the following conditions are met:
 - The repository contains a `buildspec.yml` file
 - The `buildspec.yml` contains the string `PRX_`
 
-Beyond this, there are no technical requirements necessary to be compatible with the CI system. It will happily run any buildspec that it sees, making it possible to write entirely custom build processes project-by-project.
+Beyond this, there are no technical requirements to be compatible with the CI system. It will happily run any `buildspec` that it sees, making it possible to write bespoke build processes on a project-by-project basis.
 
-All builds take place within Linux environment where a fairly modern version of Docker is available. Beyond that, the specifics of the environment are not guaranteed. It's strongly recommended that the application's build and test processes happen in Docker, rather than directly in the Linux environment, to avoid issues if the build environment changes over time.
+All builds take place within Linux environment where a fairly modern version of Docker is available. Aside from that, the specifics of the environment are not guaranteed. It's strongly recommended that the application's build and test processes happen in Docker, rather than directly in the Linux environment, to avoid issues if the build environment changes over time.
 
 In general, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
 
@@ -81,42 +81,92 @@ If you opt in to using the common CI support code, the project must execute the 
 
 A Lambda function that watches for successful builds in CodeBuild extracts information from the details of the build, and updates the staging environemnt's configuration values used within the CD system as necessary (e.g., updates the ECR image version to deploy for the app code that was built).
 
-The `PRX_CI_PUBLISH` will result in code being published and the staging environment being updated. It should only be set to `true` if both of those actions are desired. If you need code to be published without the environment being updated, like from a feature branch, you should set `PRX_CI_PRERELEASE` to the string value of `true`.
+Setting `PRX_CI_PUBLISH` to `true` will result in code being published and the staging environment being updated. It should only be set to `true` if both of those actions are desired. If you need code to be published _without_ the environment being updated, like from a feature branch, you should set `PRX_CI_PRERELEASE` to the string value of `true`.
 
 ### ECS Targets
 
-For apps that run on Docker through ECS, the `post_build` script can push build docker images to a repository in ECR. In such cases, the callback Lambda function will update metadata used by CD to keep the deployed applications in sync with the new images in ECR.
+#### Publishing Docker images
+
+At the end of a build, if the `post_build` script is invoked, Docker images resulting from the build will be pushed to ECR if they include the label `org.prx.spire.publish.ecr`. The value is irrelevent in the context of the images being pushed to ECR. For example, a `Dockerfile` might contain:
+
+    LABEL org.prx.spire.publish.ecr="MY_APP"
 
 The images will be pushed to ECR repositories that correspond to their source GitHub repository. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an ECR repository named `github/prx/my-app`. The ECR repository will be in the same region that CI is running in.
 
-In order for `post_build` to handle ECS-based apps, the following environment variables must be set:
+#### Updating CD Metadata
 
-- `PRX_ECR_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the name of the Docker image that was pushed to ECR (e.g., `AcmeAppEcrImageTag` or `AcmeAppEcrImageTag,DuplicateAcmeAppEcrImageTag`). The CD process requires that these parameter names include the string `EcrImageTag` in order to work properly.
+In addition to pushing an image to ECR, CI can also update metadata used by CD for deciding which application code to deploy. When CI builds are configured to update these metadata, CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
 
-Additionally, the `post_build` script will only push one image to ECR, and only if it contains a `LABEL` of `org.prx.app`, as set in the image's `Dockerfile`. This allows for the build process to create any number of extra Docker images for testing purposes beyond the application's own image.
+To allow the metadata updates, a project's `buildspec.yml` should include an environment variable called `PRX_SPIRE_ECR_PKG_PARAMETERS`, whose value is one or more mappings of Docker image labels to Parameter Store parameter names.
 
-### Lambda Targets
+`buildspec.yml` should also export the `PRX_SPIRE_ECR_PKG_PARAMETERS` variable, as well as variables matching any labels that are included in the mappings. For example:
 
-For apps and services that run as AWS Lambda functions, the `post_build` script can push zipped code archives to S3, so they are available to be launched by Lambda. The callback function will track the S3 version ID of the objects for those archives, and will update the metadata used by CD to keep them in sync.
+```yaml
+env:
+  variables:
+    PRX_SPIRE_ECR_PKG_PARAMETERS: MY_APP=/prx/stag/Spire/MyApp/pkg/docker-image-tag
+  exported-variables:
+    - PRX_SPIRE_ECR_PKG_PARAMETERS
+    - MY_APP
+```
 
-In order for `post_build` to handle Lambda-based apps, the following environment variables must be set:
+The label in the mapping must correspond to the value of a `org.prx.spire.publish.ecr` label included in a Docker image that was produced during the build.
 
-- `PRX_LAMBDA_CODE_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object key of the zip file containing the Lambda code (e.g., `AcmeAppLambdaObjectKey` or `AcmeAppLambdaObjectKey,DuplicateAcmeAppLambdaObjectKey`). The CD process requires that these parameter names include the string `S3ObjectKey` in order to work properly.
+Multiple Parameter Store parameters can be updated for a single Docker image if necessary, by separating the parameter names with commas:
 
-Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.lambda`, which allows for the build process to involve any number of different Docker images.
+    PRX_SPIRE_ECR_PKG_PARAMETERS: MY_APP=/path/one,/path/two
 
-How the Lambda code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that Lambda apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works well for your project.
+Metadata for multiple Docker images can be updated if necessary, by separating mappings with a semicolon:
 
-### S3 Static Site Targets
+    PRX_SPIRE_ECR_PKG_PARAMETERS: MY_APP=/path/one,/path/two;MY_DB=/path/three
 
-For websites and apps that can be run entirely as static files out of an S3 bucket, the `post_build` script can push zipped code archives to S3. It's important to note that the code resulting from the CI process is pushed to an S3 bucket **different** than the bucket the site will ultimately be served from. The archive is pushed to a bucket from which it can be deployed to the static site bucket during the CD process. You should not attempt to have CI push the code directly to the bucket configured for S3 static site hosting.
+This will result in any included Parameter Store parameters having their values updated to the full name of a Docker image that was pushed to ECR (e.g., `123456789.dkr.ecr.us-east-1.amazonaws.com/github/prx/myapp:12345646fe26a4b636f0d142b5815ff86fdbafaf`)
 
-The callback function will track the S3 version ID of the zip archive object, and update the metadata used by CD so it is available during a deploy.
+The name of the Parameter Store parameters included in these mappings must strictly adhere to the [naming conventions](https://github.com/PRX/internal/wiki/WIP:-Parameter-Store).
 
-In order for `post_build` to handle S3 static sites, the following environment variables must be set:
+### S3 Targets
 
-- `PRX_S3_STATIC_CONFIG_PARAMETERS` – A comma-separated list of CloudFormation template config parameter names, whose values will be updated to match the S3 object key of the zip file containing the Lambda code (e.g., `AcmeAppStaticS3ObjectKey`). The CD process requires that these parameter names include the string `S3ObjectKey` in order to work properly.
+Several different deployment types use code from S3, including Lambda functions and S3 static websites. The following process is the same for all of them.
 
-Additionally, the `post_build` script will always expect to find the zipped code archive that it will push to S3 at the path defined by the `PRX_S3_STATIC_ARCHIVE_BUILD_PATH` environment variable, which by default is `/.prxci/build.zip`. It will look for this file in a container created from a Docker image that has a `LABEL` of `org.prx.s3static`, which allows for the build process to involve any number of different Docker images.
+#### Publishing ZIP Archives
 
-How the static code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the zip. The implementation details of those steps are left up to you. You can reference existing projects for guidance, but it's important to remember that static site apps can look very different—some are single file and some are many megabytes with included libraries and static data sets. Build a process that works for your project.
+At the end of a build, if the `post_build` script is invoked, ZIP files resulting from the build will be pushed to S3 if they include the label `org.prx.spire.publish.s3`. The value is irrelevent in the context of the file being pushed to S3. For example, a `Dockerfile` might contain:
+
+    LABEL org.prx.spire.publish.s3="MY_APP"
+
+The files will be pushed to S3 objects that correspond to their source GitHub repository and commit. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an S3 object named `GitHub/PRX/my-app/a1b2c3.zip`. The S3 bucket these files are pushed to is configured on the CI stack.
+
+The file that gets pushed to S3 will be copied out of the labeled Docker image. The location of the file within the image is defined by the `PRX_LAMBDA_ARCHIVE_BUILD_PATH` environment variable, which defaults to `/.prxci/build.zip`. If your built ZIP file is located elsewhere in the Docker image, set `PRX_LAMBDA_ARCHIVE_BUILD_PATH` to that location in the `buildspec.yml`.
+
+How the code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the ZIP file. The implementation details of those steps are left up to you. You can reference existing projects for guidance.
+
+#### Updating CD Metadata
+
+In addition to pushing files to S3, CI can also update metadata used by CD for deciding which application code to deploy. When CI builds are configured to update these metadata, CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
+
+To allow the metadata updates, a project's `buildspec.yml` should include an environment variable called `PRX_SPIRE_S3_PKG_PARAMETERS`, whose value is one or more mappings of Docker image labels to Parameter Store parameter names.
+
+`buildspec.yml` should also export the `PRX_SPIRE_S3_PKG_PARAMETERS`variable, as well as variables matching any labels that are included in the mappings. For example:
+
+```yaml
+env:
+  variables:
+    PRX_SPIRE_S3_PKG_PARAMETERS: MY_APP=/prx/stag/Spire/MyApp/pkg/s3-object-key
+  exported-variables:
+    - PRX_SPIRE_S3_PKG_PARAMETERS
+    - MY_APP
+```
+
+The label in the mapping must correspond to the value of a `org.prx.spire.publish.s3` label included in a Docker image that was produced during the build.
+
+Multiple Parameter Store parameters can be updated for a single ZIP file if necessary, by separating the parameter names with commas:
+
+    PRX_SPIRE_S3_PKG_PARAMETERS: MY_APP=/path/one,/path/two
+
+Metadata for multiple ZIP files can be updated if necessary, by separating mappings with a semicolon:
+
+    PRX_SPIRE_S3_PKG_PARAMETERS: MY_APP=/path/one,/path/two;MY_DB=/path/three
+
+This will result in any included Parameter Store parameters having their values updated to the object key of the ZIP file that was pushed to S3 (e.g., `GitHub/PRX/my-app/a1b2c3.zip`)
+
+The name of the Parameter Store parameters included in these mappings must strictly adhere to the [naming conventions](https://github.com/PRX/internal/wiki/WIP:-Parameter-Store).
