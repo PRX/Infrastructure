@@ -227,7 +227,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       ContainerDefinitions:
-        - Cpu: !If [IsProduction, 100, 64]
+        - Cpu: !If [IsProduction, 200, 128]
           Environment:
             - Name: APP_NAME
               Value: play
@@ -249,7 +249,9 @@ Resources:
               awslogs-group: !Ref WebTaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          Memory: !If [IsProduction, 400, 200]
+          # keep memory hard limit fairly high in all envs, for image resizing
+          Memory: 1000
+          MemoryReservation: !If [IsProduction, 800, 400]
           Name: !Ref kContainerName
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
