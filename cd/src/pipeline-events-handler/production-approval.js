@@ -62,8 +62,18 @@ async function buildMessage(approvalNotification) {
   /** @type {AWS.CodePipeline.ApprovalResult} */
   const rejectedResult = { status: 'Rejected', summary: summaryData };
 
-  const regionName = regions(process.env.AWS_REGION);
-  const pipelineName = pipelineNames(approval.pipelineName);
+  const region = process.env.AWS_REGION;
+  const pipeline = approval.pipelineName;
+  const execId = PipelineExecutionId;
+
+  const regionNickname = regions(region);
+  const pipelineNickname = pipelineNames(pipeline);
+  const url = urls.executionConsoleUrl(region, pipeline, execId);
+  const icon = emoji(execId);
+  const header = [
+    `*<${url}|${regionNickname} » ${pipelineNickname}>*`,
+    `*Execution ID:* \`${execId}\` ${icon}`,
+  ].join('\n');
 
   // The DevOps Slack app handles the button actions from this message, and is
   // designed to rewrite parts of the message, so it expects a specific message
@@ -76,22 +86,13 @@ async function buildMessage(approvalNotification) {
     attachments: [
       {
         color: '#0a4a74',
-        fallback: `${regionName} ${pipelineName} Approve the production change set deltas`,
+        fallback: `${regionNickname} ${pipelineNickname} Approve the production change set deltas`,
         blocks: [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: [
-                `*<${urls.executionConsoleUrl(
-                  process.env.AWS_REGION,
-                  pipelineName,
-                  PipelineExecutionId,
-                )}|${regionName} » ${pipelineName}>*`,
-                `*Execution ID:* \`${PipelineExecutionId}\` ${emoji(
-                  PipelineExecutionId,
-                )}`,
-              ].join('\n'),
+              text: header,
             },
           },
           {

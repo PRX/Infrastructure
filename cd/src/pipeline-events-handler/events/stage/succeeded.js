@@ -10,8 +10,18 @@ const sns = new AWS.SNS({
 });
 
 module.exports = async (event) => {
-  const region = regions(event.region);
-  const name = pipelineNames(event.detail.pipeline);
+  const region = event.region;
+  const pipeline = event.detail.pipeline;
+  const execId = event.detail['execution-id'];
+
+  const regionNickname = regions(region);
+  const pipelineNickname = pipelineNames(pipeline);
+  const url = urls.executionConsoleUrl(region, pipeline, execId);
+  const icon = emoji(execId);
+  const header = [
+    `*<${url}|${regionNickname} » ${pipelineNickname}>*`,
+    `*Execution ID:* \`${execId}\` ${icon}`,
+  ].join('\n');
 
   if (['Staging', 'Production'].includes(event.detail.stage)) {
     const color = event.detail.stage === 'Production' ? '#2eb886' : '#2576b4';
@@ -26,22 +36,13 @@ module.exports = async (event) => {
           attachments: [
             {
               color,
-              fallback: `${region} ${name} ${event.detail.stage} stage has succeeded.`,
+              fallback: `${regionNickname} ${pipelineNickname} ${event.detail.stage} stage has succeeded.`,
               blocks: [
                 {
                   type: 'section',
                   text: {
                     type: 'mrkdwn',
-                    text: [
-                      `*<${urls.executionConsoleUrl(
-                        event.region,
-                        event.detail.pipeline,
-                        event.detail['execution-id'],
-                      )}|${region} » ${name}>*`,
-                      `*Execution ID:* \`${
-                        event.detail['execution-id']
-                      }\` ${emoji(event.detail['execution-id'])}`,
-                    ].join('\n'),
+                    text: header,
                   },
                 },
                 {

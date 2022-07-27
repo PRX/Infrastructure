@@ -10,8 +10,18 @@ const sns = new AWS.SNS({
 });
 
 module.exports = async (event) => {
-  const region = regions(event.region);
-  const name = pipelineNames(event.detail.pipeline);
+  const region = event.region;
+  const pipeline = event.detail.pipeline;
+  const execId = event.detail['execution-id'];
+
+  const regionNickname = regions(region);
+  const pipelineNickname = pipelineNames(pipeline);
+  const url = urls.executionConsoleUrl(region, pipeline, execId);
+  const icon = emoji(execId);
+  const header = [
+    `*<${url}|${regionNickname} » ${pipelineNickname}>*`,
+    `*Execution ID:* \`${execId}\` ${icon}`,
+  ].join('\n');
 
   await sns
     .publish({
@@ -23,22 +33,13 @@ module.exports = async (event) => {
         attachments: [
           {
             color: '#a30200',
-            fallback: `${region} ${name} has failed.`,
+            fallback: `${regionNickname} ${pipelineNickname} has failed.`,
             blocks: [
               {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: [
-                    `*<${urls.executionConsoleUrl(
-                      event.region,
-                      event.detail.pipeline,
-                      event.detail['execution-id'],
-                    )}|${region} » ${name}>*`,
-                    `*Execution ID:* \`${
-                      event.detail['execution-id']
-                    }\` ${emoji(event.detail['execution-id'])}`,
-                  ].join('\n'),
+                  text: header,
                 },
               },
               {
