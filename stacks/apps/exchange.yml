@@ -24,7 +24,7 @@ Parameters:
     Default: exchange-worker
   kSayWhenContainerName:
     Type: String
-    Default: exchange-worker
+    Default: saywhen-worker
   kWebApplicationPort:
     Type: Number
     Default: 3000
@@ -458,8 +458,6 @@ Resources:
               Value: !If [IsProduction, production.prxtransfer.org, testing.prxtransfer.org]
             - Name: PULL_DELIVERY_FTP_DOMAIN
               Value: !If [IsProduction, prxtransfer.org, staging.prxtransfer.org]
-            - Name: SAY_WHEN_THREAD
-              Value: "false"
             - Name: SLACK_SNS_TOPIC
               Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: RAILS_LOG_STDOUT
@@ -691,8 +689,6 @@ Resources:
               Value: !If [IsProduction, production.prxtransfer.org, testing.prxtransfer.org]
             - Name: PULL_DELIVERY_FTP_DOMAIN
               Value: !If [IsProduction, prxtransfer.org, staging.prxtransfer.org]
-            - Name: SAY_WHEN_THREAD
-              Value: "false"
             - Name: SLACK_SNS_TOPIC
               Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: RAILS_LOG_STDOUT
@@ -920,26 +916,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
 
-  SayWhenEcsService:
-    Type: AWS::ECS::Service
-    Condition: EnableWorkers # See README
-    Properties:
-      Cluster: !Ref EcsClusterArn
-      DeploymentConfiguration:
-        MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: 1
-      EnableECSManagedTags: true
-      PropagateTags: TASK_DEFINITION
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Exchange }
-      TaskDefinition: !Ref SayWhenTaskDefinition
   SayWhenTaskLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -957,188 +933,18 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
-  SayWhenTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
+  SayWhenEventsRole:
+    Type: AWS::IAM::Role
     Properties:
-      ContainerDefinitions:
-        - Command:
-            - worker
-          Cpu: 100 # TODO
-          Environment:
-            - Name: APP_NAME
-              Value: exchange
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
-            - Name: AWS_DEFAULT_REGION
-              Value: !Ref AWS::Region
-            - Name: AWS_SIGNER_URL
-              Value: !Ref S3SigningEndpointUrl
-            - Name: AWS_SIGNER_KEY
-              Value: !Ref S3SigningAccessKeyId
-            - Name: DB_PORT_3306_TCP_ADDR
-              Value: !Ref SharedAuroraMysqlEndpoint
-            - Name: DB_PORT_3306_TCP_PORT
-              Value: !Ref SharedAuroraMysqlPort
-            - Name: MEMCACHED_PORT_11211_TCP_ADDR
-              Value: !Ref SharedMemcachedEndpointAddress
-            - Name: MEMCACHED_PORT_11211_TCP_PORT
-              Value: !Ref SharedMemcachedEndpointPort
-            - Name: SMTP_ADDRESS
-              Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
-            - Name: SMTP_AUTHENTICATION
-              Value: login
-            - Name: SMTP_PORT
-              Value: "587"
-            - Name: SMTP_DOMAIN
-              Value: prx.org
-            - Name: SMTP_USER_NAME
-              Value: !GetAtt SesSendingSmtpCredentials.UserName
-            - Name: SMTP_PASSWORD
-              Value: !GetAtt SesSendingSmtpCredentials.Password
-            - Name: SQS_PREFIX
-              Value: !GetAtt Constants.SqsQueuePrefix
-            - Name: AWS_REGION
-              Value: !Ref AWS::Region
-            - Name: AWS_ACCOUNT_ID
-              Value: !Ref AWS::AccountId
-            - Name: AWS_ACCESS_KEY_ID
-              Value: !Ref TaskUserAccessKey
-            - Name: AWS_SECRET_ACCESS_KEY
-              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
-            - Name: AWS_BUCKET
-              Value: !Select [5, !Split [":", !Ref MediajointS3BucketArn]]
-            - Name: AUTH_HOST
-              Value: !Ref IdHostname
-            - Name: ASSET_HOST
-              Value: !If [IsProduction, assets2.prx.org, !Ref ExchangeHostname]
-            - Name: CASTLE_HOST
-              Value: !Ref TheCastleHostname
-            - Name: CASTLE_PORT
-              Value: "80"
-            - Name: CMS_HOST
-              Value: !Ref CmsHostname
-            - Name: COUNT_HOST
-              Value: !Ref TheCountHostname
-            - Name: PRX_HOST
-              Value: !Ref BetaHostname
-            - Name: SITE_HOST
-              Value: !Ref ExchangeHostname
-            - Name: PORTER_SNS_TOPIC
-              Value: !Ref PorterJobExecutionSnsTopicArn
-            - Name: PORTER_AUDIO_PROCESSING
-              Value: "true"
-            - Name: PORTER_DELIVERIES
-              Value: "false"
-            - Name: PORTER_DELIVERY_BUCKET
-              Value: !If [IsProduction, production.prxtransfer.org, testing.prxtransfer.org]
-            - Name: PULL_DELIVERY_BUCKET
-              Value: !If [IsProduction, production.prxtransfer.org, testing.prxtransfer.org]
-            - Name: PULL_DELIVERY_FTP_DOMAIN
-              Value: !If [IsProduction, prxtransfer.org, staging.prxtransfer.org]
-            - Name: SAY_WHEN_THREAD
-              Value: "true"
-            - Name: SLACK_SNS_TOPIC
-              Value: !Ref SlackMessageRelaySnsTopicArn
-            - Name: RAILS_LOG_STDOUT
-              Value: "true"
-            - Name: MODEL_SITE_HOST
-              Value: !Ref ExchangeHostname
-            - Name: DATABASE_POOL_SIZE
-              Value: "5"
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
-            - Name: CMS_API_VERSION
-              Value: v1
-            - Name: DATABASE_SOCKET
-              Value: ""
-            - Name: FIXER_HOST
-              Value: !Ref FixerHostname
-            - Name: FIXER_PORT
-              Value: "80"
-            - Name: RAILS_ENV
-              Value: !Ref EnvironmentTypeLowercase
-            - Name: CACHE_STORE
-              Value: mem_cache_store
-            - Name: RUBYOPT
-              Value: "-W0"
-          Essential: true
-          Image: !Ref EcrImageTag
-          LinuxParameters:
-            InitProcessEnabled: true
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref SayWhenTaskLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: ecs
-          Memory: 400 # TODO
-          Name: !Ref kSayWhenContainerName
-          Secrets:
-            - Name: FTP_AUTH_TOKEN
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/ftp-auth-endpoint-token
-            - Name: AUTH_CLIENT_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/auth-client-id
-            - Name: CASTLE_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-key
-            - Name: CASTLE_SECRET
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/castle-secret
-            - Name: DB_ENV_MYSQL_DATABASE
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
-            - Name: DB_ENV_MYSQL_PASSWORD
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
-            - Name: DB_ENV_MYSQL_USER
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
-            - Fn::If:
-                - IsProduction
-                - Name: FEATURED_SERIES_PLAYLIST_ID
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/featured-series-playlist-id
-                - !Ref AWS::NoValue
-            - Name: FIXER_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-key
-            - Name: FIXER_SECRET
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/fixer-secret
-            - Name: GOOGLE_MAPS_API_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/google-maps-api-key
-            - Name: PUBLIC_URL_SECRET
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/public-url-secret
-            - Name: RAILS_SECRET
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-secret
-            - Name: RAILS_SESSION_SECRET
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/rails-session-secret
-            - Fn::If:
-                - IsProduction
-                - Name: RECAPTCHA_PRIVATE_KEY
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-private-key
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsProduction
-                - Name: RECAPTCHA_PUBLIC_KEY
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-public-key
-                - !Ref AWS::NoValue
-            - Name: RECAPTCHA_SECRET_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-secret-key
-            - Name: RECAPTCHA_SITE_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/recaptcha-site-key
-            - Name: SOLR_URL
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/solr-url
-            - Name: STRIPE_API_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-api-key
-            - Name: STRIPE_PUBLISHABLE_KEY
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/stripe-publishable-key
-            - Name: WHATS_INSIDE_PLAYLIST_ID
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/whats-inside-playlist-id
-            - Fn::If:
-                - IsProduction
-                - Name: CHEF_CLIENT_CERT
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-client-certificate
-                - !Ref AWS::NoValue
-            - Fn::If:
-                - IsProduction
-                - Name: CHEF_VALIDATION_CERT
-                  ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
-                - !Ref AWS::NoValue
-      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
-      NetworkMode: bridge
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceEventsRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1147,7 +953,30 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
-      TaskRoleArn: !GetAtt TaskRole.Arn
+  SayWhenScheduledRule:
+    Type: AWS::Events::Rule
+    Condition: EnableWorkers # See README
+    Properties:
+      Description: !Sub Periodically runs ${EnvironmentType} SayWhen jobs
+      ScheduleExpression: rate(1 hour)
+      State: ENABLED
+      Targets:
+        - Arn: !Ref EcsClusterArn
+          EcsParameters:
+            TaskCount: 1
+            TaskDefinitionArn: !Ref WorkerTaskDefinition
+          Id: SayWhenRuleTarget
+          Input: !Sub | # containerOverrides comes from the ECS run-task API
+            {
+              "containerOverrides": [
+                {
+                  "name": "${kSayWhenContainerName}",
+                  "command": ["process_jobs"]
+                }
+              ]
+            }
+          RoleArn: !GetAtt SayWhenEventsRole.Arn
+
   SayWhenQueueHighVisibleMessagesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -1391,6 +1220,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
       VisibilityTimeout: 5400 # 1.5 hour
+  # TODO: remove
   SayWhenQueue:
     Type: AWS::SQS::Queue
     Properties:
