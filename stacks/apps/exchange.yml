@@ -73,6 +73,7 @@ Parameters:
   IdHostname: { Type: String }
   CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
+  ExchangeTransferHostname: { Type: String }
   BetaHostname: { Type: String }
   TheCountHostname: { Type: String }
   TheCastleHostname: { Type: String }
@@ -1599,6 +1600,23 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
+  # Creates a TLS certificate for use with FTPS connections.
+  FtpServerCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "*.${ExchangeTransferHostname}"
+      SubjectAlternativeNames:
+        - !Sub "*.station.${ExchangeTransferHostname}"
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_exchange_ftp" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      ValidationMethod: DNS
   # AWS Transfer Family does not allow public servers with insecure FTP
   # enabled. Putting the server behind an NLB allows forwarding of public FTP
   # requests to a private server.
