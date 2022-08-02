@@ -90,7 +90,6 @@ Parameters:
   CloudFormationNotificationsSnsTopicArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
@@ -102,19 +101,6 @@ Conditions:
   CreateDashboardsStack: !Condition CreateApplicationStacks
 
 Mappings:
-  EnvironmentTypeMap:
-    Testing:
-      abbreviation: test
-      lowercase: testing
-    Beta:
-      abbreviation: beta
-      lowercase: beta
-    Staging:
-      abbreviation: stag
-      lowercase: staging
-    Production:
-      abbreviation: prod
-      lowercase: production
   # Each app should be given a listener rule priority prefix between 1 and 500.
   # In app stacks, listener rule priorities are created by combining the
   # prefix with exactly two more digits. This allows each app to have up to 99
@@ -184,52 +170,6 @@ Resources:
         - { Key: prx:dev:application, Value: Infrastructure }
       TemplateURL: !Sub ${TemplateUrlBase}/stacks/custom-resources.yml
       TimeoutInMinutes: 5
-
-  Constants:
-    Type: Custom::Echo
-    Properties:
-      ServiceToken: !GetAtt CustomResourcesStack.Outputs.EchoServiceToken
-      RootStackName: !Ref AWS::StackName
-      RootStackId: !Ref AWS::StackId
-      EnvironmentTypeAbbreviation: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, abbreviation]
-      EnvironmentTypeLowercase: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, lowercase]
-      SupportBucketName:
-        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSupportBucket
-      # SourceBucketName:
-      #   Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
-      DeploymentPackageBucketName:
-        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureApplicationCodeBucket
-      # Public application hostnames
-      AuguryHostname: !If [IsProduction, augury.prx.org, augury.staging.prx.tech]
-      BetaHostname: !If [IsProduction, beta.prx.org, beta.staging.prx.tech]
-      CastleHostname: !If [IsProduction, castle.prx.org, castle.staging.prx.tech]
-      CmsHostname: !If [IsProduction, cms.prx.org, cms.staging.prx.tech]
-      CorporateHostname: corporate.prx.tech
-      DovetailCdnHostname: !If [IsProduction, dovetail3-cdn.prxu.org, dovetail3-cdn-staging.prxu.org]
-      DovetailRouterHostname: !If [IsProduction, dovetail.prxu.org, dovetail.staging.prxu.org]
-      ExchangeHostname: !If [IsProduction, exchange.prx.org, exchange.staging.prx.tech]
-      ExchangeApiHostname: !If [IsProduction, api.prx.org, exchange.staging.prx.tech]
-      ExchangeTransferHostname: !If [IsProduction, prxtransfer.org, staging.prxtransfer.org]
-      FeederHostname: !If [IsProduction, feeder.prx.org, feeder.staging.prx.tech]
-      FeederAuthProxyHostname: !If [IsProduction, p.prxu.org, p.staging.prxu.org]
-      FixerHostname: fixer.prx.org
-      IdHostname: !If [IsProduction, id.prx.org, id.staging.prx.tech]
-      MetricsHostname: !If [IsProduction, metrics.prx.org, metrics.staging.prx.tech]
-      NetworksHostname: !If [IsProduction, networks.prx.org, networks.staging.prx.tech]
-      PlayHostname: !If [IsProduction, play.prx.org, play.staging.prx.tech]
-      PublishHostname: !If [IsProduction, publish.prx.org, publish.staging.prx.tech]
-      RemixHostname: !If [IsProduction, www.prx.mx, remix.staging.prx.tech]
-      TheCastleHostname: !If [IsProduction, thecastle.prx.org, thecastle.staging.prx.tech]
-      TheCountHostname: !If [IsProduction, thecount.prx.org, thecount.staging.prx.tech]
-      TheWorldSearchHostname: !If [IsProduction, search.theworld.org, search.staging.theworld.org]
-      # Internal application hostname
-      FeederAuthProxyInternalHostname: !If [IsProduction, p.u.prx.tech, p.staging.u.prx.tech]
-      TheWorldSearchInternalHostname: !If [IsProduction, search.theworld.prx.tech, search.staging.theworld.prx.tech]
-      # Asset hostnames
-      AdFilesHostname: a.prxu.org
-      MetaHostname: meta.prx.org
-      PublicFeedsHostname: !If [IsProduction, f.prxu.org, f-staging.prxu.org]
-      WfmtHostname: !If [IsProduction, wfmt.prx.org, wfmt.staging.prx.tech]
 
   # TODO This is failing in us-west-2; "duplicate key" error
   ResourceGroupsStack:
