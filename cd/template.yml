@@ -70,6 +70,9 @@ Parameters:
   SlackMessageRelaySnsTopicArn:
     Type: String
 
+Conditions:
+  IsUsWest2: !Equals [!Ref "AWS::Region", us-west-2]
+
 Resources:
   # Common IAM policies
   SlackRelaySnsPublishOnlyAccessPolicy:
@@ -699,6 +702,39 @@ Resources:
               RunOrder: 1
         - Name: Staging
           Actions:
+            - Fn::If:
+                - IsUsWest2
+                - Name: Create-Nested-ChangeSet
+                  ActionTypeId:
+                    Category: Invoke
+                    Owner: AWS
+                    Provider: Lambda
+                    Version: "1"
+                  Configuration:
+                    FunctionName: !Ref ChangeSetCreateFunction
+                    UserParameters: !Sub |
+                      {
+                        "StackName": "${AWS::StackName}-root-staging",
+                        "ChangeSetName": "cd-pipeline-nested",
+                        "RoleArn": "${CloudFormationIamRole.Arn}",
+                        "ParameterOverrides": {
+                          "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
+                          "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+                          "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
+                          "TemplateUrlBase": "#{s3_template_copy.TemplateUrlBase}",
+                          "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
+                          "EnvironmentType": "Staging",
+                          "EnvironmentTypeAbbreviation": "stag",
+                          "PorterStateMachineArn": "/prx/stag/Spire/${AWS::Region}/porter-state-machine-arn",
+                          "PorterJobExecutionSnsTopicArn": "/prx/stag/Spire/${AWS::Region}/porter-job-execution-topic-arn",
+                          "CloudFormationNotificationsSnsTopicArn": "/prx/global/Spire/${AWS::Region}/cloudformation-notifications-topic-arn"
+                        }
+                      }
+                  InputArtifacts:
+                    - Name: InfrastructureRepoSourceArtifact
+                    - Name: TemplateConfigStagingZipArtifact
+                  RunOrder: 1
+                - !Ref AWS::NoValue
             - Name: Create-ChangeSet
               ActionTypeId:
                 Category: Deploy
@@ -737,14 +773,17 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                NotificationArn: !Ref StagingApprovalsSnsTopic
-                CustomData: !Sub |
-                  {
-                    "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
-                    "StackName": "#{staging_stack_name.value}",
-                    "ChangeSetName": "#{change_set_name.value}",
-                    "AccountId": "${AWS::AccountId}"
-                  }
+                Fn::If:
+                  - IsUsWest2
+                  - NotificationArn: !Ref StagingApprovalsSnsTopic
+                    CustomData: !Sub |
+                      {
+                        "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
+                        "StackName": "#{staging_stack_name.value}",
+                        "ChangeSetName": "#{change_set_name.value}",
+                        "AccountId": "${AWS::AccountId}"
+                      }
+                  - !Ref AWS::NoValue
               RunOrder: 2
             - Name: Deploy-ChangeSet
               ActionTypeId:
@@ -864,7 +903,6 @@ Resources:
                     "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
                     "TemplateUrlBase": "#{s3_template_copy.TemplateUrlBase}",
                     "EnvironmentType": "Production",
-                    "EnvironmentTypeAbbreviation": "prod",
                     "PorterStateMachineArn": "/prx/prod/Spire/${AWS::Region}/porter-state-machine-arn",
                     "PorterJobExecutionSnsTopicArn": "/prx/prod/Spire/${AWS::Region}/porter-job-execution-topic-arn",
                     "CloudFormationNotificationsSnsTopicArn": "/prx/global/Spire/${AWS::Region}/cloudformation-notifications-topic-arn"
