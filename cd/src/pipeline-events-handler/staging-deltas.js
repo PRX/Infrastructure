@@ -81,7 +81,7 @@ exports.handler = async (event) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: await deltas.parameterDeltaText(
+                  text: await deltas.nestedParameterDeltaText(
                     StackName,
                     ChangeSetName,
                   ),

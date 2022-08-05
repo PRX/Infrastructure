@@ -170,7 +170,10 @@ async function buildMessage(approvalNotification) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: await deltas.parameterDeltaText(StackName, ChangeSetName),
+              text: await deltas.nestedParameterDeltaText(
+                StackName,
+                ChangeSetName,
+              ),
             },
           },
         ],
