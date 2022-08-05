@@ -148,6 +148,7 @@ exports.handler = async (event, context) => {
     do {
       // Wait a few seconds
       await new Promise((resolve) => setTimeout(resolve, 10000));
+      console.log('Waiting for change set…');
 
       // Check the creation status of the change set
       const status = await cloudformation
