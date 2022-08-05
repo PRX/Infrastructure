@@ -1,4 +1,4 @@
-# cdn/single-origin.yml
+# cdn/single-origin-forks/play-cdn/single-origin.yml
 # When creating a CloudFront distribution for an S3 bucket, it is recommended
 # that the bucket remains private and CloudFront is given access to it via an
 # Origin Access Identity. This template can create that identity, but it cannot
@@ -487,8 +487,25 @@ Resources:
     Properties:
       DistributionConfig:
         Aliases: !If [HasCnames, !Ref Cnames, !Ref "AWS::NoValue"]
-        # CacheBehaviors:
-        # CacheBehavior
+        CacheBehaviors:
+          - AllowedMethods: !Ref CloudFrontAllowedMethods
+            CachedMethods: !Ref CloudFrontCachedMethods
+            Compress: !If [HasCloudFrontCompress, true, false]
+            DefaultTTL: !If [HasCloudFrontDefaultTtl, !Ref CloudFrontDefaultTtl, !Ref "AWS::NoValue"]
+            ForwardedValues:
+              Cookies: !If
+                - HasCloudFrontForwardedCookies
+                - Forward: whitelist
+                  WhitelistedNames: !Ref CloudFrontForwardedCookies
+                - !Ref AWS::NoValue
+              Headers: !If [HasCloudFrontForwardedHeaders, !Ref CloudFrontForwardedHeaders, !Ref "AWS::NoValue"]
+              QueryString: !If [ForwardQueryStrings, true, false]
+              QueryStringCacheKeys: !If [HasCloudFrontForwardedQueryStrings, !Ref CloudFrontForwardedQueryStrings, !Ref "AWS::NoValue"]
+            MaxTTL: 31536000 # 365 days
+            MinTTL: 7776000 # 90 days
+            PathPattern: /_next/image
+            TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
+            ViewerProtocolPolicy: !Ref CloudFrontViewerProtocolPolicy
         Comment: !Ref CloudFrontComment
         CustomErrorResponses:
           - ErrorCachingMinTTL: 300
