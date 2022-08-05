@@ -66,9 +66,12 @@
  */
 
 /**
- * A tuple containing a paremeter key and the old and new value for the
- * parameter
- * @typedef {[AWS.CloudFormation.ParameterKey, AWS.CloudFormation.ParameterValue|undefined, AWS.CloudFormation.ParameterValue|undefined]} ParameterDelta
+ * @typedef {Object} ParameterDelta
+ * @property {String} stackName
+ * @property {String} stackId
+ * @property {String} parameter
+ * @property {String} stackValue
+ * @property {String} changeSetValue
  */
 
 /**
