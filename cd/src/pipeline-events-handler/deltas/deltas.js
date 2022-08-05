@@ -46,8 +46,17 @@ function parameterDeltasList(deltas) {
 
 module.exports = {
   async nestedParameterDeltaText(stackName, changeSetName) {
-    const stackFamily = await getStackFamily(stackName);
+    let stackFamily = await getStackFamily(stackName);
     const changeSetFamily = await getChangeSetFamily(stackName, changeSetName);
+
+    // When there's only a single change set, it likely means that nested
+    // change sets was disabled for the given change set. In these cases, only
+    // the root stack's parameters should be included in the deltas, because
+    // there won't be anything to compare the child stacks to, and all
+    // parameters will look like they've changed.
+    if (changeSetFamily.length === 1) {
+      stackFamily = [stackFamily[0]];
+    }
 
     /** @type {ParameterDeltas} */
     const deltas = [];
