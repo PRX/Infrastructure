@@ -21,7 +21,11 @@ function parameterDeltasList(deltas) {
       const arrow = deltaArrow(d);
       const newValue = deltaValue(d.parameter, d.changeSetValue);
 
-      return `*${d.stackName}::${d.parameter}*: ${oldValue} ${arrow} ${newValue}`;
+      const label = d.stackName.includes('-root-')
+        ? d.parameter
+        : `${d.stackName}::${d.parameter}`;
+
+      return `*${label}*: ${oldValue} ${arrow} ${newValue}`;
     })
     .join('\n');
 
