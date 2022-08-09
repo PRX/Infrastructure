@@ -21,9 +21,9 @@ module.exports = function (parameterDelta, noLinks = false) {
     return '➡';
   }
 
-  const parameterKey = parameterDelta[0];
-  const beforeValue = parameterDelta[1];
-  const afterValue = parameterDelta[2];
+  const parameterKey = parameterDelta.parameter;
+  const beforeValue = parameterDelta.stackValue;
+  const afterValue = parameterDelta.changeSetValue;
 
   // The InfrastructureGitCommit parameter value is a just a commit hash,
   // so it is handled explicitly
