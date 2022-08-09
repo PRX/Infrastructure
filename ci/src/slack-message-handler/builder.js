@@ -64,15 +64,15 @@ module.exports = {
       // "MY_APP=/ssm/parameter/path", or
       // "MY_APP=/ssm/parameter/path;APP_TWO=/some/path"
       const raw = allEnvVars.PRX_SPIRE_ECR_PKG_PARAMETERS;
-      const images = raw.split(';');
+      const labeledPaths = raw.split(';');
 
       // For each label=parameter(s) entry, get the envar that matches the
-      // label, which will be a Docker image+tag
-      for (const image of images) {
-        // image will be like:
+      // label, whose value will be a Docker image+tag
+      for (const labeledPath of labeledPaths) {
+        // labeledPath will be like:
         // "MY_APP=/ssm/parameter/path", or
         // "MY_APP=/ssm/parameter/path,/another/ssm/path"
-        const parts = image.split('=');
+        const parts = labeledPath.split('=');
 
         if (parts.length === 2) {
           // e.g., "MY_APP"
@@ -92,6 +92,34 @@ module.exports = {
       }
     }
 
+    // For builds with S3 artifacts, link to the objects in S3
+    if (allEnvVars.PRX_SPIRE_S3_PKG_PARAMETERS) {
+      // raw will be like:
+      // "MY_APP=/ssm/parameter/path", or
+      // "MY_APP=/ssm/parameter/path;APP_TWO=/some/path"
+      const raw = allEnvVars.PRX_SPIRE_S3_PKG_PARAMETERS;
+      const labeledPaths = raw.split(';');
+
+      // For each label=parameter(s) entry, get the envar that matches the
+      // label, whose value will be an S3 object name
+      for (const labeledPath of labeledPaths) {
+        // labeledPath will be like:
+        // "MY_APP=/ssm/parameter/path", or
+        // "MY_APP=/ssm/parameter/path,/another/ssm/path"
+        const parts = labeledPath.split('=');
+
+        if (parts.length === 2) {
+          // e.g., "MY_APP"
+          const objectEnvarName = parts[0];
+          const objectKey = allEnvVars[objectEnvarName];
+
+          const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
+          moreLines.push(
+            `» Static code pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
+          );
+        }
+      }
+    }
     // For builds with ECR artifacts, link to the image in ECR
     // TODO This is the legacy way of doing it
     if (allEnvVars.PRX_ECR_IMAGE) {
@@ -109,6 +137,7 @@ module.exports = {
     }
 
     // For builds with Lambda artifacts, link to the S3 object
+    // TODO This is the legacy way of doing it
     if (allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE) {
       const objectKey = allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE;
 
@@ -119,6 +148,7 @@ module.exports = {
     }
 
     // For builds with static site artifacts, link to the S3 object
+    // TODO This is the legacy way of doing it
     if (allEnvVars.PRX_S3_STATIC_CONFIG_VALUE) {
       const objectKey = allEnvVars.PRX_S3_STATIC_CONFIG_VALUE;
 
