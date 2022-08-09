@@ -115,7 +115,7 @@ module.exports = {
 
           const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
           moreLines.push(
-            `» Static code pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
+            `» Code package pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
           );
         }
       }
