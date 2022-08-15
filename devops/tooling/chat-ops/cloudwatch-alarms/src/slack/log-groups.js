@@ -80,7 +80,9 @@ module.exports = {
         return `/aws/lambda/${functionDimension.Value.split(':function:')[1]}`;
       }
     }
-    //
+    // If the alarm belongs to one of the namespaces that is listed above,
+    // the tags on the alarm should be inspected to see if an explicit log
+    // group name is specified. If so, use that.
     else if (TAGGED.includes(desc?.MetricAlarms?.[0]?.Namespace)) {
       const cloudwatch = await cloudWatchClient(event);
       const tagList = await cloudwatch
