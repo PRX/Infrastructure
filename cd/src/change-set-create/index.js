@@ -121,6 +121,35 @@ exports.handler = async (event, context) => {
       ParameterValue: changeSetParams[k],
     }));
 
+    const existingChangeSet = await cloudformation
+      .describeChangeSet({
+        StackName: stackName,
+        ChangeSetName: changeSetName,
+      })
+      .promise();
+
+    if (existingChangeSet?.ExecutionStatus === 'EXECUTE_IN_PROGRESS') {
+      // Don't try to delete a change set that is currently executing. (I don't
+      // know if that's even possible.)
+      await codepipeline
+        .putJobFailureResult({
+          jobId: job.id,
+          failureDetails: {
+            message: `Can't delete in progress change set`,
+            type: 'JobFailed',
+          },
+        })
+        .promise();
+      return;
+    } else if (existingChangeSet?.ChangeSetId) {
+      await cloudformation
+        .deleteChangeSet({
+          StackName: stackName,
+          ChangeSetName: changeSetName,
+        })
+        .promise();
+    }
+
     // createChangeSet returns immediately once the the request to make the
     // change set has been made; it doesn't wait for the change set to actually
     // get made.
