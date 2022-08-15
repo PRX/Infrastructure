@@ -79,15 +79,17 @@ module.exports = {
           const imageEnvarName = parts[0];
           const imageName = allEnvVars[imageEnvarName];
 
-          const region = imageName.match(/dkr\.ecr\.(.*)\.amazonaws\.com/)[1];
-          const accountId = imageName.match(/^([0-9]+)\./)[1];
-          const repoName = imageName.match(/\/([^:]+):/)[1];
-          const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
+          if (imageName) {
+            const region = imageName.match(/dkr\.ecr\.(.*)\.amazonaws\.com/)[1];
+            const accountId = imageName.match(/^([0-9]+)\./)[1];
+            const repoName = imageName.match(/\/([^:]+):/)[1];
+            const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
 
-          const ecrUrl = `https://console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
-          moreLines.push(
-            `» Docker image pushed to <${ecrUrl}|ECR> with tag \`${tag}…\``,
-          );
+            const ecrUrl = `https://console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
+            moreLines.push(
+              `» Docker image pushed to <${ecrUrl}|ECR> with tag \`${tag}…\``,
+            );
+          }
         }
       }
     }
@@ -113,10 +115,14 @@ module.exports = {
           const objectEnvarName = parts[0];
           const objectKey = allEnvVars[objectEnvarName];
 
-          const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
-          moreLines.push(
-            `» Code package pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
-          );
+          // For builds that don't publish an object to S3, this value won't
+          // exist
+          if (objectKey) {
+            const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
+            moreLines.push(
+              `» Code package pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
+            );
+          }
         }
       }
     }
