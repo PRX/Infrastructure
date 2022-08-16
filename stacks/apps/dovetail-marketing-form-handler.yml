@@ -1,0 +1,100 @@
+# stacks/apps/dovetail-marketing-form-handler.yml
+# 100A
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that handles HTML form submissions from the
+  Dovetail marketing website
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
+
+Resources:
+  FormSubmissionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Marketing Website form submissions
+      Environment:
+        Variables:
+          FOO: bar
+      Handler: src/index.handler
+      InlineCode: |
+        exports.handler = async (event, context) => {}
+      MemorySize: 128
+      # Policies:
+      #   - Statement:
+      #       - Action: sns:Publish
+      #         Effect: Allow
+      #         Resource: !Ref PorterJobExecutionSnsTopicArn
+      #         Sid: AllowPorterJobPublish
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Marketing Website
+      Timeout: 8
+  FormSubmissionFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FormSubmissionFunction}
+      RetentionInDays: 14
+  FormSubmissionFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref FormSubmissionFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Marketing Website }
+  FormSubmissionFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Marketing Website] Form submissions <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Marketing Website Lambda function is
+        failing, so user submissions may not be making it into Zendesk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FormSubmissionFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  FormSubmissionFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt FormSubmissionFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Marketing Website }
