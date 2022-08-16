@@ -110,10 +110,10 @@ exports.handler = async (event, context) => {
     const userParamsJson = actionConfig.configuration.UserParameters;
     const userParams = JSON.parse(userParamsJson);
 
-    const stackName = userParams.StackName;
-    const changeSetName = userParams.ChangeSetName;
-    const paramOverrides = userParams.ParameterOverrides;
+    const stackName = userParams.Stack;
+    const changeSetName = userParams.ChangeSet;
     const roleArn = userParams.RoleArn;
+    const paramOverrides = userParams.Parameters;
 
     const changeSetParams = Object.assign(configParams, paramOverrides);
     const changeSetParamsArray = Object.keys(changeSetParams).map((k) => ({
