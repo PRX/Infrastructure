@@ -41,6 +41,8 @@ Parameters:
     Type: String
   DevOpsCloudWatchAlarmsBusArn:
     Type: String
+  DevOpsCloudFormationNotificationsBusArn:
+    Type: String
   CloudTrailProjectionRegions:
     Description: >-
       A list of regions that will be included in Glue table partitions for
@@ -895,6 +897,32 @@ Resources:
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-alarms-bus.yml
                 Parameters: !Sub |-
                   ParameterKey=DevOpsCloudWatchAlarmsBusArn,ParameterValue=${DevOpsCloudWatchAlarmsBusArn}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 10
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # CloudFormation Notifications event bus
+            - Name: CloudFormationNotificationsBus
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-cloudformation-notifications-event-bus
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                Description: >-
+                  Launches a stack in each region in each account in an AWS Organization
+                  to create a rule on the default event bus that forwards CloudFormation
+                  status changes to the DevOps event bus.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-cfn-bus.yml
+                Parameters: !Sub |-
+                  ParameterKey=DevOpsCloudFormationNotificationsBusArn,ParameterValue=${DevOpsCloudFormationNotificationsBusArn}
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
                 DeploymentTargets: !Ref OrganizationRootId
