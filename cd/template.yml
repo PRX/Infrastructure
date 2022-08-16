@@ -614,7 +614,7 @@ Resources:
                 BranchName: main
                 OutputArtifactFormat: CODE_ZIP
                 DetectChanges: false
-              Namespace: infra_repo
+              Namespace: src_infra
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -697,7 +697,7 @@ Resources:
                 Version: "1"
               Configuration:
                 FunctionName: !Ref EchoFunction
-                UserParameters: cd-change-set
+                UserParameters: cs-#{codepipeline.PipelineExecutionId}
               Namespace: change_set_name
               RunOrder: 1
         - Name: Staging
@@ -712,12 +712,12 @@ Resources:
                 FunctionName: !Ref ChangeSetCreateFunction
                 UserParameters: !Sub >-
                   {
-                    "Stack": "${AWS::StackName}-root-staging",
-                    "ChangeSet": "cs-#{codepipeline.PipelineExecutionId}",
+                    "Stack": "#{staging_stack_name.value}",
+                    "ChangeSet": "#{change_set_name.value}",
                     "RoleArn": "${CloudFormationIamRole.Arn}",
                     "Parameters": {
                       "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                      "InfrastructureGitCommit": "#{infra_repo.CommitId}",
+                      "InfrastructureGitCommit": "#{src_infra.CommitId}",
                       "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
                       "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
                       "SlackMessageRelayTopicArn": "${SlackMessageRelaySnsTopicArn}",
@@ -732,37 +732,6 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
                 - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
-            - Name: Create-ChangeSet
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: "1"
-              Configuration:
-                ActionMode: CHANGE_SET_REPLACE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: "#{change_set_name.value}"
-                ParameterOverrides: !Sub |
-                  {
-                    "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "InfrastructureGitCommit": "#{infra_repo.CommitId}",
-                    "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-                    "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
-                    "SlackMessageRelayTopicArn": "${SlackMessageRelaySnsTopicArn}",
-                    "EnvironmentType": "Staging",
-                    "EnvironmentTypeAbbreviation": "stag",
-                    "PorterStateMachineArn": "/prx/stag/Spire/${AWS::Region}/porter-state-machine-arn",
-                    "PorterJobExecutionSnsTopicArn": "/prx/stag/Spire/${AWS::Region}/porter-job-execution-topic-arn",
-                    "CloudFormationNotificationsTopicArn": "/prx/global/Spire/${AWS::Region}/cloudformation-notifications-topic-arn"
-                  }
-                RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: "#{staging_stack_name.value}"
-                TemplateConfiguration: TemplateConfigStagingZipArtifact::staging.json
-                TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
-              InputArtifacts:
-                - Name: TemplateConfigStagingZipArtifact
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
             - Name: Auto-Approval
               ActionTypeId:
                 Category: Approval
@@ -770,17 +739,14 @@ Resources:
                 Provider: Manual
                 Version: "1"
               Configuration:
-                Fn::If:
-                  - IsUsEast1
-                  - NotificationArn: !Ref StagingApprovalsSnsTopic
-                    CustomData: !Sub |
-                      {
-                        "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
-                        "StackName": "#{staging_stack_name.value}",
-                        "ChangeSetName": "#{change_set_name.value}",
-                        "AccountId": "${AWS::AccountId}"
-                      }
-                  - !Ref AWS::NoValue
+                NotificationArn: !Ref StagingApprovalsSnsTopic
+                CustomData: !Sub >-
+                  {
+                    "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
+                    "StackName": "#{staging_stack_name.value}",
+                    "ChangeSetName": "#{change_set_name.value}",
+                    "AccountId": "${AWS::AccountId}"
+                  }
               RunOrder: 2
             - Name: Deploy-ChangeSet
               ActionTypeId:
@@ -895,7 +861,7 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "InfrastructureGitCommit": "#{infra_repo.CommitId}",
+                    "InfrastructureGitCommit": "#{src_infra.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
                     "SlackMessageRelayTopicArn": "${SlackMessageRelaySnsTopicArn}",
                     "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
@@ -991,7 +957,7 @@ Resources:
                 BranchName: main
                 OutputArtifactFormat: CODE_ZIP
                 DetectChanges: false
-              Namespace: infra_repo
+              Namespace: src_infra
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
