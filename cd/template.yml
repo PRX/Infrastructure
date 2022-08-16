@@ -615,7 +615,7 @@ Resources:
                 BranchName: main
                 OutputArtifactFormat: CODE_ZIP
                 DetectChanges: false
-              Namespace: infrastructure_repo
+              Namespace: infra_repo
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -659,7 +659,7 @@ Resources:
                 FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-              Namespace: s3_template_copy
+              Namespace: s3_cpy
               RunOrder: 1
             - Name: Stag-Stack-Name
               # Creates a pipeline variable of the staging stack name, for
@@ -713,14 +713,14 @@ Resources:
                 FunctionName: !Ref ChangeSetCreateFunction
                 UserParameters: !Sub >-
                   {
-                    "StackName": "${AWS::StackName}-root-staging",
-                    "ChangeSetName": "#{codepipeline.PipelineExecutionId}",
+                    "Stack": "${AWS::StackName}-root-staging",
+                    "ChangeSet": "#{codepipeline.PipelineExecutionId}",
                     "RoleArn": "${CloudFormationIamRole.Arn}",
-                    "ParameterOverrides": {
+                    "Parameters": {
                       "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                      "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+                      "InfrastructureGitCommit": "#{infra_repo.CommitId}",
                       "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-                      "TemplateUrlBase": "#{s3_template_copy.TemplateUrlBase}",
+                      "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
                       "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
                       "EnvironmentType": "Staging",
                       "EnvironmentTypeAbbreviation": "stag",
@@ -746,9 +746,9 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+                    "InfrastructureGitCommit": "#{infra_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
-                    "TemplateUrlBase": "#{s3_template_copy.TemplateUrlBase}",
+                    "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
                     "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
                     "EnvironmentType": "Staging",
                     "EnvironmentTypeAbbreviation": "stag",
@@ -896,10 +896,10 @@ Resources:
                 ParameterOverrides: !Sub |
                   {
                     "InfrastructureStorageStackName": "${InfrastructureStorageStackName}",
-                    "InfrastructureGitCommit": "#{infrastructure_repo.CommitId}",
+                    "InfrastructureGitCommit": "#{infra_repo.CommitId}",
                     "PipelineExecutionNonce": "#{codepipeline.PipelineExecutionId}",
                     "SlackMessageRelaySnsTopicArn": "${SlackMessageRelaySnsTopicArn}",
-                    "TemplateUrlBase": "#{s3_template_copy.TemplateUrlBase}",
+                    "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
                     "EnvironmentType": "Production",
                     "EnvironmentTypeAbbreviation": "prod",
                     "PorterStateMachineArn": "/prx/prod/Spire/${AWS::Region}/porter-state-machine-arn",
@@ -992,7 +992,7 @@ Resources:
                 BranchName: main
                 OutputArtifactFormat: CODE_ZIP
                 DetectChanges: false
-              Namespace: infrastructure_repo
+              Namespace: infra_repo
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
@@ -1022,7 +1022,7 @@ Resources:
                 FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-              Namespace: s3_template_copy
+              Namespace: s3_cpy
               RunOrder: 1
             - Name: Prod-Stack-Name
               # Creates a pipeline variable of the production stack name, for
