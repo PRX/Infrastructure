@@ -5,23 +5,13 @@ AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >-
   Creates a Lambda function that handles CloudFormation stack event
-  notifications, which the CloudFormation service delivers to SNS topics.
-  CloudFormation cannot deliver to topics across regions, so this function is
-  subscribed to topics in all regions where we use CloudFormation. It can
-  deliver across accounts, so only one topic is necessary per region for the
-  entire organization.
+  notifications, which the CloudFormation service delivers to EventBridge. It's
+  assumed that events from all accounts and regions in the AWS organization are
+  being forwarded to the event bus that this Lambda function is subscribed to.
 
 Parameters:
   OrganizationId: { Type: String }
   SlackMessageRelaySnsTopicArn: { Type: String }
-  UsEast1TopicArn: { Type: String, Default: "" }
-  UsEast2TopicArn: { Type: String, Default: "" }
-  UsWest2TopicArn: { Type: String, Default: "" }
-
-Conditions:
-  HasUsEast1TopicArn: !Not [!Equals [!Ref UsEast1TopicArn, ""]]
-  HasUsEast2TopicArn: !Not [!Equals [!Ref UsEast2TopicArn, ""]]
-  HasUsWest2TopicArn: !Not [!Equals [!Ref UsWest2TopicArn, ""]]
 
 Resources:
   CloudFormationNotificationsEventBus:
@@ -113,54 +103,3 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref CloudFormationNotificationsSlackFunction
-
-  UsEast1Subscription:
-    Condition: HasUsEast1TopicArn
-    Type: AWS::SNS::Subscription
-    Properties:
-      Endpoint: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Protocol: lambda
-      Region: us-east-1
-      TopicArn: !Ref UsEast1TopicArn
-  UsEast1Permission:
-    Condition: HasUsEast1TopicArn
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Principal: sns.amazonaws.com
-      Action: lambda:InvokeFunction
-      SourceArn: !Ref UsEast1TopicArn
-
-  UsEast2Subscription:
-    Condition: HasUsEast2TopicArn
-    Type: AWS::SNS::Subscription
-    Properties:
-      Endpoint: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Protocol: lambda
-      Region: us-east-2
-      TopicArn: !Ref UsEast2TopicArn
-  UsEast2Permission:
-    Condition: HasUsEast2TopicArn
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Principal: sns.amazonaws.com
-      Action: lambda:InvokeFunction
-      SourceArn: !Ref UsEast2TopicArn
-
-  UsWest2Subscription:
-    Condition: HasUsWest2TopicArn
-    Type: AWS::SNS::Subscription
-    Properties:
-      Endpoint: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Protocol: lambda
-      Region: us-west-2
-      TopicArn: !Ref UsWest2TopicArn
-  UsWest2Permission:
-    Condition: HasUsWest2TopicArn
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt CloudFormationNotificationsSlackFunction.Arn
-      Principal: sns.amazonaws.com
-      Action: lambda:InvokeFunction
-      SourceArn: !Ref UsWest2TopicArn

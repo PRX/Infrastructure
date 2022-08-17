@@ -10,7 +10,6 @@
 // These notifications may come from any region or any account.
 
 const AWS = require('aws-sdk');
-const snsEvent = require('./sns');
 const eventBridgeEvent = require('./eventbridge');
 
 const sns = new AWS.SNS({
@@ -21,9 +20,8 @@ const sns = new AWS.SNS({
 exports.handler = async (event) => {
   console.log(JSON.stringify(event));
 
-  const message = event['detail-type']
-    ? eventBridgeEvent.message(event)
-    : snsEvent.message(event);
+  const message = eventBridgeEvent.message(event);
+
   if (message) {
     await sns
       .publish({
