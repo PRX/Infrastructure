@@ -154,6 +154,7 @@ module.exports = {
         ].includes(d.parameter),
     );
 
+    console.log(JSON.stringify(allowedDeltas));
     return parameterDeltasList(allowedDeltas);
   },
 };
