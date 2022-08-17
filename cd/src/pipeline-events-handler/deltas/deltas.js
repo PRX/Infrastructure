@@ -130,6 +130,8 @@ module.exports = {
       (d) => !(d.changeSetValue || '').match(/\{\{IntrinsicFunction\:/),
     );
 
+    // Some additional parameters that don't make sense to display in Slack are
+    // also filtered out.
     const allowedDeltas = cleanedDeltas.filter(
       (d) =>
         !['PipelineExecutionNonce', 'TemplateUrlBase'].includes(d.parameter),
