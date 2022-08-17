@@ -150,8 +150,8 @@ exports.message = function (event) {
   // notifications to the INFO channel
   if (
     !resourceType &&
-    (stackName.endsWith('root-staging') ||
-      stackName.endsWith('root-production')) &&
+    // (stackName.endsWith('root-staging') ||
+    //   stackName.endsWith('root-production')) &&
     (concerning.includes(status) ||
       ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(status))
   ) {
