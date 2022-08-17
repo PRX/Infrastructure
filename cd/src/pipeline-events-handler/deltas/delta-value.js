@@ -34,7 +34,9 @@ module.exports = function (key, value, noLinks = false) {
     return `\`<${url}|${value.slice(0, 7)}>\``;
   }
 
-  // Look for anything containing "dkr.ecr", which is an ECR Docker image tag
+  // Look for anything containing "dkr.ecr", which is an ECR Docker image tag.
+  // ECR image names are based on the GitHub repository name where the code
+  // came from, so they can be translated back to a GitHub URL.
   if (/dkr\.ecr/.test(value)) {
     const repo = value.match(/github\/([^:]+):/)[1];
     const commit = value.match(/:([0-9a-f]{40})$/)[1];
@@ -43,7 +45,9 @@ module.exports = function (key, value, noLinks = false) {
     return `\`<${url}|${commit.slice(0, 7)}>\``;
   }
 
-  // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
+  // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`, which is an S3 object.
+  // S3 object keys are based on the GitHub repository name where the code
+  // came from, so they can be translated back to a GitHub URL.
   if (/GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(value)) {
     const repo = value.match(/GitHub\/([^\/]+\/[^\/]+)/)[1];
     const commit = value.match(/\/([0-9a-f]{40})/)[1];
