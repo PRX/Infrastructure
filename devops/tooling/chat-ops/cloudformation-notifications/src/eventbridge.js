@@ -55,6 +55,20 @@ function colorForResourceStatus(status) {
   return '#000000';
 }
 
+const concerning = [
+  'ROLLBACK_COMPLETE',
+  'UPDATE_ROLLBACK_COMPLETE',
+  'DELETE_IN_PROGRESS',
+  'ROLLBACK_IN_PROGRESS',
+  'CREATE_FAILED',
+  'DELETE_FAILED',
+  'UPDATE_FAILED',
+  'ROLLBACK_FAILED',
+  'UPDATE_ROLLBACK_FAILED',
+  'UPDATE_ROLLBACK_IN_PROGRESS',
+  'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS',
+];
+
 exports.message = function (event) {
   // Each event includes information about the stack where the change is
   // happening. These will be present on both stack status and resource status
@@ -66,8 +80,8 @@ exports.message = function (event) {
   const stackName = stackId.split(':stack/')[1].split('/')[0];
 
   // Both stack status and resource status events will have a status and reason
-  const status = event.detail['status-detals'].status;
-  const statusReason = event.detail['status-detals']['status-reason'];
+  const status = event.detail['status-details'].status;
+  const statusReason = event.detail['status-details']['status-reason'];
 
   // For resource status events, there will also be information about the
   // resource that is changing
@@ -95,6 +109,7 @@ exports.message = function (event) {
   const msg = {
     username: SLACK_USERNAME,
     icon_emoji: SLACK_ICON,
+    channel: '#sandbox2',
     attachments: [
       {
         color: colorForResourceStatus(status),
@@ -107,15 +122,61 @@ exports.message = function (event) {
               text: header,
             },
           },
-          // {
-          //   type: 'section',
-          //   text: {
-          //     type: 'mrkdwn',
-          //     text: 'Pipeline execution has started.',
-          //   },
-          // },
         ],
       },
     ],
   };
+
+  // DELETE_SKIPPED events are funnelled to a specific Slack channel so they
+  // can be cleaned up if necessary
+  if (status === 'DELETE_SKIPPED') {
+    // msg.channel = '#ops-delete-skipped';
+    msg.attachments[0].blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: physicalResourceId
+          ? `Physical ID: \`${physicalResourceId}\``
+          : 'No physical ID',
+      },
+    });
+
+    return msg;
+  }
+
+  // For root stacks, send all start, finish, and concerning status
+  // notifications to INFO
+  // For stack status events, send all start, finish, and concerning
+  // notifications to the INFO channel
+  if (
+    !resourceType &&
+    (stackName.endsWith('root-staging') ||
+      stackName.endsWith('root-production')) &&
+    (concerning.includes(status) ||
+      ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(status))
+  ) {
+    // msg.channel = SLACK_INFO_CHANNEL;
+    return msg;
+  }
+
+  // For everything that isn't a root stack, send any notifications that
+  // include a reason to DEBUG. Reasons are most often provided when there is
+  // an issue ("resources failed to create", "handler returned message", etc).
+  // But some nominal updates do include reasons.
+  // Certain irrelevant reasons are filtered out.
+  if (
+    statusReason &&
+    ![
+      'User Initiated',
+      'Transformation succeeded',
+      'Resource creation Initiated',
+      'Requested update required the provider to create a new physical resource',
+      'Requested update requires the creation of a new physical resource; hence creating one.',
+    ].includes(statusReason)
+  ) {
+    // msg.channel = SLACK_DEBUG_CHANNEL;
+    return msg;
+  }
+
+  return;
 };
