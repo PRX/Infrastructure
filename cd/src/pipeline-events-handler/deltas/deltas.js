@@ -48,6 +48,7 @@ module.exports = {
   async nestedParameterDeltaText(stackName, changeSetName) {
     let stackFamily = await getStackFamily(stackName);
     const changeSetFamily = await getChangeSetFamily(stackName, changeSetName);
+    const changeSetFamilyStackIds = changeSetFamily.map((c) => c.StackId);
 
     // When there's only a single change set, it likely means that nested
     // change sets was disabled for the given change set. In these cases, only
@@ -64,14 +65,24 @@ module.exports = {
     // Iterate through all existing stack parameters and create a delta for
     // each one, which includes the current value.
     for (const stack of stackFamily) {
-      for (const param of stack.Parameters || []) {
-        deltas.push({
-          stackName: stack.StackName,
-          stackId: stack.StackId,
-          parameter: param.ParameterKey,
-          stackValue: param.ResolvedValue || param.ParameterValue,
-          changeSetValue: null,
-        });
+      // Not all nested stacks are guaranteed to be have a change set. If a
+      // stack in the stack family does not have a corresponding change set,
+      // and the deltas are determined strictly by finding matching values in
+      // the stack and change set families, all parameters for that stack would
+      // appear to be unmatched. So, if there is no corresponding change set
+      // for a given stack, that stack's parameters should not be included in
+      // the deltas. (If there is a change set with no corresponding stack,
+      // those deltas *will* still be included below.)
+      if (changeSetFamilyStackIds.includes(stack.StackId)) {
+        for (const param of stack.Parameters || []) {
+          deltas.push({
+            stackName: stack.StackName,
+            stackId: stack.StackId,
+            parameter: param.ParameterKey,
+            stackValue: param.ResolvedValue || param.ParameterValue,
+            changeSetValue: null,
+          });
+        }
       }
     }
 
