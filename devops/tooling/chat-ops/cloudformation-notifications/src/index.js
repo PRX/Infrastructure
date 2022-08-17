@@ -71,6 +71,12 @@ function colorForResourceStatus(status) {
 }
 
 function messageForEvent(event) {
+  if (event['detail-type']) {
+    // Temp logging to get a sense of what EventBridge is doing
+    console.log(JSON.stringify(event));
+    return;
+  }
+
   const note = event.Records[0].Sns.Message;
 
   // Each event includes information about the stack where the change is
