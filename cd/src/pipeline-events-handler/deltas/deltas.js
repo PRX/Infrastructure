@@ -147,7 +147,11 @@ module.exports = {
     // also filtered out.
     const allowedDeltas = cleanedDeltas.filter(
       (d) =>
-        !['PipelineExecutionNonce', 'TemplateUrlBase'].includes(d.parameter),
+        ![
+          'PipelineExecutionNonce',
+          'TemplateUrlBase',
+          'TemplateUrlPrefix',
+        ].includes(d.parameter),
     );
 
     return parameterDeltasList(allowedDeltas);
