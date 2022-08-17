@@ -155,13 +155,15 @@ exports.message = function (event) {
       ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(status))
   ) {
     msg.channel = SLACK_INFO_CHANNEL;
-    return msg;
+    // return msg;
+    return;
   }
 
   // For other stacks, send finish and concerning notifications to DEBUG
   if (
     !resourceType &&
-    (concerning.includes(status) || ['UPDATE_COMPLETE'].includes(status))
+    (concerning.includes(status) || ['UPDATE_COMPLETE'].includes(status)) &&
+    !stackName.includes('infrastructure-cd-root-')
   ) {
     msg.channel = SLACK_DEBUG_CHANNEL;
     return msg;
