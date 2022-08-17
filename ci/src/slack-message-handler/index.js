@@ -22,6 +22,7 @@ async function buildAttachments(event) {
   return [
     {
       color: color.value(event),
+      // TODO fallback: '',
       blocks,
     },
   ];
