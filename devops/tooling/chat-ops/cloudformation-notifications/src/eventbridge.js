@@ -37,15 +37,15 @@ function colorForResourceStatus(status) {
   const grey = ['DELETE_COMPLETE'];
 
   if (green.includes(status)) {
-    return 'good';
+    return '#2eb886';
   }
 
   if (yellow.includes(status)) {
-    return 'warning';
+    return '#f4f323';
   }
 
   if (red.includes(status)) {
-    return 'danger';
+    return '#a30200';
   }
 
   if (grey.includes(status)) {
@@ -98,8 +98,8 @@ exports.message = function (event) {
   const header = [
     `*<${stackUrl}|${accountNickname} - ${regionNickname} » ${stackName}>*`,
     resourceType
-      ? `Resource Status Change: ${status} for ${resourceType}`
-      : `Stack Status Change: ${status}`,
+      ? `Resource Status Change: *${status}* for \`${resourceType}\``
+      : `Stack Status Change: *${status}*`,
   ].join('\n');
 
   const fallback = resourceType
