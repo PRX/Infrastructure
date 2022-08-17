@@ -74,7 +74,6 @@ exports.message = function (event) {
   // happening. These will be present on both stack status and resource status
   // events.
   const stackId = event.detail['stack-id'];
-  const timestamp = event.time;
 
   // Extract the stack name from the stack ID
   const stackName = stackId.split(':stack/')[1].split('/')[0];
@@ -130,7 +129,7 @@ exports.message = function (event) {
   // DELETE_SKIPPED events are funnelled to a specific Slack channel so they
   // can be cleaned up if necessary
   if (status === 'DELETE_SKIPPED') {
-    // msg.channel = '#ops-delete-skipped';
+    msg.channel = '#ops-delete-skipped';
     msg.attachments[0].blocks.push({
       type: 'section',
       text: {
@@ -144,18 +143,27 @@ exports.message = function (event) {
     return msg;
   }
 
-  // For root stacks, send all start, finish, and concerning status
+  // For Spire root stacks, send all start, finish, and concerning status
   // notifications to INFO
   // For stack status events, send all start, finish, and concerning
   // notifications to the INFO channel
   if (
     !resourceType &&
-    // (stackName.endsWith('root-staging') ||
-    //   stackName.endsWith('root-production')) &&
+    (stackName.endsWith('root-staging') ||
+      stackName.endsWith('root-production')) &&
     (concerning.includes(status) ||
       ['UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE'].includes(status))
   ) {
-    // msg.channel = SLACK_INFO_CHANNEL;
+    msg.channel = SLACK_INFO_CHANNEL;
+    return msg;
+  }
+
+  // For other stacks, send finish and concerning notifications to DEBUG
+  if (
+    !resourceType &&
+    (concerning.includes(status) || ['UPDATE_COMPLETE'].includes(status))
+  ) {
+    msg.channel = SLACK_DEBUG_CHANNEL;
     return msg;
   }
 
@@ -174,7 +182,7 @@ exports.message = function (event) {
       'Requested update requires the creation of a new physical resource; hence creating one.',
     ].includes(statusReason)
   ) {
-    // msg.channel = SLACK_DEBUG_CHANNEL;
+    msg.channel = SLACK_DEBUG_CHANNEL;
     return msg;
   }
 
