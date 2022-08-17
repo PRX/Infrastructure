@@ -33,6 +33,7 @@ Parameters:
   CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
   IdHostname: { Type: String }
+  MediajointS3BucketArn: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
 
@@ -196,6 +197,23 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Effect: Allow
+                Resource: !Ref MediajointS3BucketArn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:Get*
+                Effect: Allow
+                Resource: !Sub ${MediajointS3BucketArn}/*
+                Sid: AllowObjectActions
+            Version: "2012-10-17"
+          PolicyName: S3ReadAccess
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -216,7 +234,11 @@ Resources:
               Value: !Ref EnvironmentTypeLowercase
             - Name: APP_ENV
               Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_BUCKET
+              Value: !Select [5, !Split [":", !Ref MediajointS3BucketArn]]
             - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_REGION
               Value: !Ref AWS::Region
             - Name: DB_PORT_3306_TCP_ADDR
               Value: !Ref SharedAuroraMysqlEndpoint
