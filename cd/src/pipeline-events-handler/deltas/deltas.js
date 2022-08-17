@@ -51,7 +51,24 @@ function parameterDeltasList(deltas) {
         const arrow = deltaArrow(d, true);
         const newValue = deltaValue(d.parameter, d.changeSetValue, true);
 
-        return `*${d.stackName}::${d.parameter}*: ${oldValue} ${arrow} ${newValue}`;
+        let label;
+
+        if (
+          [
+            'infrastructure-cd-root-staging',
+            'infrastructure-cd-root-production',
+          ].includes(d.stackName)
+        ) {
+          // For root stack parameters, label with just the parameter name
+          label = d.parameter;
+        } else {
+          // For nested stacks, try to extract some meaningful part of the stack
+          // name that is useful to include
+          const nickname = d.stackName.split('-').at(-2);
+          label = `${nickname}::${d.parameter}`;
+        }
+
+        return `*${label}*: ${oldValue} ${arrow} ${newValue}`;
       })
       .join('\n');
   }
