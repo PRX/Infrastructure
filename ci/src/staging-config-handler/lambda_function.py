@@ -131,4 +131,4 @@ def lambda_handler(event, context):
         for v in info["exported-environment-variables"]:
             all_env_vars[v["name"]] = v["value"]
 
-    update_staging_config_file(event, all_env_vars)
+    # update_staging_config_file(event, all_env_vars)
