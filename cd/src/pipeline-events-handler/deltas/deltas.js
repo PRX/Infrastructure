@@ -42,15 +42,15 @@ function parameterDeltasList(deltas) {
   // too large, try creating the list without links to reduce the size.
   const withLinks = deltas.map((d) => listItem(d, false)).join('\n');
 
-  if (withLinks.length < 2900) {
+  if (withLinks.length < 2500) {
     return withLinks;
   } else {
     const withoutLinks = deltas.map((d) => listItem(d, true)).join('\n');
 
-    if (withoutLinks.length < 2900) {
+    if (withoutLinks.length < 2500) {
       return withoutLinks;
     } else {
-      return withoutLinks.slice(0, 2900);
+      return withoutLinks.slice(0, 2500);
     }
   }
 }
