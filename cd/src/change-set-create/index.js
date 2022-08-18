@@ -170,7 +170,15 @@ exports.handler = async (event, context) => {
         // When it's created, the Lambda can stop running and the pipeline
         // can continue
         changeSetDone = true;
-        await codepipeline.putJobSuccessResult({ jobId: job.id }).promise();
+        await codepipeline
+          .putJobSuccessResult({
+            jobId: job.id,
+            outputVariables: {
+              StackName: stackName,
+              ChangeSetName: changeSetName,
+            },
+          })
+          .promise();
         break;
       } else if (
         // If it's still creating, the Lambda needs to keep waiting
