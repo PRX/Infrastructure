@@ -13,64 +13,45 @@ function parameterDeltasList(deltas) {
     return 'This change set contained no meaningful parameter deltas.';
   }
 
+  function listItem(delta, noLinks = false) {
+    const oldValue = deltaValue(delta.parameter, delta.stackValue, noLinks);
+    const arrow = deltaArrow(delta);
+    const newValue = deltaValue(delta.parameter, delta.changeSetValue, noLinks);
+
+    let label;
+
+    if (
+      [
+        'infrastructure-cd-root-staging',
+        'infrastructure-cd-root-production',
+      ].includes(delta.stackName)
+    ) {
+      // For root stack parameters, label with just the parameter name
+      label = delta.parameter;
+    } else {
+      // For nested stacks, try to extract some meaningful part of the stack
+      // name that is useful to include
+      const nickname = delta.stackName.split('-').at(-2);
+      label = `${nickname}::${delta.parameter}`;
+    }
+
+    return `*${label}*: ${oldValue} ${arrow} ${newValue}`;
+  }
+
   // Text blocks within attachments have a 3000 character limit. If the text is
   // too large, try creating the list without links to reduce the size.
-  const withLinks = deltas
-    .map((d) => {
-      const oldValue = deltaValue(d.parameter, d.stackValue);
-      const arrow = deltaArrow(d);
-      const newValue = deltaValue(d.parameter, d.changeSetValue);
-
-      let label;
-
-      if (
-        [
-          'infrastructure-cd-root-staging',
-          'infrastructure-cd-root-production',
-        ].includes(d.stackName)
-      ) {
-        // For root stack parameters, label with just the parameter name
-        label = d.parameter;
-      } else {
-        // For nested stacks, try to extract some meaningful part of the stack
-        // name that is useful to include
-        const nickname = d.stackName.split('-').at(-2);
-        label = `${nickname}::${d.parameter}`;
-      }
-
-      return `*${label}*: ${oldValue} ${arrow} ${newValue}`;
-    })
-    .join('\n');
+  const withLinks = deltas.map((d) => listItem(d, false)).join('\n');
 
   if (withLinks.length < 2900) {
     return withLinks;
   } else {
-    return deltas
-      .map((d) => {
-        const oldValue = deltaValue(d.parameter, d.stackValue, true);
-        const arrow = deltaArrow(d, true);
-        const newValue = deltaValue(d.parameter, d.changeSetValue, true);
+    const withoutLinks = deltas.map((d) => listItem(d, true)).join('\n');
 
-        let label;
-
-        if (
-          [
-            'infrastructure-cd-root-staging',
-            'infrastructure-cd-root-production',
-          ].includes(d.stackName)
-        ) {
-          // For root stack parameters, label with just the parameter name
-          label = d.parameter;
-        } else {
-          // For nested stacks, try to extract some meaningful part of the stack
-          // name that is useful to include
-          const nickname = d.stackName.split('-').at(-2);
-          label = `${nickname}::${d.parameter}`;
-        }
-
-        return `*${label}*: ${oldValue} ${arrow} ${newValue}`;
-      })
-      .join('\n');
+    if (withoutLinks.length < 2900) {
+      return withoutLinks;
+    } else {
+      return withoutLinks.slice(0, 2900);
+    }
   }
 }
 
