@@ -27,11 +27,6 @@ Parameters:
   CastlePostgresUserPassword: { Type: String, Default: "", NoEcho: true }
   AuthorizedKeys: { Type: AWS::SSM::Parameter::Value<List<String>>, Default: /prx/global/Spire/authorized-keys, NoEcho: true }
   # Required
-  RegionMode:
-    Type: String
-    AllowedValues:
-      - Primary
-      - Secondary
   SlackMessageRelayTopicArn: { Type: AWS::SSM::Parameter::Value<String>, Default: /prx/global/Spire/slack-message-relay-sns-topic-arn }
   # Parameter Overrides from the CodePipeline action
   StorageStackName: { Type: String }
@@ -86,6 +81,14 @@ Mappings:
     us-west-2:
       Staging: 10.33.0.0/16
       Production: 172.23.0.0/16
+  RegionModeMap:
+    us-east-1:
+      Staging: Primary
+      Production: Primary
+    us-west-2:
+      Staging: Secondary
+      Production: Secondary
+
 Conditions:
   IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
   HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
@@ -354,7 +357,7 @@ Resources:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RegionMode: !Ref RegionMode
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackName
         SlackMessageRelaySnsTopicArn: !Ref SlackMessageRelayTopicArn
@@ -472,7 +475,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.Outputs.EnvironmentTypeLowercase
-        RegionMode: !Ref RegionMode
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackId
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
@@ -545,7 +548,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.Outputs.EnvironmentTypeLowercase
-        RegionMode: !Ref RegionMode
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackId
         VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
@@ -641,7 +644,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.Outputs.EnvironmentTypeLowercase
-        RegionMode: !Ref RegionMode
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackId
         VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
@@ -703,7 +706,7 @@ Resources:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         EnvironmentTypeLowercase: !GetAtt Constants.Outputs.EnvironmentTypeLowercase
-        RegionMode: !Ref RegionMode
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackId
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
@@ -887,7 +890,7 @@ Outputs:
   EnvironmentType:
     Value: !Ref EnvironmentType
   RegionMode:
-    Value: !Ref RegionMode
+    Value: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
 
   ApplicationStacksState:
     Value: !If [CreateApplicationStacks, Created, tktktk]
