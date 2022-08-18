@@ -51,17 +51,6 @@ Parameters:
   PorterStateMachineArn: { Type: AWS::SSM::Parameter::Value<String> }
   PorterJobExecutionTopicArn: { Type: AWS::SSM::Parameter::Value<String> }
 
-Conditions:
-  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
-  HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
-  HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
-  HasAllSharedAuroraEndpoints: !And [!Condition HasSharedAuroraMysqlEndpoint, !Condition HasSharedAuroraPostgresqlEndpoint]
-  CreateDatabaseDependentResources: !Condition HasAllSharedAuroraEndpoints
-  # Application stacks require external MySQL/PostgreSQL databases
-  CreateApplicationStacks: !Condition CreateDatabaseDependentResources
-  # Dashboard requires that application stacks have been created
-  CreateDashboardsStack: !Condition CreateApplicationStacks
-
 Mappings:
   # Each app should be given a listener rule priority prefix between 1 and 500.
   # In app stacks, listener rule priorities are created by combining the
@@ -97,6 +86,17 @@ Mappings:
     us-west-2:
       Staging: 10.33.0.0/16
       Production: 172.23.0.0/16
+Conditions:
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
+  HasSharedAuroraMysqlEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  HasSharedAuroraPostgresqlEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
+  HasAllSharedAuroraEndpoints: !And [!Condition HasSharedAuroraMysqlEndpoint, !Condition HasSharedAuroraPostgresqlEndpoint]
+  CreateDatabaseDependentResources: !Condition HasAllSharedAuroraEndpoints
+  # Application stacks require external MySQL/PostgreSQL databases
+  CreateApplicationStacks: !Condition CreateDatabaseDependentResources
+  # Dashboard requires that application stacks have been created
+  CreateDashboardsStack: !Condition CreateApplicationStacks
+
 Resources:
   Constants:
     Type: AWS::CloudFormation::Stack
