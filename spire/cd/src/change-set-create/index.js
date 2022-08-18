@@ -24,8 +24,8 @@ exports.handler = async (event) => {
     const userParamsJson = actionConfig.configuration.UserParameters;
     const userParams = JSON.parse(userParamsJson);
 
-    const stackName = userParams.Stack;
-    const changeSetName = userParams.ChangeSet;
+    const stackName = userParams.StackName;
+    const changeSetName = userParams.ChangeSetName;
     const roleArn = userParams.RoleArn;
     const paramOverrides = userParams.Parameters;
     const templateUrlBase = userParams.TemplateUrlBase;
