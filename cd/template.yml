@@ -50,18 +50,6 @@ Parameters:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
     Type: String
-  InfrastructureConfigStagingKey:
-    Default: template-config-staging.zip
-    Description: >-
-      The S3 object key for the staging template configuration file archive
-      (.zip), inside the InfrastructureConfigBucket
-    Type: String
-  InfrastructureConfigProductionKey:
-    Default: template-config-production.zip
-    Description: >-
-      The S3 object key for the production template configuration file archive
-      (.zip), inside the InfrastructureConfigBucket
-    Type: String
   CodeStarConnectionArn:
     Type: String
     Description: >-
@@ -137,35 +125,6 @@ Resources:
           - Action: cloudwatch:PutMetricData
             Effect: Allow
             Resource: "*"
-        Version: "2012-10-17"
-  StagingConfigObjectReadOnlyAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetObject
-            Effect: Allow
-            Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-        Version: "2012-10-17"
-  ProductionConfigObjectReadOnlyAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetObject
-            Effect: Allow
-            Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
-        Version: "2012-10-17"
-  ProductionConfigObjectReadWriteAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - s3:GetObject
-              - s3:PutObject
-            Effect: Allow
-            Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigProductionKey]]
         Version: "2012-10-17"
   SnapshotsBucketWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -493,20 +452,6 @@ Resources:
                   - !Sub ${ArtifactStore.Arn}/*
             Version: "2012-10-17"
           PolicyName: ArtifactStoreFullAccess
-        # CodePipeline needs access to objects that are used in source actions
-        - PolicyDocument:
-            Statement:
-              - Action: s3:GetBucketVersioning
-                Effect: Allow
-                Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket"]]
-              - Action:
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Effect: Allow
-                Resource:
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-            Version: "2012-10-17"
-          PolicyName: S3SourceActionAccessPolicy
         # For Approval actions
         - PolicyDocument:
             Statement:
@@ -565,11 +510,9 @@ Resources:
                 Effect: Allow
                 Resource:
                   - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
-                  - !GetAtt ParameterCaptureFunction.Arn
-                  - !GetAtt StagingDeltasFunction.Arn
                   - !GetAtt ChangeSetCreateFunction.Arn
                   - !GetAtt ProductionParameterPromotionFunction.Arn
-                  - !GetAtt EchoFunction.Arn
+                  - !GetAtt ParameterCaptureFunction.Arn
             Version: "2012-10-17"
           PolicyName: LambdaRolePolicy
         # Lets CodePipeline start CodeBuild (for acceptance tests, etc)
@@ -644,46 +587,6 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_cpy
               RunOrder: 1
-            - Name: Stag-Stack-Name
-              # Creates a pipeline variable of the staging stack name, for
-              # convenience and consistency
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EchoFunction
-                UserParameters: !Sub ${AWS::StackName}-root-staging
-              Namespace: staging_stack_name
-              RunOrder: 1
-            - Name: Prod-Stack-Name
-              # Creates a pipeline variable of the production stack name, for
-              # convenience and consistency
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EchoFunction
-                UserParameters: !Sub ${AWS::StackName}-root-production
-              Namespace: production_stack_name
-              RunOrder: 1
-            - Name: ChangeSet-Name
-              # Creates a pipeline variable for the name used for change sets
-              # created and executed by the pipeline's action, for
-              # convenience and consistency
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EchoFunction
-                UserParameters: cs-#{codepipeline.PipelineExecutionId}
-              Namespace: change_set_name
-              RunOrder: 1
         - Name: Staging
           Actions:
             - Name: Create-ChangeSet
@@ -696,8 +599,8 @@ Resources:
                 FunctionName: !Ref ChangeSetCreateFunction
                 UserParameters: !Sub >-
                   {
-                    "Stack": "#{staging_stack_name.value}",
-                    "ChangeSet": "#{change_set_name.value}",
+                    "Stack": "${AWS::StackName}-root-staging",
+                    "ChangeSet": "cs-#{codepipeline.PipelineExecutionId}",
                     "RoleArn": "${CloudFormationIamRole.Arn}",
                     "Parameters": {
                       "StorageStackName": "${InfrastructureStorageStackName}",
@@ -714,6 +617,7 @@ Resources:
                   }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+              Namespace: staging_change_set
               RunOrder: 1
             - Name: Auto-Approval
               ActionTypeId:
@@ -726,8 +630,8 @@ Resources:
                 CustomData: !Sub >-
                   {
                     "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
-                    "StackName": "#{staging_stack_name.value}",
-                    "ChangeSetName": "#{change_set_name.value}",
+                    "StackName": "#{staging_change_set.StackName}",
+                    "ChangeSetName": "#{staging_change_set.ChangeSetName}",
                     "AccountId": "${AWS::AccountId}"
                   }
               RunOrder: 2
@@ -740,9 +644,9 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                ChangeSetName: "#{change_set_name.value}"
+                ChangeSetName: "#{staging_change_set.ChangeSetName}"
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: "#{staging_stack_name.value}"
+                StackName: "#{staging_change_set.StackName}"
               Namespace: staging_deploy
               RunOrder: 3
             - Name: Capture-Params
@@ -753,7 +657,8 @@ Resources:
                 Version: "1"
               Configuration:
                 FunctionName: !Ref ParameterCaptureFunction
-                UserParameters: "#{staging_stack_name.value}"
+                # The name of the root stack used to capture parameters
+                UserParameters: "#{staging_change_set.StackName}"
               RunOrder: 4
         - Name: Testing
           Actions:
@@ -808,33 +713,33 @@ Resources:
               RunOrder: 1
             - Name: Create-ChangeSet
               ActionTypeId:
-                Category: Deploy
+                Category: Invoke
                 Owner: AWS
-                Provider: CloudFormation
+                Provider: Lambda
                 Version: "1"
               Configuration:
-                ActionMode: CHANGE_SET_REPLACE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM,CAPABILITY_AUTO_EXPAND
-                ChangeSetName: "#{change_set_name.value}"
-                ParameterOverrides: !Sub |
+                FunctionName: !Ref ChangeSetCreateFunction
+                UserParameters: !Sub >-
                   {
-                    "StorageStackName": "${InfrastructureStorageStackName}",
-                    "InfrastructureGitCommit": "#{src_infra.CommitId}",
-                    "Nonce": "#{codepipeline.PipelineExecutionId}",
-                    "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
-                    "EnvironmentType": "Production",
-                    "EnvironmentTypeAbbreviation": "prod",
-                    "PorterStateMachineArn": "/prx/prod/Spire/${AWS::Region}/porter-state-machine-arn",
-                    "PorterJobExecutionTopicArn": "/prx/prod/Spire/${AWS::Region}/porter-job-execution-topic-arn",
-                    "SharedAuroraMysqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-mysql-database/endpoint",
-                    "SharedAuroraPostgresqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-postgresql-database/endpoint"
+                    "Stack": "${AWS::StackName}-root-production",
+                    "ChangeSet": "cs-#{codepipeline.PipelineExecutionId}",
+                    "RoleArn": "${CloudFormationIamRole.Arn}",
+                    "Parameters": {
+                      "StorageStackName": "${InfrastructureStorageStackName}",
+                      "InfrastructureGitCommit": "#{src_infra.CommitId}",
+                      "Nonce": "#{codepipeline.PipelineExecutionId}",
+                      "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
+                      "EnvironmentType": "Production",
+                      "EnvironmentTypeAbbreviation": "prod",
+                      "PorterStateMachineArn": "/prx/prod/Spire/${AWS::Region}/porter-state-machine-arn",
+                      "PorterJobExecutionTopicArn": "/prx/prod/Spire/${AWS::Region}/porter-job-execution-topic-arn",
+                      "SharedAuroraMysqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-mysql-database/endpoint",
+                      "SharedAuroraPostgresqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-postgresql-database/endpoint"
+                    }
                   }
-                RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: "#{production_stack_name.value}"
-                TemplateConfiguration: TemplateConfigProductionZipArtifact::production.json
-                TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+              Namespace: production_change_set
               RunOrder: 2
             - Name: Wait-For-Approval
               ActionTypeId:
@@ -847,8 +752,8 @@ Resources:
                 CustomData: !Sub |
                   {
                     "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
-                    "StackName": "#{production_stack_name.value}",
-                    "ChangeSetName": "#{change_set_name.value}",
+                    "StackName": "#{production_change_set.StackName}",
+                    "ChangeSetName": "#{production_change_set.ChangeSetName}",
                     "AccountId": "${AWS::AccountId}"
                   }
               RunOrder: 3
@@ -861,9 +766,9 @@ Resources:
               Configuration:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
-                ChangeSetName: "#{change_set_name.value}"
+                ChangeSetName: "#{production_change_set.ChangeSetName}"
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
-                StackName: "#{production_stack_name.value}"
+                StackName: "#{production_change_set.StackName}"
               RunOrder: 4
             - Name: Capture-Params
               ActionTypeId:
@@ -873,7 +778,8 @@ Resources:
                 Version: "1"
               Configuration:
                 FunctionName: !Ref ParameterCaptureFunction
-                UserParameters: "#{production_stack_name.value}"
+                # The name of the root stack used to capture parameters
+                UserParameters: "#{production_change_set.StackName}"
               RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -921,33 +827,6 @@ Resources:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_cpy
               RunOrder: 1
-            - Name: Prod-Stack-Name
-              # Creates a pipeline variable of the production stack name, for
-              # convenience and consistency
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EchoFunction
-                UserParameters: !Sub ${AWS::StackName}-root-production
-              Namespace: production_stack_name
-              RunOrder: 1
-            - Name: ChangeSet-Name
-              # Creates a pipeline variable for the name used for change sets
-              # created and executed by the pipeline's action, for
-              # convenience and consistency
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EchoFunction
-                UserParameters: cd-change-set
-              Namespace: change_set_name
-              RunOrder: 1
         - Name: Production
           Actions:
             - Name: Capture-Params
@@ -958,7 +837,8 @@ Resources:
                 Version: "1"
               Configuration:
                 FunctionName: !Ref ParameterCaptureFunction
-                UserParameters: "#{production_stack_name.value}"
+                # The name of the root stack used to capture parameters
+                UserParameters: "tktktk"
               RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1313,31 +1193,6 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
-  EchoFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/echo/
-      Description: tktktk # TODO
-      Handler: index.handler
-      MemorySize: 128
-      Policies:
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 8
-  EchoLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${EchoFunction}
-      RetentionInDays: 7
-
   ChangeSetCreateFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -1493,134 +1348,3 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
-
-  # Pipeline S3 Trigger
-  # TODO Remove all this once we're off template config files
-  CdPipelineS3TriggerTrailStore:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      LifecycleConfiguration:
-        Rules:
-          - ExpirationInDays: 14
-            Status: Enabled
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerTrailStoreBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref CdPipelineS3TriggerTrailStore
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetBucketAcl
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}
-            Sid: AWSCloudTrailAclCheck
-          - Action: s3:PutObject
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-            Effect: Allow
-            Principal:
-              Service: cloudtrail.amazonaws.com
-            Resource: !Sub arn:aws:s3:::${CdPipelineS3TriggerTrailStore}/AWSLogs/${AWS::AccountId}/*
-            Sid: AWSCloudTrailWrite
-        Version: "2012-10-17"
-  CdPipelineS3TriggerTrail:
-    Type: AWS::CloudTrail::Trail
-    DependsOn:
-      - CdPipelineS3TriggerTrailStoreBucketPolicy
-    Properties:
-      EventSelectors:
-        - DataResources:
-            - Type: AWS::S3::Object
-              Values:
-                - Fn::Sub:
-                    - arn:aws:s3:::${BucketName}/
-                    - BucketName:
-                        Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          IncludeManagementEvents: false
-          ReadWriteType: WriteOnly
-      IsLogging: true
-      IsMultiRegionTrail: false
-      S3BucketName: !Ref CdPipelineS3TriggerTrailStore
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        - PolicyDocument:
-            Statement:
-              - Action: codepipeline:StartPipelineExecution
-                Effect: Allow
-                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-            Version: "2012-10-17"
-          PolicyName: LambdaPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  CdPipelineS3TriggerEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: >-
-        Triggers CD CodePipeline when CloudTrail sees changes in S3 on the
-        staging template config
-      EventPattern:
-        source:
-          - aws.s3
-        detail-type:
-          - AWS API Call via CloudTrail
-        detail:
-          eventSource:
-            - s3.amazonaws.com
-          eventName:
-            - PutObject
-            - CopyObject
-          userIdentity:
-            sessionContext:
-              sessionIssuer:
-                arn:
-                  # CodePipeline does a CopyObject when it pulls in an S3
-                  # object as part of a Source action, using the pipeline's
-                  # role. To prevent an infinite loop, those events need to be
-                  # filtered out
-                  - anything-but: !GetAtt CdPipelineIamRole.Arn
-          resources:
-            ARN:
-              - Fn::Sub:
-                  - arn:aws:s3:::${BucketName}/${ObjectId}
-                  - ObjectId: !Ref InfrastructureConfigStagingKey
-                    BucketName:
-                      Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-      State: ENABLED
-      Targets:
-        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-          Id: !Sub ${AWS::StackName}.CdPipelineS3Trigger
-          RoleArn: !GetAtt CdPipelineS3TriggerIamRole.Arn
