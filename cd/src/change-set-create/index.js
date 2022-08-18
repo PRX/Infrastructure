@@ -57,29 +57,6 @@ exports.handler = async (event, context) => {
 
     const inputArtifacts = job.data.inputArtifacts;
 
-    // Download the template config Zip file, and extract the stack parameters
-    // from it
-    const configZipTempPath = path.join(
-      os.tmpdir(),
-      context.awsRequestId,
-      'config.zip',
-    );
-    const configArtifact = inputArtifacts.find((a) =>
-      [
-        'TemplateConfigStagingZipArtifact',
-        'TemplateConfigProductionZipArtifact',
-      ].includes(a.name),
-    );
-    await s3GetObject(
-      configArtifact.location.s3Location.bucketName,
-      configArtifact.location.s3Location.objectKey,
-      configZipTempPath,
-    );
-    const configZip = new AdmZip(configZipTempPath);
-    const configJson = configZip.readAsText('staging.json');
-    const config = JSON.parse(configJson);
-    const configParams = config.Parameters;
-
     // Download the Infrastructure repo Zip file, extract root.yml, and send
     // it back to S3 so that the change set can reference it directly
     const repoZipTempPath = path.join(
@@ -115,7 +92,7 @@ exports.handler = async (event, context) => {
     const roleArn = userParams.RoleArn;
     const paramOverrides = userParams.Parameters;
 
-    const changeSetParams = Object.assign(configParams, paramOverrides);
+    const changeSetParams = paramOverrides;
     const changeSetParamsArray = Object.keys(changeSetParams).map((k) => ({
       ParameterKey: k,
       ParameterValue: changeSetParams[k],
@@ -172,7 +149,6 @@ exports.handler = async (event, context) => {
       })
       .promise();
 
-    fs.unlinkSync(configZipTempPath);
     fs.unlinkSync(repoZipTempPath);
 
     let changeSetDone = false;

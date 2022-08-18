@@ -565,9 +565,9 @@ Resources:
                 Effect: Allow
                 Resource:
                   - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
-                  - !GetAtt EnvironmentStateCaptureFunction.Arn
+                  # TODO - !GetAtt EnvironmentStateCaptureFunction.Arn
                   - !GetAtt ParameterCaptureFunction.Arn
-                  - !GetAtt ProductionConfigPseudoSourceFunction.Arn
+                  # TODO - !GetAtt ProductionConfigPseudoSourceFunction.Arn
                   - !GetAtt StagingDeltasFunction.Arn
                   - !GetAtt ChangeSetCreateFunction.Arn
                   - !GetAtt ProductionParameterPromotionFunction.Arn
@@ -632,20 +632,21 @@ Resources:
               OutputArtifacts:
                 - Name: MetaRepoSourceArtifact
               RunOrder: 1
-            - Name: StagingConfig
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: S3
-                Version: "1"
-              Configuration:
-                PollForSourceChanges: false
-                S3Bucket:
-                  Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-                S3ObjectKey: !Ref InfrastructureConfigStagingKey
-              OutputArtifacts:
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 1
+            # TODO
+            # - Name: StagingConfig
+            #   ActionTypeId:
+            #     Category: Source
+            #     Owner: AWS
+            #     Provider: S3
+            #     Version: "1"
+            #   Configuration:
+            #     PollForSourceChanges: false
+            #     S3Bucket:
+            #       Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+            #     S3ObjectKey: !Ref InfrastructureConfigStagingKey
+            #   OutputArtifacts:
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 1
         - Name: Pre-Deploy
           Actions:
             - Name: S3-Template-Copy
@@ -730,7 +731,7 @@ Resources:
                   }
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
+                # TODO - Name: TemplateConfigStagingZipArtifact
               RunOrder: 1
             - Name: Auto-Approval
               ActionTypeId:
@@ -762,18 +763,18 @@ Resources:
                 StackName: "#{staging_stack_name.value}"
               Namespace: staging_deploy
               RunOrder: 3
-            - Name: Capture-State
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EnvironmentStateCaptureFunction
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 4
+            # TODO - Name: Capture-State
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref EnvironmentStateCaptureFunction
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 4
             - Name: Capture-Params
               ActionTypeId:
                 Category: Invoke
@@ -826,19 +827,19 @@ Resources:
               RunOrder: 1
         - Name: Production
           Actions:
-            - Name: GetProductionConfig
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref ProductionConfigPseudoSourceFunction
-              InputArtifacts:
-                - Name: TemplateConfigStagingZipArtifact
-              OutputArtifacts:
-                - Name: TemplateConfigProductionZipArtifact
-              RunOrder: 1
+            # TODO - Name: GetProductionConfig
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref ProductionConfigPseudoSourceFunction
+            #   InputArtifacts:
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   OutputArtifacts:
+            #     - Name: TemplateConfigProductionZipArtifact
+            #   RunOrder: 1
             - Name: Promote-Parameters
               ActionTypeId:
                 Category: Invoke
@@ -867,14 +868,16 @@ Resources:
                     "EnvironmentType": "Production",
                     "EnvironmentTypeAbbreviation": "prod",
                     "PorterStateMachineArn": "/prx/prod/Spire/${AWS::Region}/porter-state-machine-arn",
-                    "PorterJobExecutionTopicArn": "/prx/prod/Spire/${AWS::Region}/porter-job-execution-topic-arn"
+                    "PorterJobExecutionTopicArn": "/prx/prod/Spire/${AWS::Region}/porter-job-execution-topic-arn",
+                    "SharedAuroraMysqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-mysql-database/endpoint",
+                    "SharedAuroraPostgresqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-postgresql-database/endpoint"
                   }
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: "#{production_stack_name.value}"
                 TemplateConfiguration: TemplateConfigProductionZipArtifact::production.json
                 TemplatePath: InfrastructureRepoSourceArtifact::stacks/root.yml
               InputArtifacts:
-                - Name: TemplateConfigProductionZipArtifact
+                # TODO - Name: TemplateConfigProductionZipArtifact
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 2
             - Name: Wait-For-Approval
@@ -906,17 +909,17 @@ Resources:
                 RoleArn: !GetAtt CloudFormationIamRole.Arn
                 StackName: "#{production_stack_name.value}"
               RunOrder: 4
-            - Name: CaptureProductionState
-              ActionTypeId:
-                Category: Invoke
-                Owner: AWS
-                Provider: Lambda
-                Version: "1"
-              Configuration:
-                FunctionName: !Ref EnvironmentStateCaptureFunction
-              InputArtifacts:
-                - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 5
+            # TODO - Name: CaptureProductionState
+            #   ActionTypeId:
+            #     Category: Invoke
+            #     Owner: AWS
+            #     Provider: Lambda
+            #     Version: "1"
+            #   Configuration:
+            #     FunctionName: !Ref EnvironmentStateCaptureFunction
+            #   InputArtifacts:
+            #     - Name: InfrastructureRepoSourceArtifact
+            #   RunOrder: 5
             - Name: Capture-Params
               ActionTypeId:
                 Category: Invoke
@@ -959,20 +962,20 @@ Resources:
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            - Name: StagingConfig
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: S3
-                Version: "1"
-              Configuration:
-                PollForSourceChanges: false
-                S3Bucket:
-                  Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-                S3ObjectKey: !Ref InfrastructureConfigStagingKey
-              OutputArtifacts:
-                - Name: TemplateConfigStagingZipArtifact
-              RunOrder: 1
+            # - Name: StagingConfig
+            #   ActionTypeId:
+            #     Category: Source
+            #     Owner: AWS
+            #     Provider: S3
+            #     Version: "1"
+            #   Configuration:
+            #     PollForSourceChanges: false
+            #     S3Bucket:
+            #       Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+            #     S3ObjectKey: !Ref InfrastructureConfigStagingKey
+            #   OutputArtifacts:
+            #     - Name: TemplateConfigStagingZipArtifact
+            #   RunOrder: 1
         - Name: Pre-Deploy
           Actions:
             - Name: S3-Template-Copy
@@ -1692,108 +1695,108 @@ Resources:
           RoleArn: !GetAtt CdPipelineS3TriggerIamRole.Arn
 
   # TODO Remove once we're off template config files
-  ProductionConfigPseudoSourceFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/production-config-pseudo-source/
-      Description: >-
-        Generates output artifact of the production template config
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-      Handler: lambda_function.lambda_handler
-      MemorySize: 256
-      Policies:
-        - !Ref ArtifactBucketReadWriteAccessPolicy
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref ProductionConfigObjectReadWriteAccessPolicy
-        - !Ref StagingConfigObjectReadOnlyAccessPolicy
-      Runtime: python3.9
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 8
-  ProductionConfigPseudoSourceLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${ProductionConfigPseudoSourceFunction}
-      RetentionInDays: 14
-  ProductionConfigPseudoSourceErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Config pseudo source <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the pseudo source lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref ProductionConfigPseudoSourceFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
+  # ProductionConfigPseudoSourceFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/production-config-pseudo-source/
+  #     Description: >-
+  #       Generates output artifact of the production template config
+  #     Environment:
+  #       Variables:
+  #         INFRASTRUCTURE_CONFIG_BUCKET:
+  #           Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+  #         INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+  #     Handler: lambda_function.lambda_handler
+  #     MemorySize: 256
+  #     Policies:
+  #       - !Ref ArtifactBucketReadWriteAccessPolicy
+  #       - !Ref CodePipelineJobResultWriteAccessPolicy
+  #       - !Ref ProductionConfigObjectReadWriteAccessPolicy
+  #       - !Ref StagingConfigObjectReadOnlyAccessPolicy
+  #     Runtime: python3.9
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: Production
+  #       prx:dev:application: CD
+  #     Timeout: 8
+  # ProductionConfigPseudoSourceLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   DeletionPolicy: Delete
+  #   UpdateReplacePolicy: Delete
+  #   Properties:
+  #     LogGroupName: !Sub /aws/lambda/${ProductionConfigPseudoSourceFunction}
+  #     RetentionInDays: 14
+  # ProductionConfigPseudoSourceErrorAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: !Sub WARN [CD] Config pseudo source <prod> INVOCATIONS ERRORS (${AWS::StackName})
+  #     AlarmDescription: >-
+  #       The error rate on the pseudo source lambda has exceeded 0 in
+  #       the last minute.
+  #     ComparisonOperator: GreaterThanThreshold
+  #     Dimensions:
+  #       - Name: FunctionName
+  #         Value: !Ref ProductionConfigPseudoSourceFunction
+  #     EvaluationPeriods: 1
+  #     MetricName: Errors
+  #     Namespace: AWS/Lambda
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 1
+  #     TreatMissingData: notBreaching
 
   # TODO Remoe once we're off template config files
-  EnvironmentStateCaptureFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/environment-state-capture/
-      Description: >-
-        Capture template and config version data for deployed environments
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
-          INFRASTRUCTURE_SNAPSHOTS_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
-      Handler: index.handler
-      MemorySize: 256
-      Policies:
-        - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref ProductionConfigObjectReadOnlyAccessPolicy
-        - !Ref SnapshotsBucketWriteAccessPolicy
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 5
-  EnvironmentStateCaptureLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${EnvironmentStateCaptureFunction}
-      RetentionInDays: 14
-  EnvironmentStateCaptureErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] State capture <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the state capture lambda has exceeded 0 in
-        the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref EnvironmentStateCaptureFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
+  # EnvironmentStateCaptureFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/environment-state-capture/
+  #     Description: >-
+  #       Capture template and config version data for deployed environments
+  #     Environment:
+  #       Variables:
+  #         INFRASTRUCTURE_CONFIG_BUCKET:
+  #           Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
+  #         INFRASTRUCTURE_CONFIG_PRODUCTION_KEY: !Ref InfrastructureConfigProductionKey
+  #         INFRASTRUCTURE_SNAPSHOTS_BUCKET:
+  #           Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket
+  #     Handler: index.handler
+  #     MemorySize: 256
+  #     Policies:
+  #       - !Ref CodePipelineJobResultWriteAccessPolicy
+  #       - !Ref ProductionConfigObjectReadOnlyAccessPolicy
+  #       - !Ref SnapshotsBucketWriteAccessPolicy
+  #     Runtime: nodejs16.x
+  #     Tags:
+  #       prx:meta:tagging-version: "2021-04-07"
+  #       prx:cloudformation:stack-name: !Ref AWS::StackName
+  #       prx:cloudformation:stack-id: !Ref AWS::StackId
+  #       prx:ops:environment: Production
+  #       prx:dev:application: CD
+  #     Timeout: 5
+  # EnvironmentStateCaptureLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   DeletionPolicy: Delete
+  #   UpdateReplacePolicy: Delete
+  #   Properties:
+  #     LogGroupName: !Sub /aws/lambda/${EnvironmentStateCaptureFunction}
+  #     RetentionInDays: 14
+  # EnvironmentStateCaptureErrorAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: !Sub WARN [CD] State capture <prod> INVOCATIONS ERRORS (${AWS::StackName})
+  #     AlarmDescription: >-
+  #       The error rate on the state capture lambda has exceeded 0 in
+  #       the last minute.
+  #     ComparisonOperator: GreaterThanThreshold
+  #     Dimensions:
+  #       - Name: FunctionName
+  #         Value: !Ref EnvironmentStateCaptureFunction
+  #     EvaluationPeriods: 1
+  #     MetricName: Errors
+  #     Namespace: AWS/Lambda
+  #     Period: 60
+  #     Statistic: Sum
+  #     Threshold: 1
+  #     TreatMissingData: notBreaching
