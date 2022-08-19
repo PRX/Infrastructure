@@ -106,6 +106,7 @@ exports.handler = async (event) => {
         // When it's created, the Lambda can stop running and the pipeline
         // can continue
         changeSetDone = true;
+        console.log('Change set was created successfully');
         await codepipeline
           .putJobSuccessResult({
             jobId: job.id,
@@ -126,11 +127,14 @@ exports.handler = async (event) => {
         // Any other status would mean something went bad with the change set
         // and the pipeline execution neesd to halt
         changeSetDone = true;
+        console.log('Change set creation failed!');
+        console.log(status.Status);
+        console.log(status.StatusReason);
         await codepipeline
           .putJobFailureResult({
             jobId: job.id,
             failureDetails: {
-              message: `Change set failed with ${status.Status}`,
+              message: `${status.Status} - ${status.StatusReason}`,
               type: 'JobFailed',
             },
           })
