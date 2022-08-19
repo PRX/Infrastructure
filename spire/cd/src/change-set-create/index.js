@@ -28,7 +28,7 @@ exports.handler = async (event) => {
     const changeSetName = userParams.ChangeSetName;
     const roleArn = userParams.RoleArn;
     const paramOverrides = userParams.Parameters;
-    const templateUrlBase = userParams.TemplateUrlBase;
+    const templateUrlBase = paramOverrides.TemplateUrlBase;
 
     const changeSetParams = paramOverrides;
     const changeSetParamsArray = Object.keys(changeSetParams).map((k) => ({
