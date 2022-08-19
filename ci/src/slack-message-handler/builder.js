@@ -126,43 +126,6 @@ module.exports = {
         }
       }
     }
-    // For builds with ECR artifacts, link to the image in ECR
-    // TODO This is the legacy way of doing it
-    if (allEnvVars.PRX_ECR_IMAGE) {
-      const imageName = allEnvVars.PRX_ECR_IMAGE;
-
-      const region = imageName.match(/dkr\.ecr\.(.*)\.amazonaws\.com/)[1];
-      const accountId = imageName.match(/^([0-9]+)\./)[1];
-      const repoName = imageName.match(/\/([^:]+):/)[1];
-      const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
-
-      const ecrUrl = `https://console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
-      moreLines.push(
-        `» Docker image pushed to <${ecrUrl}|ECR> with tag \`${tag}…\``,
-      );
-    }
-
-    // For builds with Lambda artifacts, link to the S3 object
-    // TODO This is the legacy way of doing it
-    if (allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE) {
-      const objectKey = allEnvVars.PRX_LAMBDA_CODE_CONFIG_VALUE;
-
-      const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
-      moreLines.push(
-        `» Lambda code pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
-      );
-    }
-
-    // For builds with static site artifacts, link to the S3 object
-    // TODO This is the legacy way of doing it
-    if (allEnvVars.PRX_S3_STATIC_CONFIG_VALUE) {
-      const objectKey = allEnvVars.PRX_S3_STATIC_CONFIG_VALUE;
-
-      const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
-      moreLines.push(
-        `» Static code pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
-      );
-    }
 
     // For default branch pushes, include a list of commits
     if (!pr) {
