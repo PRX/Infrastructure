@@ -62,9 +62,9 @@ push_to_s3() {
         echo "< No Docker images found. Set the org.prx.spire.publish.s3 LABEL in a Dockerfile to publish a ZIP file."
     else
         for image_id in $image_ids; do
-            echo "> Publishing ZIP file from Docker image: $image_id..."
-
             label=$(docker inspect --format '{{ index .Config.Labels "org.prx.spire.publish.s3"}}' "$image_id")
+
+            echo "> Publishing ZIP file for ${label} from Docker image: $image_id..."
 
             if [ -z "$PRX_S3_ARCHIVE_BUILD_PATH" ]; then export PRX_S3_ARCHIVE_BUILD_PATH="/.prxci/build.zip" ; fi
 
