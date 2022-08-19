@@ -135,15 +135,6 @@ Resources:
             Effect: Allow
             Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
         Version: "2012-10-17"
-  SourceBucketWriteAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: s3:PutObject
-            Effect: Allow
-            Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
-        Version: "2012-10-17"
   ArtifactBucketReadOnlyAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -212,8 +203,6 @@ Resources:
               - Action: s3:GetObject
                 Effect: Allow
                 Resource:
-                  # TODO Remove the ImportValue one
-                  - !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSourceBucket", "/*"]]
                   - !Sub ${TemplateCopyBucket.Arn}/*
             Version: "2012-10-17"
           PolicyName: TemplateBucketAccess
@@ -1137,14 +1126,11 @@ Resources:
       Environment:
         Variables:
           TEMPLATE_COPY_BUCKET_NAME: !Ref TemplateCopyBucket
-          INFRASTRUCTURE_SOURCE_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureSourceBucket
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Policies:
         - !Ref ArtifactBucketReadOnlyAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
-        - !Ref SourceBucketWriteAccessPolicy
         - Statement:
             - Action: s3:PutObject
               Effect: Allow
