@@ -4,7 +4,7 @@
 # In order for the root stack to launch nested stacks, the tempates for those
 # nested stacks much be available on S3. This function copies all files in the
 # Infrastructure repo artifact to S3 for that purpose.
-# Those files are copied to the InfrastructureSourceBucket bucket, with an
+# Those files are copied to the template copy bucket, with an
 # object prefix of the Git commit hash of the commit being copied.
 #
 # This should always callback to the CodePipeline API to indicate success or

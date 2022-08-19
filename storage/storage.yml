@@ -30,28 +30,8 @@ Resources:
           Value: !Ref AWS::StackId
       VersioningConfiguration:
         Status: Suspended
-  InfrastructureSourceBucket:
-    # TODO Delete this bucket once CD isn't using it anymore
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      BucketName: !Sub ${BucketNamePrefix}-${AWS::Region}-source
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - Key: Project
-          Value: Infrastructure
-        - Key: "prx:cloudformation:stack-name"
-          Value: !Ref AWS::StackName
-        - Key: "prx:cloudformation:stack-id"
-          Value: !Ref AWS::StackId
-      VersioningConfiguration:
-        Status: Suspended
   InfrastructureConfigBucket:
+    # Holds the (now unused) CloudFormation template config JSON files
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -92,6 +72,8 @@ Resources:
       VersioningConfiguration:
         Status: Suspended
   InfrastructureApplicationCodeBucket:
+    # CI publishes S3 objects (zip files usually) to this bucket, and this is
+    # where they get deployed from
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
@@ -117,17 +99,6 @@ Outputs:
     Value: !Ref InfrastructureSupportBucket
     Export:
       Name: !Sub ${AWS::StackName}-InfrastructureSupportBucket
-  InfrastructureSourceBucket:
-    Value: !Ref InfrastructureSourceBucket
-    Export:
-      Name: !Sub ${AWS::StackName}-InfrastructureSourceBucket
-  InfrastructureSourceBucketUrl:
-    Description: >-
-      The complete S3 URL for the Source bucket (e.g.,
-      https://acme-us-west-2-source.s3.dualstack.us-west-2.amazonaws.com/)
-    Value: !Sub https://${InfrastructureSourceBucket.DualStackDomainName}/
-    Export:
-      Name: !Sub ${AWS::StackName}-SourceBucketUrl
   InfrastructureConfigBucket:
     Value: !Ref InfrastructureConfigBucket
     Export:

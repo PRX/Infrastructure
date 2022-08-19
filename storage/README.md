@@ -13,13 +13,6 @@ Holds miscellaneous resources that are needed at various points of the setup and
 - Exported as: `${AWS::StackName}-InfrastructureSupportBucket`
 - Named: `${BucketNamePrefix}-${AWS::Region}-support`, eg `prx-infrastructure-us-east-1-support`
 
-### Source
-
-Holds copies of the Infrastructure repository, prefixed with the Git commit hash from when the copy was made. The root stack template points to files in this bucket for nested templates. It does not need S3 versioning.
-
-- Exported as: `${AWS::StackName}-InfrastructureSourceBucket`
-- Named: `${BucketNamePrefix}-${AWS::Region}-source`, eg `prx-infrastructure-us-east-1-source`
-
 ### Config
 
 Holds one zip file per environment, each which holds a single JSON file. Eg. `template-config-production.zip` and `template-config-staging.zip`. Versioning is required; these files are updated in place whenever the configuration changes. Versioning is used to rollback to good states.
