@@ -81,7 +81,7 @@ push_to_s3() {
 
             # Send send-to-s3.zip to S3 as a new object (not a version)
             echo "> Sending ZIP file to S3"
-            key="GitHub/${PRX_REPO}/${PRX_COMMIT}.zip"
+            key="GitHub/${PRX_REPO}/${PRX_COMMIT}/${label}.zip"
 
             aws s3api put-object --bucket $PRX_APPLICATION_CODE_BUCKET --key $key --acl private --body send-to-s3.zip
             echo "< Finished publishing ZIP file"
