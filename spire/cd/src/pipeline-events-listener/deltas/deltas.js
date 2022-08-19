@@ -162,6 +162,8 @@ module.exports = {
       ) {
         return false;
       }
+
+      return true;
     });
 
     console.log(JSON.stringify(allowedDeltas));
