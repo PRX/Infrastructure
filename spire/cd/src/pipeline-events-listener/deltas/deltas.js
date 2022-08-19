@@ -147,6 +147,8 @@ module.exports = {
       (d) =>
         ![
           'PipelineExecutionNonce',
+          'PipelineExecutionId',
+          'Nonce',
           'TemplateUrlBase',
           'TemplateUrlPrefix',
         ].includes(d.parameter),

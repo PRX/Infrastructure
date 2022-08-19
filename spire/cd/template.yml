@@ -1,4 +1,4 @@
-# cd/template.yml
+# spire/cd/template.yml
 # This template is deployed continuously via GitHub Actions. The IAM role used
 # by GitHub actions is not permitted to manage all aspects of the template.
 # It's mainly intended for minor updates to the pipeline and other existing
@@ -30,18 +30,9 @@ Metadata:
         Parameters:
           - InfrastructureStorageStackName
           - CodeStarConnectionArn
-      - Label:
-          default: Infrastructure Config
-        Parameters:
-          - InfrastructureConfigStagingKey
-          - InfrastructureConfigProductionKey
     ParameterLabels:
       InfrastructureStorageStackName:
         default: Storage stack name
-      InfrastructureConfigStagingKey:
-        default: Staging S3 object key
-      InfrastructureConfigProductionKey:
-        default: Production S3 object key
       CodeStarConnectionArn:
         default: CodeStar Connection ARN
 
@@ -137,7 +128,7 @@ Resources:
   # to create S3 buckets.
   # NOTE This role should not be given to anything other than the CodePipeline
   # CloudFormation actions! It's very powerful!
-  CloudFormationIamRole:
+  CloudFormationRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -262,12 +253,12 @@ Resources:
         - { Key: prx:dev:application, Value: CD }
 
   # Parameter Store Events
-  ParameterStoreEventsFunction:
+  ParameterStoreListenerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/parameter-store-events-handler/
+      CodeUri: src/parameter-store-listener/
       Description: >-
-        Watches for changes in Parameter Store and starts pipeline executions
+        Listens for changes in Parameter Store and starts pipeline executions
         when necessary.
       Environment:
         Variables:
@@ -304,26 +295,90 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CD
       Timeout: 8
-  ParameterStoreEventsLogGroup:
+  ParameterStoreListenerLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub /aws/lambda/${ParameterStoreEventsFunction}
+      LogGroupName: !Sub /aws/lambda/${ParameterStoreListenerFunction}
       RetentionInDays: 14
-  ParameterStoreEventsErrorAlarm:
+  ParameterStoreListenerErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [CD] Parameter Store events <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmName: !Sub WARN [CD] Parameter Store listener <prod> INVOCATIONS ERRORS (${AWS::StackName})
       AlarmDescription: >-
-        The Lambda function that watches for changes in Parameter Store and
+        The Lambda function that listens for changes in Parameter Store and
         starts pipeline executions is failing, so the pipeline may not be
         starting automatically. This function is not part the pipeline, so
         running the pipeline manually should not be impacted.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Ref ParameterStoreEventsFunction
+          Value: !Ref ParameterStoreListenerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+
+  # Watches for certain events in EventBridge related to the pipelines in this
+  # stack.
+  PipelineEventsListenerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/pipeline-events-listener/
+      Description: Responds to pipeline execution state change events
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
+      Events:
+        StateChange:
+          Properties:
+            Pattern:
+              detail-type:
+                - CodePipeline Action Execution State Change
+                - CodePipeline Stage Execution State Change
+                - CodePipeline Pipeline Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${EmergencyPipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
+      Handler: events.handler
+      MemorySize: 128
+      Policies:
+        - !Ref CodePipelineStateReadOnlyAccessPolicy
+        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: CD
+      Timeout: 8
+  PipelineEventsListenerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PipelineEventsListenerFunction}
+      RetentionInDays: 14
+  PipelineEventsListenerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [CD] Pipeline events listener <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The Lambda function that listens for changes in CodePipeline is
+        failing, so some Slack messages related to Spire CD may not be getting
+        sent.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PipelineEventsListenerFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -380,7 +435,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
-  CdPipelineIamRole:
+  PipelineRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -438,7 +493,7 @@ Resources:
             Statement:
               - Action: iam:PassRole
                 Effect: Allow
-                Resource: !GetAtt CloudFormationIamRole.Arn
+                Resource: !GetAtt CloudFormationRole.Arn
               # Full access for staging stacks
               - Action: cloudformation:*
                 Effect: Allow
@@ -469,8 +524,8 @@ Resources:
               - Action: lambda:InvokeFunction
                 Effect: Allow
                 Resource:
-                  - !GetAtt InfrastructureRepoSourceS3SyncFunction.Arn
-                  - !GetAtt ChangeSetCreateFunction.Arn
+                  - !GetAtt TemplateCopyFunction.Arn
+                  - !GetAtt CreateNestedChangeSetFunction.Arn
                   - !GetAtt ProductionParameterPromotionFunction.Arn
                   - !GetAtt ParameterCaptureFunction.Arn
             Version: "2012-10-17"
@@ -499,7 +554,7 @@ Resources:
       ArtifactStore:
         Location: !Ref ArtifactStore
         Type: S3
-      RoleArn: !GetAtt CdPipelineIamRole.Arn
+      RoleArn: !GetAtt PipelineRole.Arn
       Stages:
         - Name: Source
           Actions:
@@ -542,7 +597,7 @@ Resources:
                 Provider: Lambda
                 Version: "1"
               Configuration:
-                FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
+                FunctionName: !Ref TemplateCopyFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_cpy
@@ -556,12 +611,12 @@ Resources:
                 Provider: Lambda
                 Version: "1"
               Configuration:
-                FunctionName: !Ref ChangeSetCreateFunction
+                FunctionName: !Ref CreateNestedChangeSetFunction
                 UserParameters: !Sub >-
                   {
                     "StackName": "${AWS::StackName}-root-staging",
                     "ChangeSetName": "cs-#{codepipeline.PipelineExecutionId}",
-                    "RoleArn": "${CloudFormationIamRole.Arn}",
+                    "RoleArn": "${CloudFormationRole.Arn}",
                     "Parameters": {
                       "StorageStackName": "${InfrastructureStorageStackName}",
                       "InfrastructureGitCommit": "#{src_infra.CommitId}",
@@ -601,7 +656,7 @@ Resources:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
                 ChangeSetName: "#{staging_change_set.ChangeSetName}"
-                RoleArn: !GetAtt CloudFormationIamRole.Arn
+                RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: "#{staging_change_set.StackName}"
               Namespace: staging_deploy
               RunOrder: 3
@@ -674,12 +729,12 @@ Resources:
                 Provider: Lambda
                 Version: "1"
               Configuration:
-                FunctionName: !Ref ChangeSetCreateFunction
+                FunctionName: !Ref CreateNestedChangeSetFunction
                 UserParameters: !Sub >-
                   {
                     "StackName": "${AWS::StackName}-root-production",
                     "ChangeSetName": "cs-#{codepipeline.PipelineExecutionId}",
-                    "RoleArn": "${CloudFormationIamRole.Arn}",
+                    "RoleArn": "${CloudFormationRole.Arn}",
                     "Parameters": {
                       "StorageStackName": "${InfrastructureStorageStackName}",
                       "InfrastructureGitCommit": "#{src_infra.CommitId}",
@@ -719,7 +774,7 @@ Resources:
                 ActionMode: CHANGE_SET_EXECUTE
                 Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
                 ChangeSetName: "#{production_change_set.ChangeSetName}"
-                RoleArn: !GetAtt CloudFormationIamRole.Arn
+                RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: "#{production_change_set.StackName}"
               RunOrder: 4
             - Name: Capture-Params
@@ -745,7 +800,7 @@ Resources:
       ArtifactStore:
         Location: !Ref ArtifactStore
         Type: S3
-      RoleArn: !GetAtt CdPipelineIamRole.Arn
+      RoleArn: !GetAtt PipelineRole.Arn
       Stages:
         - Name: Source
           Actions:
@@ -774,7 +829,7 @@ Resources:
                 Provider: Lambda
                 Version: "1"
               Configuration:
-                FunctionName: !Ref InfrastructureRepoSourceS3SyncFunction
+                FunctionName: !Ref TemplateCopyFunction
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               Namespace: s3_cpy
@@ -817,7 +872,7 @@ Resources:
   StagingDeltasFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/pipeline-events-handler/
+      CodeUri: src/pipeline-events-listener/
       Description: >-
         Sends a message about stack changes in a CloudFormation change set, and
         also automatically approves the invoking approval action in the
@@ -855,13 +910,15 @@ Resources:
     Properties:
       LogGroupName: !Sub /aws/lambda/${StagingDeltasFunction}
       RetentionInDays: 14
-  StagingDeltasNotificationErrorAlarm:
+  StagingDeltasErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [CD] Staging deltas <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmName: !Sub WARN [CD] Staging approvals <prod> INVOCATIONS ERRORS (${AWS::StackName})
       AlarmDescription: >-
-        The error rate on the diff notification lambda has exceeded 0 in
-        the last minute.
+        The Lambda function that sends messages to Slack with staging deploy
+        deltas is failing, so those messages may not be appearing in Slack.
+        The function also automatically approves staging deploys, so there may
+        be deploys that require manual approval in the pipeline.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -890,7 +947,7 @@ Resources:
   ProductionApprovalsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/pipeline-events-handler/
+      CodeUri: src/pipeline-events-listener/
       Description: >-
         Receives notifications from CodePipeline when approval is required, and
         builds a messages to alert externally
@@ -941,158 +998,11 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
-  # Watches for certain events in EventBridge related to the pipelines in this
-  # stack.
-  CdPipelineEventsTargetFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/pipeline-events-handler/
-      Description: Responds to pipeline execution state change events
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
-      Events:
-        StateChange:
-          Properties:
-            Pattern:
-              detail-type:
-                - CodePipeline Action Execution State Change
-                - CodePipeline Stage Execution State Change
-                - CodePipeline Pipeline Execution State Change
-              resources:
-                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
-                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${EmergencyPipeline}
-              source:
-                - aws.codepipeline
-          Type: EventBridgeRule
-      Handler: events.handler
-      MemorySize: 128
-      Policies:
-        - !Ref CodePipelineStateReadOnlyAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: nodejs16.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CD
-      Timeout: 8
-  CdPipelineEventsTargetLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${CdPipelineEventsTargetFunction}
-      RetentionInDays: 14
-  CdPipelineEventsTargetErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CD] Pipeline events <prod> INVOCATIONS ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The error rate on the pipeline events handler lambda has exceeded
-        0 in the last minute.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref CdPipelineEventsTargetFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 1
-      TreatMissingData: notBreaching
-
-  # Acceptance Test Pipeline Action
-  AcceptanceTestsCodeBuildIamRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action: sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service: codebuild.amazonaws.com
-        Version: "2012-10-17"
-      Policies:
-        # Allow CodeBuild to log to CloudWatch
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Effect: Allow
-                Resource:
-                  # NOTE These need to stay in sync with the CodeBuild Project
-                  # name from below
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests:*
-            Version: "2012-10-17"
-          PolicyName: CodeBuildLogs
-        # CodeBuild sources from CodePipeline artifacts, so it needs access
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - s3:PutObject
-                  - s3:GetObject
-                  - s3:GetObjectVersion
-                Effect: Allow
-                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
-            Version: "2012-10-17"
-          PolicyName: ArtifactStoreBasicAccess
-        - PolicyDocument:
-            Statement:
-              - Action: ssm:GetParameters
-                Effect: Allow
-                Resource: "*" # TODO
-            Version: "2012-10-17"
-          PolicyName: ParameterStorePolicy
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - states:StartExecution
-                  - states:DescribeExecution
-                Effect: Allow
-                Resource: "*" # TODO
-            Version: "2012-10-17"
-          PolicyName: PorterPolicy
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-  AcceptanceTestsCodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Artifacts:
-        Type: CODEPIPELINE
-      Description: Runs acceptance tests for PRX platform
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: !Sub 561178107736.dkr.ecr.${AWS::Region}.amazonaws.com/meta.prx.org:latest
-        Type: LINUX_CONTAINER
-      # If this Name changes, the CodeBuild role policy needs to change too
-      Name: !Sub ${AWS::StackName}-AcceptanceTests
-      ServiceRole: !GetAtt AcceptanceTestsCodeBuildIamRole.Arn
-      Source:
-        BuildSpec: buildspec-pipeline.yml
-        Type: CODEPIPELINE
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-      TimeoutInMinutes: 5
-
   # Pipeline Custom Lambda Actions
-  InfrastructureRepoSourceS3SyncFunction:
+  TemplateCopyFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/infrastructure-s3-sync/
+      CodeUri: src/template-copy/
       Description: Copies Infrastructure repo artifact to S3
       Environment:
         Variables:
@@ -1120,24 +1030,25 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CD
       Timeout: 8
-  InfrastructureRepoSourceS3SyncLogGroup:
+  TemplateCopyLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub /aws/lambda/${InfrastructureRepoSourceS3SyncFunction}
+      LogGroupName: !Sub /aws/lambda/${TemplateCopyFunction}
       RetentionInDays: 14
-  InfrastructureRepoSourceS3SyncErrorAlarm:
+  TemplateCopyErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [CD] Repo S3 sync <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmName: !Sub WARN [CD] Template copy <prod> INVOCATIONS ERRORS (${AWS::StackName})
       AlarmDescription: >-
-        The error rate on the S3 Sync lambda has exceeded 0 in
-        the last minute.
+        The Lambda function that copies CloudFormation templates to S3 is
+        failing. The templates must be copied to S3 to be deployed, so deploys
+        may not be working.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Ref InfrastructureRepoSourceS3SyncFunction
+          Value: !Ref TemplateCopyFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1146,10 +1057,10 @@ Resources:
       Threshold: 1
       TreatMissingData: notBreaching
 
-  ChangeSetCreateFunction:
+  CreateNestedChangeSetFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/change-set-create/
+      CodeUri: src/create-nested-change-set/
       Description: >-
         Creates change sets
       Handler: index.handler
@@ -1160,7 +1071,7 @@ Resources:
         - Statement:
             - Action: iam:PassRole
               Effect: Allow
-              Resource: !GetAtt CloudFormationIamRole.Arn
+              Resource: !GetAtt CloudFormationRole.Arn
               Sid: AllowPassingCfnRole
           Version: "2012-10-17"
         - Statement:
@@ -1177,24 +1088,24 @@ Resources:
         prx:ops:environment: Production
         prx:dev:application: CD
       Timeout: 600 # 10 minutes
-  ChangeSetCreateLogGroup:
+  CreateNestedChangeSetLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      LogGroupName: !Sub /aws/lambda/${ChangeSetCreateFunction}
+      LogGroupName: !Sub /aws/lambda/${CreateNestedChangeSetFunction}
       RetentionInDays: 14
-  ChangeSetCreateNotificationErrorAlarm:
+  CreateNestedChangeSetErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub WARN [CD] Changeset create <prod> INVOCATIONS ERRORS (${AWS::StackName})
+      AlarmName: !Sub WARN [CD] Create change set <prod> INVOCATIONS ERRORS (${AWS::StackName})
       AlarmDescription: >-
-        The error rate on the change set create lambda has exceeded 0 in
-        the last minute.
+        The Lambda function that creates CloudFormation change sets is failing,
+        so deploys are probably stuck
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
-          Value: !Ref ChangeSetCreateFunction
+          Value: !Ref CreateNestedChangeSetFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
@@ -1306,3 +1217,87 @@ Resources:
       Statistic: Sum
       Threshold: 1
       TreatMissingData: notBreaching
+
+  # Acceptance Tests
+  AcceptanceTestsCodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        # Allow CodeBuild to log to CloudWatch
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  # NOTE These need to stay in sync with the CodeBuild Project
+                  # name from below
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests:*
+            Version: "2012-10-17"
+          PolicyName: CodeBuildLogs
+        # CodeBuild sources from CodePipeline artifacts, so it needs access
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Effect: Allow
+                Resource: !Sub arn:aws:s3:::${ArtifactStore}/*
+            Version: "2012-10-17"
+          PolicyName: ArtifactStoreBasicAccess
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource: "*" # TODO
+            Version: "2012-10-17"
+          PolicyName: ParameterStorePolicy
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - states:StartExecution
+                  - states:DescribeExecution
+                Effect: Allow
+                Resource: "*" # TODO
+            Version: "2012-10-17"
+          PolicyName: PorterPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+  AcceptanceTestsCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Runs acceptance tests for PRX platform
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: !Sub 561178107736.dkr.ecr.${AWS::Region}.amazonaws.com/meta.prx.org:latest
+        Type: LINUX_CONTAINER
+      # If this Name changes, the CodeBuild role policy needs to change too
+      Name: !Sub ${AWS::StackName}-AcceptanceTests
+      ServiceRole: !GetAtt AcceptanceTestsCodeBuildRole.Arn
+      Source:
+        BuildSpec: buildspec-pipeline.yml
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+      TimeoutInMinutes: 5

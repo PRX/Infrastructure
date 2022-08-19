@@ -47,7 +47,7 @@ exports.handler = async (event) => {
     console.log(JSON.stringify(event));
 
     // Staging parameters that match these patterns will have their values
-    // copied to the equivalent production paramter. These parameters should
+    // copied to the equivalent production parameter. These parameters should
     // contain identifiers for deployable code artifacts, like Docker image
     // tags, or S3 object keys.
     const patterns = [/\/pkg\/docker-image-tag$/, /\/pkg\/s3-object-key$/];
