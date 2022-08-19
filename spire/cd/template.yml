@@ -117,15 +117,6 @@ Resources:
             Effect: Allow
             Resource: "*"
         Version: "2012-10-17"
-  CloudWatchMetricWriteAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: cloudwatch:PutMetricData
-            Effect: Allow
-            Resource: "*"
-        Version: "2012-10-17"
   SnapshotsBucketWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -134,15 +125,6 @@ Resources:
           - Action: s3:PutObject
             Effect: Allow
             Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureSnapshotsBucket", "/*"]]
-        Version: "2012-10-17"
-  ArtifactBucketReadOnlyAccessPolicy:
-    Type: AWS::IAM::ManagedPolicy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action: s3:GetObject
-            Effect: Allow
-            Resource: !Sub ${ArtifactStore.Arn}/*
         Version: "2012-10-17"
 
   # This role gets passed to CloudFormation, and is used by CloudFormation to
@@ -1118,8 +1100,12 @@ Resources:
       Handler: lambda_function.lambda_handler
       MemorySize: 256
       Policies:
-        - !Ref ArtifactBucketReadOnlyAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
+        - Statement:
+            - Action: s3:GetObject
+              Effect: Allow
+              Resource: !Sub ${ArtifactStore.Arn}/*
+          Version: "2012-10-17"
         - Statement:
             - Action: s3:PutObject
               Effect: Allow
