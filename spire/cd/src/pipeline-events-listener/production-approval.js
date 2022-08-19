@@ -75,6 +75,8 @@ async function buildMessage(approvalNotification) {
     `*Execution ID:* \`${execId}\` ${icon}`,
   ].join('\n');
 
+  const report = await deltas.report(StackName, ChangeSetName);
+
   // The DevOps Slack app handles the button actions from this message, and is
   // designed to rewrite parts of the message, so it expects a specific message
   // payload structure. If this message changes, the reject/approve/annotate/etc
@@ -170,11 +172,17 @@ async function buildMessage(approvalNotification) {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: await deltas.nestedParameterDeltaText(
-                StackName,
-                ChangeSetName,
-              ),
+              text: report.text,
             },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
+              },
+            ],
           },
         ],
       },

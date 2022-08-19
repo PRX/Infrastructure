@@ -46,6 +46,8 @@ exports.handler = async (event) => {
     `*Execution ID:* \`${execId}\` ${icon}`,
   ].join('\n');
 
+  const report = await deltas.report(StackName, ChangeSetName);
+
   await sns
     .publish({
       TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
@@ -81,11 +83,17 @@ exports.handler = async (event) => {
                 type: 'section',
                 text: {
                   type: 'mrkdwn',
-                  text: await deltas.nestedParameterDeltaText(
-                    StackName,
-                    ChangeSetName,
-                  ),
+                  text: report.text,
                 },
+              },
+              {
+                type: 'context',
+                elements: [
+                  {
+                    type: 'mrkdwn',
+                    text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
+                  },
+                ],
               },
             ],
           },

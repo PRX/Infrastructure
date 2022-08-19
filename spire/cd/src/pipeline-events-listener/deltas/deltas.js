@@ -56,7 +56,7 @@ function parameterDeltasList(deltas) {
 }
 
 module.exports = {
-  async nestedParameterDeltaText(stackName, changeSetName) {
+  async report(stackName, changeSetName) {
     let stackFamily = await getStackFamily(stackName);
     const changeSetFamily = await getChangeSetFamily(stackName, changeSetName);
     const changeSetFamilyStackIds = changeSetFamily.map((c) => c.StackId);
@@ -143,18 +143,33 @@ module.exports = {
 
     // Some additional parameters that don't make sense to display in Slack are
     // also filtered out.
-    const allowedDeltas = cleanedDeltas.filter(
-      (d) =>
-        ![
+    const allowedDeltas = cleanedDeltas.filter((d) => {
+      if (
+        [
           'PipelineExecutionNonce',
           'PipelineExecutionId',
           'Nonce',
           'TemplateUrlBase',
           'TemplateUrlPrefix',
-        ].includes(d.parameter),
-    );
+        ].includes(d.parameter)
+      ) {
+        return false;
+      }
+
+      if (
+        d.parameter === 'InfrastructureGitCommit' &&
+        d.stackName.includes('DashboardsStack')
+      ) {
+        return false;
+      }
+    });
 
     console.log(JSON.stringify(allowedDeltas));
-    return parameterDeltasList(allowedDeltas);
+
+    return {
+      text: parameterDeltasList(allowedDeltas),
+      hiddenDeltaCount: cleanedDeltas.length - allowedDeltas.length,
+      rawDeltaCount: deltas.length,
+    };
   },
 };
