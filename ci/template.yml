@@ -40,12 +40,6 @@ Parameters:
     Default: infrastructure-storage
     Description: The name of a previously launched infrastructure storage stack
     Type: String
-  InfrastructureConfigStagingKey:
-    Default: template-config-staging.zip
-    Description: >-
-      The S3 object key for the staging template configuration file archive
-      (.zip), inside the InfrastructureConfigBucket
-    Type: String
   GitHubToken:
     Description: >-
       A GitHub access token with permissions to update statuses, request
@@ -315,86 +309,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref BuildHandlerFunction
-      EvaluationPeriods: 1
-      MetricName: Errors
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 0
-      TreatMissingData: notBreaching
-
-  # TODO Remove
-  StagingConfigHandlerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: src/staging-config-handler/
-      Description: >-
-        Listens for successful CI CodeBuild builds on EventBridge, and updates
-        the staging stack template config JSON file in S3 with new code package
-        identifiers when necessary.
-      Environment:
-        Variables:
-          INFRASTRUCTURE_CONFIG_BUCKET:
-            Fn::ImportValue: !Sub ${InfrastructureStorageStackName}-InfrastructureConfigBucket
-          INFRASTRUCTURE_CONFIG_STAGING_KEY: !Ref InfrastructureConfigStagingKey
-      Events:
-        CodeBuild:
-          Properties:
-            Pattern:
-              detail:
-                build-status:
-                  - SUCCEEDED
-                project-name:
-                  - !Ref CiCodeBuildProject
-              detail-type:
-                - CodeBuild Build State Change
-              source:
-                - aws.codebuild
-          Type: EventBridgeRule
-      Handler: lambda_function.lambda_handler
-      MemorySize: 192
-      Policies:
-        - Statement:
-            - Action:
-                - s3:GetObject
-                - s3:PutObject
-              Effect: Allow
-              Resource: !Join ["", ["arn:aws:s3:::", "Fn::ImportValue": !Sub "${InfrastructureStorageStackName}-InfrastructureConfigBucket", "/", !Ref InfrastructureConfigStagingKey]]
-          Version: "2012-10-17"
-      Runtime: python3.9
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CI
-      Timeout: 10
-  StagingConfigHandlerLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      LogGroupName: !Sub /aws/lambda/${StagingConfigHandlerFunction}
-      RetentionInDays: 5
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CI }
-  StagingConfigHandlerErrorAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub WARN [CI] Staging config <prod> FUNCTION ERRORS (${AWS::StackName})
-      AlarmDescription: >-
-        The Lambda function that updates the CloudFormation template config
-        file for the staging root stack based on CI build artifacts is
-        failing, so some new app versions may not be deployed via CD as
-        expected.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref StagingConfigHandlerFunction
       EvaluationPeriods: 1
       MetricName: Errors
       Namespace: AWS/Lambda
