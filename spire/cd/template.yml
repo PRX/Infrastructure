@@ -836,6 +836,61 @@ Resources:
               RunOrder: 1
         - Name: Production
           Actions:
+            - Name: Create-ChangeSet
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: "1"
+              Configuration:
+                FunctionName: !Ref CreateNestedChangeSetFunction
+                UserParameters: !Sub >-
+                  {
+                    "StackName": "${AWS::StackName}-root-production",
+                    "ChangeSetName": "cs-#{codepipeline.PipelineExecutionId}",
+                    "RoleArn": "${CloudFormationRole.Arn}",
+                    "Parameters": {
+                      "StorageStackName": "${InfrastructureStorageStackName}",
+                      "InfrastructureGitCommit": "#{src_infra.CommitId}",
+                      "Nonce": "#{codepipeline.PipelineExecutionId}",
+                      "TemplateUrlBase": "#{s3_cpy.TemplateUrlBase}",
+                      "EnvironmentType": "Production",
+                      "EnvironmentTypeAbbreviation": "prod",
+                      "SharedAuroraMysqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-mysql-database/endpoint",
+                      "SharedAuroraPostgresqlEndpoint": "/prx/prod/Spire/${AWS::Region}/shared-postgresql-database/endpoint"
+                    }
+                  }
+              Namespace: production_change_set
+              RunOrder: 2
+            - Name: Wait-For-Approval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              Configuration:
+                NotificationArn: !Ref ProductionApprovalsSnsTopic
+                CustomData: !Sub |
+                  {
+                    "PipelineExecutionId": "#{codepipeline.PipelineExecutionId}",
+                    "StackName": "#{production_change_set.StackName}",
+                    "ChangeSetName": "#{production_change_set.ChangeSetName}",
+                    "AccountId": "${AWS::AccountId}"
+                  }
+              RunOrder: 3
+            - Name: Deploy-ChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_NAMED_IAM
+                ChangeSetName: "#{production_change_set.ChangeSetName}"
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: "#{production_change_set.StackName}"
+              RunOrder: 4
             - Name: Capture-Params
               ActionTypeId:
                 Category: Invoke
@@ -845,7 +900,7 @@ Resources:
               Configuration:
                 FunctionName: !Ref ParameterCaptureFunction
                 # The name of the root stack used to capture parameters
-                UserParameters: "tktktk"
+                UserParameters: "#{production_change_set.StackName}"
               RunOrder: 5
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
