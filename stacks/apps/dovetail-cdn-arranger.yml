@@ -23,7 +23,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
-  LambdaLayerS3Bucket: { Type: String }
+  FfmpegLambdaLayerS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
   CloudFrontOai: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterHostname: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterToken: { Type: AWS::SSM::Parameter::Value<String> }
@@ -75,16 +75,17 @@ Resources:
             Sid: Grant read access to a CloudFront Origin Identity
         Version: "2012-10-17"
 
-  # TODO The ARN for this should be a root stack parameter, and we should
-  # create it elsewhere before launching the root stack
   FfmpegBinaryLayer:
     Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       CompatibleRuntimes:
         - nodejs14.x
+        - nodejs16.x
       Content:
-        S3Bucket: !Ref LambdaLayerS3Bucket
-        S3Key: lambda-layers/ffmpeg-4.3.1.zip
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref FfmpegLambdaLayerS3ObjectKey
       Description: FFmpeg binaries for Dovetail CDN Arranger
       LicenseInfo: MIT
 
@@ -165,6 +166,8 @@ Resources:
       Timeout: 900
   ArrangerFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${ArrangerFunction}
       RetentionInDays: 14
