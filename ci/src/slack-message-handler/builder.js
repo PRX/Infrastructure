@@ -44,7 +44,9 @@ module.exports = {
     // Built PRX/Infrastructure main branch with commit 674811e
     // Building PRX/Infrastructure #582 with commit 26fad6b
     const line1 = [
-      `<${codebuildUrl(event)}|${verb[event.detail['build-status']]}>`,
+      `<${codebuildUrl(event)}|${process.env.AWS_REGION} » ${
+        verb[event.detail['build-status']]
+      }>`,
       ownerAndRepo,
       pr
         ? `<https://github.com/${ownerAndRepo}/pull/${pr}|#${pr}>`
