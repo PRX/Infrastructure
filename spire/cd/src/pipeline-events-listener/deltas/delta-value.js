@@ -5,10 +5,10 @@
  * value.
  *
  * Some values are Docker image tags like:
- * 111111111111.dkr.ecr.us-east-1.amazonaws.com/github/prx/my-repo:f4a8a88f7adafa4d2f268573672374af025a314
+ * 111111111111.dkr.ecr.us-east-1.amazonaws.com/github/prx/my-repo:5dcaf25b333f251be26dc468d8b82887b6370534
  *
  * Some values are S3 object names that contain GitHub info:
- * GitHub/PRX/my-repo/f4a8a88f7adafa4d2f268573672374af025a314.zip
+ * GitHub/PRX/my-repo/5dcaf25b333f251be26dc468d8b82887b6370534.zip
  * @param {AWS.CloudFormation.ParameterKey} key
  * @param {AWS.CloudFormation.ParameterValue} value
  * @param {Boolean} noLinks
@@ -16,15 +16,11 @@
  */
 module.exports = function (key, value, noLinks = false) {
   if (value === '') {
-    return '❔';
+    return '(Empty string)';
   }
 
   if (!value) {
     return '❌';
-  }
-
-  if (noLinks) {
-    return `\`${value}\``;
   }
 
   // The InfrastructureGitCommit parameter value is a just a commit hash,
@@ -34,26 +30,17 @@ module.exports = function (key, value, noLinks = false) {
     return `\`<${url}|${value.slice(0, 7)}>\``;
   }
 
-  // Look for anything containing "dkr.ecr", which is an ECR Docker image tag.
-  // ECR image names are based on the GitHub repository name where the code
-  // came from, so they can be translated back to a GitHub URL.
-  if (/dkr\.ecr/.test(value)) {
-    const repo = value.match(/github\/([^:]+):/)[1];
-    const commit = value.match(/:([0-9a-f]{40})$/)[1];
+  // Check if the value looks anything like:
+  // github/org-name/repo-name/1234567890123456789012345678901234567890
+  const gitHubMatch = value.match(/github\/(.*\/.*)[:\/]([0-9a-f]{40})/i);
+  if (gitHubMatch) {
+    const repo = gitHubMatch[1];
+    const commit = gitHubMatch[2];
 
     const url = `https://github.com/${repo}/commit/${commit}`;
-    return `\`<${url}|${commit.slice(0, 7)}>\``;
-  }
+    const text = commit.slice(0, 7);
 
-  // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`, which is an S3 object.
-  // S3 object keys are based on the GitHub repository name where the code
-  // came from, so they can be translated back to a GitHub URL.
-  if (/GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(value)) {
-    const repo = value.match(/GitHub\/([^\/]+\/[^\/]+)/)[1];
-    const commit = value.match(/\/([0-9a-f]{40})/)[1];
-
-    const url = `https://github.com/${repo}/commit/${commit}`;
-    return `\`<${url}|${commit.slice(0, 7)}>\``;
+    return noLinks ? text : `\`<${url}|${text}>\``;
   }
 
   return `\`${value}\``;

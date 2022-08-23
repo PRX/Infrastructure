@@ -32,38 +32,26 @@ module.exports = function (parameterDelta, noLinks = false) {
     return `<${url}|➡>`;
   }
 
-  // Look for anything containing "dkr.ecr", which is an ECR Docker image tag
-  // TODO This doesn't check if the repo in before and after changed
-  if (
-    beforeValue &&
-    afterValue &&
-    /dkr\.ecr/.test(beforeValue) &&
-    /dkr\.ecr/.test(afterValue)
-  ) {
-    const repo = afterValue.match(/github\/([^:]+):/)[1];
+  if (beforeValue && afterValue) {
+    const beforeGitHubMatch = beforeValue.match(
+      /github\/(.*\/.*)[:\/]([0-9a-f]{40})/i,
+    );
+    const afterGitHubMatch = afterValue.match(
+      /github\/(.*\/.*)[:\/]([0-9a-f]{40})/i,
+    );
 
-    const oldCommit = beforeValue.match(/:([0-9a-f]{40})$/)[1];
-    const newCommit = afterValue.match(/:([0-9a-f]{40})$/)[1];
+    if (beforeGitHubMatch && afterGitHubMatch) {
+      const beforeRepo = beforeGitHubMatch[1];
+      const afterRepo = afterGitHubMatch[1];
 
-    const url = `https://github.com/${repo}/compare/${oldCommit}...${newCommit}`;
-    return `<${url}|➡>`;
-  }
+      if (beforeRepo === afterRepo) {
+        const beforeCommit = beforeGitHubMatch[2];
+        const afterCommit = afterGitHubMatch[2];
 
-  // Look for `GitHub/[CHARS]/[CHARS]/[HEX HASH]`
-  // TODO This doesn't check if the repo in before and after changed
-  if (
-    beforeValue &&
-    afterValue &&
-    /GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(beforeValue) &&
-    /GitHub\/[^\/]+\/[^\/]+\/[a-f0-9]{40}/.test(afterValue)
-  ) {
-    const repo = afterValue.match(/GitHub\/([^\/]+\/[^\/]+)/)[1];
-
-    const oldCommit = beforeValue.match(/\/([0-9a-f]{40})/)[1];
-    const newCommit = afterValue.match(/\/([0-9a-f]{40})/)[1];
-
-    const url = `https://github.com/${repo}/compare/${oldCommit}...${newCommit}`;
-    return `<${url}|➡>`;
+        const url = `https://github.com/${afterRepo}/compare/${beforeCommit}...${afterCommit}`;
+        return `<${url}|➡>`;
+      }
+    }
   }
 
   return '➡';
