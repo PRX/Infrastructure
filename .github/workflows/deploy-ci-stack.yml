@@ -16,6 +16,13 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    strategy:
+      matrix:
+        include:
+          - region: us-east-1
+            stack: infrastructure-ci
+          - region: us-west-2
+            stack: infrastructure-ci
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -29,6 +36,5 @@ jobs:
       - name: Deploy CloudFormation stack
         working-directory: ci
         run: |
-          bucket_name=$(aws cloudformation describe-stacks --region us-east-1 --stack-name aws-sam-cli-managed-default | jq -r ".Stacks[0].Outputs[0].OutputValue")
-          stack_name="infrastructure-ci"
-          sam deploy --region us-east-1 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --s3-bucket "$bucket_name" --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
+          bucket_name=$(aws cloudformation describe-stacks --region ${{ matrix.region }} --stack-name aws-sam-cli-managed-default | jq -r ".Stacks[0].Outputs[0].OutputValue")
+          sam deploy --region ${{ matrix.region }} --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "${{ matrix.stack }}" --s3-bucket "$bucket_name" --s3-prefix "${{ matrix.stack }}" --capabilities CAPABILITY_IAM
