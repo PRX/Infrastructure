@@ -1,6 +1,10 @@
 const AWS = require('aws-sdk');
 
-const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
+const ssm = new AWS.SSM({
+  apiVersion: '2014-11-06',
+  maxRetries: 6,
+  retryDelayOptions: { base: 1100 },
+});
 const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
