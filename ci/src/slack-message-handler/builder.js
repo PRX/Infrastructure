@@ -1,4 +1,5 @@
 const github = require('./github');
+const regions = require('./regions');
 
 function codebuildUrl(event) {
   const region = event.region;
@@ -43,8 +44,9 @@ module.exports = {
     // Building PRX/Infrastructure main branch with commit be8e83b
     // Built PRX/Infrastructure main branch with commit 674811e
     // Building PRX/Infrastructure #582 with commit 26fad6b
+    const regionNickname = regions(process.env.AWS_REGION);
     const line1 = [
-      `<${codebuildUrl(event)}|${process.env.AWS_REGION} » ${
+      `${regionNickname} » <${codebuildUrl(event)}|${
         verb[event.detail['build-status']]
       }>`,
       ownerAndRepo,
