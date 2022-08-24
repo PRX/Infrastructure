@@ -126,6 +126,9 @@ Resources:
             Sid: AllowStackUpdates
         Version: "2012-10-17"
 
+  # TODO There should be multiple roles, for different cases, like repos with
+  # workflows that just need to run tests & builds, and those that actually
+  # need to deploy things
   Role:
     Type: AWS::IAM::Role
     Properties:
@@ -135,7 +138,9 @@ Resources:
             Condition:
               StringLike:
                 # Allows only actions in this repository to assume the role
-                token.actions.githubusercontent.com:sub: !Sub repo:${FullRepoName}:*
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${FullRepoName}:*
+                  - repo:PRX/Porter:*
             Effect: Allow
             Principal:
               Federated: !Ref GitHubOidc
