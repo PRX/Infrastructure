@@ -52,6 +52,7 @@ Parameters:
   FeederAuthProxyHostname: { Type: String }
   FeederAuthProxyInternalHostname: { Type: String }
   PublicFeedsHostname: { Type: String }
+  HoneycombApiKey: { Type: AWS::SSM::Parameter::Value<String>, Default: /prx/global/Spire/honeycomb-api-key }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -500,6 +501,12 @@ Resources:
               Value: !If [IsProduction, 10, 5]
             - Name: FEEDER_HOST
               Value: !Ref FeederHostname
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: https://api.honeycomb.io
+            - Name: OTEL_EXPORTER_OTLP_HEADERS
+              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
+            - Name: OTEL_SERVICE_NAME
+              Value: !If [IsProduction, Feeder Production, Feeder Staging]
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
@@ -643,6 +650,12 @@ Resources:
               Value: !If [IsProduction, 10, 5]
             - Name: FEEDER_HOST
               Value: !Ref FeederHostname
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: https://api.honeycomb.io
+            - Name: OTEL_EXPORTER_OTLP_HEADERS
+              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
+            - Name: OTEL_SERVICE_NAME
+              Value: !If [IsProduction, Feeder Production, Feeder Staging]
           Essential: true
           Image: !Ref EcrImageTag
           LinuxParameters:
