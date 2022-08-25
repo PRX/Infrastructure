@@ -4,29 +4,35 @@ name: Deploy prx.mx DNS
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - dns/prx.mx-hosted_zone.yml
+    branches: [main]
+    paths: [dns/prx.mx-hosted_zone.yml]
 
 concurrency:
   group: ${{ github.workflow }}
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-DeployPrxMxStack
+
       - name: Deploy CloudFormation stack
         working-directory: dns
         run: |
-          aws cloudformation deploy --region us-east-1 --stack-name hostedzone-prx-mx --template-file prx.mx-hosted_zone.yml --no-fail-on-empty-changeset
+          aws cloudformation deploy \
+            --no-fail-on-empty-changeset \
+            --region us-east-1 \
+            --stack-name hostedzone-prx-mx \
+            --template-file prx.mx-hosted_zone.yml

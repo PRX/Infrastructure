@@ -2,17 +2,16 @@ name: Start Spire CD pipeline execution
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - stacks/**
+    branches: [main]
+    paths: [stacks/**]
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
     strategy:
       matrix:
         include:
@@ -27,6 +26,7 @@ jobs:
           aws-region: us-east-1
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-StartCdPipelineExecution
+
       - name: Start pipeline execution
         run: |
           aws codepipeline start-pipeline-execution --region ${{ matrix.region }} --name ${{ matrix.stack }}
