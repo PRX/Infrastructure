@@ -1,4 +1,5 @@
 # stacks/apps/radiotopia-tower.yml
+# 100A
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -17,6 +18,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  ParseXmlLayerS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
 
 Resources:
   # API
@@ -48,6 +50,20 @@ Resources:
         prx:dev:family: Radiotopia
         prx:dev:application: Tower
 
+  RgroveParseXmlLayer:
+    Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CompatibleRuntimes:
+        - nodejs12.x
+        - nodejs14.x
+        - nodejs16.x
+      Content:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref ParseXmlLayerS3ObjectKey
+      LicenseInfo: ISC
+
   TowerEndpointFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -64,7 +80,7 @@ Resources:
           Type: HttpApi
       Handler: index.handler
       Layers:
-        - !Sub arn:aws:lambda:${AWS::Region}:561178107736:layer:npm-rgrove-parse-xml:1 # TODO Multiregion
+        - !Ref RgroveParseXmlLayer
       MemorySize: 512
       Runtime: nodejs14.x
       Tags:
