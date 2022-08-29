@@ -21,6 +21,7 @@ Parameters:
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   EnvironmentTypeLowercase: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -40,6 +41,7 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
 
 Resources:
   HostHeaderListenerRule:
@@ -124,7 +126,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 2, 1]
+      DesiredCount: !If [IsPrimaryRegion, !If [IsProduction, 2, 1], 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
