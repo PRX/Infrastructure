@@ -67,6 +67,7 @@ Parameters:
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   SharedGlueDatabaseName: { Type: String }
+  LatencyGroupDomain: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -386,6 +387,30 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+
+  LatencyGroupDomainRecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: !Sub >-
+        Latency record for the shared ${EnvironmentType} ALB
+      HostedZoneName: prx.tech.
+      RecordSets:
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !Ref LatencyGroupDomain
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: AAAA
+        - AliasTarget:
+            DNSName: !GetAtt Alb.DNSName
+            EvaluateTargetHealth: true
+            HostedZoneId: !GetAtt Alb.CanonicalHostedZoneID
+          Name: !Ref LatencyGroupDomain
+          Region: !Ref AWS::Region
+          SetIdentifier: !Ref AWS::StackName
+          Type: A
 
 Outputs:
   AlbArn:
