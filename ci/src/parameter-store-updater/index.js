@@ -30,7 +30,7 @@ async function updateSsmParameter(parameterName, parameterValue) {
         Message: JSON.stringify({
           username: 'AWS CodeBuild',
           icon_emoji: ':ops-codebuild:',
-          channel: '#ops-debug',
+          channel: 'G2QHC11SM', // #ops-debug
           text: `[SSM] Setting: ${parameterName} = ${parameterValue}`,
         }),
       })

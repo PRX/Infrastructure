@@ -37,7 +37,7 @@ exports.handler = async (event) => {
     .publish({
       TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
       Message: JSON.stringify({
-        channel: '#ops-builds',
+        channel: 'G5C36JDUY', // #ops-build
         username: 'AWS CodeBuild',
         icon_emoji: ':ops-codebuild:',
         attachments,

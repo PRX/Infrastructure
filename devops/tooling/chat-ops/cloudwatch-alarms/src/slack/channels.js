@@ -9,19 +9,19 @@ module.exports = {
     const name = event.detail.alarmName;
 
     if (name.startsWith('FATAL')) {
-      return '#ops-fatal';
+      return 'G2QH13X62'; // #ops-fatal
     } else if (name.startsWith('ERROR')) {
-      return '#ops-error';
+      return 'G2QH6NMEH'; // #ops-error
     } else if (name.startsWith('WARN')) {
-      return '#ops-warn';
+      return 'G2QHC2N7K'; // #ops-warn
     } else if (name.startsWith('INFO')) {
-      return '#ops-info';
+      return 'G2QHBL6UX'; // #ops-info
     } else if (name.startsWith('CRITICAL')) {
-      return '#ops-fatal';
+      return 'G2QH13X62'; // #ops-fatal
     } else if (name.startsWith('MAJOR')) {
-      return '#ops-error';
+      return 'G2QH6NMEH'; // #ops-error
     } else if (name.startsWith('MINOR')) {
-      return '#ops-warn';
+      return 'G2QHC2N7K'; // #ops-warn
     }
 
     return '#sandbox2';

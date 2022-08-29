@@ -250,7 +250,7 @@ exports.handler = async (event) => {
       Message: JSON.stringify({
         username: 'Amazon CloudWatch Alarms',
         icon_emoji: ':ops-cloudwatch-alarm:',
-        channel: '#ops-error',
+        channel: 'G2QH6NMEH', // #ops-error
         attachments: [
           {
             color: '#a30200',

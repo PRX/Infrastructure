@@ -1,5 +1,5 @@
-const SLACK_DEBUG_CHANNEL = '#ops-debug';
-const SLACK_INFO_CHANNEL = '#ops-info';
+const SLACK_DEBUG_CHANNEL = 'G2QHC11SM'; // #ops-debug
+const SLACK_INFO_CHANNEL = 'G2QHBL6UX'; // #ops-info
 const SLACK_ICON = ':ops-cloudformation:';
 const SLACK_USERNAME = 'AWS CloudFormation';
 

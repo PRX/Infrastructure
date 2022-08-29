@@ -261,7 +261,7 @@ def lambda_handler(event, context):
         TopicArn=os.environ["SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN"],
         Message=json.dumps(
             {
-                "channel": "#ops-billing",
+                "channel": "G9MGS7W8N",  # ops-billing
                 "username": "AWS Cost Explorer",
                 "icon_emoji": ":ops-costexplorer:",
                 "blocks": [
