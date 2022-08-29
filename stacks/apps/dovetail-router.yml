@@ -1,4 +1,5 @@
 # stacks/apps/dovetail-router.yml
+# 300A
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -71,6 +72,7 @@ Parameters:
   EcsClusterName: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
@@ -94,6 +96,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
 
 Resources:
   Constants:
@@ -668,7 +671,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 8, 2]
+      DesiredCount: !If [IsPrimaryRegion, !If [IsProduction, 8, 2], 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName

@@ -19,6 +19,7 @@ Parameters:
   EcsClusterArn: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
@@ -40,6 +41,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
 
 Resources:
   HostHeaderListenerRule:
@@ -125,7 +127,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: 2
+      DesiredCount: !If [IsPrimaryRegion, 2, 0]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
