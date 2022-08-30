@@ -1,4 +1,5 @@
 # stacks/apps/dovetail-traffic.yml
+# 100A
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -19,6 +20,7 @@ Parameters:
   ######
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
@@ -26,9 +28,14 @@ Parameters:
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
 
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+
 Resources:
   TrafficSqsQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       MessageRetentionPeriod: 7200
       Tags:
@@ -65,7 +72,7 @@ Resources:
         ScheduleTrigger:
           Properties:
             Schedule: !Sub rate(${kScheduleIntervalMinutes} ${kScheduleIntervalLabel})
-            Enabled: true
+            Enabled: !If [IsPrimaryRegion, true, false]
           Type: Schedule
       Handler: index.handler
       MemorySize: 256
@@ -89,6 +96,8 @@ Resources:
       Timeout: 60
   TrafficFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${TrafficFunction}
       RetentionInDays: 14
