@@ -16,6 +16,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  BigQueryClientConfig: { Type: AWS::SSM::Parameter::Value<String> }
   PorterJobExecutionSnsTopicArn: { Type: String }
 
 Conditions:
@@ -37,18 +38,11 @@ Resources:
         Variables:
           GCP_EXPORT_BUCKET: !If [IsProduction, prx-metrics-export-prod, prx-metrics-export-stag]
           BIGQUERY_DATASET: !If [IsProduction, production, staging]
-          # TODO Update with modern naming
-          GCP_CLIENT_CONFIG_PARAMETER_NAME: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/BQ_CREDENTIALS
+          BIGQUERY_CLIENT_CONFIG: !Ref BigQueryClientConfig
           PORTER_SNS_TOPIC: !Ref PorterJobExecutionSnsTopicArn
       Handler: src/index.handler
       MemorySize: 128
       Policies:
-        - Statement:
-            - Action: ssm:Get*
-              Effect: Allow
-              # TODO Update with more modern parameter naming
-              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/dovetail-metrics-export/*
-              Sid: AllowParameterReadOnly
         - Statement:
             - Action: sns:Publish
               Effect: Allow
@@ -67,6 +61,8 @@ Resources:
       Timeout: 180
   ExportFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${ExportFunction}
       RetentionInDays: 14
