@@ -36,18 +36,23 @@ push_to_ecr() {
             fi
             set -e
 
-            # Construct the image name with a tag
-            ecr_image_name="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/${safe_ecr_repo_name}:${PRX_COMMIT}"
+            image_tag="${PRX_COMMIT}"
+            image_name="${safe_ecr_repo_name}"
+            tagged_image_name="${image_name}:${image_tag}"
+
+            ecr_domain="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+
+            full_image_uri="${ecr_domain}/${tagged_image_name}"
 
             # Export a variable whose name is the LABEL from the Dockerfile,
             # and whose value is the full image name with tag
             # e.g., if there's a LABEL org.prx.spire.publish.docker="WEB_SERVER"
             # this would set WEB_SERVER=1234.dkr.ecr.us-eas-1.amazonaws.com...
-            declare -gx "$label"="$ecr_image_name"
+            declare -gx "$label"="$tagged_image_name"
 
-            echo "> Pushing image $image_id to ECR $ecr_image_name"
-            docker tag $image_id $ecr_image_name
-            docker push $ecr_image_name
+            echo "> Pushing image $image_id to ECR $full_image_uri"
+            docker tag $image_id $full_image_uri
+            docker push $full_image_uri
             echo "< Finished publishing Docker image"
         done
     fi
