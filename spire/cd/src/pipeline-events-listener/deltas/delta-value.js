@@ -40,7 +40,7 @@ module.exports = function (key, value, noLinks = false) {
     const url = `https://github.com/${repo}/commit/${commit}`;
     const text = commit.slice(0, 7);
 
-    return noLinks ? text : `\`<${url}|${text}>\``;
+    return noLinks ? `\`${text}\`` : `\`<${url}|${text}>\``;
   }
 
   return `\`${value}\``;
