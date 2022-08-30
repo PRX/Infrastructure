@@ -15,7 +15,7 @@ function parameterDeltasList(deltas) {
 
   function listItem(delta, noLinks = false) {
     const oldValue = deltaValue(delta.parameter, delta.stackValue, noLinks);
-    const arrow = deltaArrow(delta);
+    const arrow = deltaArrow(delta, noLinks);
     const newValue = deltaValue(delta.parameter, delta.changeSetValue, noLinks);
 
     let label;
