@@ -25,7 +25,7 @@ Resources:
       PolicyDocument:
         Statement:
           - Action:
-              - apigateway:GET
+              - apigateway:Get*
               - cloudformation:Describe*
               - cloudformation:Get*
               - cloudformation:List*
@@ -68,6 +68,21 @@ Resources:
           - Action:
               # Allows GitHub actions to start execution of any CodePipeline
               - codepipeline:StartPipelineExecution
+
+              # Allows GitHub actions to send emails via SES
+              - ses:SendEmail
+
+              # Allows GitHub actions to push Docker images to ECR
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+
+              # Allows GitHub actions to create CloudFormation change sets
+              - cloudformation:CreateChangeSet
+
+              # Allows GitHub actions to start Step Functions executions
+              # TODO This is for Porter acceptance tests, which probably should
+              # be done with a different role
+              - states:StartExecution
             Effect: Allow
             Resource: "*"
             Sid: AllowGlobalAccess
@@ -77,27 +92,6 @@ Resources:
             Effect: Allow
             Resource: arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket*/*
             Sid: AllowGlobalSamCliS3Access
-          - Action:
-              # Allows GitHub actions to send emails via SES
-              - ses:SendEmail
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalSesSend
-          - Action:
-              # Allows GitHub actions to push Docker images to ECR
-              - ecr:PutImage
-              - ecr:UploadLayerPart
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalEcrPush
-          - Action:
-              # Allows GitHub actions to start Step Functions executions
-              # TODO This is for Porter acceptance tests, which probably should
-              # be done with a different role
-              - states:StartExecution
-            Effect: Allow
-            Resource: "*"
-            Sid: AllowGlobalStepFunctionStart
         Version: "2012-10-17"
 
   # Allows GitHub actions to interact directly with certain CloudFormation
@@ -113,7 +107,6 @@ Resources:
             Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
             Sid: AllowServerlessTransformFullAccess
           - Action:
-              - cloudformation:CreateChangeSet
               - cloudformation:DeleteChangeSet
               - cloudformation:ExecuteChangeSet
               - cloudformation:UpdateStack
