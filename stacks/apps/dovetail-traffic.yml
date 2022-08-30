@@ -51,6 +51,7 @@ Resources:
 
   TrafficFunction:
     Type: AWS::Serverless::Function
+    Condition: IsPrimaryRegion
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
@@ -70,13 +71,10 @@ Resources:
             Enabled: true
           Type: SQS
         ScheduleTrigger:
-          Fn::If:
-            - IsPrimaryRegion
-            - Properties:
-                Schedule: !Sub rate(${kScheduleIntervalMinutes} ${kScheduleIntervalLabel})
-                Enabled: !If [IsPrimaryRegion, true, false]
-              Type: Schedule
-            - !Ref AWS::NoValue
+          Properties:
+            Schedule: !Sub rate(${kScheduleIntervalMinutes} ${kScheduleIntervalLabel})
+            Enabled: true
+          Type: Schedule
       Handler: index.handler
       MemorySize: 256
       Runtime: nodejs14.x
@@ -99,6 +97,7 @@ Resources:
       Timeout: 60
   TrafficFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: IsPrimaryRegion
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -106,6 +105,7 @@ Resources:
       RetentionInDays: 14
   TrafficFunctionLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
+    Condition: IsPrimaryRegion
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
       LogGroupName: !Ref TrafficFunctionLogGroup
@@ -120,6 +120,7 @@ Resources:
         - { Key: prx:dev:application, Value: Traffic }
   TrafficFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: IsPrimaryRegion
     Properties:
       AlarmName: !Sub WARN [Dovetail-Traffic] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
@@ -138,6 +139,7 @@ Resources:
       TreatMissingData: notBreaching
   TrafficFunctionElevatedErrorAlarmTags:
     Type: Custom::CloudWatchAlarmTags
+    Condition: IsPrimaryRegion
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt TrafficFunctionElevatedErrorAlarm.Arn
