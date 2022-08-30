@@ -70,10 +70,13 @@ Resources:
             Enabled: true
           Type: SQS
         ScheduleTrigger:
-          Properties:
-            Schedule: !Sub rate(${kScheduleIntervalMinutes} ${kScheduleIntervalLabel})
-            Enabled: !If [IsPrimaryRegion, true, false]
-          Type: Schedule
+          Fn::If:
+            - IsPrimaryRegion
+            - Properties:
+                Schedule: !Sub rate(${kScheduleIntervalMinutes} ${kScheduleIntervalLabel})
+                Enabled: !If [IsPrimaryRegion, true, false]
+              Type: Schedule
+            - !Ref AWS::NoValue
       Handler: index.handler
       MemorySize: 256
       Runtime: nodejs14.x
