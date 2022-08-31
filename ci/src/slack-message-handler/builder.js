@@ -84,7 +84,7 @@ module.exports = {
           const imageName = allEnvVars[imageEnvarName];
 
           if (imageName) {
-            const region = imageName.match(/dkr\.ecr\.(.*)\.amazonaws\.com/)[1];
+            const region = process.env.AWS_REGION;
             const accountId = imageName.match(/^([0-9]+)\./)[1];
             const repoName = imageName.match(/\/([^:]+):/)[1];
             const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
