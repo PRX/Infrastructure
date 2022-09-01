@@ -88,6 +88,10 @@ Resources:
         prx:dev:application: The Count
   ApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
+    # To prevent a timing issue, add an explicit dependency on the stage that
+    # the AWS::Serverless::HttpApi will create, which has a name of:
+    # <Logical ID of Serverless::HttpApi>ApiGatewayDefaultStage
+    DependsOn: HttpApiApiGatewayDefaultStage
     Properties:
       ApiId: !Ref HttpApi
       DomainName: !Ref DomainName
@@ -169,6 +173,8 @@ Resources:
         - { Key: prx:dev:application, Value: The Count }
   ActionFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${ActionFunction}
       RetentionInDays: 14
@@ -188,6 +194,8 @@ Resources:
 
   LogsFileSystem:
     Type: AWS::EFS::FileSystem
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       BackupPolicy:
         Status: DISABLED
@@ -375,6 +383,8 @@ Resources:
           - !Ref VpcPublicSubnet3Id
   StreamToFileFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${StreamToFileFunction}
       RetentionInDays: 14

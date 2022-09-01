@@ -76,6 +76,8 @@ Resources:
 
   DefaultJobQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -96,6 +98,8 @@ Resources:
       VisibilityTimeout: 3600 # 1 hour
   DefaultJobDeadletterQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -150,6 +154,8 @@ Resources:
 
   FixerCallbackQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -170,6 +176,8 @@ Resources:
       VisibilityTimeout: 3600 # 1 hour
   FixerCallbackDeadletterQueue:
     Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DelaySeconds: 0
       MessageRetentionPeriod: 604800 # 7 days
@@ -425,6 +433,8 @@ Resources:
       TaskDefinition: !Ref WebTaskDefinition
   WebTaskLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       RetentionInDays: 14
   WebTaskLogGroupTags:
@@ -574,6 +584,8 @@ Resources:
       TaskDefinition: !Ref WorkerTaskDefinition
   WorkerTaskLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       RetentionInDays: 14
   WorkerTaskLogGroupTags:
@@ -791,6 +803,8 @@ Resources:
       Timeout: 30
   AuthProxyHttpLambdaLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${AuthProxyHttpLambdaFunction}
       RetentionInDays: 14
@@ -880,6 +894,10 @@ Resources:
         prx:dev:application: Feeder
   ExternalApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
+    # To prevent a timing issue, add an explicit dependency on the stage that
+    # the AWS::Serverless::HttpApi will create, which has a name of:
+    # <Logical ID of Serverless::HttpApi>ApiGatewayDefaultStage
+    DependsOn: AuthProxyHttpApiApiGatewayDefaultStage
     Properties:
       ApiId: !Ref AuthProxyHttpApi
       DomainName: !Ref ExternalDomainName

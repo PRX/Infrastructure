@@ -175,6 +175,8 @@ Resources:
 
   SearchEndpointFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${SearchEndpointFunction}
       RetentionInDays: 14
@@ -215,6 +217,10 @@ Resources:
         prx:dev:application: Search
   ExternalApiMapping:
     Type: AWS::ApiGatewayV2::ApiMapping
+    # To prevent a timing issue, add an explicit dependency on the stage that
+    # the AWS::Serverless::HttpApi will create, which has a name of:
+    # <Logical ID of Serverless::HttpApi>ApiGatewayDefaultStage
+    DependsOn: HttpApiApiGatewayDefaultStage
     Properties:
       ApiId: !Ref HttpApi
       DomainName: !Ref ExternalDomainName
