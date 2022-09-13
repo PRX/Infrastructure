@@ -20,16 +20,12 @@ Parameters:
   ######
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
-  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
-
-Conditions:
-  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
 
 Resources:
   TrafficSqsQueue:
@@ -51,7 +47,6 @@ Resources:
 
   TrafficFunction:
     Type: AWS::Serverless::Function
-    Condition: IsPrimaryRegion
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
@@ -97,7 +92,6 @@ Resources:
       Timeout: 60
   TrafficFunctionLogGroup:
     Type: AWS::Logs::LogGroup
-    Condition: IsPrimaryRegion
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -105,7 +99,6 @@ Resources:
       RetentionInDays: 14
   TrafficFunctionLogGroupTags:
     Type: Custom::CloudWatchLogGroupTags
-    Condition: IsPrimaryRegion
     Properties:
       ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
       LogGroupName: !Ref TrafficFunctionLogGroup
@@ -120,7 +113,6 @@ Resources:
         - { Key: prx:dev:application, Value: Traffic }
   TrafficFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsPrimaryRegion
     Properties:
       AlarmName: !Sub WARN [Dovetail-Traffic] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
@@ -139,7 +131,6 @@ Resources:
       TreatMissingData: notBreaching
   TrafficFunctionElevatedErrorAlarmTags:
     Type: Custom::CloudWatchAlarmTags
-    Condition: IsPrimaryRegion
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt TrafficFunctionElevatedErrorAlarm.Arn
