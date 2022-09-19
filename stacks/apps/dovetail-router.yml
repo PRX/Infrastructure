@@ -98,6 +98,7 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsUsEast1: !Equals [!Ref "AWS::Region", us-east-1]
 
 Resources:
   Constants:
@@ -506,7 +507,9 @@ Resources:
       MetricName: TargetResponseTime
       Namespace: AWS/ApplicationELB
       Period: 300
-      Threshold: 0.5 # TODO Bring back to ~.2 once things are optimzed
+      # TODO: Bring back to ~.2 once things are optimized
+      # TODO: 3rd party VAST requests are much slower outside us-east-1
+      Threshold: !If [IsUsEast1, 0.5, 2.5]
       TreatMissingData: notBreaching
       Unit: Seconds
   AlbResponseTimeP95AlarmTags:
