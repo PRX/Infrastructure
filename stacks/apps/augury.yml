@@ -82,6 +82,7 @@ Resources:
 
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: IsPrimaryRegion
     Properties:
       GroupDescription: !Sub Augury ${EnvironmentType} Redis security group
       SecurityGroupIngress:
@@ -102,6 +103,7 @@ Resources:
       VpcId: !Ref VpcId
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
+    Condition: IsPrimaryRegion
     Properties:
       Description: !Sub Augury ${EnvironmentType} Redis subnet group
       SubnetIds:
@@ -119,6 +121,7 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
   RedisCluster:
     Type: AWS::ElastiCache::CacheCluster
+    Condition: IsPrimaryRegion
     Properties:
       AutoMinorVersionUpgrade: false
       CacheNodeType: !If [IsProduction, cache.t4g.small, cache.t4g.micro]
@@ -356,9 +359,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
             - Name: REDIS_PORT
-              Value: !GetAtt RedisCluster.RedisEndpoint.Port
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
             - Name: UPLOAD_ADFILE_SECRET_ACCESS_KEY
               Value: !GetAtt S3SigningAccessKey.SecretAccessKey
             - Name: UPLOAD_ADFILE_ACCESS_KEY_ID
@@ -492,9 +495,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
             - Name: REDIS_PORT
-              Value: !GetAtt RedisCluster.RedisEndpoint.Port
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
             - Name: RAILS_SERVE_STATIC_FILES
               Value: "true"
             - Name: POSTGRES_POOL_SIZE
@@ -827,9 +830,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !GetAtt RedisCluster.RedisEndpoint.Address
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
             - Name: REDIS_PORT
-              Value: !GetAtt RedisCluster.RedisEndpoint.Port
+              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
             - Name: RAILS_SERVE_STATIC_FILES
               Value: "true"
             - Name: POSTGRES_POOL_SIZE
