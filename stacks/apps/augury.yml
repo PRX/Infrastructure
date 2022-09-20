@@ -63,6 +63,7 @@ Parameters:
   CmsHostname: { Type: String }
   DovetailRouterHostname: { Type: String }
   AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
+  HoneycombApiKey: { Type: AWS::SSM::Parameter::Value<String>, Default: /prx/global/Spire/honeycomb-api-key }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -402,6 +403,12 @@ Resources:
               Value: !If [IsProduction, production, staging]
             - Name: SLOW_WORKER_RELAY_SQS_URL
               Value: !Ref SlowWorkerRelaySqsQueue
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: https://api.honeycomb.io
+            - Name: OTEL_EXPORTER_OTLP_HEADERS
+              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
+            - Name: OTEL_SERVICE_NAME
+              Value: !If [IsProduction, Augury Production, Augury Staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -526,6 +533,12 @@ Resources:
               Value: !Ref SlowWorkerRelaySqsQueue
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: https://api.honeycomb.io
+            - Name: OTEL_EXPORTER_OTLP_HEADERS
+              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
+            - Name: OTEL_SERVICE_NAME
+              Value: !If [IsProduction, Augury Production, Augury Staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -859,6 +872,12 @@ Resources:
               Value: !If [IsProduction, production, staging]
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: https://api.honeycomb.io
+            - Name: OTEL_EXPORTER_OTLP_HEADERS
+              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
+            - Name: OTEL_SERVICE_NAME
+              Value: !If [IsProduction, Augury Production, Augury Staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
