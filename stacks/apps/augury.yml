@@ -51,6 +51,7 @@ Parameters:
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
+  SharedEcsAsgInstanceSecurityGroupId: { Type: String }
   SharedPostgresqlClientSecurityGroupId: { Type: String }
   CastlePostgresInstanceEndpointAddress: { Type: String }
   CastlePostgresInstanceEndpointPort: { Type: String }
@@ -79,6 +80,26 @@ Resources:
       TargetingRecordCacheSizeMetricsName: !Sub TargetingRecordCacheSize${EnvironmentType}
       AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
 
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub Augury ${EnvironmentType} Redis security group
+      SecurityGroupIngress:
+        - FromPort: 6379
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+          ToPort: 6379
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_augury_redis" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
+      VpcId: !Ref VpcId
   RedisSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:
@@ -96,7 +117,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-
   RedisCluster:
     Type: AWS::ElastiCache::CacheCluster
     Properties:
@@ -116,7 +136,8 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
-      VpcSecurityGroupIds: TODO
+      VpcSecurityGroupIds:
+        - !Ref RedisSecurityGroup
 
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
