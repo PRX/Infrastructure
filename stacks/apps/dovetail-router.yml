@@ -674,8 +674,8 @@ Resources:
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 8, 2]
+        MinimumHealthyPercent: 100
+      DesiredCount: !If [IsProduction, 16, 2]
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
@@ -794,6 +794,8 @@ Resources:
               Value: "2"
             - Name: FINCH_POOL_SIZE
               Value: "100"
+            - Name: LOG_STATS
+              Value: "1"
             - Name: PORT
               Value: !Ref kApplicationPort
             - Name: REDIRECT_HOST
@@ -885,8 +887,8 @@ Resources:
   ScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
     Properties:
-      MinCapacity: !If [IsProduction, 8, 2]
-      MaxCapacity: !If [IsProduction, 24, 4]
+      MinCapacity: !If [IsProduction, !If [IsPrimaryRegion, 16, 12], 2]
+      MaxCapacity: !If [IsProduction, 30, 4]
       ResourceId: !Sub service/${EcsClusterName}/${EcsService.Name}
       RoleARN: !GetAtt ScalingIamRole.Arn
       ScalableDimension: ecs:service:DesiredCount
@@ -947,10 +949,9 @@ Resources:
         const SERVICE_NAME = process.env.ECS_SERVICE_NAME;
         const SCALE_TO = {
           '815/feed-rss.xml': 4,
-          '284/feed-rss.xml': 9,
-          '70/feed-rss.xml': 24,
+          '70/feed-rss.xml': 30,
           'criminal/feed-rss.xml': 16,
-          'themoth/feed-rss.xml': 16,
+          'themoth/feed-rss.xml': 30,
         };
 
         exports.handler = async (event) => {
