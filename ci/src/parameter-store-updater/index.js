@@ -23,18 +23,6 @@ async function updateSsmParameter(parameterName, parameterValue) {
         Overwrite: true,
       })
       .promise();
-
-    await sns
-      .publish({
-        TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-        Message: JSON.stringify({
-          username: 'AWS CodeBuild',
-          icon_emoji: ':ops-codebuild:',
-          channel: 'G2QHC11SM', // #ops-debug
-          text: `[SSM] Setting: ${parameterName} = ${parameterValue}`,
-        }),
-      })
-      .promise();
   }
 }
 
