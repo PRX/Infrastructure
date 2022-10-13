@@ -31,10 +31,10 @@ Parameters:
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
-  CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
   IdHostname: { Type: String }
   MediajointS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
+  PorterJobExecutionSnsTopicArn: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
 
@@ -202,6 +202,14 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPorterJobExecution
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
               - Action:
                   - s3:Get*
                   - s3:ListBucket
@@ -216,6 +224,28 @@ Resources:
                 Sid: AllowObjectActions
             Version: "2012-10-17"
           PolicyName: S3ReadAccess
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListBucketVersions
+                Effect: Allow
+                Resource: !GetAtt IdUploadsBucket.Arn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:Get*
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:PutObjectVersionAcl
+                Effect: Allow
+                Resource: !Sub ${IdUploadsBucket.Arn}/*
+                Sid: AllowObjectActions
+            Version: "2012-10-17"
+          PolicyName: S3UploadAccess
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -258,8 +288,6 @@ Resources:
               Value: !GetAtt SesSendingSmtpCredentials.UserName
             - Name: SMTP_PASSWORD
               Value: !GetAtt SesSendingSmtpCredentials.Password
-            - Name: CMS_HOST
-              Value: !Ref CmsHostname
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, id.prx.org, id.prx.org (Staging)]
             - Name: NEW_RELIC_KEY
@@ -272,12 +300,14 @@ Resources:
               Value: !If [IsProduction, do-not-reply@prx.org, do-not-reply-staging@prx.org]
             - Name: ACTION_MAILER_HOST
               Value: !Ref IdHostname
-            - Name: CMS_API_VERSION
-              Value: v1
             - Name: ISSUER_IDENTIFIER
               Value: !Ref IdHostname
             - Name: SESSION_DOMAIN
               Value: !If [IsProduction, .prx.org, .prx.tech]
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: UPLOADS_BUCKET
+              Value: !Ref IdUploadsBucket
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -365,6 +395,48 @@ Resources:
       AccessKeyId: !Ref SesSendingAccessKey
       SecretAccessKey: !GetAtt SesSendingAccessKey.SecretAccessKey
       Region: !Ref AWS::Region
+
+  IdUploadsBucket:
+    Type: AWS::S3::Bucket
+    # TODO: necessary?
+    # DeletionPolicy: Retain
+    # UpdateReplacePolicy: Retain
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - POST
+              - PUT
+            AllowedOrigins:
+              - "*"
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+              - Date
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 7
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: ID }
 
 Outputs:
   TargetGroupFullName:
