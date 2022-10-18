@@ -78,6 +78,7 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       ActualsIngestJobInvocationCountMetricName: !Sub ActualsIngestJobInvocationCountNewCluster${EnvironmentType}
       JobErrorsCountMetricName: !Sub JobErrorsCountNewCluster${EnvironmentType}
+      SlowJobErrorsCountMetricName: !Sub JobErrorsCountNewCluster${EnvironmentType}
       TargetingRecordCacheSizeMetricsName: !Sub TargetingRecordCacheSize${EnvironmentType}
       AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
 
@@ -666,6 +667,16 @@ Resources:
         - MetricName: !GetAtt Constants.JobErrorsCountMetricName
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
+  WorkerSlowJobsProducedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.msg = "*Error performing*" }
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !GetAtt Constants.SlowJobErrorsCountMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
   TargetingRecordCacheSizeMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
@@ -739,6 +750,20 @@ Resources:
         - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
+  AugurySlowJobsProducedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Worker <${EnvironmentTypeAbbreviation}> IS THROWING THE ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's worker task has raised an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.JobErrorsCountMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
   AuguryJobsProducedErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -758,6 +783,21 @@ Resources:
     Properties:
       ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
       AlarmArn: !GetAtt AuguryJobsProducedErrorsAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
+  AugurySlowJobsProducedErrorsAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AugurySlowJobsProducedErrorsAlarm.Arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
