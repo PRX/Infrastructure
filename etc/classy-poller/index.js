@@ -129,8 +129,14 @@ function getCount() {
   });
 }
 
-function shortMemberName(member) {
-  return `${member?.first_name} ${member?.last_name.charAt(0)}.`;
+function shortMemberName(member, tx) {
+  if (tx.is_anonymous) {
+    return `:see_no_evil: ~${member?.first_name} ${member?.last_name.charAt(
+      0,
+    )}.~`;
+  } else {
+    return `${member?.first_name} ${member?.last_name.charAt(0)}.`;
+  }
 }
 
 function campaignUrl(campaign) {
@@ -243,7 +249,7 @@ exports.handler = async (event) => {
 
           // const fullTx = await httpGet(`/transactions/${tx.id}`);
 
-          const name = shortMemberName(mem);
+          const name = shortMemberName(mem, tx);
           const campUrl = campaignUrl(camp);
           const txUrl = transactionUrl(tx);
           // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
