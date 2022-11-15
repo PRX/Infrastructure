@@ -131,9 +131,7 @@ function getCount() {
 
 function shortMemberName(member, tx) {
   if (tx.is_anonymous) {
-    return `:see_no_evil: ~${member?.first_name} ${member?.last_name.charAt(
-      0,
-    )}.~`;
+    return `_Anonymous_`;
   } else {
     return `${member?.first_name} ${member?.last_name.charAt(0)}.`;
   }
