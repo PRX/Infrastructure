@@ -12,6 +12,8 @@ module.exports = (accountId) => {
       return 'The World';
     case '151502348212':
       return 'PRX Data Production';
+    case '639773875692':
+      return 'PRX publicmedia.social';
     default:
       return accountId;
   }
