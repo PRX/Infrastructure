@@ -1,0 +1,324 @@
+# stacks/apps/s3-signing.yml
+# 100A
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: A serverless API application to batch api requests to Apple
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  MediajointS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
+  NetworksS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
+  WfmtServicesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
+
+Resources:
+
+Resources:
+  AppleApiBridgeLambdaFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: bridge/dist
+      Handler: app.lambdaHandler
+      Runtime: nodejs16.x
+      Description: !Sub ${EnvironmentType} Apple API Bridge
+      MemorySize: 128
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Events:
+        Bridge:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /bridge
+            Method: post
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Apple Api Bridge
+
+  AppleApiBridgeLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppleApiBridgeLambdaFunction}
+      RetentionInDays: 60
+
+  AppleApiBridgeLambdaLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref AppleApiBridgeLambdaLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple Api Bridge }
+
+  # Lambda Alarms
+  BridgeLambdaElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is failing, which likely
+        means uploads to Publish are also failing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeLambdaFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  BridgeLambdaElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+  BridgeLambdaDangerousErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is failing a lot, which
+        likely means uploads to Publish are also failing.
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 2
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeLambdaFunction
+      EvaluationPeriods: 10
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  BridgeLambdaDangerousErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaDangerousErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+  BridgeLambdaElevatedThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is being throttled. This
+        likely means uploads to Publish are failing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeLambdaFunction
+      EvaluationPeriods: 1
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  BridgeLambdaElevatedThrottleAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaElevatedThrottleAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+  BridgeLambdaElevatedVolumeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> SUSPICIOUSLY HIGH INVOCATIONS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function is being invoked a
+        suspiciously high amount. This could indicate a misbehaving client
+        (e.g., Publish frontend), attack attempt, or could be legitimate.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeLambdaFunction
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
+      MetricName: Invocations
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 500
+      TreatMissingData: notBreaching
+  BridgeLambdaElevatedVolumeAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaElevatedVolumeAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+  BridgeLambdaDangerousErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [S3 Signing] Lambda function <${EnvironmentTypeAbbreviation}> DANGEROUS ERROR RATE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Apple API Bridge function short-term error rate
+        is high.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
+      Metrics:
+        - Id: errors
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AppleApiBridgeLambdaFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 120
+            Stat: Sum
+          ReturnData: false
+        - Id: invocations
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AppleApiBridgeLambdaFunction
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: 120
+            Stat: Sum
+          ReturnData: false
+        - Id: error_rate
+          Expression: "errors / invocations"
+          ReturnData: true
+      Threshold: 0.3
+      TreatMissingData: notBreaching
+  BridgeLambdaDangerousErrorRateAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaDangerousErrorRateAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+  BridgeLambdaCriticalErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [Apple API] Lambda function <${EnvironmentTypeAbbreviation}> CRITICAL ERROR RATE (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} S3 signing Lambda function short-term error rate is high.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 2
+      Metrics:
+        - Id: errors
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AppleApiBridgeLambdaFunction
+              MetricName: Errors
+              Namespace: AWS/Lambda
+            Period: 60
+            Stat: Sum
+          ReturnData: false
+        - Id: invocations
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: FunctionName
+                  Value: !Ref AppleApiBridgeLambdaFunction
+              MetricName: Invocations
+              Namespace: AWS/Lambda
+            Period: 60
+            Stat: Sum
+          ReturnData: false
+        - Id: error_rate
+          Expression: "errors / invocations"
+          ReturnData: true
+      Threshold: 0.6
+      TreatMissingData: notBreaching
+  BridgeLambdaCriticalErrorRateAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt BridgeLambdaCriticalErrorRateAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Apple API Bridge }
+
+Outputs:
+  BridgeEndpointUrl:
+    Description: The URL for the signing endpoint
+    Value: !Sub https://${AppleApiBridgeApi}.execute-api.${AWS::Region}.amazonaws.com/bridge
+  BridgeId:
+    Value: !Ref AppleApiBridgeApi
