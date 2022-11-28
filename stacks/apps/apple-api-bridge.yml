@@ -19,8 +19,23 @@ Parameters:
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
 
 Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: !Sub >-
+        ${EnvironmentType} Apple Api Bridge API
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Feeder
+
   AppleApiBridgeLambdaFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri:
         Bucket: !Ref CodeS3Bucket
@@ -32,8 +47,14 @@ Resources:
       Architectures:
         - x86_64
       Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /post
+          Type: HttpApi
         Bridge:
-          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Type: Api
           Properties:
             Path: /bridge
             Method: post
