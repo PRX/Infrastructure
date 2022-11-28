@@ -188,43 +188,6 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Apple Api Bridge }
 
-  AppleApiBridgeFunctionElevatedVolumnAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub WARN [Apple Api Bridge] Lambda function <${EnvironmentTypeAbbreviation}> SUSPICIOUSLY HIGH INVOCATIONS (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Apple Api Bridge Lambda function is being invoked a
-        suspiciously high amount. This could indicate a misbehaving client
-        (e.g., Publish frontend), attack attempt, or could be legitimate.
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref AppleApiBridgeFunction
-      DatapointsToAlarm: 2
-      EvaluationPeriods: 3
-      MetricName: Invocations
-      Namespace: AWS/Lambda
-      Period: 60
-      Statistic: Sum
-      Threshold: 500
-      TreatMissingData: notBreaching
-  AppleApiBridgeFunctionElevatedVolumnAlarmTags:
-    Type: Custom::CloudWatchAlarmTags
-    Condition: IsProduction
-    Properties:
-      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
-      AlarmArn: !GetAtt AppleApiBridgeFunctionElevatedVolumnAlarm.Arn
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Apple Api Bridge }
-
   AppleApiBridgeFunctionDangerousErrorRateAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
