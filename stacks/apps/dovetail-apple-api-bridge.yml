@@ -1,0 +1,201 @@
+# stacks/apps/dovetail-apple-api-bridge.yml
+# 100A
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: A serverless API application to batch api requests to Apple
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Parameters:
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CloudWatchAlarmTaggerServiceToken: { Type: String }
+  CloudWatchLogGroupTaggerServiceToken: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Description: !Sub >-
+        ${EnvironmentType} Apple Api Bridge API
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Apple Api Bridge
+
+  AppleApiBridgeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Handler: app.lambdaHandler
+      Runtime: nodejs18.x
+      Description: !Sub ${EnvironmentType} Apple API Bridge
+      MemorySize: 128
+      Architectures:
+        - arm64
+      Events:
+        ApiRequest:
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: post
+            Path: /bridge
+          Type: HttpApi
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Apple Api Bridge
+  AppleApiBridgeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppleApiBridgeFunction}
+      RetentionInDays: 60
+  AppleApiBridgeFunctionLogGroupTags:
+    Type: Custom::CloudWatchLogGroupTags
+    Properties:
+      ServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      LogGroupName: !Ref AppleApiBridgeFunctionLogGroup
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Apple Api Bridge }
+
+  # Lambda Alarms
+  AppleApiBridgeFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Apple Api Bridge] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Apple API Bridge Lambda function is failing.
+        This could delay publishing and state management in Apple's system.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AppleApiBridgeFunctionElevatedErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AppleApiBridgeFunctionElevatedErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Apple Api Bridge }
+
+  AppleApiBridgeFunctionDangerousErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [Apple Api Bridge] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Apple Api Bridge Lambda is failing a lot.
+        There are structural problems with Lambda invocation.
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 2
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeFunction
+      EvaluationPeriods: 10
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AppleApiBridgeFunctionDangerousErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AppleApiBridgeFunctionDangerousErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Apple Api Bridge }
+
+  AppleApiBridgeFunctionElevatedThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [Apple Api Bridge] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS BEING THROTTLED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Apple Api Bridge Lambda function is being throttled.
+        This could mean that the lambda is being invoked too rapidly.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AppleApiBridgeFunction
+      EvaluationPeriods: 1
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AppleApiBridgeFunctionElevatedThrottleAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Condition: IsProduction
+    Properties:
+      ServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+      AlarmArn: !GetAtt AppleApiBridgeFunctionElevatedThrottleAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Apple Api Bridge }
+
+Outputs:
+  ApiUrl:
+    Description: URL of the Apple API Bridge API
+    Value:
+      Fn::Sub: "https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/"
+  HttpApiId:
+    Description: Api id of HttpApi for Apple Api Bridge
+    Value: !Ref HttpApi
