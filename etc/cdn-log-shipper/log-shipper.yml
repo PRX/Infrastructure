@@ -100,7 +100,7 @@ Resources:
             // take up to 4 chunks - drop the rest
             const chunks = ip.split(':').slice(0, 4);
 
-            # remove all trailing ':', then add '::' (zeroes)
+            // remove all trailing ':', then add '::' (zeroes)
             return chunks.join(':').replace(/:+$/, '') + '::'
           } else if (ip === '-') {
             // that's ok
@@ -151,20 +151,19 @@ Resources:
             fields.push('prx-podcast-id');
             fields.push('prx-episode-guid');
 
-            // mask IP addresses
-            datas.forEach(data => {
-              data['c-ip'] = maskIp(data['c-ip'], 'c-ip');
-              const xffParts = (data['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(s => s);
-              data['x-forwarded-for'] = xffParts.map(ip => maskIp(ip, 'x-forwarded-for')).join(', ');
-            });
-
             // calculate listener_ids
             datas.forEach(data => {
-              // use leftmost XFF or IP in listener_id
-              const ip = data['x-forwarded-for'].split(', ')[0] || data['c-ip'] || '';
+              // use leftmost XFF or IP
+              const xffParts = (data['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(s => s);
+              const leftMostIp = xffParts[0] || data['c-ip'];
+
+              // truncate ipv6 but not ipv4
+              const truncatedIp = leftMostIp.includes(':') ? maskIp(leftMostIp, 'listener-id') : leftMostIp;
+
+              // combine with UA string
               const userAgent = data['cs(User-Agent)'] || '';
               const hmac = crypto.createHmac('sha256', process.env.SECRET_KEY || '');
-              hmac.update(ip + userAgent);
+              hmac.update(truncatedIp + userAgent);
               data['prx-listener-id'] = hmac.digest('base64').replace(/\+|\/|=/g, m => {
                 if (m === '+') { return '-'; }
                 if (m === '/') { return '_'; }
@@ -172,6 +171,13 @@ Resources:
               });
             });
             fields.push('prx-listener-id');
+
+            // mask IP addresses
+            datas.forEach(data => {
+              data['c-ip'] = maskIp(data['c-ip'], 'c-ip');
+              const xffParts = (data['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(s => s);
+              data['x-forwarded-for'] = xffParts.map(ip => maskIp(ip, 'x-forwarded-for')).join(', ');
+            });
 
             // write to tsv and gzip
             const tsv = fields.join('\t') + '\n' + datas.map(data => {
