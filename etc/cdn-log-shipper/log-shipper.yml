@@ -92,14 +92,15 @@ Resources:
         const crypto = require('crypto');
 
         const IPV4_MASK = /\.[0-9]{1,3}$/;
-        const IPV6_MASK = /:[0-9a-fA-F]{0,4}$/;
         const maskIp = (ip, field) => {
           if (ip.match(IPV4_MASK)) {
             return ip.replace(IPV4_MASK, '.0');
-          } else if (ip.endsWith(':')) {
-            return ip;
-          } else if (ip.match(IPV6_MASK)) {
-            return ip.replace(IPV6_MASK, ':0');
+          } else if (ip.includes(':')) {
+            // take up to 4 chunks - drop the rest
+            const chunks = ip.split(':').slice(0, 4);
+
+            // remove all trailing ':', then add '::' (zeroes)
+            return chunks.join(':').replace(/:+$/, '') + '::'
           } else if (ip === '-') {
             // that's ok
           } else {
@@ -151,10 +152,17 @@ Resources:
 
             // calculate listener_ids
             datas.forEach(data => {
-              const literalIp = data['x-forwarded-for'] || data['c-ip'] || '';
+              // use leftmost XFF or IP
+              const xffParts = (data['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(s => s);
+              const leftMostIp = xffParts[0] || data['c-ip'];
+
+              // truncate ipv6 but not ipv4
+              const truncatedIp = leftMostIp.includes(':') ? maskIp(leftMostIp, 'listener-id') : leftMostIp;
+
+              // combine with UA string
               const userAgent = data['cs(User-Agent)'] || '';
               const hmac = crypto.createHmac('sha256', process.env.SECRET_KEY || '');
-              hmac.update(literalIp + userAgent);
+              hmac.update(truncatedIp + userAgent);
               data['prx-listener-id'] = hmac.digest('base64').replace(/\+|\/|=/g, m => {
                 if (m === '+') { return '-'; }
                 if (m === '/') { return '_'; }
