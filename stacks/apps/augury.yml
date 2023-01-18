@@ -81,6 +81,9 @@ Resources:
       SlowJobErrorsCountMetricName: !Sub SlowJobErrorsCountNewCluster${EnvironmentType}
       TargetingRecordCacheSizeMetricsName: !Sub TargetingRecordCacheSize${EnvironmentType}
       AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
+      WorkerLoggedErrorsMetricName: !Sub WorkerLoggedErrors${EnvironmentType}
+      SlowWorkerLoggedErrorsMetricName: !Sub SlowWorkerLoggedErrors${EnvironmentType}
+      WebLoggedErrorsMetricName: !Sub WebLoggedErrors${EnvironmentType}
 
   RedisSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -677,6 +680,78 @@ Resources:
         - MetricName: !GetAtt Constants.SlowJobErrorsCountMetricName
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
+  WebLoggedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { ($.level >= 50) && ($.level < 60) }
+      LogGroupName: !Ref WebTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Constants.WebLoggedErrorsMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  WorkersLoggedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { ($.level >= 50) && ($.level < 60) }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Constants.WorkerLoggedErrorsMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  WorkersSlowLoggedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { ($.level >= 50) && ($.level < 60) }
+      LogGroupName: !Ref SlowWorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub Constants.SlowWorkerLoggedErrorsMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AuguryWebLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Web <${EnvironmentTypeAbbreviation}> IS LOGGING ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's web task has logged an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.WebLoggedErrorsMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+  AuguryWorkerLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Worker <${EnvironmentTypeAbbreviation}> IS LOGGING ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's worker task has logged an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.WorkerLoggedErrorsMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
+  AugurySlowWorkerLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Augury] Slow Worker <${EnvironmentTypeAbbreviation}> IS LOGGING ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Augury's slow worker task has logged an error. Check the logs!
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 3
+      MetricName: !GetAtt Constants.SlowWorkerLoggedErrorsMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Threshold: 1
+      TreatMissingData: notBreaching
   TargetingRecordCacheSizeMetricFilter:
     Type: AWS::Logs::MetricFilter
     Properties:
