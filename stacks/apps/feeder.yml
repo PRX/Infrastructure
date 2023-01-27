@@ -52,7 +52,6 @@ Parameters:
   FeederAuthProxyHostname: { Type: String }
   FeederAuthProxyInternalHostname: { Type: String }
   PublicFeedsHostname: { Type: String }
-  HoneycombApiKey: { Type: AWS::SSM::Parameter::Value<String>, Default: /prx/global/Spire/honeycomb-api-key }
   DovetailAppleApiBridgeEndpointUrl: { Type: String }
 
 Conditions:
@@ -460,46 +459,30 @@ Resources:
             - web
           Cpu: !If [IsProduction, 200, 128]
           Environment:
-            - Name: APP_NAME
-              Value: feeder
-            - Name: RAILS_ENV
-              Value: !Ref EnvironmentTypeLowercase
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: ANNOUNCE_RESOURCE_PREFIX
+              Value: !Ref AnnounceResourcePrefix
             - Name: APPLE_API_BRIDGE_URL
               Value: !Ref DovetailAppleApiBridgeEndpointUrl
+            - Name: AWS_ACCOUNT_ID
+              Value: !Ref AWS::AccountId
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: AWS_ACCOUNT_ID
-              Value: !Ref AWS::AccountId
-            - Name: POSTGRES_HOST
-              Value: !Ref SharedAuroraPostgresqlEndpoint
-            - Name: POSTGRES_PORT
-              Value: !Ref SharedAuroraPostgresqlPort
-            - Name: DB_PORT_5432_TCP_ADDR
-              Value: !Ref SharedAuroraPostgresqlEndpoint
-            - Name: DB_PORT_5432_TCP_PORT
-              Value: !Ref SharedAuroraPostgresqlPort
-            - Name: FIXER_CALLBACK_QUEUE_NAME
-              Value: !GetAtt FixerCallbackQueue.QueueName
-            - Name: ANNOUNCE_RESOURCE_PREFIX
-              Value: !Ref AnnounceResourcePrefix
             - Name: CMS_HOST
               Value: !Ref CmsHostname
             - Name: DATABASE_POOL_SIZE
-              Value: "16"
+              Value: 16
             - Name: DOVETAIL_HOST
               Value: !Ref DovetailRouterHostname
             - Name: FEEDER_CDN_HOST
               Value: !Ref PublicFeedsHostname
             - Name: FEEDER_CDN_PRIVATE_HOST
               Value: !Ref FeederAuthProxyHostname
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: LANG
-              Value: en_US.UTF-8
             - Name: NEW_RELIC_KEY
               Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
@@ -508,24 +491,14 @@ Resources:
               Value: !Ref kWebApplicationPort
             - Name: PORTER_SNS_TOPIC
               Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: POSTGRES_HOST
+              Value: !Ref SharedAuroraPostgresqlEndpoint
+            - Name: POSTGRES_PORT
+              Value: !Ref SharedAuroraPostgresqlPort
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
             - Name: PRX_HOST
               Value: !Ref BetaHostname
-            - Name: RAILS_SERVE_STATIC_FILES
-              Value: enabled
-            - Name: WORKER_PAUSE
-              Value: "30"
-            - Name: WORKER_DATABASE_POOL_SIZE
-              Value: !If [IsProduction, 16, 5]
-            - Name: WORKER_COUNT
-              Value: !If [IsProduction, 8, 5]
-            - Name: FEEDER_HOST
-              Value: !Ref FeederHostname
-            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
-              Value: https://api.honeycomb.io
-            - Name: OTEL_EXPORTER_OTLP_HEADERS
-              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
-            - Name: OTEL_SERVICE_NAME
-              Value: !If [IsProduction, Feeder Production, Feeder Staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -543,20 +516,14 @@ Resources:
             - ContainerPort: !Ref kWebApplicationPort
               HostPort: 0
           Secrets:
+            - Name: FEEDS_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/feeds-token
             - Name: POSTGRES_DATABASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-name
             - Name: POSTGRES_PASSWORD
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-password
             - Name: POSTGRES_USER
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-username
-            - Name: DB_ENV_POSTGRES_DATABASE
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-name
-            - Name: DB_ENV_POSTGRES_PASSWORD
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-password
-            - Name: DB_ENV_POSTGRES_USER
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-username
-            - Name: FEEDS_TOKEN
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/feeds-token
             - Name: PRX_CLIENT_ID
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/id-auth-client-id
             - Name: PRX_SECRET
@@ -625,72 +592,48 @@ Resources:
             - worker
           Cpu: !If [IsProduction, 200, 128]
           Environment:
-            - Name: APP_NAME
-              Value: feeder
+            - Name: ANNOUNCE_RESOURCE_PREFIX
+              Value: !Ref AnnounceResourcePrefix
             - Name: APPLE_API_BRIDGE_URL
               Value: !Ref DovetailAppleApiBridgeEndpointUrl
-            - Name: RAILS_ENV
-              Value: !Ref EnvironmentTypeLowercase
-            - Name: APP_ENV
-              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_ACCOUNT_ID
+              Value: !Ref AWS::AccountId
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: AWS_ACCOUNT_ID
-              Value: !Ref AWS::AccountId
-            - Name: POSTGRES_HOST
-              Value: !Ref SharedAuroraPostgresqlEndpoint
-            - Name: POSTGRES_PORT
-              Value: !Ref SharedAuroraPostgresqlPort
-            - Name: DB_PORT_5432_TCP_ADDR
-              Value: !Ref SharedAuroraPostgresqlEndpoint
-            - Name: DB_PORT_5432_TCP_PORT
-              Value: !Ref SharedAuroraPostgresqlPort
-            - Name: FIXER_CALLBACK_QUEUE_NAME
-              Value: !GetAtt FixerCallbackQueue.QueueName
-            - Name: ANNOUNCE_RESOURCE_PREFIX
-              Value: !Ref AnnounceResourcePrefix
             - Name: CMS_HOST
               Value: !Ref CmsHostname
             - Name: DATABASE_POOL_SIZE
-              Value: "16"
+              Value: !If [IsProduction, 16, 5]
             - Name: DOVETAIL_HOST
               Value: !Ref DovetailRouterHostname
             - Name: FEEDER_CDN_HOST
               Value: !Ref PublicFeedsHostname
             - Name: FEEDER_CDN_PRIVATE_HOST
               Value: !Ref FeederAuthProxyHostname
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: LANG
-              Value: en_US.UTF-8
             - Name: NEW_RELIC_KEY
               Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Feeder Production, Feeder Staging]
             - Name: PORTER_SNS_TOPIC
               Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: POSTGRES_HOST
+              Value: !Ref SharedAuroraPostgresqlEndpoint
+            - Name: POSTGRES_PORT
+              Value: !Ref SharedAuroraPostgresqlPort
             - Name: PRX_HOST
               Value: !Ref BetaHostname
-            - Name: RAILS_SERVE_STATIC_FILES
-              Value: enabled
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
             - Name: START_SAY_WHEN
-              Value: "true"
-            - Name: WORKER_PAUSE
-              Value: "30"
-            - Name: WORKER_DATABASE_POOL_SIZE
-              Value: !If [IsProduction, 16, 5]
+              Value: true
             - Name: WORKER_COUNT
               Value: !If [IsProduction, 8, 5]
-            - Name: FEEDER_HOST
-              Value: !Ref FeederHostname
-            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
-              Value: https://api.honeycomb.io
-            - Name: OTEL_EXPORTER_OTLP_HEADERS
-              Value: !Sub x-honeycomb-team=${HoneycombApiKey}
-            - Name: OTEL_SERVICE_NAME
-              Value: !If [IsProduction, Feeder Production, Feeder Staging]
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -705,20 +648,14 @@ Resources:
           MemoryReservation: !If [IsProduction, 1000, 500]
           Name: !Ref kWorkerContainerName
           Secrets:
+            - Name: FEEDS_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/feeds-token
             - Name: POSTGRES_DATABASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-name
             - Name: POSTGRES_PASSWORD
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-password
             - Name: POSTGRES_USER
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-username
-            - Name: DB_ENV_POSTGRES_DATABASE
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-name
-            - Name: DB_ENV_POSTGRES_PASSWORD
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-password
-            - Name: DB_ENV_POSTGRES_USER
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/database-username
-            - Name: FEEDS_TOKEN
-              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/feeds-token
             - Name: PRX_CLIENT_ID
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/id-auth-client-id
             - Name: PRX_SECRET
