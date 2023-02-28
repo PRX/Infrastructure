@@ -55,6 +55,12 @@ Parameters:
       The ID for a security group that clients which should have access
       to the database belong to
     Type: String
+  InstanceCondition:
+    Type: String
+    AllowedValues:
+      - Normal
+      - Headless
+    Default: Normal
 
 # Mappings:
 #   EnvironmentTypeMap:
@@ -65,6 +71,7 @@ Parameters:
 
 Conditions:
   # IsProduction: !Equals [!Ref EnvironmentType, Production]
+  HasInstances: !Equals [!Ref InstanceCondition, "Normal"]
   HasGlobalClusterIdentifier: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
   HasMasterUsername: !Not [!Equals [!Ref DbClusterMasterUsername, ""]]
   HasMasterUserPassword: !Not [!Equals [!Ref DbClusterMasterUserPassword, ""]]
@@ -85,7 +92,7 @@ Resources:
         - general
         - slowquery
       Engine: aurora-mysql
-      EngineVersion: "5.7.mysql_aurora.2.10.0"
+      EngineVersion: "5.7.mysql_aurora.2.10.1"
       GlobalClusterIdentifier: !If
         - HasGlobalClusterIdentifier
         - !Ref GlobalClusterIdentifier
@@ -113,6 +120,9 @@ Resources:
   DbInstance:
     Type: AWS::RDS::DBInstance
     DependsOn: DbSubnetGroup
+    Condition: HasInstances
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
     Properties:
       AllowMajorVersionUpgrade: false
       AutoMinorVersionUpgrade: true
