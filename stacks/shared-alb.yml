@@ -68,9 +68,11 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   SharedGlueDatabaseName: { Type: String }
   LatencyGroupDomain: { Type: String }
+  MaintenanceMode: { Type: String, Default: "Off" }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsMaintenanceMode: !Equals [!Ref MaintenanceMode, "On"]
 
 Resources:
   Certificate:
@@ -350,6 +352,26 @@ Resources:
       LoadBalancerArn: !Ref Alb
       Port: 443
       Protocol: HTTPS
+
+  MaintenanceModeListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsMaintenanceMode
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: status.prx.org
+            Port: "443"
+            Path: "/"
+            Protocol: HTTPS
+            Query: ""
+            StatusCode: HTTP_301
+          Type: redirect
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - "*"
+      ListenerArn: !Ref HttpsListener
+      Priority: 20
 
   AlbHttp5xxAlarm:
     Type: AWS::CloudWatch::Alarm
