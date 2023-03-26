@@ -12,144 +12,6 @@ sns_endpoint_region = re.search(
 sns = boto3.client("sns", region_name=sns_endpoint_region)
 ce = boto3.client("ce")
 
-ri_amounts = {}
-
-
-def daily_savings_plan_coverage(service, start, end):
-    return ce.get_savings_plans_coverage(
-        TimePeriod={
-            "Start": start.strftime("%Y-%m-%d"),
-            "End": end.strftime("%Y-%m-%d"),
-        },
-        Granularity="DAILY",
-        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
-    )
-
-
-def daily_savings_plan_utilization(service, start, end):
-    return ce.get_savings_plans_utilization(
-        TimePeriod={
-            "Start": start.strftime("%Y-%m-%d"),
-            "End": end.strftime("%Y-%m-%d"),
-        },
-        Granularity="DAILY",
-    )
-
-
-def daily_reservation_coverage(service, start, end):
-    return ce.get_reservation_coverage(
-        TimePeriod={
-            "Start": start.strftime("%Y-%m-%d"),
-            "End": end.strftime("%Y-%m-%d"),
-        },
-        Granularity="DAILY",
-        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
-    )
-
-
-def daily_reservation_utilization(service, start, end):
-    return ce.get_reservation_utilization(
-        TimePeriod={
-            "Start": start.strftime("%Y-%m-%d"),
-            "End": end.strftime("%Y-%m-%d"),
-        },
-        Granularity="DAILY",
-        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
-    )
-
-
-def ec2_savings_chart_url(start, end):
-    sp_coverage = daily_savings_plan_coverage(
-        "Amazon Elastic Compute Cloud - Compute", start, end
-    )
-
-    o = map(
-        lambda c: c["Coverage"]["OnDemandCost"], sp_coverage["SavingsPlansCoverages"]
-    )
-    s = map(
-        lambda c: str(
-            float(c["Coverage"]["TotalCost"]) - float(c["Coverage"]["OnDemandCost"])
-        ),
-        sp_coverage["SavingsPlansCoverages"],
-    )
-    d = "|".join([",".join(s), ",".join(o)])
-
-    return (
-        f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}"
-    )
-
-
-def ec2_savings_utilization_chart_url(start, end):
-    sp_util = daily_savings_plan_utilization(
-        "Amazon Elastic Compute Cloud - Compute", start, end
-    )
-
-    u = map(
-        lambda c: c["Utilization"]["UsedCommitment"],
-        sp_util["SavingsPlansUtilizationsByTime"],
-    )
-    n = map(
-        lambda c: c["Utilization"]["UnusedCommitment"],
-        sp_util["SavingsPlansUtilizationsByTime"],
-    )
-    d = "|".join([",".join(u), ",".join(n)])
-
-    return (
-        f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}"
-    )
-
-
-def rds_chart_url(start, end):
-    coverage = daily_reservation_coverage(
-        "Amazon Relational Database Service", start, end
-    )
-
-    # t = map(
-    #     lambda c: c["Total"]["CoverageHours"]["TotalRunningHours"],
-    #     coverage["CoveragesByTime"],
-    # )
-
-    o = map(
-        lambda c: c["Total"]["CoverageHours"]["OnDemandHours"],
-        coverage["CoveragesByTime"],
-    )
-    r = map(
-        lambda c: c["Total"]["CoverageHours"]["ReservedHours"],
-        coverage["CoveragesByTime"],
-    )
-    d = "|".join([",".join(r), ",".join(o)])
-
-    return (
-        f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}"
-    )
-
-
-def ec_chart_url(start, end):
-    coverage = daily_reservation_coverage("Amazon ElastiCache", start, end)
-
-    # t = map(
-    #     lambda c: c["Total"]["CoverageHours"]["TotalRunningHours"],
-    #     coverage["CoveragesByTime"],
-    # )
-
-    o = map(
-        lambda c: c["Total"]["CoverageHours"]["OnDemandHours"],
-        coverage["CoveragesByTime"],
-    )
-    r = map(
-        lambda c: c["Total"]["CoverageHours"]["ReservedHours"],
-        coverage["CoveragesByTime"],
-    )
-    d = "|".join([",".join(r), ",".join(o)])
-
-    return (
-        f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600&chd=t:{d}"
-    )
-
 
 def daily_cost_chart_url(start, end):
     cost = ce.get_cost_and_usage(
@@ -168,7 +30,7 @@ def daily_cost_chart_url(start, end):
 
     return (
         f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD&chd=t:{d}"
+        f"/chart?cht=bvs&chs=600x90&chma=-10,0,3,-7&chds=a&chco=0089BD&chd=t:{d}"
     )
 
 
@@ -217,25 +79,119 @@ def daily_usage_cost_chart_url(start, end):
     )
 
 
-def utilization_chart_url(start, end):
-    ec2_util = daily_reservation_utilization(
-        "Amazon Elastic Compute Cloud - Compute", start, end
+def daily_savings_plan_coverage_chart_url(service, start, end):
+    coverage_data = ce.get_savings_plans_coverage(
+        TimePeriod={
+            "Start": start.strftime("%Y-%m-%d"),
+            "End": end.strftime("%Y-%m-%d"),
+        },
+        Granularity="DAILY",
+        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
     )
-    ec2 = map(lambda c: c["Total"]["UnusedHours"], ec2_util["UtilizationsByTime"])
 
-    rds_util = daily_reservation_utilization(
-        "Amazon Relational Database Service", start, end
+    days = coverage_data["SavingsPlansCoverages"]
+
+    daily_coverage_rates = map(
+        lambda day: str(int(float(day["Coverage"]["CoveragePercentage"]))),
+        days
     )
-    rds = map(lambda c: c["Total"]["UnusedHours"], rds_util["UtilizationsByTime"])
-
-    ec_util = daily_reservation_utilization("Amazon ElastiCache", start, end)
-    ec = map(lambda c: c["Total"]["UnusedHours"], ec_util["UtilizationsByTime"])
-
-    d = "|".join([",".join(ec2), ",".join(rds), ",".join(ec)])
+    daily_uncovered_rates = map(
+        lambda day: str(100 - int(float(day["Coverage"]["CoveragePercentage"]))),
+        days,
+    )
+    d = "|".join([",".join(daily_coverage_rates), ",".join(daily_uncovered_rates)])
 
     return (
         f"https://image-charts.com"
-        f"/chart?cht=bvs&chs=600x90&chds=a&chco=0089BD,FF9600,1A1A1A&chd=t:{d}"
+        f"/chart?cht=bvs&chs=600x90&chma=-10,0,3,-7&chds=a&chco=0089BD,FF9600&chd=t:{d}"
+    )
+
+
+def daily_savings_plan_utilization_chart_url(service, start, end):
+    utilization_data = ce.get_savings_plans_utilization(
+        TimePeriod={
+            "Start": start.strftime("%Y-%m-%d"),
+            "End": end.strftime("%Y-%m-%d"),
+        },
+        Granularity="DAILY",
+    )
+
+    days = utilization_data["SavingsPlansUtilizationsByTime"]
+
+    daily_utilization_rates = map(
+        lambda day: str(int(float(day["Utilization"]["UtilizationPercentage"]))),
+        days,
+    )
+    daily_unused_rates = map(
+        lambda day: str(100 - int(float(day["Utilization"]["UtilizationPercentage"]))),
+        days,
+    )
+
+    d = "|".join([",".join(daily_utilization_rates), ",".join(daily_unused_rates)])
+
+    return (
+        f"https://image-charts.com"
+        f"/chart?cht=bvs&chs=600x90&chma=-10,0,3,-7&chds=a&chco=0089BD,FF9600&chd=t:{d}"
+    )
+
+
+def daily_reservation_coverage_chart_url(service, start, end):
+    coverage_data = ce.get_reservation_coverage(
+        TimePeriod={
+            "Start": start.strftime("%Y-%m-%d"),
+            "End": end.strftime("%Y-%m-%d"),
+        },
+        Granularity="DAILY",
+        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
+    )
+
+    days = coverage_data["CoveragesByTime"]
+
+    daily_coverage_rates = map(
+        lambda day: str(int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))),
+        days,
+    )
+
+    daily_uncovered_rates = map(
+        lambda day: str(100 - int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))),
+        days,
+    )
+
+    d = "|".join([",".join(daily_coverage_rates), ",".join(daily_uncovered_rates)])
+
+    return (
+        f"https://image-charts.com"
+        f"/chart?cht=bvs&chs=600x90&chma=-10,0,3,-7&chds=a&chco=0089BD,FF9600&chd=t:{d}"
+    )
+
+
+def daily_reservation_utilization_chart_url(service, start, end):
+    utilization_data = ce.get_reservation_utilization(
+        TimePeriod={
+            "Start": start.strftime("%Y-%m-%d"),
+            "End": end.strftime("%Y-%m-%d"),
+        },
+        Granularity="DAILY",
+        Filter={"Dimensions": {"Key": "SERVICE", "Values": [service]}},
+    )
+
+    days = utilization_data["UtilizationsByTime"]
+
+    daily_utilization_rates = map(
+        lambda day: str(int(float(day["Total"]["UtilizationPercentage"]))),
+        days,
+    )
+
+    daily_unused_rates = map(
+        lambda day: str(100 - int(float(day["Total"]["UtilizationPercentage"]))),
+        days,
+    )
+
+    d = "|".join([",".join(daily_utilization_rates), ",".join(daily_unused_rates)])
+
+    return (
+        f"https://image-charts.com"
+        f"/chart?cht=bvs&chs=600x90&chma=-10,0,3,-7&chds=a&chco=0089BD,FF9600&chd=t:{d}"
     )
 
 
@@ -243,19 +199,6 @@ def lambda_handler(event, context):
     date_start = datetime.today() - timedelta(days=14)
     # End date is exclusive
     date_end = datetime.today() - timedelta(days=0)
-
-    ec2_sp_url = ec2_savings_chart_url(date_start, date_end)
-    ec2_sp_util_url = ec2_savings_utilization_chart_url(date_start, date_end)
-    rds_url = rds_chart_url(date_start, date_end)
-    ec_url = ec_chart_url(date_start, date_end)
-
-    utilization_url = utilization_chart_url(date_start, date_end)
-
-    date_start = datetime.today() - timedelta(days=21)
-    daily_cost_url = daily_cost_chart_url(date_start, date_end)
-
-    date_start = datetime.today() - timedelta(days=28)
-    daily_usage_url = daily_usage_cost_chart_url(date_start, date_end)
 
     sns.publish(
         TopicArn=os.environ["SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN"],
@@ -270,25 +213,11 @@ def lambda_handler(event, context):
                         "title": {
                             "type": "plain_text",
                             "text": (
-                                "EC2 – Unreserved costs: "
-                                "Savings Plan (blue) vs. On-Demand (orange)"
+                                "EC2 Savings Plan Utilization"
                             ),
                             "emoji": True,
                         },
-                        "image_url": ec2_sp_url,
-                        "alt_text": "EC2 savings plans coverage stacked bar chart",
-                    },
-                    {
-                        "type": "image",
-                        "title": {
-                            "type": "plain_text",
-                            "text": (
-                                "EC2 – Savings Plan utilization: "
-                                "Used (blue) vs. Unused (orange)"
-                            ),
-                            "emoji": True,
-                        },
-                        "image_url": ec2_sp_util_url,
+                        "image_url": daily_savings_plan_utilization_chart_url("Amazon Elastic Compute Cloud - Compute", date_start, date_end),
                         "alt_text": "EC2 savings plans utilization stacked bar chart",
                     },
                     {
@@ -296,46 +225,78 @@ def lambda_handler(event, context):
                         "title": {
                             "type": "plain_text",
                             "text": (
-                                "Unused reserved hours for EC2 (blue)"
-                                ", RDS (orange) and ElastiCache (grey)"
+                                "EC2 Savings Plan Coverage"
                             ),
                             "emoji": True,
                         },
-                        "image_url": utilization_url,
-                        "alt_text": "Unused reserved hours stacked bar chart",
+                        "image_url": daily_savings_plan_coverage_chart_url("Amazon Elastic Compute Cloud - Compute", date_start, date_end),
+                        "alt_text": "EC2 savings plans coverage stacked bar chart",
                     },
-                    {
-                        "type": "image",
-                        "title": {
-                            "type": "plain_text",
-                            "text": (
-                                "RDS Reserved hours (blue) "
-                                "& On-Demand hours (orange)"
-                            ),
-                            "emoji": True,
-                        },
-                        "image_url": rds_url,
-                        "alt_text": (
-                            "RDS reserved and on-demand comparison stacked bar chart"
-                        ),
-                    },
-                    {
-                        "type": "image",
-                        "title": {
-                            "type": "plain_text",
-                            "text": (
-                                "ElastiCache Reserved hours (blue)"
-                                " & On-Demand hours (orange)"
-                            ),
-                            "emoji": True,
-                        },
-                        "image_url": ec_url,
-                        "alt_text": (
-                            "ElastiCache reserved and on-demand "
-                            "comparison stacked bar chart"
-                        ),
-                    },
+
                     {"type": "divider"},
+
+                    {
+                        "type": "image",
+                        "title": {
+                            "type": "plain_text",
+                            "text": (
+                                "RDS Reservations Utilization"
+                            ),
+                            "emoji": True,
+                        },
+                        "image_url": daily_reservation_utilization_chart_url('Amazon Relational Database Service', date_start, date_end),
+                        "alt_text": (
+                            "RDS Reservations Utilization"
+                        ),
+                    },
+                    {
+                        "type": "image",
+                        "title": {
+                            "type": "plain_text",
+                            "text": (
+                                "RDS Reservations Coverage"
+                            ),
+                            "emoji": True,
+                        },
+                        "image_url": daily_reservation_coverage_chart_url('Amazon Relational Database Service', date_start, date_end),
+                        "alt_text": (
+                            "RDS Reservations Utilization"
+                        ),
+                    },
+
+                    {"type": "divider"},
+
+                    {
+                        "type": "image",
+                        "title": {
+                            "type": "plain_text",
+                            "text": (
+                                "ElastiCache Reservations Utilization"
+                            ),
+                            "emoji": True,
+                        },
+                        "image_url": daily_reservation_utilization_chart_url('Amazon ElastiCache', date_start, date_end),
+                        "alt_text": (
+                            "ElastiCache Reservations Utilization"
+                        ),
+                    },
+                    {
+                        "type": "image",
+                        "title": {
+                            "type": "plain_text",
+                            "text": (
+                                "ElastiCache Reservations Coverage"
+                            ),
+                            "emoji": True,
+                        },
+                        "image_url": daily_reservation_coverage_chart_url('Amazon ElastiCache', date_start, date_end),
+                        "alt_text": (
+                            "ElastiCache Reservations Utilization"
+                        ),
+                    },
+
+                    {"type": "divider"},
+
                     {
                         "type": "image",
                         "title": {
@@ -343,7 +304,7 @@ def lambda_handler(event, context):
                             "text": "Total Daily Costs (Unblended)",
                             "emoji": True,
                         },
-                        "image_url": daily_cost_url,
+                        "image_url": daily_cost_chart_url(datetime.today() - timedelta(days=21), date_end),
                         "alt_text": "Daily unblended costs stacked bar chart",
                     },
                     {
@@ -353,7 +314,7 @@ def lambda_handler(event, context):
                             "text": "Daily Usage Costs (Unblended)",
                             "emoji": True,
                         },
-                        "image_url": daily_usage_url,
+                        "image_url": daily_usage_cost_chart_url(datetime.today() - timedelta(days=28), date_end),
                         "alt_text": "Daily usage costs stacked bar chart",
                     },
                 ],
