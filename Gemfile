@@ -1,3 +1,5 @@
 source "https://rubygems.org"
 
-gem "rest-client"
+ruby "3.2.1"
+
+gem "standard"

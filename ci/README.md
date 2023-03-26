@@ -167,6 +167,6 @@ Metadata for multiple ZIP files can be updated if necessary, by separating mappi
 
     PRX_SPIRE_S3_PKG_PARAMETERS: MY_APP=/path/one,/path/two;MY_DB=/path/three
 
-This will result in any included Parameter Store parameters having their values updated to the object key of the ZIP file that was pushed to S3 (e.g., `GitHub/PRX/my-app/a1b2c3.zip`)
+This will result in any included Parameter Store parameters having their values updated to the object key of the ZIP file that was pushed to S3 (e.g., `GitHub/PRX/my-app/a1b2c3.zip`).
 
 The name of the Parameter Store parameters included in these mappings must strictly adhere to the [naming conventions](https://github.com/PRX/internal/wiki/WIP:-Parameter-Store).
