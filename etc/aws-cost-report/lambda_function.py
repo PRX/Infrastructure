@@ -92,8 +92,7 @@ def daily_savings_plan_coverage_chart_url(service, start, end):
     days = coverage_data["SavingsPlansCoverages"]
 
     daily_coverage_rates = map(
-        lambda day: str(int(float(day["Coverage"]["CoveragePercentage"]))),
-        days
+        lambda day: str(int(float(day["Coverage"]["CoveragePercentage"]))), days
     )
     daily_uncovered_rates = map(
         lambda day: str(100 - int(float(day["Coverage"]["CoveragePercentage"]))),
@@ -148,12 +147,16 @@ def daily_reservation_coverage_chart_url(service, start, end):
     days = coverage_data["CoveragesByTime"]
 
     daily_coverage_rates = map(
-        lambda day: str(int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))),
+        lambda day: str(
+            int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))
+        ),
         days,
     )
 
     daily_uncovered_rates = map(
-        lambda day: str(100 - int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))),
+        lambda day: str(
+            100 - int(float(day["Total"]["CoverageHours"]["CoverageHoursPercentage"]))
+        ),
         days,
     )
 
@@ -212,91 +215,81 @@ def lambda_handler(event, context):
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "EC2 Savings Plan Utilization"
-                            ),
+                            "text": "EC2 Savings Plan Utilization",
                             "emoji": True,
                         },
-                        "image_url": daily_savings_plan_utilization_chart_url("Amazon Elastic Compute Cloud - Compute", date_start, date_end),
+                        "image_url": daily_savings_plan_utilization_chart_url(
+                            "Amazon Elastic Compute Cloud - Compute",
+                            date_start,
+                            date_end,
+                        ),
                         "alt_text": "EC2 savings plans utilization stacked bar chart",
                     },
                     {
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "EC2 Savings Plan Coverage"
-                            ),
+                            "text": "EC2 Savings Plan Coverage",
                             "emoji": True,
                         },
-                        "image_url": daily_savings_plan_coverage_chart_url("Amazon Elastic Compute Cloud - Compute", date_start, date_end),
+                        "image_url": daily_savings_plan_coverage_chart_url(
+                            "Amazon Elastic Compute Cloud - Compute",
+                            date_start,
+                            date_end,
+                        ),
                         "alt_text": "EC2 savings plans coverage stacked bar chart",
                     },
-
                     {"type": "divider"},
-
                     {
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "RDS Reservations Utilization"
-                            ),
+                            "text": "RDS Reservations Utilization",
                             "emoji": True,
                         },
-                        "image_url": daily_reservation_utilization_chart_url('Amazon Relational Database Service', date_start, date_end),
-                        "alt_text": (
-                            "RDS Reservations Utilization"
+                        "image_url": daily_reservation_utilization_chart_url(
+                            "Amazon Relational Database Service", date_start, date_end
                         ),
+                        "alt_text": "RDS Reservations Utilization",
                     },
                     {
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "RDS Reservations Coverage"
-                            ),
+                            "text": "RDS Reservations Coverage",
                             "emoji": True,
                         },
-                        "image_url": daily_reservation_coverage_chart_url('Amazon Relational Database Service', date_start, date_end),
-                        "alt_text": (
-                            "RDS Reservations Utilization"
+                        "image_url": daily_reservation_coverage_chart_url(
+                            "Amazon Relational Database Service", date_start, date_end
                         ),
+                        "alt_text": "RDS Reservations Utilization",
                     },
-
                     {"type": "divider"},
-
                     {
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "ElastiCache Reservations Utilization"
-                            ),
+                            "text": "ElastiCache Reservations Utilization",
                             "emoji": True,
                         },
-                        "image_url": daily_reservation_utilization_chart_url('Amazon ElastiCache', date_start, date_end),
-                        "alt_text": (
-                            "ElastiCache Reservations Utilization"
+                        "image_url": daily_reservation_utilization_chart_url(
+                            "Amazon ElastiCache", date_start, date_end
                         ),
+                        "alt_text": "ElastiCache Reservations Utilization",
                     },
                     {
                         "type": "image",
                         "title": {
                             "type": "plain_text",
-                            "text": (
-                                "ElastiCache Reservations Coverage"
-                            ),
+                            "text": "ElastiCache Reservations Coverage",
                             "emoji": True,
                         },
-                        "image_url": daily_reservation_coverage_chart_url('Amazon ElastiCache', date_start, date_end),
-                        "alt_text": (
-                            "ElastiCache Reservations Utilization"
+                        "image_url": daily_reservation_coverage_chart_url(
+                            "Amazon ElastiCache", date_start, date_end
                         ),
+                        "alt_text": "ElastiCache Reservations Utilization",
                     },
-
                     {"type": "divider"},
-
                     {
                         "type": "image",
                         "title": {
@@ -304,7 +297,9 @@ def lambda_handler(event, context):
                             "text": "Total Daily Costs (Unblended)",
                             "emoji": True,
                         },
-                        "image_url": daily_cost_chart_url(datetime.today() - timedelta(days=21), date_end),
+                        "image_url": daily_cost_chart_url(
+                            datetime.today() - timedelta(days=21), date_end
+                        ),
                         "alt_text": "Daily unblended costs stacked bar chart",
                     },
                     {
@@ -314,7 +309,9 @@ def lambda_handler(event, context):
                             "text": "Daily Usage Costs (Unblended)",
                             "emoji": True,
                         },
-                        "image_url": daily_usage_cost_chart_url(datetime.today() - timedelta(days=28), date_end),
+                        "image_url": daily_usage_cost_chart_url(
+                            datetime.today() - timedelta(days=28), date_end
+                        ),
                         "alt_text": "Daily usage costs stacked bar chart",
                     },
                 ],
