@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const { App } = require('octokit');
-const fs = require('fs');
 
 const OK_RESPONSE = { statusCode: 200 };
 
