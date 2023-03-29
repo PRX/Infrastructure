@@ -36,7 +36,6 @@ async function handleIssue(payload) {
         projectNumber,
       },
     );
-    console.log(JSON.stringify(idResp));
 
     const projectId = idResp[ownerType]?.projectV2.id;
     const contentId = payload.issue.node_id;
@@ -50,7 +49,6 @@ async function handleIssue(payload) {
         }
       }`,
     );
-    console.log(JSON.stringify(addResp));
   }
 }
 
