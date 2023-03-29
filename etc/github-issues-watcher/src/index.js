@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+// @ts-ignore
 const { App } = require('octokit');
 
 const OK_RESPONSE = { statusCode: 200 };
