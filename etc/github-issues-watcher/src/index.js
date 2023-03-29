@@ -40,7 +40,7 @@ async function handleIssue(payload) {
     const projectId = idResp[ownerType]?.projectV2.id;
     const contentId = payload.issue.node_id;
 
-    const addResp = await octokit.graphql(
+    await octokit.graphql(
       `mutation addIssueToProject {
         addProjectV2ItemById(
           input: {projectId: "${projectId}", contentId: "${contentId}"}
