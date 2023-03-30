@@ -714,9 +714,50 @@ Resources:
                   ]
                 ProjectName: !Ref AcceptanceTestsCodeBuildProject
               InputArtifacts:
-                - Name: MetaRepoSourceArtifact
+                - Name: AcceptanceRepoSourceArtifact
               OutputArtifacts:
                 - Name: AcceptanceTestArtifact
+              RunOrder: 1
+            - Name: Old-Acceptance-Tests
+              ActionTypeId:
+                Category: Test
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                EnvironmentVariables: |-
+                  [
+                    {
+                      "name": "DOVETAIL_HOST",
+                      "value": "#{staging_deploy.DovetailRouterHostname}"
+                    }, {
+                      "name": "FEEDER_HOST",
+                      "value": "#{staging_deploy.FeederHostname}"
+                    }, {
+                      "name": "METRICS_HOST",
+                      "value": "#{staging_deploy.MetricsHostname}"
+                    }, {
+                      "name": "PUBLISH_HOST",
+                      "value": "#{staging_deploy.PublishHostname}"
+                    }, {
+                      "name": "UPLOAD_HOST",
+                      "value": "#{staging_deploy.S3SigningHostname}"
+                    }, {
+                      "name": "STAGING_REGION_MODE",
+                      "value": "#{staging_deploy.RegionMode}"
+                    }, {
+                      "name": "STAGING_APPLICATIONS_STACK_STATE",
+                      "value": "#{staging_deploy.ApplicationStacksState}"
+                    }, {
+                      "name": "PORTER_STATE_MACHINE_ARN",
+                      "value": "#{staging_deploy.PorterStateMachineArn}"
+                    }
+                  ]
+                ProjectName: !Ref OldAcceptanceTestsCodeBuildProject
+              InputArtifacts:
+                - Name: MetaRepoSourceArtifact
+              OutputArtifacts:
+                - Name: OldAcceptanceTestArtifact
               RunOrder: 1
         - Name: Production
           Actions:
@@ -1292,21 +1333,6 @@ Resources:
               Service: codebuild.amazonaws.com
         Version: "2012-10-17"
       Policies:
-        # Allow CodeBuild to log to CloudWatch
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Effect: Allow
-                Resource:
-                  # NOTE These need to stay in sync with the CodeBuild Project
-                  # name from below
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests
-                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AWS::StackName}-AcceptanceTests:*
-            Version: "2012-10-17"
-          PolicyName: CodeBuildLogs
         # CodeBuild sources from CodePipeline artifacts, so it needs access
         - PolicyDocument:
             Statement:
@@ -1340,7 +1366,66 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
+
+  AcceptanceTestsCodeBuildLogsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsCodeBuildProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${AcceptanceTestsCodeBuildProject}:*
+            Sid: AllowCodeBuildLogs
+        Version: "2012-10-17"
+      PolicyName: CloudWatchLogsPolicy
+      Roles:
+        - !Ref AcceptanceTestsCodeBuildRole
   AcceptanceTestsCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Runs acceptance tests for PRX platform
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        Type: LINUX_CONTAINER
+      Name: !Sub ${AWS::StackName}-AcceptanceTests
+      ServiceRole: !GetAtt AcceptanceTestsCodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: CD }
+      TimeoutInMinutes: 5
+
+  OldAcceptanceTestsCodeBuildLogsPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${OldAcceptanceTestsCodeBuildProject}
+              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${OldAcceptanceTestsCodeBuildProject}:*
+            Sid: AllowOldCodeBuildLogs
+        Version: "2012-10-17"
+      PolicyName: OldCloudWatchLogsPolicy
+      Roles:
+        - !Ref AcceptanceTestsCodeBuildRole
+  OldAcceptanceTestsCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Artifacts:
@@ -1350,8 +1435,7 @@ Resources:
         ComputeType: BUILD_GENERAL1_SMALL
         Image: !Sub 561178107736.dkr.ecr.${AWS::Region}.amazonaws.com/meta.prx.org:latest
         Type: LINUX_CONTAINER
-      # If this Name changes, the CodeBuild role policy needs to change too
-      Name: !Sub ${AWS::StackName}-AcceptanceTests
+      Name: !Sub ${AWS::StackName}-OldAcceptanceTests
       ServiceRole: !GetAtt AcceptanceTestsCodeBuildRole.Arn
       Source:
         BuildSpec: buildspec-pipeline.yml
