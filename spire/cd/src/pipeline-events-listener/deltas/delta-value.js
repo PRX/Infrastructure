@@ -1,4 +1,9 @@
 /**
+ * @typedef {import('@aws-sdk/client-cloudformation').Parameter["ParameterKey"]} ParameterKey
+ * @typedef {import('@aws-sdk/client-cloudformation').Parameter["ParameterValue"]} ParameterValue
+ */
+
+/**
  * Builds a Slack markdown flavored string representing a specific parameter
  * value, based on the form of parameter value. It will contain a link to the
  * relevant commit in GitHub, so the repo and commit ID are extracted from the
@@ -9,8 +14,8 @@
  *
  * Some values are S3 object names that contain GitHub info:
  * GitHub/PRX/my-repo/5dcaf25b333f251be26dc468d8b82887b6370534.zip
- * @param {AWS.CloudFormation.ParameterKey} key
- * @param {AWS.CloudFormation.ParameterValue} value
+ * @param {ParameterKey} key
+ * @param {ParameterValue} value
  * @param {Boolean} noLinks
  * @returns {String}
  */

@@ -145,8 +145,8 @@ function duration(event) {
  * Returns basic details of the alarm notification, like duration and links
  * to CloudWatch console pages.
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {Promise<String[]>}
  */
 async function basics(event, desc, history) {

@@ -1,3 +1,5 @@
+/** @typedef {import('@aws-sdk/client-cloudformation').Stack} Stack */
+
 const { CloudFormation } = require('@aws-sdk/client-cloudformation');
 const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
 
@@ -20,7 +22,7 @@ const cloudformation = new CloudFormation({
 
 /**
  * @param {string} stackName
- * @returns {Promise<AWS.CloudFormation.Stack[]>}
+ * @returns {Promise<Stack[]>}
  */
 async function stackFamily(stackName) {
   const stacks = [];

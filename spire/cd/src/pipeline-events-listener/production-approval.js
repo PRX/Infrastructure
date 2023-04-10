@@ -8,6 +8,8 @@
 /**
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  * @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments
+ * @typedef {import('@aws-sdk/client-codepipeline').PutApprovalResultInput} PutApprovalResultInput
+ * @typedef {import('@aws-sdk/client-codepipeline').ApprovalResult} ApprovalResult
  */
 
 const { SNS } = require('@aws-sdk/client-sns');
@@ -39,7 +41,7 @@ async function buildMessage(approvalNotification) {
   // A bunch of values that will be required to fulfill the action are stuffed
   // into the actions' values as JSON. This object should match the parameters
   // for codepipeline.putApprovalResult().
-  /** @type {AWS.CodePipeline.PutApprovalResultInput} */
+  /** @type {PutApprovalResultInput} */
   const approvalParams = {
     pipelineName: approval.pipelineName,
     stageName: approval.stageName,
@@ -57,9 +59,9 @@ async function buildMessage(approvalNotification) {
   const summaryData = `${approvalNotification.region},${AccountId}`;
 
   // These get Object.assigned below to the approvalParams
-  /** @type {AWS.CodePipeline.ApprovalResult} */
+  /** @type {ApprovalResult} */
   const approvedResult = { status: 'Approved', summary: summaryData };
-  /** @type {AWS.CodePipeline.ApprovalResult} */
+  /** @type {ApprovalResult} */
   const rejectedResult = { status: 'Rejected', summary: summaryData };
 
   const region = process.env.AWS_REGION;
