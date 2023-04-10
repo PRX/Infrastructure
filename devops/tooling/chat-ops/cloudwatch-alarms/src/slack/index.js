@@ -53,12 +53,12 @@
 
 /** @typedef { import('aws-lambda').EventBridgeEvent<'CloudWatch Alarm State Change', EventBridgeCloudWatchAlarmsEventDetail> } EventBridgeCloudWatchAlarmsEvent */
 
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
 const color = require('./color');
 const builder = require('./builder');
 const channels = require('./channels');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
@@ -86,42 +86,38 @@ exports.handler = async (event) => {
     const blocks = await builder.blocks(event);
     const fallback = await builder.fallback(event);
 
-    await sns
-      .publish({
-        TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-        Message: JSON.stringify({
-          username: 'Amazon CloudWatch Alarms',
-          icon_emoji: ':ops-cloudwatch-alarm:',
-          channel: channels.channel(event),
-          attachments: [
-            {
-              color: color.value(event),
-              fallback,
-              blocks,
-            },
-          ],
-        }),
-      })
-      .promise();
+    await sns.publish({
+      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+      Message: JSON.stringify({
+        username: 'Amazon CloudWatch Alarms',
+        icon_emoji: ':ops-cloudwatch-alarm:',
+        channel: channels.channel(event),
+        attachments: [
+          {
+            color: color.value(event),
+            fallback,
+            blocks,
+          },
+        ],
+      }),
+    });
   } catch (error) {
     console.log(error);
 
-    await sns
-      .publish({
-        TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-        Message: JSON.stringify({
-          username: 'Amazon CloudWatch Alarms',
-          icon_emoji: ':ops-cloudwatch-alarm:',
-          channel: 'G2QHC2N7K', // #ops-warn
-          text: [
-            'The following CloudWatch alarm event was not handled successfully:',
-            `\n\n*Event ID:* \`${event.id}\`\n\n`,
-            '```',
-            JSON.stringify(event),
-            '```',
-          ].join(''),
-        }),
-      })
-      .promise();
+    await sns.publish({
+      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+      Message: JSON.stringify({
+        username: 'Amazon CloudWatch Alarms',
+        icon_emoji: ':ops-cloudwatch-alarm:',
+        channel: 'G2QHC2N7K', // #ops-warn
+        text: [
+          'The following CloudWatch alarm event was not handled successfully:',
+          `\n\n*Event ID:* \`${event.id}\`\n\n`,
+          '```',
+          JSON.stringify(event),
+          '```',
+        ].join(''),
+      }),
+    });
   }
 };

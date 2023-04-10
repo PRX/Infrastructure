@@ -1,8 +1,9 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 
-const AWS = require('aws-sdk');
+const { STS } = require('@aws-sdk/client-sts');
+const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
 
-const sts = new AWS.STS({ apiVersion: '2011-06-15' });
+const sts = new STS({ apiVersion: '2011-06-15' });
 
 // Alarms with certain namespaces can look up a log group from their resource
 // tags, when there's no way to infer the log group from the alarm's
@@ -25,21 +26,19 @@ async function cloudWatchClient(event) {
   const accountId = event.account;
   const roleName = process.env.CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME;
 
-  const role = await sts
-    .assumeRole({
-      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
-      RoleSessionName: 'notifications_lambda_reader',
-    })
-    .promise();
+  const role = await sts.assumeRole({
+    RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+    RoleSessionName: 'notifications_lambda_reader',
+  });
 
-  return new AWS.CloudWatch({
+  return new CloudWatch({
     apiVersion: '2010-08-01',
     region: event.region,
-    credentials: new AWS.Credentials(
-      role.Credentials.AccessKeyId,
-      role.Credentials.SecretAccessKey,
-      role.Credentials.SessionToken,
-    ),
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 }
 
@@ -85,10 +84,9 @@ module.exports = {
     // group name is specified. If so, use that.
     else if (TAGGED.includes(desc?.MetricAlarms?.[0]?.Namespace)) {
       const cloudwatch = await cloudWatchClient(event);
-      const tagList = await cloudwatch
-        .listTagsForResource({ ResourceARN: event.resources[0] })
-        .promise();
-
+      const tagList = await cloudwatch.listTagsForResource({
+        ResourceARN: event.resources[0],
+      });
       const logGroupNameTag = tagList?.Tags?.find(
         (t) => t.Key === 'prx:ops:cloudwatch-log-group-name',
       );

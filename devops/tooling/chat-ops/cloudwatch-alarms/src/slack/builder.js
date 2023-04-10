@@ -1,12 +1,13 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 
-const AWS = require('aws-sdk');
+const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
+const { STS } = require('@aws-sdk/client-sts');
 const regions = require('./regions');
 const ok = require('./builder-ok');
 const alarm = require('./builder-alarm');
 const urls = require('./urls');
 
-const sts = new AWS.STS({ apiVersion: '2011-06-15' });
+const sts = new STS({ apiVersion: '2011-06-15' });
 
 /**
  * Returns the alarm name with the suffix portion (anything at the end
@@ -39,27 +40,24 @@ function title(event) {
  * Returns a CloudWatch SDK client with credentials for the account where an
  * alarm originated
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @returns {Promise<AWS.CloudWatch>}
+ * @returns {Promise<CloudWatch>}
  */
 async function cloudWatchClient(event) {
   const accountId = event.account;
   const roleName = process.env.CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME;
 
-  const role = await sts
-    .assumeRole({
-      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
-      RoleSessionName: 'notifications_lambda_reader',
-    })
-    .promise();
-
-  return new AWS.CloudWatch({
+  const role = await sts.assumeRole({
+    RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+    RoleSessionName: 'notifications_lambda_reader',
+  });
+  return new CloudWatch({
     apiVersion: '2010-08-01',
     region: event.region,
-    credentials: new AWS.Credentials(
-      role.Credentials.AccessKeyId,
-      role.Credentials.SecretAccessKey,
-      role.Credentials.SessionToken,
-    ),
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 }
 
@@ -106,23 +104,19 @@ module.exports = {
     const cloudwatch = await cloudWatchClient(event);
 
     // Fetch the full description of the alarm
-    const desc = await cloudwatch
-      .describeAlarms({ AlarmNames: [event.detail.alarmName] })
-      .promise();
-
+    const desc = await cloudwatch.describeAlarms({
+      AlarmNames: [event.detail.alarmName],
+    });
     // Fetch all state transitions from the last 24 hours
     const historyStart = new Date();
     historyStart.setUTCHours(-24);
-    const history = await cloudwatch
-      .describeAlarmHistory({
-        AlarmName: event.detail.alarmName,
-        HistoryItemType: 'StateUpdate',
-        StartDate: historyStart,
-        EndDate: new Date(),
-        MaxRecords: 100,
-      })
-      .promise();
-
+    const history = await cloudwatch.describeAlarmHistory({
+      AlarmName: event.detail.alarmName,
+      HistoryItemType: 'StateUpdate',
+      StartDate: historyStart,
+      EndDate: new Date(),
+      MaxRecords: 100,
+    });
     // Linked title block
     blox.push({
       type: 'section',
