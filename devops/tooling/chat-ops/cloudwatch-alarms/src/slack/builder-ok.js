@@ -101,7 +101,7 @@ async function metricData(event, cloudWatchClient, desc, startTime, endTime) {
     ],
   };
 
-  return cloudWatchClient.getMetricData(params).promise();
+  return cloudWatchClient.getMetricData(params);
 }
 
 /**
