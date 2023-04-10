@@ -1,3 +1,5 @@
+/** @typedef {import('@aws-sdk/client-cloudformation').DescribeChangeSetOutput} DescribeChangeSetOutput */
+
 const { CloudFormation } = require('@aws-sdk/client-cloudformation');
 const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
 
@@ -22,7 +24,7 @@ const cloudformation = new CloudFormation({
 /**
  * @param {string} stackName
  * @param {string} changeSetName
- * @returns {Promise<AWS.CloudFormation.DescribeChangeSetOutput[]>}
+ * @returns {Promise<DescribeChangeSetOutput[]>}
  */
 async function changeSetFamily(stackName, changeSetName) {
   const changeSets = [];

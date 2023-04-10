@@ -1,3 +1,5 @@
+/** @typedef {import('@aws-sdk/client-cloudformation').Stack} Stack */
+
 const { CloudFormation } = require('@aws-sdk/client-cloudformation');
 const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const { S3 } = require('@aws-sdk/client-s3');
@@ -28,7 +30,7 @@ const s3 = new S3({ apiVersion: '2006-03-01' });
  * nesting, including the root stack. The elements of the array are the objects
  * returned by describe-stacks.
  * @param {string} stackId
- * @returns {Promise<AWS.CloudFormation.Stacks>}
+ * @returns {Promise<Stack[]>}
  */
 async function getStackHierarchy(stackId) {
   const stackDesc = await cloudformation.describeStacks({ StackName: stackId });
@@ -60,7 +62,7 @@ async function getStackHierarchy(stackId) {
  * Store, and each value is the value of that parameter at the time
  * CloudFormation resolved it. This includes all Parameter Store-based stack
  * parameters for all stacks in the array being passed in.
- * @param {AWS.CloudFormation.Stacks} stacks
+ * @param {Stack[]} stacks
  * @returns {Object}
  */
 function getAllResolveParameters(stacks) {

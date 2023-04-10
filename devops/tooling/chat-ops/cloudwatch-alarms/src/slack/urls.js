@@ -271,8 +271,8 @@ module.exports = {
   },
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
-   * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+   * @param {DescribeAlarmsOutput} desc
+   * @param {DescribeAlarmHistoryOutput} history
    * @returns {String}
    */
   metricsConsole(event, desc, history) {
@@ -282,7 +282,7 @@ module.exports = {
   },
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+   * @param {DescribeAlarmsOutput} desc
    * @returns {Promise<String>}
    */
   async logsConsole(event, desc) {
