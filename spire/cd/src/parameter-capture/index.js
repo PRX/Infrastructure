@@ -23,7 +23,7 @@ async function getStackHierarchy(stackId) {
   // Start with an array containing only the root stack
   let stacks = stackDesc.Stacks;
 
-  // Query all the resources in the given stack...
+  // Query all the resources in the given stack..
   const resourceList = await cloudformation
     .listStackResources({ StackName: stackId })
     .promise();
