@@ -1,11 +1,25 @@
-const AWS = require('aws-sdk');
+const { SSM } = require('@aws-sdk/client-ssm');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
+const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
 
-const ssm = new AWS.SSM({
+const MAXIMUM_ATTEMPTS = 6;
+const MAXIMUM_RETRY_DELAY = 10000;
+const customRetryStrategy = new StandardRetryStrategy(
+  async () => MAXIMUM_ATTEMPTS,
+  {
+    delayDecider: (_, attempts) =>
+      Math.floor(
+        Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+      ),
+  },
+);
+
+const ssm = new SSM({
   apiVersion: '2014-11-06',
-  maxRetries: 6,
-  retryDelayOptions: { base: 1100 },
+  maxAttempts: MAXIMUM_ATTEMPTS,
+  retryStrategy: customRetryStrategy,
 });
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
  * Recursively pages through all Parameter Store parameters under a given path
@@ -107,28 +121,24 @@ exports.handler = async (event) => {
         console.log(`Promoting value for: ${prodName}`);
         console.log(`>> Old: ${productionPkgParameter?.Value}`);
         console.log(`>> New: ${stagingPkgParameter.Value}`);
-        await ssm
-          .putParameter({
-            Name: prodName,
-            Overwrite: true,
-            Value: stagingPkgParameter.Value,
-            Type: 'String',
-          })
-          .promise();
+        await ssm.putParameter({
+          Name: prodName,
+          Overwrite: true,
+          Value: stagingPkgParameter.Value,
+          Type: 'String',
+        });
       }
     }
 
-    await codepipeline.putJobSuccessResult({ jobId: job.id }).promise();
+    await codepipeline.putJobSuccessResult({ jobId: job.id });
   } catch (error) {
     console.error(error);
-    await codepipeline
-      .putJobFailureResult({
-        jobId: job.id,
-        failureDetails: {
-          message: `${error.name}: ${error.message}`,
-          type: 'JobFailed',
-        },
-      })
-      .promise();
+    await codepipeline.putJobFailureResult({
+      jobId: job.id,
+      failureDetails: {
+        message: `${error.name}: ${error.message}`,
+        type: 'JobFailed',
+      },
+    });
   }
 };

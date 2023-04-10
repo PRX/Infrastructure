@@ -1,12 +1,27 @@
-const AWS = require('aws-sdk');
+const { CloudFormation } = require('@aws-sdk/client-cloudformation');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
+const { S3 } = require('@aws-sdk/client-s3');
+const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
 
-const cloudformation = new AWS.CloudFormation({
+const MAXIMUM_ATTEMPTS = 6;
+const MAXIMUM_RETRY_DELAY = 10000;
+const customRetryStrategy = new StandardRetryStrategy(
+  async () => MAXIMUM_ATTEMPTS,
+  {
+    delayDecider: (_, attempts) =>
+      Math.floor(
+        Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+      ),
+  },
+);
+
+const cloudformation = new CloudFormation({
   apiVersion: '2010-05-15',
-  maxRetries: 6,
-  retryDelayOptions: { base: 1100 },
+  maxAttempts: MAXIMUM_ATTEMPTS,
+  retryStrategy: customRetryStrategy,
 });
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
-const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
+const s3 = new S3({ apiVersion: '2006-03-01' });
 
 /**
  * Returns an array of all stacks that are related to some root stack through
@@ -16,18 +31,14 @@ const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
  * @returns {Promise<AWS.CloudFormation.Stacks>}
  */
 async function getStackHierarchy(stackId) {
-  const stackDesc = await cloudformation
-    .describeStacks({ StackName: stackId })
-    .promise();
-
+  const stackDesc = await cloudformation.describeStacks({ StackName: stackId });
   // Start with an array containing only the root stack
   let stacks = stackDesc.Stacks;
 
   // Query all the resources in the given stack..
-  const resourceList = await cloudformation
-    .listStackResources({ StackName: stackId })
-    .promise();
-
+  const resourceList = await cloudformation.listStackResources({
+    StackName: stackId,
+  });
   // ...and look for any child CloudFormation stacks
   const resourceSummaries = resourceList.StackResourceSummaries;
   const nestedStackSummaries = resourceSummaries.filter(
@@ -80,30 +91,24 @@ exports.handler = async (event, context) => {
     const iso8601 = new Date().toISOString();
     const key = `${rootStackName}/${iso8601}.json`;
 
-    await s3
-      .putObject({
-        Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
-        Key: key,
-        Body: JSON.stringify(resolvedParams),
-      })
-      .promise();
+    await s3.putObject({
+      Bucket: process.env.INFRASTRUCTURE_SNAPSHOTS_BUCKET,
+      Key: key,
+      Body: JSON.stringify(resolvedParams),
+    });
 
-    await codepipeline
-      .putJobSuccessResult({
-        jobId: job.id,
-      })
-      .promise();
+    await codepipeline.putJobSuccessResult({
+      jobId: job.id,
+    });
   } catch (error) {
     console.error(error);
-    await codepipeline
-      .putJobFailureResult({
-        jobId: job.id,
-        failureDetails: {
-          message: `${error.name}: ${error.message}`,
-          type: 'JobFailed',
-          externalExecutionId: context.invokeid,
-        },
-      })
-      .promise();
+    await codepipeline.putJobFailureResult({
+      jobId: job.id,
+      failureDetails: {
+        message: `${error.name}: ${error.message}`,
+        type: 'JobFailed',
+        externalExecutionId: context.invokeid,
+      },
+    });
   }
 };

@@ -10,14 +10,14 @@
  * @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments
  */
 
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
 const regions = require('./etc/regions');
 const urls = require('./etc/urls');
 const pipelineNames = require('./etc/pipeline-names');
 const deltas = require('./deltas/deltas');
 const { emoji } = require('./etc/execution-emoji');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
@@ -205,10 +205,8 @@ exports.handler = async (event) => {
 
   const slackMessage = await buildMessage(approvalNotification);
 
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify(slackMessage),
-    })
-    .promise();
+  await sns.publish({
+    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+    Message: JSON.stringify(slackMessage),
+  });
 };

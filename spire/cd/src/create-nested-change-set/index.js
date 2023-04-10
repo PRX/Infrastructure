@@ -2,10 +2,11 @@
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  */
 
-const AWS = require('aws-sdk');
+const { CloudFormation } = require('@aws-sdk/client-cloudformation');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 
-const cloudformation = new AWS.CloudFormation({ apiVersion: '2010-05-15' });
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const cloudformation = new CloudFormation({ apiVersion: '2010-05-15' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
  * Publishes a Slack message to the relay SNS topic with information about a
@@ -38,54 +39,46 @@ exports.handler = async (event) => {
 
     let existingChangeSet;
     try {
-      existingChangeSet = await cloudformation
-        .describeChangeSet({
-          StackName: stackName,
-          ChangeSetName: changeSetName,
-        })
-        .promise();
+      existingChangeSet = await cloudformation.describeChangeSet({
+        StackName: stackName,
+        ChangeSetName: changeSetName,
+      });
 
       if (existingChangeSet?.ExecutionStatus === 'EXECUTE_IN_PROGRESS') {
         // Don't try to delete a change set that is currently executing. (I don't
         // know if that's even possible.)
-        await codepipeline
-          .putJobFailureResult({
-            jobId: job.id,
-            failureDetails: {
-              message: `Can't delete in progress change set`,
-              type: 'JobFailed',
-            },
-          })
-          .promise();
+        await codepipeline.putJobFailureResult({
+          jobId: job.id,
+          failureDetails: {
+            message: `Can't delete in progress change set`,
+            type: 'JobFailed',
+          },
+        });
         return;
       } else if (existingChangeSet?.ChangeSetId) {
-        await cloudformation
-          .deleteChangeSet({
-            StackName: stackName,
-            ChangeSetName: changeSetName,
-          })
-          .promise();
+        await cloudformation.deleteChangeSet({
+          StackName: stackName,
+          ChangeSetName: changeSetName,
+        });
       }
     } catch (e) {}
 
     // createChangeSet returns immediately once the the request to make the
     // change set has been made; it doesn't wait for the change set to actually
     // get made.
-    await cloudformation
-      .createChangeSet({
-        StackName: stackName,
-        ChangeSetName: changeSetName,
-        RoleARN: roleArn,
-        Capabilities: [
-          'CAPABILITY_IAM',
-          'CAPABILITY_NAMED_IAM',
-          'CAPABILITY_AUTO_EXPAND',
-        ],
-        TemplateURL: `${templateUrlBase}/stacks/root.yml`,
-        Parameters: changeSetParamsArray,
-        IncludeNestedStacks: true,
-      })
-      .promise();
+    await cloudformation.createChangeSet({
+      StackName: stackName,
+      ChangeSetName: changeSetName,
+      RoleARN: roleArn,
+      Capabilities: [
+        'CAPABILITY_IAM',
+        'CAPABILITY_NAMED_IAM',
+        'CAPABILITY_AUTO_EXPAND',
+      ],
+      TemplateURL: `${templateUrlBase}/stacks/root.yml`,
+      Parameters: changeSetParamsArray,
+      IncludeNestedStacks: true,
+    });
 
     let changeSetDone = false;
 
@@ -95,27 +88,22 @@ exports.handler = async (event) => {
       console.log('Waiting for change set…');
 
       // Check the creation status of the change set
-      const status = await cloudformation
-        .describeChangeSet({
-          StackName: stackName,
-          ChangeSetName: changeSetName,
-        })
-        .promise();
-
+      const status = await cloudformation.describeChangeSet({
+        StackName: stackName,
+        ChangeSetName: changeSetName,
+      });
       if (status.Status === 'CREATE_COMPLETE') {
         // When it's created, the Lambda can stop running and the pipeline
         // can continue
         changeSetDone = true;
         console.log('Change set was created successfully');
-        await codepipeline
-          .putJobSuccessResult({
-            jobId: job.id,
-            outputVariables: {
-              StackName: stackName,
-              ChangeSetName: changeSetName,
-            },
-          })
-          .promise();
+        await codepipeline.putJobSuccessResult({
+          jobId: job.id,
+          outputVariables: {
+            StackName: stackName,
+            ChangeSetName: changeSetName,
+          },
+        });
         break;
       } else if (
         // If it's still creating, the Lambda needs to keep waiting
@@ -130,28 +118,24 @@ exports.handler = async (event) => {
         console.log('Change set creation failed!');
         console.log(status.Status);
         console.log(status.StatusReason);
-        await codepipeline
-          .putJobFailureResult({
-            jobId: job.id,
-            failureDetails: {
-              message: `${status.Status} - ${status.StatusReason}`,
-              type: 'JobFailed',
-            },
-          })
-          .promise();
+        await codepipeline.putJobFailureResult({
+          jobId: job.id,
+          failureDetails: {
+            message: `${status.Status} - ${status.StatusReason}`,
+            type: 'JobFailed',
+          },
+        });
         break;
       }
     } while (changeSetDone === false);
   } catch (error) {
     console.error(error);
-    await codepipeline
-      .putJobFailureResult({
-        jobId: job.id,
-        failureDetails: {
-          message: `${error.name}: ${error.message}`,
-          type: 'JobFailed',
-        },
-      })
-      .promise();
+    await codepipeline.putJobFailureResult({
+      jobId: job.id,
+      failureDetails: {
+        message: `${error.name}: ${error.message}`,
+        type: 'JobFailed',
+      },
+    });
   }
 };

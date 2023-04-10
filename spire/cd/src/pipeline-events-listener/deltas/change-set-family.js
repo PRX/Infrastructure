@@ -1,9 +1,22 @@
-const AWS = require('aws-sdk');
+const { CloudFormation } = require('@aws-sdk/client-cloudformation');
+const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
 
-const cloudformation = new AWS.CloudFormation({
+const MAXIMUM_ATTEMPTS = 6;
+const MAXIMUM_RETRY_DELAY = 10000;
+const customRetryStrategy = new StandardRetryStrategy(
+  async () => MAXIMUM_ATTEMPTS,
+  {
+    delayDecider: (_, attempts) =>
+      Math.floor(
+        Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 1100),
+      ),
+  },
+);
+
+const cloudformation = new CloudFormation({
   apiVersion: '2010-05-15',
-  maxRetries: 10,
-  retryDelayOptions: { base: 500 },
+  maxAttempts: MAXIMUM_ATTEMPTS,
+  retryStrategy: customRetryStrategy,
 });
 
 /**
@@ -15,9 +28,10 @@ async function changeSetFamily(stackName, changeSetName) {
   const changeSets = [];
 
   // Get the details of just the given change set
-  const changeSet = await cloudformation
-    .describeChangeSet({ StackName: stackName, ChangeSetName: changeSetName })
-    .promise();
+  const changeSet = await cloudformation.describeChangeSet({
+    StackName: stackName,
+    ChangeSetName: changeSetName,
+  });
 
   // Add the parameters for the given stack to the object
   changeSets.push(changeSet);

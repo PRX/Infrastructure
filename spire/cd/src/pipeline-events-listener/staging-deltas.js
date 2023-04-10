@@ -1,18 +1,19 @@
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const regions = require('./etc/regions');
 const urls = require('./etc/urls');
 const pipelineNames = require('./etc/pipeline-names');
 const deltas = require('./deltas/deltas');
 const { emoji } = require('./etc/execution-emoji');
 
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  * @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments
  */
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
@@ -48,70 +49,66 @@ exports.handler = async (event) => {
 
   const report = await deltas.report(StackName, ChangeSetName);
 
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify({
-        channel: `#ops-deploys-${approvalNotification.region}`,
-        username: 'AWS CodePipeline',
-        icon_emoji: ':ops-codepipeline:',
-        attachments: [
-          {
-            color: '#2576b4',
-            fallback: `${regionNickname} ${pipelineNickname} Review the staging change set deltas`,
-            blocks: [
-              {
-                type: 'section',
-                text: {
+  await sns.publish({
+    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+    Message: JSON.stringify({
+      channel: `#ops-deploys-${approvalNotification.region}`,
+      username: 'AWS CodePipeline',
+      icon_emoji: ':ops-codepipeline:',
+      attachments: [
+        {
+          color: '#2576b4',
+          fallback: `${regionNickname} ${pipelineNickname} Review the staging change set deltas`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: header,
+              },
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: [
+                  'Staging stack change set has been created, and automatically approved.',
+                ].join('\n'),
+              },
+            },
+            {
+              type: 'divider',
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: report.text,
+              },
+            },
+            {
+              type: 'context',
+              elements: [
+                {
                   type: 'mrkdwn',
-                  text: header,
+                  text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
                 },
-              },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: [
-                    'Staging stack change set has been created, and automatically approved.',
-                  ].join('\n'),
-                },
-              },
-              {
-                type: 'divider',
-              },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: report.text,
-                },
-              },
-              {
-                type: 'context',
-                elements: [
-                  {
-                    type: 'mrkdwn',
-                    text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      }),
-    })
-    .promise();
+              ],
+            },
+          ],
+        },
+      ],
+    }),
+  });
 
-  await codepipeline
-    .putApprovalResult({
-      pipelineName: approval.pipelineName,
-      stageName: approval.stageName,
-      actionName: approval.actionName,
-      token: approval.token,
-      result: {
-        status: 'Approved',
-        summary: 'Automatically approved',
-      },
-    })
-    .promise();
+  await codepipeline.putApprovalResult({
+    pipelineName: approval.pipelineName,
+    stageName: approval.stageName,
+    actionName: approval.actionName,
+    token: approval.token,
+    result: {
+      status: 'Approved',
+      summary: 'Automatically approved',
+    },
+  });
 };
