@@ -1,4 +1,6 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 
 const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
 const { STS } = require('@aws-sdk/client-sts');
@@ -63,8 +65,8 @@ async function cloudWatchClient(event) {
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {Promise<String[]>}
  */
 async function detailLines(event, desc, history, cloudWatchClient) {

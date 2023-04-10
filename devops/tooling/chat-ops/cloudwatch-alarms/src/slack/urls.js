@@ -1,4 +1,6 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 
 const operators = require('./operators');
 const logGroups = require('./log-groups');
@@ -49,8 +51,8 @@ function cwUrlEncode(inp) {
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {String}
  */
 function singleMetricAlarmMetricsConsole(event, desc, history) {
@@ -173,7 +175,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
 /**
  *
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmsOutput} desc
  * @returns {Promise<String>}
  */
 async function logsInsightsConsole(event, desc) {

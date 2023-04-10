@@ -1,4 +1,6 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 
 const { STS } = require('@aws-sdk/client-sts');
 const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
@@ -47,7 +49,7 @@ module.exports = {
    * Returns the name of a log group associated with the alarm that triggerd
    * and event.
    * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+   * @param {DescribeAlarmsOutput} desc
    * @returns {Promise<String>}
    */
   async logGroup(event, desc) {
