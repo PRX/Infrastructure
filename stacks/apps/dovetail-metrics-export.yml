@@ -16,6 +16,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  BigQueryLayerS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
   BigQueryClientConfig: { Type: AWS::SSM::Parameter::Value<String> }
   PorterJobExecutionSnsTopicArn: { Type: String }
 
@@ -26,6 +27,18 @@ Conditions:
   EnableProductionRules: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
 
 Resources:
+  BigQueryLayer:
+    Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CompatibleRuntimes:
+        - nodejs18.x
+      Content:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref BigQueryLayerS3ObjectKey
+      LicenseInfo: ISC
+
   ExportFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -41,6 +54,8 @@ Resources:
           BIGQUERY_CLIENT_CONFIG: !Ref BigQueryClientConfig
           PORTER_SNS_TOPIC: !Ref PorterJobExecutionSnsTopicArn
       Handler: src/index.handler
+      Layers:
+        - !Ref BigQueryLayer
       MemorySize: 128
       Policies:
         - Statement:
@@ -48,7 +63,7 @@ Resources:
               Effect: Allow
               Resource: !Ref PorterJobExecutionSnsTopicArn
               Sid: AllowPorterJobPublish
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -59,6 +74,7 @@ Resources:
         prx:dev:family: Dovetail
         prx:dev:application: Metrics Export
       Timeout: 180
+
   ExportFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Delete
@@ -80,6 +96,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Metrics Export }
+
   ExportFunctionElevatedErrorAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
