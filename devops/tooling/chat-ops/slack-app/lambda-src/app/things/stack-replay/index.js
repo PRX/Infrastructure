@@ -1,5 +1,5 @@
 const { WebClient } = require('@slack/web-api');
-const AWS = require('aws-sdk');
+const { S3 } = require('@aws-sdk/client-s3');
 const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
@@ -9,11 +9,13 @@ async function s3lient(accountId) {
   // listObjectVersions
   const role = await Access.devopsRole(accountId);
 
-  const s3 = new AWS.S3({
+  const s3 = new S3({
     apiVersion: '2006-03-01',
-    accessKeyId: role.Credentials.AccessKeyId,
-    secretAccessKey: role.Credentials.SecretAccessKey,
-    sessionToken: role.Credentials.SessionToken,
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 
   return s3;
@@ -21,12 +23,10 @@ async function s3lient(accountId) {
 
 async function openModal(payload) {
   const s3 = await s3lient(process.env.PRX_LEGACY_ACCOUNT_ID);
-  const versions = await s3
-    .listObjectVersions({
-      Bucket: process.env.INFRASTRUCTURE_CONFIG_BUCKET,
-      Prefix: process.env.INFRASTRUCTURE_CONFIG_STAGING_KEY,
-    })
-    .promise();
+  const versions = await s3.listObjectVersions({
+    Bucket: process.env.INFRASTRUCTURE_CONFIG_BUCKET,
+    Prefix: process.env.INFRASTRUCTURE_CONFIG_STAGING_KEY,
+  });
 
   const now = Date.now();
   const range = 60 * 60 * 24 * 14 * 1000;
@@ -167,13 +167,11 @@ async function replayVersion(payload) {
   const sourceUrl = `${configBucket}/${configKey}?versionId=${versionId}`;
 
   const s3 = await s3lient(process.env.PRX_LEGACY_ACCOUNT_ID);
-  await s3
-    .copyObject({
-      Bucket: configBucket,
-      CopySource: encodeURI(sourceUrl).replace(/\+/g, '%2B'),
-      Key: configKey,
-    })
-    .promise();
+  await s3.copyObject({
+    Bucket: configBucket,
+    CopySource: encodeURI(sourceUrl).replace(/\+/g, '%2B'),
+    Key: configKey,
+  });
 
   await web.chat.postMessage({
     icon_emoji: ':ops-codepipeline:',

@@ -1,4 +1,4 @@
-const AWS = require('aws-sdk');
+// const AWS = require('aws-sdk');
 // const regions = require('../../etc/regions');
 // const urls = require('../../etc/urls');
 // const { emoji } = require('../../etc/execution-emoji');

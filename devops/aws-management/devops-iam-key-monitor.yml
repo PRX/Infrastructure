@@ -29,9 +29,12 @@ Resources:
       Handler: index.handler
       InlineCode: |
         const AWS = require('aws-sdk');
+        const { SNS } = require('@aws-sdk/client-sns');
+        const { STS } = require('@aws-sdk/client-sts');
+        const { IAM } = require('@aws-sdk/client-iam');
 
-        const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
-        const sts = new AWS.STS({ apiVersion: '2011-06-15' });
+        const sns = new SNS({ apiVersion: '2010-03-31' });
+        const sts = new STS({ apiVersion: '2011-06-15' });
 
         const lookup = {
           '048723829744': ['Organization-Owners'],
@@ -61,10 +64,9 @@ Resources:
               .assumeRole({
                 RoleArn: roleArn,
                 RoleSessionName: 'iam_key_monitor',
-              })
-              .promise();
+              });
 
-            const iam = new AWS.IAM({
+            const iam = new IAM({
               apiVersion: '2010-05-08',
               accessKeyId: role.Credentials.AccessKeyId,
               secretAccessKey: role.Credentials.SecretAccessKey,
@@ -74,14 +76,14 @@ Resources:
             for (const groupName of lookup[accountId]) {
               const group = await iam.getGroup({
                 GroupName: groupName,
-              }).promise();
+              });
 
               for (const groupUser of group.Users) {
                 if (ignore_users.includes(groupUser.UserName)) { continue; }
 
                 const keys = await iam.listAccessKeys({
                   UserName: groupUser.UserName,
-                }).promise();
+                });
 
                 const activeKeys = keys.AccessKeyMetadata.filter(k => k.Status === 'Active');
                 const staleKeys = activeKeys.filter(k => now - +k.CreateDate > THRESHOLD);
@@ -94,7 +96,7 @@ Resources:
 
                   const usage = await iam.getAccessKeyLastUsed({
                     AccessKeyId: staleKey.AccessKeyId,
-                  }).promise();
+                  });
 
                   if (usage?.AccessKeyLastUsed?.LastUsedDate) {
                     const lastUsedMs = now - +usage.AccessKeyLastUsed.LastUsedDate;
@@ -131,7 +133,7 @@ Resources:
                 icon_emoji: ':ops-iam:',
                 text: lines.join("\n"),
               }),
-            }).promise();
+            });
           }
         };
 
@@ -147,7 +149,7 @@ Resources:
               Effect: Allow
               Resource: arn:aws:iam::*:role/DevOps-CrossAccountAccessRole
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName

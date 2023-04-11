@@ -51,10 +51,10 @@
 
 /** @typedef { import('aws-lambda').EventBridgeEvent<'CloudWatch Alarm State Change', EventBridgeCloudWatchAlarmsEventDetail> } EventBridgeCloudWatchAlarmsEvent */
 
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
 const regions = require('./regions');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.FATAL_SMS_CONTACT_LIST_SNS_TOPIC_ARN.split(':')[3],
 });
@@ -69,11 +69,9 @@ exports.handler = async (event) => {
   if (event.detail.alarmName.startsWith('FATAL')) {
     const region = regions.descriptor(event.region);
 
-    await sns
-      .publish({
-        TopicArn: process.env.FATAL_SMS_CONTACT_LIST_SNS_TOPIC_ARN,
-        Message: `${event.detail.state.value} | ${region} » ${event.detail.alarmName}`,
-      })
-      .promise();
+    await sns.publish({
+      TopicArn: process.env.FATAL_SMS_CONTACT_LIST_SNS_TOPIC_ARN,
+      Message: `${event.detail.state.value} | ${region} » ${event.detail.alarmName}`,
+    });
   }
 };

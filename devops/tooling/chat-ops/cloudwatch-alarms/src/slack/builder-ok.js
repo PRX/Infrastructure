@@ -1,4 +1,8 @@
 /** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').GetMetricDataOutput} GetMetricDataOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').CloudWatch} CloudWatch */
 
 const urls = require('./urls');
 
@@ -64,11 +68,11 @@ function conditionAlarmTime(event) {
 /**
  *
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch} cloudWatchClient
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+ * @param {CloudWatch} cloudWatchClient
+ * @param {DescribeAlarmsOutput} desc
  * @param {Date} startTime
  * @param {Date} endTime
- * @returns {Promise<AWS.CloudWatch.GetMetricDataOutput>}
+ * @returns {Promise<GetMetricDataOutput>}
  */
 async function metricData(event, cloudWatchClient, desc, startTime, endTime) {
   const queryMetric = {};
@@ -101,7 +105,7 @@ async function metricData(event, cloudWatchClient, desc, startTime, endTime) {
     ],
   };
 
-  return cloudWatchClient.getMetricData(params).promise();
+  return cloudWatchClient.getMetricData(params);
 }
 
 /**
@@ -141,8 +145,8 @@ function duration(event) {
  * Returns basic details of the alarm notification, like duration and links
  * to CloudWatch console pages.
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {Promise<String[]>}
  */
 async function basics(event, desc, history) {
@@ -169,8 +173,8 @@ async function basics(event, desc, history) {
  * that is ending. The list is truncated and sorted in some cases, depending
  * on the type of alarm and the total number of values.
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch} cloudWatchClient
+ * @param {DescribeAlarmsOutput} desc
+ * @param {CloudWatch} cloudWatchClient
  * @returns {Promise<String[]>}
  */
 async function datapoints(event, desc, cloudWatchClient) {
@@ -262,9 +266,9 @@ async function datapoints(event, desc, cloudWatchClient) {
 module.exports = {
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
-   * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
-   * @param {AWS.CloudWatch} cloudWatchClient
+   * @param {DescribeAlarmsOutput} desc
+   * @param {DescribeAlarmHistoryOutput} history
+   * @param {CloudWatch} cloudWatchClient
    * @returns {Promise<String[]>}
    */
   async detailLines(event, desc, history, cloudWatchClient) {

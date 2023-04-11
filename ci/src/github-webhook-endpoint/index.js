@@ -13,9 +13,9 @@
  */
 
 const crypto = require('crypto');
-const AWS = require('aws-sdk');
+const { EventBridge } = require('@aws-sdk/client-eventbridge');
 
-const eventbridge = new AWS.EventBridge({ apiVersion: '2015-10-07' });
+const eventbridge = new EventBridge({ apiVersion: '2015-10-07' });
 
 /** @typedef { import('aws-lambda').APIGatewayProxyStructuredResultV2 } APIGatewayProxyStructuredResultV2 */
 /** @typedef { import('aws-lambda').APIGatewayProxyEventV2 } APIGatewayProxyEventV2 */
@@ -53,17 +53,15 @@ exports.handler = async (event) => {
       // Blackhole `ping` events
       break;
     default:
-      await eventbridge
-        .putEvents({
-          Entries: [
-            {
-              Detail: body,
-              DetailType: event.headers['x-github-event'],
-              Source: 'org.prx.ci.github-webhook',
-            },
-          ],
-        })
-        .promise();
+      await eventbridge.putEvents({
+        Entries: [
+          {
+            Detail: body,
+            DetailType: event.headers['x-github-event'],
+            Source: 'org.prx.ci.github-webhook',
+          },
+        ],
+      });
   }
 
   return OK_RESPONSE;

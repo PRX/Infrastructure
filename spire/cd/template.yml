@@ -277,7 +277,7 @@ Resources:
               Effect: Allow
               Resource: !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -342,7 +342,7 @@ Resources:
       Policies:
         - !Ref CodePipelineStateReadOnlyAccessPolicy
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -530,8 +530,6 @@ Resources:
                 Resource:
                   - !GetAtt AcceptanceTestsCodeBuildProject.Arn
                   - !Sub ${AcceptanceTestsCodeBuildProject.Arn}/*
-                  - !GetAtt OldAcceptanceTestsCodeBuildProject.Arn
-                  - !Sub ${OldAcceptanceTestsCodeBuildProject.Arn}/*
             Version: "2012-10-17"
           PolicyName: CodeBuildPolicy
       Tags:
@@ -565,20 +563,6 @@ Resources:
               Namespace: src_infra
               OutputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
-              RunOrder: 1
-            - Name: MetaRepo
-              ActionTypeId:
-                Category: Source
-                Owner: AWS
-                Provider: CodeStarSourceConnection
-                Version: "1"
-              Configuration:
-                ConnectionArn: !Ref CodeStarConnectionArn
-                FullRepositoryId: PRX/meta.prx.org
-                BranchName: master
-                OutputArtifactFormat: CODE_ZIP
-              OutputArtifacts:
-                - Name: MetaRepoSourceArtifact
               RunOrder: 1
             - Name: AcceptanceTestsRepo
               ActionTypeId:
@@ -722,47 +706,6 @@ Resources:
                 - Name: AcceptanceRepoSourceArtifact
               OutputArtifacts:
                 - Name: AcceptanceTestArtifact
-              RunOrder: 1
-            - Name: Old-Acceptance-Tests
-              ActionTypeId:
-                Category: Test
-                Owner: AWS
-                Provider: CodeBuild
-                Version: "1"
-              Configuration:
-                EnvironmentVariables: |-
-                  [
-                    {
-                      "name": "DOVETAIL_HOST",
-                      "value": "#{staging_deploy.DovetailRouterHostname}"
-                    }, {
-                      "name": "FEEDER_HOST",
-                      "value": "#{staging_deploy.FeederHostname}"
-                    }, {
-                      "name": "METRICS_HOST",
-                      "value": "#{staging_deploy.MetricsHostname}"
-                    }, {
-                      "name": "PUBLISH_HOST",
-                      "value": "#{staging_deploy.PublishHostname}"
-                    }, {
-                      "name": "UPLOAD_HOST",
-                      "value": "#{staging_deploy.S3SigningHostname}"
-                    }, {
-                      "name": "STAGING_REGION_MODE",
-                      "value": "#{staging_deploy.RegionMode}"
-                    }, {
-                      "name": "STAGING_APPLICATIONS_STACK_STATE",
-                      "value": "#{staging_deploy.ApplicationStacksState}"
-                    }, {
-                      "name": "PORTER_STATE_MACHINE_ARN",
-                      "value": "#{staging_deploy.PorterStateMachineArn}"
-                    }
-                  ]
-                ProjectName: !Ref OldAcceptanceTestsCodeBuildProject
-              InputArtifacts:
-                - Name: MetaRepoSourceArtifact
-              OutputArtifacts:
-                - Name: OldAcceptanceTestArtifact
               RunOrder: 1
         - Name: Production
           Actions:
@@ -1003,7 +946,7 @@ Resources:
               Effect: Allow
               Resource: "*"
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1072,7 +1015,7 @@ Resources:
       Policies:
         - !Ref SlackRelaySnsPublishOnlyAccessPolicy
         - !Ref CloudFormationReadOnlyAccessPolicy
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1188,7 +1131,7 @@ Resources:
               Resource:
                 - !Sub ${TemplateCopyBucket.Arn}/*
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1242,7 +1185,7 @@ Resources:
               Effect: Allow
               Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/prod/Spire/*
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1291,7 +1234,7 @@ Resources:
         - !Ref CloudFormationReadOnlyAccessPolicy
         - !Ref SnapshotsBucketWriteAccessPolicy
         - !Ref CodePipelineJobResultWriteAccessPolicy
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -1412,44 +1355,3 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: CD }
       TimeoutInMinutes: 15
-
-  OldAcceptanceTestsCodeBuildLogsPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyDocument:
-        Statement:
-          - Action:
-              - logs:CreateLogGroup
-              - logs:CreateLogStream
-              - logs:PutLogEvents
-            Effect: Allow
-            Resource:
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${OldAcceptanceTestsCodeBuildProject}
-              - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${OldAcceptanceTestsCodeBuildProject}:*
-            Sid: AllowOldCodeBuildLogs
-        Version: "2012-10-17"
-      PolicyName: OldCloudWatchLogsPolicy
-      Roles:
-        - !Ref AcceptanceTestsCodeBuildRole
-  OldAcceptanceTestsCodeBuildProject:
-    Type: AWS::CodeBuild::Project
-    Properties:
-      Artifacts:
-        Type: CODEPIPELINE
-      Description: Runs acceptance tests for PRX platform
-      Environment:
-        ComputeType: BUILD_GENERAL1_SMALL
-        Image: !Sub 561178107736.dkr.ecr.${AWS::Region}.amazonaws.com/meta.prx.org:latest
-        Type: LINUX_CONTAINER
-      Name: !Sub ${AWS::StackName}-OldAcceptanceTests
-      ServiceRole: !GetAtt AcceptanceTestsCodeBuildRole.Arn
-      Source:
-        BuildSpec: buildspec-pipeline.yml
-        Type: CODEPIPELINE
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: Production }
-        - { Key: prx:dev:application, Value: CD }
-      TimeoutInMinutes: 5

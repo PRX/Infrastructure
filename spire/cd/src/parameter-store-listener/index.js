@@ -1,6 +1,6 @@
-const AWS = require('aws-sdk');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 // https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-cwe.html
 /**
@@ -17,8 +17,8 @@ exports.handler = async (event) => {
     event.detail.name.startsWith('/prx/stag/Spire/') ||
     event.detail.name.startsWith('/prx/global/Spire/')
   ) {
-    await codepipeline
-      .startPipelineExecution({ name: process.env.PIPELINE_NAME })
-      .promise();
+    await codepipeline.startPipelineExecution({
+      name: process.env.PIPELINE_NAME,
+    });
   }
 };

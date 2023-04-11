@@ -64,9 +64,12 @@ Resources:
         ZipFile: |
           const url = require('url');
           const https = require('https');
-          const AWS = require('aws-sdk');
+          const { SNS } = require('@aws-sdk/client-sns');
 
-          const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+          const sns = new SNS({
+              apiVersion: '2010-03-31',
+              region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
+          });
 
           const API_URL_BASE = 'https://api.submittable.com';
 
@@ -139,7 +142,7 @@ Resources:
               await sns.publish({
                   TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
                   Message: JSON.stringify(messageForSubmissions(submissions)),
-              }).promise();
+              });
           };
       Description: >-
         Gets recent submissions from Submittable and sends them to Slack via the
@@ -154,7 +157,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt PollerFunctionIamRole.Arn
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         - Key: Project
           Value: Misc

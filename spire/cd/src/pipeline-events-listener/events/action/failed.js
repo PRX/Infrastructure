@@ -1,10 +1,10 @@
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
 const regions = require('../../etc/regions');
 const urls = require('../../etc/urls');
 const pipelineNames = require('../../etc/pipeline-names');
 const { emoji } = require('../../etc/execution-emoji');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
@@ -23,43 +23,41 @@ module.exports = async (event) => {
     `*Execution ID:* \`${execId}\` ${icon}`,
   ].join('\n');
 
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify({
-        channel: `#ops-deploys-${event.region}`,
-        username: 'AWS CodePipeline',
-        icon_emoji: ':ops-codepipeline:',
-        attachments: [
-          {
-            color: '#a30200',
-            fallback: `${regionNickname} ${pipelineNickname} has failed.`,
-            blocks: [
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: header,
-                },
+  await sns.publish({
+    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+    Message: JSON.stringify({
+      channel: `#ops-deploys-${event.region}`,
+      username: 'AWS CodePipeline',
+      icon_emoji: ':ops-codepipeline:',
+      attachments: [
+        {
+          color: '#a30200',
+          fallback: `${regionNickname} ${pipelineNickname} has failed.`,
+          blocks: [
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: header,
               },
-              {
-                type: 'section',
-                text: {
-                  type: 'mrkdwn',
-                  text: [
-                    `${event.detail.stage} \`${event.detail.action}\` has failed.`,
-                    `*Reason*: _${
-                      event.detail?.['execution-result']?.[
-                        'external-execution-summary'
-                      ] || 'unknown'
-                    }_`,
-                  ].join('\n'),
-                },
+            },
+            {
+              type: 'section',
+              text: {
+                type: 'mrkdwn',
+                text: [
+                  `${event.detail.stage} \`${event.detail.action}\` has failed.`,
+                  `*Reason*: _${
+                    event.detail?.['execution-result']?.[
+                      'external-execution-summary'
+                    ] || 'unknown'
+                  }_`,
+                ].join('\n'),
               },
-            ],
-          },
-        ],
-      }),
-    })
-    .promise();
+            },
+          ],
+        },
+      ],
+    }),
+  });
 };

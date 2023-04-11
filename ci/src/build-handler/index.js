@@ -16,9 +16,9 @@
  */
 
 const https = require('https');
-const AWS = require('aws-sdk');
+const { CodeBuild } = require('@aws-sdk/client-codebuild');
 
-const codebuild = new AWS.CodeBuild({ apiVersion: '2016-10-06' });
+const codebuild = new CodeBuild({ apiVersion: '2016-10-06' });
 
 /** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
 /** @typedef { import('@octokit/types').Endpoints["GET /repos/{owner}/{repo}"]["response"]["data"] } ReposGetResponseData } */
@@ -147,18 +147,16 @@ async function triggerBuild(ciContentsResponse, event) {
     environmentVariables.push({ name: 'PRX_GITHUB_AFTER', value: after });
   }
 
-  await codebuild
-    .startBuild({
-      projectName: process.env.CODEBUILD_PROJECT_NAME,
-      sourceTypeOverride: 'GITHUB',
-      sourceLocationOverride: event.repository.clone_url,
-      sourceVersion: eventIsPullRequest(event)
-        ? `pr/${event.pull_request.number}`
-        : event.after,
-      buildspecOverride: buildspec,
-      environmentVariablesOverride: environmentVariables,
-    })
-    .promise();
+  await codebuild.startBuild({
+    projectName: process.env.CODEBUILD_PROJECT_NAME,
+    sourceTypeOverride: 'GITHUB',
+    sourceLocationOverride: event.repository.clone_url,
+    sourceVersion: eventIsPullRequest(event)
+      ? `pr/${event.pull_request.number}`
+      : event.after,
+    buildspecOverride: buildspec,
+    environmentVariablesOverride: environmentVariables,
+  });
 
   console.log('CodeBuild started');
 }

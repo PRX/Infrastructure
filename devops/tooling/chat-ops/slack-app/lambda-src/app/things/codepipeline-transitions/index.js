@@ -1,5 +1,5 @@
 const { WebClient } = require('@slack/web-api');
-const AWS = require('aws-sdk');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
@@ -9,12 +9,14 @@ async function codePipelineClient(accountId, region) {
   // listDistributions
   const role = await Access.devopsRole(accountId);
 
-  const codepipeline = new AWS.CodePipeline({
+  const codepipeline = new CodePipeline({
     apiVersion: '2019-03-26',
     region: region,
-    accessKeyId: role.Credentials.AccessKeyId,
-    secretAccessKey: role.Credentials.SecretAccessKey,
-    sessionToken: role.Credentials.SessionToken,
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 
   return codepipeline;
@@ -135,7 +137,7 @@ async function regionSelected(payload) {
   const { accountId, accountName } = privateMetadata;
 
   const codepipeline = await codePipelineClient(accountId, region);
-  const pipelines = await codepipeline.listPipelines({}).promise();
+  const pipelines = await codepipeline.listPipelines({});
 
   await web.views.update({
     view_id: payload.view.id,
@@ -206,11 +208,9 @@ async function pipelineSelected(payload) {
   const { accountId, accountName, region } = privateMetadata;
 
   const codepipeline = await codePipelineClient(accountId, region);
-  const pipelineState = await codepipeline
-    .getPipelineState({
-      name: pipelineName,
-    })
-    .promise();
+  const pipelineState = await codepipeline.getPipelineState({
+    name: pipelineName,
+  });
 
   await web.views.update({
     view_id: payload.view.id,
@@ -290,11 +290,9 @@ async function stageSelected(payload) {
   const { accountId, accountName, region, pipelineName } = privateMetadata;
 
   const codepipeline = await codePipelineClient(accountId, region);
-  const pipelineState = await codepipeline
-    .getPipelineState({
-      name: pipelineName,
-    })
-    .promise();
+  const pipelineState = await codepipeline.getPipelineState({
+    name: pipelineName,
+  });
 
   const stageState = pipelineState.stageStates.find(
     (state) => state.stageName === stageName,
@@ -421,25 +419,21 @@ async function setTransitionState(payload) {
     const { value } = action;
 
     const reason = value;
-    await codepipeline
-      .disableStageTransition({
-        pipelineName,
-        stageName,
-        transitionType: 'Inbound',
-        reason,
-      })
-      .promise();
+    await codepipeline.disableStageTransition({
+      pipelineName,
+      stageName,
+      transitionType: 'Inbound',
+      reason,
+    });
 
     msg.text = `Pipeline stage transition for \`${pipelineName}\`:\`${stageName}\` has been disabled.\n> ${reason}`;
   } else {
     // Stage is currently enabled; Enable it
-    await codepipeline
-      .enableStageTransition({
-        pipelineName,
-        stageName,
-        transitionType: 'Inbound',
-      })
-      .promise();
+    await codepipeline.enableStageTransition({
+      pipelineName,
+      stageName,
+      transitionType: 'Inbound',
+    });
 
     msg.text = `Pipeline stage transition for \`${pipelineName}\`:\`${stageName}\` has been enabled.`;
   }

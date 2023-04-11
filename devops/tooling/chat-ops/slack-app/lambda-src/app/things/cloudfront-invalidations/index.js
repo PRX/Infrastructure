@@ -1,5 +1,5 @@
 const { WebClient } = require('@slack/web-api');
-const AWS = require('aws-sdk');
+const { CloudFront } = require('@aws-sdk/client-cloudfront');
 const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
@@ -61,15 +61,17 @@ async function selectAccount(payload) {
   // listDistributions
   const role = await Access.devopsRole(accountId);
 
-  const cloudfront = new AWS.CloudFront({
+  const cloudfront = new CloudFront({
     apiVersion: '2019-03-26',
     region: 'us-east-1',
-    accessKeyId: role.Credentials.AccessKeyId,
-    secretAccessKey: role.Credentials.SecretAccessKey,
-    sessionToken: role.Credentials.SessionToken,
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 
-  const distributions = await cloudfront.listDistributions({}).promise();
+  const distributions = await cloudfront.listDistributions({});
 
   await web.views.update({
     view_id: payload.view.id,
@@ -212,26 +214,26 @@ async function createInvalidation(accountId, distributionId, paths) {
   // createInvalidation
   const role = await Access.devopsRole(accountId);
 
-  const cloudfront = new AWS.CloudFront({
+  const cloudfront = new CloudFront({
     apiVersion: '2019-03-26',
     region: 'us-east-1',
-    accessKeyId: role.Credentials.AccessKeyId,
-    secretAccessKey: role.Credentials.SecretAccessKey,
-    sessionToken: role.Credentials.SessionToken,
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 
-  await cloudfront
-    .createInvalidation({
-      DistributionId: distributionId,
-      InvalidationBatch: {
-        CallerReference: `${+new Date()}`,
-        Paths: {
-          Quantity: paths.length,
-          Items: paths,
-        },
+  await cloudfront.createInvalidation({
+    DistributionId: distributionId,
+    InvalidationBatch: {
+      CallerReference: `${+new Date()}`,
+      Paths: {
+        Quantity: paths.length,
+        Items: paths,
       },
-    })
-    .promise();
+    },
+  });
 }
 
 async function submitPaths(payload) {

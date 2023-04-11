@@ -1,4 +1,7 @@
 /** @typedef {import('../index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
+/** @typedef {import('@aws-sdk/client-cloudwatch').MetricAlarm} MetricAlarm */
 
 const operators = require('../operators');
 const urls = require('../urls');
@@ -22,8 +25,8 @@ function precision(a) {
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * * @returns {Promise<String[]>}
  */
 async function started(event, desc, history) {
@@ -77,7 +80,7 @@ async function started(event, desc, history) {
  * Returns the datapoints that were evaluated and caused the alarm to move to
  * an ALARM state
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmsOutput} desc
  * @returns {String[]}
  */
 function datapoints(event, desc) {
@@ -134,7 +137,7 @@ function datapoints(event, desc) {
 /**
  * Returns information about the number of times the alarm has had a to ALARM
  * state change in the last 24 hours
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {String[]}
  */
 function last24Hours(history) {
@@ -154,7 +157,7 @@ function last24Hours(history) {
  * stat, like Sum, Average, Minimum, or an extended stat, like a percentile.
  * Statistics and extended statistics are mutually exclusive; an alarm will
  * only ever have one or the other.
- * @param {AWS.CloudWatch.MetricAlarm} alarm
+ * @param {MetricAlarm} alarm
  * @returns {String}
  */
 function alarmStatistic(alarm) {
@@ -206,8 +209,8 @@ function evaluationSummary(
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
- * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
  * @returns {String[]}
  */
 function cause(event, desc, history) {
@@ -249,8 +252,8 @@ function cause(event, desc, history) {
 module.exports = {
   /**
    * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {AWS.CloudWatch.DescribeAlarmsOutput} desc
-   * @param {AWS.CloudWatch.DescribeAlarmHistoryOutput} history
+   * @param {DescribeAlarmsOutput} desc
+   * @param {DescribeAlarmHistoryOutput} history
    * @returns {Promise<String[]>}
    */
   async detailLines(event, desc, history) {

@@ -18,6 +18,7 @@ Parameters:
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  GoogleapisLayerS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
   TheWorldSearchGoogleCustomSearchEngineId: { Type: AWS::SSM::Parameter::Value<String> }
   TheWorldSearchGoogleCustomSearchApiKey: { Type: AWS::SSM::Parameter::Value<String> }
   TheWorldSearchHostname: { Type: String }
@@ -68,6 +69,18 @@ Resources:
         prx:dev:family: The World
         prx:dev:application: Search
 
+  GoogleapisLayer:
+    Type: AWS::Lambda::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      CompatibleRuntimes:
+        - nodejs18.x
+      Content:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref GoogleapisLayerS3ObjectKey
+      LicenseInfo: ISC
+
   SearchEndpointFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -87,8 +100,10 @@ Resources:
           ENGINE_ID: !Ref TheWorldSearchGoogleCustomSearchEngineId
           CSE_API_KEY: !Ref TheWorldSearchGoogleCustomSearchApiKey
       Handler: index.handler
+      Layers:
+        - !Ref GoogleapisLayer
       MemorySize: 192
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName

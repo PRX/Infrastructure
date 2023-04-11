@@ -1,11 +1,12 @@
 const https = require('https');
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
+const { S3 } = require('@aws-sdk/client-s3');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
-const s3 = new AWS.S3({ apiVersion: '2006-03-01' });
+const s3 = new S3({ apiVersion: '2006-03-01' });
 
 const CLASSY_API_CLIENT_ID = process.env.CLASSY_API_CLIENT_ID;
 const CLASSY_API_CLIENT_SECRET = process.env.CLASSY_API_CLIENT_SECRET;
@@ -112,23 +113,23 @@ function httpGet(token, path) {
   });
 }
 
-function getCount() {
-  return new Promise((resolve, reject) => {
-    s3.getObject(
-      {
-        Bucket: process.env.COUNTER_BUCKET,
-        Key: process.env.COUNTER_OBJECT,
-      },
-      (err, data) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(+data.Body.toString('utf8'));
-        }
-      },
-    );
-  });
-}
+// function getCount() {
+//   return new Promise((resolve, reject) => {
+//     s3.getObject(
+//       {
+//         Bucket: process.env.COUNTER_BUCKET,
+//         Key: process.env.COUNTER_OBJECT,
+//       },
+//       (err, data) => {
+//         if (err) {
+//           reject(err);
+//         } else {
+//           resolve(+data.Body.toString('utf8'));
+//         }
+//       },
+//     );
+//   });
+// }
 
 function shortMemberName(member, tx) {
   if (tx.is_anonymous) {
@@ -299,17 +300,15 @@ exports.handler = async (event) => {
       }
 
       if (text) {
-        await sns
-          .publish({
-            TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-            Message: JSON.stringify({
-              channel: mapping[camp.id],
-              username: 'Classy',
-              icon_emoji: ':classy:',
-              text,
-            }),
-          })
-          .promise();
+        await sns.publish({
+          TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+          Message: JSON.stringify({
+            channel: mapping[camp.id],
+            username: 'Classy',
+            icon_emoji: ':classy:',
+            text,
+          }),
+        });
       }
     }
   }

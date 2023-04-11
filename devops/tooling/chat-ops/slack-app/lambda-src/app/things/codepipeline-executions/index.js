@@ -1,5 +1,5 @@
 const { WebClient } = require('@slack/web-api');
-const AWS = require('aws-sdk');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
@@ -9,12 +9,14 @@ async function codePipelineClient(accountId, region) {
   // listDistributions
   const role = await Access.devopsRole(accountId);
 
-  const codepipeline = new AWS.CodePipeline({
+  const codepipeline = new CodePipeline({
     apiVersion: '2019-03-26',
     region: region,
-    accessKeyId: role.Credentials.AccessKeyId,
-    secretAccessKey: role.Credentials.SecretAccessKey,
-    sessionToken: role.Credentials.SessionToken,
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 
   return codepipeline;
@@ -135,7 +137,7 @@ async function regionSelected(payload) {
   const { accountId, accountName } = privateMetadata;
 
   const codepipeline = await codePipelineClient(accountId, region);
-  const pipelines = await codepipeline.listPipelines({}).promise();
+  const pipelines = await codepipeline.listPipelines({});
 
   await web.views.update({
     view_id: payload.view.id,
@@ -262,11 +264,9 @@ async function pipelineSelected(payload) {
  */
 async function startPipelineExecution(accountId, region, pipelineName) {
   const codepipeline = await codePipelineClient(accountId, region);
-  await codepipeline
-    .startPipelineExecution({
-      name: pipelineName,
-    })
-    .promise();
+  await codepipeline.startPipelineExecution({
+    name: pipelineName,
+  });
 }
 
 async function startPipeline(payload) {

@@ -1,9 +1,9 @@
 const { WebClient } = require('@slack/web-api');
-const AWS = require('aws-sdk');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const Access = require('../../access');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
-const codepipeline = new AWS.CodePipeline({ apiVersion: '2015-07-09' });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
  * Sends a Slack message with release notes
@@ -103,15 +103,17 @@ module.exports = {
     // putApprovalResult
     const role = await Access.devopsRole(pipelineAccountId);
 
-    const codepipeline = new AWS.CodePipeline({
+    const codepipeline = new CodePipeline({
       apiVersion: '2019-03-26',
       region: pipelineRegion,
-      accessKeyId: role.Credentials.AccessKeyId,
-      secretAccessKey: role.Credentials.SecretAccessKey,
-      sessionToken: role.Credentials.SessionToken,
+      credentials: {
+        accessKeyId: role.Credentials.AccessKeyId,
+        secretAccessKey: role.Credentials.SecretAccessKey,
+        sessionToken: role.Credentials.SessionToken,
+      },
     });
 
-    await codepipeline.putApprovalResult(approvalParams).promise();
+    await codepipeline.putApprovalResult(approvalParams);
 
     // Get the message that included the approval notification/button
     const history = await web.conversations.history({

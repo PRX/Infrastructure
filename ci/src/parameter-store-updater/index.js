@@ -1,10 +1,6 @@
-const AWS = require('aws-sdk');
+const { SSM } = require('@aws-sdk/client-ssm');
 
-const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
-const sns = new AWS.SNS({
-  apiVersion: '2010-03-31',
-  region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
-});
+const ssm = new SSM({ apiVersion: '2014-11-06' });
 
 /**
  * Updates a Parameter Store parameter with the given value, if the parameter
@@ -15,14 +11,12 @@ const sns = new AWS.SNS({
 async function updateSsmParameter(parameterName, parameterValue) {
   if (parameterName.startsWith('/prx/stag/Spire/')) {
     console.log(`Setting: ${parameterName} = ${parameterValue}`);
-    await ssm
-      .putParameter({
-        Name: parameterName,
-        Value: parameterValue,
-        Type: 'String',
-        Overwrite: true,
-      })
-      .promise();
+    await ssm.putParameter({
+      Name: parameterName,
+      Value: parameterValue,
+      Type: 'String',
+      Overwrite: true,
+    });
   }
 }
 

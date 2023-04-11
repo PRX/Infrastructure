@@ -64,7 +64,8 @@ Resources:
     Properties:
       Code:
         ZipFile: >
-          var AWS = require("aws-sdk");
+          const { SNS } = require('@aws-sdk/client-sns');
+
           exports.handler = async (event, context) => {
               let message = JSON.parse(event["Records"][0]["Sns"]["Message"]);
               let eventBody = JSON.parse(message["body"]);
@@ -85,14 +86,17 @@ Resources:
                   text: slackMsg
               };
 
-              var sns = new AWS.SNS({region: 'us-east-1'});
+              var sns = new SNS({
+                  apiVersion: '2010-03-31',
+                  region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3]
+              });
               var snsWrapper = {
                   Message: JSON.stringify(relayParams),
                   Subject: "Resource Reporter: Resource Action Discovered",
                   TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN
               };
 
-              await sns.publish(snsWrapper).promise();
+              await sns.publish(snsWrapper);
               return relayParams;
           };
       Description: Listens for CMS SNS actions, routes them to slack
@@ -107,7 +111,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaIamRole.Arn
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Timeout: 8
   LambdaErrorAlarm:
     Type: "AWS::CloudWatch::Alarm"

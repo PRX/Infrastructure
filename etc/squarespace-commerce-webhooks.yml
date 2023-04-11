@@ -92,10 +92,14 @@ Resources:
       Code:
         ZipFile: |
           const https = require('https');
-          const AWS = require('aws-sdk');
+          const { SNS } = require('@aws-sdk/client-sns');
           const url = require('url');
 
           const sns = new AWS.SNS({ apiVersion: '2010-03-31' });
+          const sns = new SNS({
+              apiVersion: '2010-03-31',
+              region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3]
+          });
 
           const SLACK_CHANNEL = '#garage-registration';
           const SLACK_USERNAME = 'Squarespace';
@@ -188,7 +192,7 @@ Resources:
                                   `<mailto:${order.customerEmail}|${order.billingAddress.firstName} ${order.billingAddress.lastName}> ordered ${lineItem.quantity} ticket${lineItem.quantity === 1 ? '' : 's' } for *${inventory.descriptor}*`,
                               ].join('\n')
                           }),
-                      }).promise();
+                      });
                   }
 
                   return { statusCode: 200, headers: {}, body: '' };
@@ -206,7 +210,7 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt LambdaIamRole.Arn
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         - Key: Project
           Value: Misc

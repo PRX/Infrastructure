@@ -7,34 +7,34 @@
  * 1. https://api.slack.com/methods/chat.postMessage
  */
 
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
+const { STS } = require('@aws-sdk/client-sts');
+const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
 const regions = require('./regions');
 const urls = require('./urls');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
-const sts = new AWS.STS({ apiVersion: '2011-06-15' });
+const sts = new STS({ apiVersion: '2011-06-15' });
 
 async function cloudWatchClient(accountId, region) {
   const roleName = process.env.CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME;
 
-  const role = await sts
-    .assumeRole({
-      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
-      RoleSessionName: 'reminders_lambda_reader',
-    })
-    .promise();
+  const role = await sts.assumeRole({
+    RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+    RoleSessionName: 'reminders_lambda_reader',
+  });
 
-  return new AWS.CloudWatch({
+  return new CloudWatch({
     apiVersion: '2010-08-01',
     region: region,
-    credentials: new AWS.Credentials(
-      role.Credentials.AccessKeyId,
-      role.Credentials.SecretAccessKey,
-      role.Credentials.SessionToken,
-    ),
+    credentials: {
+      accessKeyId: role.Credentials.AccessKeyId,
+      secretAccessKey: role.Credentials.SecretAccessKey,
+      sessionToken: role.Credentials.SessionToken,
+    },
   });
 }
 
@@ -244,21 +244,19 @@ exports.handler = async (event) => {
 
   console.log(blocks);
 
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-      Message: JSON.stringify({
-        username: 'Amazon CloudWatch Alarms',
-        icon_emoji: ':ops-cloudwatch-alarm:',
-        channel: 'G2QH6NMEH', // #ops-error
-        attachments: [
-          {
-            color: '#a30200',
-            fallback: `There are *${count}* long-running alarms`,
-            blocks,
-          },
-        ],
-      }),
-    })
-    .promise();
+  await sns.publish({
+    TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+    Message: JSON.stringify({
+      username: 'Amazon CloudWatch Alarms',
+      icon_emoji: ':ops-cloudwatch-alarm:',
+      channel: 'G2QH6NMEH', // #ops-error
+      attachments: [
+        {
+          color: '#a30200',
+          fallback: `There are *${count}* long-running alarms`,
+          blocks,
+        },
+      ],
+    }),
+  });
 };

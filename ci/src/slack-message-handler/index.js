@@ -7,9 +7,9 @@
  * details that are included in the CodeBuild event.
  */
 
-const AWS = require('aws-sdk');
+const { SNS } = require('@aws-sdk/client-sns');
 
-const sns = new AWS.SNS({
+const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
@@ -33,15 +33,13 @@ exports.handler = async (event) => {
 
   const attachments = await buildAttachments(event);
 
-  await sns
-    .publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify({
-        channel: 'G5C36JDUY', // #ops-build
-        username: 'AWS CodeBuild',
-        icon_emoji: ':ops-codebuild:',
-        attachments,
-      }),
-    })
-    .promise();
+  await sns.publish({
+    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+    Message: JSON.stringify({
+      channel: 'G5C36JDUY', // #ops-build
+      username: 'AWS CodeBuild',
+      icon_emoji: ':ops-codebuild:',
+      attachments,
+    }),
+  });
 };
