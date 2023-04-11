@@ -1176,8 +1176,8 @@ Resources:
             Queue: !GetAtt SlowWorkerRelaySqsQueue.Arn
       Handler: index.handler
       InlineCode: |
-        const AWS = require('aws-sdk');
-        const ecs = new AWS.ECS();
+        const { ECS } = require('@aws-sdk/client-ecs');
+        const ecs = new ECS({ apiVersion: '2014-11-13' });
         const QUEUE_CONCURRENCY = { slow: 2, slow_ted: 1 };
 
         // ECS listTask parameters
@@ -1259,12 +1259,12 @@ Resources:
             return log('warn', `unknown queue ${queueName}`);
           }
 
-          const listRes = await ecs.listTasks(listParams(queueName)).promise();
+          const listRes = await ecs.listTasks(listParams(queueName));
           const running = listRes.taskArns.length;
           if (running < QUEUE_CONCURRENCY[queueName]) {
             log('info', `launching 1 more ${queueName} worker (${running} running)`);
             try {
-              const runRes = await ecs.runTask(runParams(queueName)).promise();
+              const runRes = await ecs.runTask(runParams(queueName));
               log('debug', 'ran task', runRes);
             } catch (err) {
               log('error', 'error running task', err);
@@ -1290,7 +1290,7 @@ Resources:
                 - !GetAtt TaskRole.Arn
           Version: "2012-10-17"
       ReservedConcurrentExecutions: 1
-      Runtime: nodejs16.x
+      Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
