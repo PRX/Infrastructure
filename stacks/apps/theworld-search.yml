@@ -210,11 +210,20 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Search }
 
-  # Creates an association between search.[staging.]theworld.org and the
-  # production API Gateway. This association can be created once per region.
-  # This association allows for a CNAME to be made between
-  # search.[staging.]theworld.org and search.[staging.]theworld.prx.tech, the
-  # latter of which provides latency-based routing for the app between regions.
+  # Adds a custom domain to the API Gateway. This is the public domain used for
+  # The World Search (i.e., search.theworld.org or search.staging.theworld.org).
+  #
+  # This DOES NOT create any DNS records.
+  #
+  # This configuration enables the API Gateway to handle traffic with a host
+  # header that matches the public domain, and associates the necessary TLS
+  # certificate with the Gateway.
+  #
+  # It's expected that the DNS for this domain will be like:
+  #   - search.theworld.org          CNAME  search.theworld.prx.tech
+  #   - search.staging.theworld.org  CNAME  search.staging.theworld.prx.tech
+  #
+  # See below for additional DNS information.
   ExternalDomainName:
     Type: AWS::ApiGatewayV2::DomainName
     Properties:
@@ -237,14 +246,22 @@ Resources:
       DomainName: !Ref ExternalDomainName
       Stage: !Ref HttpApiApiGatewayDefaultStage
 
-  # Creates DNS records for search.[staging.]theworld.prx.tech, which alias to
-  # the regional domain name for the domain association for
-  # search.[staging.]theworld.org. This allows for search.theworld.org to
-  # resolve to search.[staging.]theworld.prx.tech, and have
-  # search.[staging.]theworld.prx.tech return the IP for an endpoint that is
-  # associated with search.[staging.]theworld.org. There is no API Gateway
-  # domain association for search.[staging.]theworld.prx.tech itself, so that
-  # domain is not functional, in any way other than as a DNS CNAME target.
+  # Creates DNS records for search.theworld.prx.tech (or
+  # search.staging.theworld.prx.tech) that look like:
+  #   - search.theworld.prx.tech    A ALIAS   d-1234567890.execute-api.us-east-1.amazonaws.com.
+  #
+  # A record for this domain is created in each Spire region, which creates a
+  # latency routing policy for the domain.
+  #
+  # API Gateway is NOT configured to handle traffic to this domain, so requests
+  # to search.theworld.prx.tech will fail. This domain exists solely to resolve
+  # to the IP address of the API Gateway.
+  #
+  # A request made to search.theworld.org will resolve to
+  # search.theworld.prx.tech, which will resolve to the lowest latency IP
+  # address, which is how the request reaches a API Gateway. The request will
+  # have a host header of search.theworld.org, which the API Gateway is
+  # configured to handle.
   InternalDomainNameRecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
     Properties:
