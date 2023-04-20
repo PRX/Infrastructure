@@ -35,6 +35,9 @@ Parameters:
   RootStackId: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   CloudWatchLogGroupTaggerServiceToken: { Type: String }
+  S3SigningUserName: { Type: String }
+  S3SigningEndpointUrl: { Type: String }
+  S3SigningAccessKeyId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
@@ -495,10 +498,18 @@ Resources:
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
-            - Name: RAILS_ENV
-              Value: !Ref EnvironmentTypeLowercase
             - Name: PRX_HOST
               Value: !Ref BetaHostname
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: UPLOAD_BUCKET_NAME
+              Value: !Ref FeederUploadsBucket
+            - Name: UPLOAD_S3_ENDPOINT_HOST
+              Value: !Sub ${FeederUploadsBucket}.s3-accelerate.dualstack.amazonaws.com
+            - Name: UPLOAD_SIGNING_SERVICE_KEY_ID
+              Value: !Ref S3SigningAccessKeyId
+            - Name: UPLOAD_SIGNING_SERVICE_URL
+              Value: !Ref S3SigningEndpointUrl
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -674,6 +685,76 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Feeder }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # bucket for temporary S3 uploads from Feeder UI
+  FeederUploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AccelerateConfiguration:
+        AccelerationStatus: Enabled
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - POST
+              - PUT
+            AllowedOrigins:
+              - "*"
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+              - Date
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 7
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+  FeederUploadsBucketUploadSignerPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:GetBucketAcl
+              - s3:GetBucketLocation
+              - s3:ListBucket
+              - s3:ListBucketMultipartUploads
+            Effect: Allow
+            Resource: !GetAtt FeederUploadsBucket.Arn
+          - Action:
+              - s3:AbortMultipartUpload
+              - s3:GetObject
+              - s3:GetObjectAcl
+              - s3:ListMultipartUploadParts
+              - s3:PutObject
+              - s3:PutObjectAcl
+            Effect: Allow
+            Resource: !Sub ${FeederUploadsBucket.Arn}/*
+        Version: "2012-10-17"
+      PolicyName: FeederUploadsBucketAccess
+      Users:
+        - !Ref S3SigningUserName
 
   AuthProxyHttpApi:
     Type: AWS::Serverless::HttpApi
