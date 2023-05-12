@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  SecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SubnetId1: { Type: AWS::EC2::Subnet::Id }
+  SubnetId2: { Type: AWS::EC2::Subnet::Id }
+  SubnetId3: { Type: AWS::EC2::Subnet::Id }
+  DbHost: { Type: String }
+  DbName: { Type: String }
+  DbUser: { Type: String }
+  DbPassword: { Type: String, NoEcho: true }
+
+Resources:
+  MomentLambdaLayer:
+    Type: AWS::Serverless::LayerVersion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      Description: moment NPM module
+      ContentUri: lambda-layers/moment
+      CompatibleRuntimes:
+        - nodejs16.x
+
+  PgdumpBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 90
+            Status: Enabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PgdumpFunctionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        tktktk
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: "-1"
+        - CidrIpv6: ::/0
+          IpProtocol: "-1"
+      Tags:
+        # - { Key: Name, Value: !Sub "${RootStackName}_dovetail-counts_function" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+      # VpcId: !Ref VpcId
+      VpcId: !Ref VpcId
+
+  PgdumpFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: s3:*
+                Effect: Allow
+                Resource: !Sub ${PgdumpBucket.Arn}
+              - Action: s3:*
+                Effect: Allow
+                Resource: !Sub ${PgdumpBucket.Arn}/*
+            Version: "2012-10-17"
+          PolicyName: S3Policy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  PgdumpFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-src/pgdump-aws-lambda/
+      Description: Runs pg_dump and sends the files to S3
+      Handler: index.handler
+      Layers:
+        - !Ref MomentLambdaLayer
+      MemorySize: 10240
+      Role: !GetAtt PgdumpFunctionRole.Arn
+      Runtime: nodejs16.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
+      Timeout: 900
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt PgdumpFunctionSecurityGroup.GroupId
+          - !Ref SecurityGroupId
+        SubnetIds:
+          - !Ref SubnetId1
+          - !Ref SubnetId2
+          - !Ref SubnetId3
+  PgdumpFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PgdumpFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  RulesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: lambda:InvokeFunction
+                Effect: Allow
+                Resource: !GetAtt PgdumpFunction.Arn
+                Sid: AllowLambdaInvoke
+            Version: "2012-10-17"
+          PolicyName: EventRuleTargets
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  AuguryCron:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Dump Augury staging database
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt PgdumpFunction.Arn
+          Id: pg-dump-augury-staging
+          Input: !Sub |-
+            {
+              "PGHOST": "${DbHost}",
+              "PGPORT": "3306",
+              "PGDATABASE": "${DbName}",
+              "PGUSER": "${DbUser}",
+              "PGPASSWORD": "${DbPassword}",
+              "S3_REGION": "us-east-1",
+              "S3_BUCKET": "${PgdumpBucket}",
+              "ROOT": "daily/Augury",
+              "PGDUMP_ARGS": [
+                "--exclude-table-data=v1_*",
+                "--exclude-table-data=sessions",
+                "--exclude-table-data=availability_results"
+              ]
+            }
+  AuguryCronInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PgdumpFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AuguryCron.Arn
