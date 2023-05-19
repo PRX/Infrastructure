@@ -6,7 +6,7 @@ const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
-const s3 = new S3({ apiVersion: '2006-03-01' });
+// const s3 = new S3({ apiVersion: '2006-03-01' });
 
 const CLASSY_API_CLIENT_ID = process.env.CLASSY_API_CLIENT_ID;
 const CLASSY_API_CLIENT_SECRET = process.env.CLASSY_API_CLIENT_SECRET;
@@ -192,6 +192,8 @@ function moneyAmountString(transaction) {
 }
 
 exports.handler = async (event) => {
+  let icon = ':classy:';
+
   const token = await getAccessToken();
 
   const payload = await httpGet(token, `/organizations/72482/activity`);
@@ -257,15 +259,24 @@ exports.handler = async (event) => {
           // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
 
           const money = moneyAmountString(tx);
+          const moneyAmt = parseFloat(money.match(/[0-9]+\.[0-9]{2}/)[0]);
 
           if (tx.frequency === 'one-time') {
             text = text.concat(
               `*${name}* made a <${txUrl}|${money}> donation to the <${campUrl}|${camp.name}> campaign${comment}`,
             );
+
+            if (moneyAmt >= 100) {
+              icon = ':classy-alt:';
+            }
           } else {
             text = text.concat(
               `*${name}* created a new ${tx.frequency} recurring giving plan for the <${campUrl}|${camp.name}> campaign for <${txUrl}|${money}>${comment}`,
             );
+
+            if (moneyAmt >= 33) {
+              icon = ':classy-alt:';
+            }
           }
 
           // if (mapping[camp.id] === '#radiotopia-donations') {
@@ -307,7 +318,7 @@ exports.handler = async (event) => {
           Message: JSON.stringify({
             channel: mapping[camp.id],
             username: 'Classy',
-            icon_emoji: ':classy:',
+            icon_emoji: icon,
             text,
           }),
         });
