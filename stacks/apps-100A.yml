@@ -58,12 +58,16 @@ Parameters:
 
   StyleguideSharedAlbListenerRulePriorityPrefix: { Type: String }
 
+  TheWorldWebsiteSharedAlbListenerRulePriorityPrefix: { Type: String }
+
 Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   CmsStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         AlbFullName: !Ref AlbFullName
@@ -109,6 +113,8 @@ Resources:
 
   DovetailCdnArrangerStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -141,6 +147,8 @@ Resources:
 
   DovetailAppleApiBridgeStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -165,6 +173,8 @@ Resources:
 
   DovetailCountsStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -230,6 +240,8 @@ Resources:
   DovetailTrafficStack:
     Type: AWS::CloudFormation::Stack
     Condition: IsStaging # Staging only
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -254,6 +266,8 @@ Resources:
 
   IdStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         AlbFullName: !Ref AlbFullName
@@ -292,6 +306,8 @@ Resources:
 
   IframelyStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         AlbFullName: !Ref AlbFullName
@@ -320,6 +336,8 @@ Resources:
 
   PlayStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         AlbFullName: !Ref AlbFullName
@@ -349,6 +367,8 @@ Resources:
 
   RadiotopiaTowerStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -374,6 +394,8 @@ Resources:
 
   S3SigningStack:
     Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
@@ -401,6 +423,8 @@ Resources:
   StyleguideStack:
     Type: AWS::CloudFormation::Stack
     Condition: IsStaging # Staging only
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
     Properties:
       Parameters:
         AlbFullName: !Ref AlbFullName
@@ -456,6 +480,36 @@ Resources:
         - { Key: prx:dev:application, Value: Search }
       TemplateURL: !Sub ${TemplateUrlPrefix}/theworld-search.yml
       TimeoutInMinutes: 5
+
+  TheWorldWebsiteStack:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Website/pkg/docker-image-tag
+        AlbListenerRulePriorityPrefix: !Ref TheWorldWebsiteSharedAlbListenerRulePriorityPrefix
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+        CloudWatchLogGroupTaggerServiceToken: !Ref CloudWatchLogGroupTaggerServiceToken
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/theworld-website.yml
+      TimeoutInMinutes: 20
 
 Outputs:
   S3SigningUserName:
