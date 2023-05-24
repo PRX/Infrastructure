@@ -260,7 +260,7 @@ exports.handler = async (event) => {
           // const supporterUrl = `https://www.classy.org/admin/72482/supporters/${fullTx.supporter_id}`;
 
           const money = moneyAmountString(tx);
-          const moneyAmt = parseFloat(money.match(/[0-9]+\.[0-9]{2}/)[0]);
+          const moneyAmt = parseFloat(money.match(/[0-9]+\.[0-9]+/g).at(-1));
 
           if (tx.frequency === 'one-time') {
             text = text.concat(
