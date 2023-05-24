@@ -6,7 +6,6 @@ const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
 });
-// const s3 = new S3({ apiVersion: '2006-03-01' });
 
 const CLASSY_API_CLIENT_ID = process.env.CLASSY_API_CLIENT_ID;
 const CLASSY_API_CLIENT_SECRET = process.env.CLASSY_API_CLIENT_SECRET;
@@ -216,7 +215,7 @@ exports.handler = async (event) => {
 
         // Only process transactions from the campaigns we care about, since
         // the last time the the poller ran
-        if (mapping[camp.id] && ts >= threshold) {
+        if (ts >= threshold) {
           const comment = tx.comment?.length ? `\n> ${tx.comment}` : '';
           text = '';
 
@@ -279,19 +278,6 @@ exports.handler = async (event) => {
               icon = ':classy-alt:';
             }
           }
-
-          // if (mapping[camp.id] === '#radiotopia-donations') {
-          //   const count = await getCount();
-          //   await s3
-          //     .putObject({
-          //       Body: `${count + 1}`,
-          //       Bucket: process.env.COUNTER_BUCKET,
-          //       Key: process.env.COUNTER_OBJECT,
-          //     })
-          //     .promise();
-
-          //   text = `${text} (#${count})`;
-          // }
         }
       } else if (activity.type === 'ticket_purchased') {
         const tx = activity.transaction;
@@ -301,7 +287,7 @@ exports.handler = async (event) => {
 
         // Only process transactions from the campaigns we care about, since
         // the last time the the poller ran
-        if (mapping[camp.id] && ts >= threshold) {
+        if (ts >= threshold) {
           const name = shortMemberName(mem);
           const campUrl = campaignUrl(camp);
           const txUrl = transactionUrl(tx);
@@ -314,10 +300,22 @@ exports.handler = async (event) => {
       }
 
       if (text) {
+        if (mapping[camp.id]) {
+          await sns.publish({
+            TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
+            Message: JSON.stringify({
+              channel: mapping[camp.id],
+              username: 'Classy',
+              icon_emoji: icon,
+              text,
+            }),
+          });
+        }
+
         await sns.publish({
           TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
           Message: JSON.stringify({
-            channel: mapping[camp.id],
+            channel: 'C0596MWU6UV', // #resdev-donations
             username: 'Classy',
             icon_emoji: icon,
             text,
