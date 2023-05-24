@@ -31,6 +31,7 @@ const mapping = {
   431079: '#earhustle-donations',
   479496: '#earhustle-donations',
   483297: '#earhustle-donations',
+  484673: '#earhustle-donations',
   368624: '#tw-donations',
   368561: '#tw-donations',
   368367: '#tw-donations',
