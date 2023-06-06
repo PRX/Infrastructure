@@ -1,0 +1,620 @@
+# devops/oxbow-cd-pipeline.yml
+# This template is deployed continuously via GitHub Actions.
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a deployment pipeline in CodePipeline, along with CodeBuild projects
+  and other resources needed to support the pipeline, for Oxbow. The main
+  branch of the Oxbow GitHub repository is continuously deployed to staging.
+  Production requires manual approval.
+
+Parameters:
+  kPackagedTemplateFileName:
+    Type: String
+    Default: pkg-template.yaml
+  #######
+  CodeStarConnectionArn:
+    Type: String
+  StagingStackName:
+    Type: String
+  ProductionStackName:
+    Type: String
+  SlackMessageRelayTopicArn:
+    Type: String
+
+Resources:
+  FFmpegEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  # Runs `sam build` and `sam package`, and outputs the resulting
+  # CloudFormation template as an artifact.
+  SamCodeBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  SamCodeBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  SamCodeBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt SamCodeBuildProjectLogGroup.Arn
+        Version: "2012-10-17"
+      PolicyName: OxbowSamCodeBuildProjectPolicy
+      Roles:
+        - !Ref SamCodeBuildProjectRole
+  SamCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and packages Oxbow via SAM for future deployment
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:5.0
+        Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref SamCodeBuildProjectLogGroup
+          Status: ENABLED
+      ServiceRole: !GetAtt SamCodeBuildProjectRole.Arn
+      Source:
+        BuildSpec: !Sub |-
+          version: 0.2
+          phases:
+            install:
+              runtime-versions:
+                nodejs: latest
+                python: latest
+                ruby: latest
+            pre_build:
+              commands:
+                - make bootstrap
+                - make deploy-check
+            build:
+              commands:
+                - sam build --parallel
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ${kPackagedTemplateFileName}
+          artifacts:
+            files:
+              - ${kPackagedTemplateFileName}
+            name: SamBuildArtifact
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+      TimeoutInMinutes: 15
+
+  # Runs `docker build` for the transcode task image if necessary, and pushes
+  # the result to the ECR repository above. The CodeBuild project exports a
+  # variable called IMAGE_NAME with the Docker image name:tag in all cases.
+  FFmpegBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  FFmpegBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  FFmpegBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - ecr:*RepositoryPolicy
+              - ecr:BatchCheckLayerAvailability
+              - ecr:CompleteLayerUpload
+              - ecr:DescribeImages
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+            Effect: Allow
+            Resource: !GetAtt FFmpegEcrRepository.Arn
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt FFmpegBuildProjectLogGroup.Arn
+        Version: "2012-10-17"
+      PolicyName: OxbowFFmpegBuildProjectPolicy
+      Roles:
+        - !Ref FFmpegBuildProjectRole
+  FFmpegBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and publishes the transcode task Docker image
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: ECR_REPOSITORY_NAME
+            Value: !Ref FFmpegEcrRepository
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref FFmpegBuildProjectLogGroup
+          Status: ENABLED
+      ServiceRole: !GetAtt FFmpegBuildProjectRole.Arn
+      Source:
+        BuildSpec: |-
+          version: 0.2
+          env:
+            exported-variables:
+              - IMAGE_NAME
+          phases:
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+            build:
+              commands:
+                # Calculate the SHA1 hash of the transcode directory
+                - sha1=`find src/containers/transcode -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                # Construct the Docker image name:tag using the hash
+                - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
+                # See if that tag already exists in the repository
+                - >-
+                  lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
+                # Only build and push the image if it doesn't exist, meaning the directory and code has changed
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker build -t transcode src/containers/transcode; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker tag transcode:latest "$imageName"; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
+            post_build:
+              commands:
+                - export IMAGE_NAME="$imageName"
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+      TimeoutInMinutes: 15
+
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:DeleteBucket
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Effect: Deny
+                Resource: "*"
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource: "*"
+              - Action:
+                  - cloudwatch:*
+                  - ec2:*
+                  - ecs:*
+                  - events:*
+                  - iam:*
+                  - lambda:*
+                  - logs:*
+                  - s3:*
+                  - sns:*
+                  - sqs:*
+                  - states:*
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: ResourceManipulationPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PipelineArtifactStore:
+    # The bucket used to store artifacts generated by CodePipeline actions.
+    # This bucket is to be used exclusively by AWS; don't use it to store any
+    # app, infrastructure, or user data.
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 14
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        # CodePipeline seems to need access to special buckets
+        - PolicyDocument:
+            Statement:
+              - Action: s3:PutObject
+                Effect: Allow
+                Resource: arn:aws:s3:::codepipeline*
+            Version: "2012-10-17"
+          PolicyName: GenericCodePipelineS3PutPolicy
+        # Let CodePipeline read and write artifacts
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:Put*
+                  - s3:List*
+                Effect: Allow
+                Resource:
+                  - !GetAtt PipelineArtifactStore.Arn
+                  - !Sub ${PipelineArtifactStore.Arn}/*
+            Version: "2012-10-17"
+          PolicyName: ArtifactStoreFullAccess
+        # To allow the pipeline to use a CodeStar Connection
+        - PolicyDocument:
+            Statement:
+              - Action: codestar-connections:*
+                Condition:
+                  ForAllValues:StringEquals:
+                    codestar-connections:PassedToService: codepipeline.amazonaws.com
+                Effect: Allow
+                Resource: !Ref CodeStarConnectionArn
+            Version: "2012-10-17"
+          PolicyName: CodeStarConnectionPolicy
+        # Allow interaction with CodeBuild actions
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                Effect: Allow
+                Resource:
+                  - !GetAtt SamCodeBuildProject.Arn
+                  - !GetAtt FFmpegBuildProject.Arn
+            Version: "2012-10-17"
+          PolicyName: CodeBuildActionPolicy
+        # Let CodePipeline describe CloudFormation stacks
+        - PolicyDocument:
+            Statement:
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${StagingStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionStackName}
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${ProductionStackName}/*
+            Version: "2012-10-17"
+          PolicyName: CloudFormationAccess
+        # Allow PassRole to the CloudFormation role
+        - PolicyDocument:
+            Statement:
+              - Action: iam:PassRole
+                Effect: Allow
+                Resource: !GetAtt CloudFormationRole.Arn
+            Version: "2012-10-17"
+          PolicyName: IamPassRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Location: !Ref PipelineArtifactStore
+        Type: S3
+      RoleArn: !GetAtt PipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Oxbow-GitHub
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: "1"
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnectionArn
+                FullRepositoryId: PRX/Oxbow
+                BranchName: main
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts:
+                - Name: OxbowRepoSourceArtifact
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            # The output artifact is the CloudFormation template that's a
+            # result of `sam build && sam package`
+            - Name: SAM-Build-and-Package
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref SamCodeBuildProject
+              InputArtifacts:
+                - Name: OxbowRepoSourceArtifact
+              OutputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 1
+            # Exports a variable called IMAGE_NAME to the namespace with the
+            # docker image name:tag
+            - Name: FFmpeg-Docker-Build-and-Publish
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref FFmpegBuildProject
+              InputArtifacts:
+                - Name: OxbowRepoSourceArtifact
+              Namespace: transcode_build
+              RunOrder: 1
+        - Name: Staging
+          Actions:
+            # Runs a CloudFormation update using the SAM template (the
+            # artifact from SAM Build action), and passes in the Docker image
+            # names from the FTP and transcode build steps as pipeline
+            # variables. Also passes in the template config file from the
+            # source action. Outputs the stack outputs as pipeline variables in
+            # a namespace.
+            - Name: Update-Staging-Stack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: |
+                  {
+                    "FFmpegEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "EnvironmentType": "Staging",
+                    "EnvironmentTypeAbbreviation": "stag",
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref StagingStackName
+                # Get the YAML template from `sam package` out of the artifact
+                TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              Namespace: staging_deploy
+              RunOrder: 1
+        - Name: Production
+          Actions:
+            - Name: Approve-Prod
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: "1"
+              RunOrder: 1
+            # Behaves the same as the staging deploy action, but against the
+            # production stack.
+            - Name: Update-Prod-Stack
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: |
+                  {
+                    "FFmpegEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "EnvironmentType": "Production",
+                    "EnvironmentTypeAbbreviation": "prod",
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref ProductionStackName
+                TemplatePath: !Sub SamBuildArtifact::${kPackagedTemplateFileName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 2
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  PipelineStateChangeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Sends a message when Oxbow pipeline completes
+      Environment:
+        Variables:
+          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelayTopicArn
+      Events:
+        PipelineState:
+          Properties:
+            Pattern:
+              detail-type:
+                - CodePipeline Pipeline Execution State Change
+                - CodePipeline Action Execution State Change
+              resources:
+                - !Sub arn:${AWS::Partition}:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+              source:
+                - aws.codepipeline
+          Type: EventBridgeRule
+      Handler: index.handler
+      InlineCode: |
+        const { SNS } = require('@aws-sdk/client-sns');
+
+        const sns = new SNS({
+          apiVersion: '2010-03-31',
+          region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3]
+        });
+
+        exports.handler = async (event) => {
+          console.log(JSON.stringify(event));
+
+          let msg;
+
+          // https://docs.aws.amazon.com/codepipeline/latest/userguide/detect-state-changes-cloudwatch-events.html#detect-state-events-types
+          if (event['detail-type'] === 'CodePipeline Action Execution State Change') {
+            if (event.detail.action == 'Approve-Prod') {
+              if (event.detail.state === 'STARTED') {
+                msg = `:hourglass_flowing_sand: Oxbow deploy pipeline in ${event.region} needs approval`;
+              }
+            }
+          }
+
+          if (event['detail-type'] === 'CodePipeline Pipeline Execution State Change') {
+            if (event.detail.state === 'SUCCEEDED') {
+                msg = `Oxbow deploy pipeline in ${event.region} succeeded`;
+            } else if (event.detail.state === 'FAILED') {
+                msg = `:x: Oxbow deploy pipeline in ${event.region} failed`;
+            }
+          }
+
+          if (msg) {
+            await sns
+              .publish({
+                TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+                Message: JSON.stringify({
+                  channel: '#ops-deploys',
+                  username: 'AWS CodePipeline',
+                  icon_emoji: ':ops-codepipeline:',
+                  text: msg,
+                }),
+              });
+          }
+        };
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Action: sns:Publish
+              Effect: Allow
+              Resource: !Ref SlackMessageRelayTopicArn
+          Version: "2012-10-17"
+      Runtime: nodejs18.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: DevOps
+      Timeout: 3
+  PipelineStateChangeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PipelineStateChangeFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
