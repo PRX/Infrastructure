@@ -1,0 +1,45 @@
+name: Deploy Oxbow CD pipeline CloudFormation stacks
+
+# This workflow updates the CloudFormations stacks that manage the continuous
+# deployment pipelines for Oxbow. These pipelines exist in multiple regions,
+# and this workflow updates all of them. This workflow is only intended to
+# update **existing** stacks, not to launch new stacks.
+#
+# The stacks that this workflow interacts with are only for the deployment
+# pipelines, **not** for Oxbow itself.
+#
+# tl;dr deploys devops/oxbow-cd-pipeline.yml
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - devops/oxbow-cd-pipeline.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        region:
+          - us-east-1
+          - us-west-2
+    steps:
+      - uses: actions/checkout@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1-node16
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-DeployOxbowCdPipelineStack
+      - name: Deploy CloudFormation stack
+        working-directory: devops
+        run: |
+          aws cloudformation deploy --region ${{ matrix.region }} --stack-name oxbow-cd-pipeline --template-file oxbow-cd-pipeline.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
