@@ -130,7 +130,7 @@ Resources:
         - { Key: prx:dev:application, Value: DevOps }
       TimeoutInMinutes: 15
 
-  # Runs `docker build` for the transcode task image if necessary, and pushes
+  # Runs `docker build` for the FFmpeg task image if necessary, and pushes
   # the result to the ECR repository above. The CodeBuild project exports a
   # variable called IMAGE_NAME with the Docker image name:tag in all cases.
   FFmpegBuildProjectLogGroup:
@@ -199,7 +199,7 @@ Resources:
     Properties:
       Artifacts:
         Type: CODEPIPELINE
-      Description: Builds and publishes the transcode task Docker image
+      Description: Builds and publishes the FFmpeg task Docker image
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         EnvironmentVariables:
@@ -227,8 +227,8 @@ Resources:
                 - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
             build:
               commands:
-                # Calculate the SHA1 hash of the transcode directory
-                - sha1=`find src/containers/transcode -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                # Calculate the SHA1 hash of the ffmpeg directory
+                - sha1=`find src/containers/ffmpeg -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
                 # Construct the Docker image name:tag using the hash
                 - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
                 # See if that tag already exists in the repository
@@ -236,9 +236,9 @@ Resources:
                   lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
                 # Only build and push the image if it doesn't exist, meaning the directory and code has changed
                 - >-
-                  if [ "$lookup" = "notFound" ]; then docker build -t transcode src/containers/transcode; fi
+                  if [ "$lookup" = "notFound" ]; then docker build -t ffmpeg src/containers/ffmpeg; fi
                 - >-
-                  if [ "$lookup" = "notFound" ]; then docker tag transcode:latest "$imageName"; fi
+                  if [ "$lookup" = "notFound" ]; then docker tag ffmpeg:latest "$imageName"; fi
                 - >-
                   if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
             post_build:
@@ -455,13 +455,13 @@ Resources:
                 ProjectName: !Ref FFmpegBuildProject
               InputArtifacts:
                 - Name: OxbowRepoSourceArtifact
-              Namespace: transcode_build
+              Namespace: ffmpeg_build
               RunOrder: 1
         - Name: Staging
           Actions:
             # Runs a CloudFormation update using the SAM template (the
             # artifact from SAM Build action), and passes in the Docker image
-            # names from the FTP and transcode build steps as pipeline
+            # names from the FFmpeg build steps as pipeline
             # variables. Also passes in the template config file from the
             # source action. Outputs the stack outputs as pipeline variables in
             # a namespace.
@@ -476,7 +476,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 ParameterOverrides: |
                   {
-                    "FFmpegEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "FFmpegEcsTaskDefinitionImage": "#{ffmpeg_build.IMAGE_NAME}",
                     "EnvironmentType": "Staging",
                     "EnvironmentTypeAbbreviation": "stag",
                   }
@@ -510,7 +510,7 @@ Resources:
                 Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
                 ParameterOverrides: |
                   {
-                    "FFmpegEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
+                    "FFmpegEcsTaskDefinitionImage": "#{ffmpeg_build.IMAGE_NAME}",
                     "EnvironmentType": "Production",
                     "EnvironmentTypeAbbreviation": "prod",
                   }
