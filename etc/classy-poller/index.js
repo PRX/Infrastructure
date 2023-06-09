@@ -193,7 +193,8 @@ function moneyAmountString(transaction) {
 }
 
 exports.handler = async (event) => {
-  let icon = ':classy:';
+  let icon_emoji = ':classy:';
+  let username = 'Classy';
 
   const token = await getAccessToken();
 
@@ -268,7 +269,8 @@ exports.handler = async (event) => {
             );
 
             if (moneyAmt >= 100) {
-              icon = ':classy-alt:';
+              icon_emoji = ':classy-alt:';
+              username = 'Classy!';
             }
           } else {
             text = text.concat(
@@ -276,7 +278,8 @@ exports.handler = async (event) => {
             );
 
             if (moneyAmt >= 33) {
-              icon = ':classy-alt:';
+              icon_emoji = ':classy-alt:';
+              username = 'Classy!';
             }
           }
         }
@@ -307,7 +310,7 @@ exports.handler = async (event) => {
             Message: JSON.stringify({
               channel: mapping[camp.id],
               username: 'Classy',
-              icon_emoji: icon,
+              icon_emoji,
               text,
             }),
           });
@@ -317,8 +320,8 @@ exports.handler = async (event) => {
           TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
           Message: JSON.stringify({
             channel: 'C0596MWU6UV', // #resdev-donations
-            username: 'Classy',
-            icon_emoji: icon,
+            username,
+            icon_emoji,
             text,
           }),
         });
