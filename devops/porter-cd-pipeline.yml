@@ -323,6 +323,9 @@ Resources:
               - logs:PutLogEvents
             Effect: Allow
             Resource: !GetAtt FtpBuildProjectLogGroup.Arn
+          - Action: ssm:GetParameters
+            Effect: Allow
+            Resource: "*" # TODO
         Version: "2012-10-17"
       PolicyName: PorterFtpBuildProjectPolicy
       Roles:
@@ -352,12 +355,17 @@ Resources:
         BuildSpec: |-
           version: 0.2
           env:
+            parameter-store:
+              DOCKERHUB_USERNAME: /prx/DOCKERHUB_USERNAME
+              DOCKERHUB_PASSWORD: /prx/DOCKERHUB_PASSWORD
             exported-variables:
               - IMAGE_NAME
           phases:
             pre_build:
               commands:
                 - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - echo Logging in to Docker Hub...
+                - echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USERNAME --password-stdin
             build:
               commands:
                 # Calculate the SHA1 hash of the ftp directory
