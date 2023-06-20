@@ -1,0 +1,52 @@
+# stacks/shared-vpc/private-network-eic-endpoints.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an EC2 Instance Connect Endpoints for the shared VPC
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  PrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedPostgresqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+
+Resources:
+  PrivateNetworkEicEndpoint:
+    Type: AWS::EC2::InstanceConnectEndpoint
+    Properties:
+      SecurityGroupIds:
+        # Traffic will travel from a remote client (like an SSH client running
+        # on your laptop) through the EIC Endpoint and to some resource (like a
+        # database or EC2 instance). That traffic will belong to all the
+        # security groups listed below.
+        #
+        # For some resources there exists a "Client" security group, to which
+        # clients that connect to those resources are expected to belong. For
+        # example, the SharedMysqlClientSecurityGroupId. These security groups
+        # allow relevant egress traffic (e.g., MySQL traffic), and the security
+        # group of the associated resource (e.g., the MySQL server) allows
+        # ingress traffic from the client security group.
+        #
+        # By adding this EIC endpoint to, e.g., the MySQL client security group,
+        # the remote traffic entering the VPC via the endpoint will be treated
+        # as a MySQL client, and therefore have access to the MySQL server
+        # resource.
+        #
+        # Client security groups associated with any resources that should be
+        # accessible via the endpoint can be added here. Each security group
+        # listed should have a matching security group elsewhere that allows
+        # ingress traffic from the client securitty group.
+        - !Ref SharedMysqlClientSecurityGroupId
+        - !Ref SharedPostgresqlClientSecurityGroupId
+      SubnetId: !Ref PrivateSubnet1Id
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_private" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
