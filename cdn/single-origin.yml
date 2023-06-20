@@ -50,6 +50,11 @@ Conditions:
   # HasCloudFrontCustom403ErrorResponsePagePath: !Not [!Equals [!Ref CloudFrontCustom403ErrorResponsePagePath, ""]]
   HasCloudFrontWebACLId: !Not [!Equals [!Ref CloudFrontWebACLId, ""]]
   HasCloudFrontOriginCustomHeaders: !Not [!Equals [!Join ["", !Ref CloudFrontOriginCustomHeaders], ""]]
+  HasCloudFrontEncodedPublicKey1: !Not [!Equals [!Ref CloudFrontEncodedPublicKey1, ""]]
+  HasCloudFrontEncodedPublicKey2: !Not [!Equals [!Ref CloudFrontEncodedPublicKey2, ""]]
+  HasCloudFrontPublicKey: !Or
+    - !Condition HasCloudFrontEncodedPublicKey1
+    - !Condition HasCloudFrontEncodedPublicKey1
   HasAcmCertificateArn: !Not [!Equals [!Ref AcmCertificateArn, ""]]
   HasNoAcmCertificateArn: !Equals [!Ref AcmCertificateArn, ""]
   HasOriginPath: !Not [!Equals [!Ref OriginPath, ""]]
@@ -123,6 +128,8 @@ Metadata:
           - CloudFrontCustom404ErrorResponseCode
           - CloudFrontCustom404ErrorResponsePagePath
           - CloudFrontWebACLId
+          - CloudFrontEncodedPublicKey1
+          - CloudFrontEncodedPublicKey2
       - Label:
           default: HTTPS Certificate
         Parameters:
@@ -194,6 +201,10 @@ Metadata:
         default: Custom 404 error response page
       CloudFrontWebACLId:
         default: AWS WAF web ACL ID
+      CloudFrontEncodedPublicKey1:
+        default: Public key
+      CloudFrontEncodedPublicKey2:
+        default: Another public key
       AcmCertificateArn:
         default: Certificate ARN
 
@@ -472,6 +483,14 @@ Parameters:
     Type: String
     Description: >-
       (optional) The AWS WAF web ACL to associate with this distribution
+  CloudFrontEncodedPublicKey1:
+    Type: String
+    Description: >-
+      (optional) A public key that you can use with signed URLs and signed cookies, or with field-level encryption
+  CloudFrontEncodedPublicKey2:
+    Type: String
+    Description: >-
+      (optional) A public key that you can use with signed URLs and signed cookies, or with field-level encryption
   AcmCertificateArn:
     Type: String
     Description: >-
@@ -532,6 +551,7 @@ Resources:
           MaxTTL: !If [HasCloudFrontMaxTtl, !Ref CloudFrontMaxTtl, !Ref "AWS::NoValue"]
           MinTTL: !If [HasCloudFrontMinTtl, !Ref CloudFrontMinTtl, !Ref "AWS::NoValue"]
           TargetOriginId: !If [HasFailoverOriginDomain, primary-origin-group, primary-origin]
+          TrustedKeyGroups: !If [HasCloudFrontPublicKey, [!Ref CloudFrontKeyGroup], !Ref "AWS::NoValue"]
           ViewerProtocolPolicy: !Ref CloudFrontViewerProtocolPolicy
         DefaultRootObject: !If [HasCloudFrontDefaultRootObject, !Ref CloudFrontDefaultRootObject, !Ref "AWS::NoValue"]
         Enabled: true
@@ -639,6 +659,34 @@ Resources:
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: !Ref CloudFrontComment
+
+  # Two keys are allowed to support uninterrupted key rotation
+  CloudFrontPublicKey1:
+    Type: AWS::CloudFront::PublicKey
+    Condition: HasCloudFrontEncodedPublicKey1
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref AWS::StackName
+        EncodedKey: !Ref CloudFrontEncodedPublicKey1
+        Name: !Sub ${AWS::StackName}-1
+  CloudFrontPublicKey2:
+    Type: AWS::CloudFront::PublicKey
+    Condition: HasCloudFrontEncodedPublicKey2
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Ref AWS::StackName
+        EncodedKey: !Ref CloudFrontEncodedPublicKey2
+        Name: !Sub ${AWS::StackName}-2
+
+  CloudFrontKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Condition: HasCloudFrontPublicKey
+    Properties:
+      KeyGroupConfig:
+        Items:
+          - !If [HasCloudFrontEncodedPublicKey1, !Ref CloudFrontPublicKey1, !Ref AWS::NoValue]
+          - !If [HasCloudFrontEncodedPublicKey2, !Ref CloudFrontPublicKey2, !Ref AWS::NoValue]
+        Name: !Ref AWS::StackName
 
 Outputs:
   CloudFrontDomainName:
