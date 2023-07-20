@@ -184,18 +184,21 @@ Resources:
             }).join('\n');
             const buffer = await gzip(tsv);
 
-            // send to destination s3
-            const params = {
-              Bucket: process.env.DESTINATION_BUCKET,
-              Key: `${process.env.DESTINATION_PREFIX}/${Key.split('/').pop()}`,
-              ACL: 'bucket-owner-full-control',
-              Body: buffer
-            };
-            if (datas.length > 0) {
-              await s3.putObject(params).promise();
-            }
+            // send to s3 destinations
+            const bucket_names = process.env.DESTINATION_BUCKET.split(',');
+            for (const bucket_name of bucket_names) {
+              const params = {
+                Bucket: bucket_name,
+                Key: `${process.env.DESTINATION_PREFIX}/${Key.split('/').pop()}`,
+                ACL: 'bucket-owner-full-control',
+                Body: buffer
+              };
+              if (datas.length > 0) {
+                await s3.putObject(params).promise();
+              }
 
-            console.info(`Shipped ${datas.length} of ${rows.length} to s3://${params.Bucket}/${params.Key}`);
+              console.info(`Shipped ${datas.length} of ${rows.length} to s3://${params.Bucket}/${params.Key}`);
+            }
           }
         };
       MemorySize: 768
