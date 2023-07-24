@@ -109,6 +109,16 @@ Resources:
           }
         };
 
+        const hashValue = (val) => {
+          const hmac = crypto.createHmac('sha256', process.env.SECRET_KEY || '');
+          hmac.update(val);
+          return hmac.digest('base64').replace(/\+|\/|=/g, m => {
+            if (m === '+') { return '-'; }
+            if (m === '/') { return '_'; }
+            return '';
+          });
+        };
+
         const PODCAST_IDS = process.env.PODCAST_IDS.split(',').map(s => s.trim()).filter(s => s);
 
         const IGNORE_PATHS = ['/', '/favicon.ico', '/robots.txt'];
@@ -161,15 +171,13 @@ Resources:
 
               // combine with UA string
               const userAgent = data['cs(User-Agent)'] || '';
-              const hmac = crypto.createHmac('sha256', process.env.SECRET_KEY || '');
-              hmac.update(truncatedIp + userAgent);
-              data['prx-listener-id'] = hmac.digest('base64').replace(/\+|\/|=/g, m => {
-                if (m === '+') { return '-'; }
-                if (m === '/') { return '_'; }
-                return '';
-              });
+              data['prx-listener-id'] = hashValue(truncatedIp + userAgent);
+
+              // also provide just the hashed IP, use truncated ipv6
+              data['prx-hashed-ip'] = hashValue(truncatedIp);
             });
             fields.push('prx-listener-id');
+            fields.push('prx-hashed-ip');
 
             // mask IP addresses
             datas.forEach(data => {
