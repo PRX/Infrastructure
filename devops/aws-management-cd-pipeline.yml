@@ -756,7 +756,7 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # OAM monitoring account sink
+            # Observability Access Manager monitoring account sink
             - Name: OamSink
               ActionTypeId:
                 Category: Deploy
@@ -775,12 +775,13 @@ Resources:
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/oam-monitoring-account-sink.yml
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
+              Namespace: oam_sink
               RunOrder: 1
 
         - Name: Organization_Accounts-One_Region
           # These actions all deploy a stackset to the same region as this
           # pipeline, which creates stacks in one region in every account in
-          # the organization
+          # the organization, except the management account
           Actions:
             # DevOps-CrossAccountAccessRole IAM role
             - Name: DevopsCrossAcctRole
@@ -879,6 +880,30 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
+            # Observability Access Manager source account link
+            - Name: OamLink
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-oam-source-account-link
+                Capabilities: CAPABILITY_NAMED_IAM
+                Description: >-
+                  Launches a stack in one region in each account in an AWS Organization
+                  to create an OAM link to the sink (monitoring account)
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/oam-source-account-link.yml
+                Parameters: !Sub ParameterKey=SinkArn,ParameterValue=#{oam_sink.SinkArn}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Ref SingleRegion
+                FailureTolerancePercentage: 8
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
 
         - Name: Management_Account-All_Regions
           # These actions all deploy a stackset to the same account as this
@@ -937,7 +962,7 @@ Resources:
         - Name: Organization_Accounts-All_Regions
           # These actions all deploy a stackset to the same region as this
           # pipeline, which creates stacks in all regions in every account in
-          # the organization
+          # the organization except the management account
           Actions:
             # CloudWatch Alarms event bus
             - Name: CloudWatchAlarmsBus
