@@ -48,7 +48,7 @@ Parameters:
     Type: String
     Description: eg. some/path/here
   DestinationBucket:
-    Type: String
+    Type: CommaDelimitedList
     Description: eg. some-bucket-name
   DestinationPrefix:
     Type: String
@@ -78,7 +78,7 @@ Resources:
         destination S3 bucket.
       Environment:
         Variables:
-          DESTINATION_BUCKET: !Ref DestinationBucket
+          DESTINATION_BUCKET: !Join [",", !Ref DestinationBucket]
           DESTINATION_PREFIX: !Ref DestinationPrefix
           PODCAST_IDS: !Ref PodcastIds
       Handler: index.handler
@@ -217,17 +217,36 @@ Resources:
                 - s3:GetObjectVersion
               Effect: Allow
               Resource: !Sub arn:aws:s3:::${LogBucket}/${LogPrefix}/*
+              Sid: AllowCdnLogRead
           Version: "2012-10-17"
         - Statement:
             - Action: s3:ListBucketMultipartUploads
               Effect: Allow
-              Resource: !Sub arn:aws:s3:::${DestinationBucket}
+              # Resource: !Sub arn:aws:s3:::${DestinationBucket}
+              # Wrap each item in the list in: arn:aws:s3:::${item}/*
+              Resource: !Split
+                - ","
+                - !Sub
+                  - "arn:aws:s3:::${inner}"
+                  - inner: !Join
+                      - ",arn:aws:s3:::"
+                      - Ref: DestinationBucket
+              Sid: AllowDestinationBucketList
             - Action:
                 - s3:AbortMultipartUpload
                 - s3:ListMultipartUploadParts
                 - s3:PutObject*
               Effect: Allow
-              Resource: !Sub arn:aws:s3:::${DestinationBucket}/${DestinationPrefix}/*
+              # Resource: !Sub arn:aws:s3:::${DestinationBucket}/${DestinationPrefix}/*
+              # Wrap each item in the list in: arn:aws:s3:::${item}/*
+              Resource: !Split
+                - ","
+                - !Sub
+                  - "arn:aws:s3:::${inner}/*"
+                  - inner: !Join
+                      - "/*,arn:aws:s3:::"
+                      - Ref: DestinationBucket
+              Sid: AllowDestinationObjectWrite
           Version: "2012-10-17"
       Runtime: nodejs16.x
       Tags:
