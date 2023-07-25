@@ -1,0 +1,31 @@
+# devops/aws-management/oam-monitoring-account-sink.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: e.g. o-a1s2d3f4f5g
+    AllowedPattern: ^(o-[a-z0-9]{4,32})$
+
+Resources:
+  Sink:
+    Type: AWS::Oam::Sink
+    Properties:
+      Name: MainSink
+      Policy:
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - oam:CreateLink
+              - oam:UpdateLink
+            Resource: "*"
+            Condition:
+              ForAllValues:StringEquals:
+                oam:ResourceTypes:
+                  - AWS::Logs::LogGroup
+                  - AWS::CloudWatch::Metric
+                  - AWS::XRay::Trace
+              ForAnyValue:StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationId
+        Version: "2012-10-17"
