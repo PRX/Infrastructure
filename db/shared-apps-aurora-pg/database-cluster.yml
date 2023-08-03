@@ -74,7 +74,7 @@ Parameters:
 #       abbreviation: prod
 
 Conditions:
-  # IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasInstances: !Equals [!Ref InstanceCondition, "Normal"]
   HasGlobalClusterIdentifier: !Not [!Equals [!Ref GlobalClusterIdentifier, ""]]
   HasMasterUsername: !Not [!Equals [!Ref DbClusterMasterUsername, ""]]
@@ -109,6 +109,10 @@ Resources:
         - !Ref AWS::NoValue
       # PreferredBackupWindow
       # PreferredMaintenanceWindow
+      StorageType: !If
+        - IsProduction
+        - aurora-iopt1
+        - aurora
       Tags:
         - { Key: Name, Value: !Sub "${AWS::StackName}_shared-pg-aurora" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
