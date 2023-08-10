@@ -158,15 +158,6 @@ Resources:
         - { Key: prx:dev:application, Value: CI }
       TimeoutInMinutes: 16
 
-  HttpApi:
-    Type: AWS::Serverless::HttpApi
-    Properties:
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:ops:environment: Production
-        prx:dev:application: CI
   GitHubWebhookEndpointFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -177,13 +168,6 @@ Resources:
       Environment:
         Variables:
           GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
-      Events:
-        GitHubWebhookRequest:
-          Properties:
-            ApiId: !Ref HttpApi
-            Method: post
-            Path: /v1/github/webhook
-          Type: HttpApi
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: BUFFERED
@@ -456,4 +440,4 @@ Resources:
 
 Outputs:
   GitHubWebhookEndpointUrl:
-    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+    Value: !GetAtt GitHubWebhookEndpointFunctionUrl.FunctionUrl
