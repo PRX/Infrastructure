@@ -12,6 +12,10 @@ The high-level goals of the system are:
 - Allow for code that passes build and test process to be packaged and pushed to destinations from which it can be deployed
 - Create small amounts of lightweight, reusable code to [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) up the amount of boilerplate needed for getting a project to support this type of continuous integration
 
+> **Known Limitations:**
+>
+> - Out-of-order builds: If multiple builds for different commits of a single branch or pull request run concurrently, it is possible that the last (newest) commit does not complete after all other builds. In these cases, the newest commit's build may finish and publish an artifact as expected, but then an older commit's build will finish later and also publish an artifact. Because of how CI and CD are integrated, the most-recently created artifact will be deployed even if it is not the most recent commit.
+
 ## Project architecture
 
 In order to build a system to accomplish all that, we spin up a number of AWS resources (using a CloudFormation template). Launching a stack from the `ci/template.yml` template is fairly straightforward, but this CI project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
