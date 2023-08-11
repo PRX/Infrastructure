@@ -44,6 +44,8 @@ Parameters:
 Resources:
   TheCastleStack:
     Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Parameters:
         RootStackName: !Ref RootStackName
@@ -94,7 +96,14 @@ Resources:
         CodeS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics_Export/pkg/s3-object-key
         BigQueryLayerS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics_Export/bigquery-layer/pkg/s3-object-key
         BigQueryClientConfig: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Metrics_Export/big-query-client-config
-        PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
+        # Because Metrics Export is intended to send files to third parties,
+        # the Porter jobs it creates are often writing files to S3 buckets that
+        # we don't control, which have granted access to a specific IAM role.
+        # Switching to Porter in another region would change which IAM role is
+        # being used, and require the third parties to update the policies on
+        # their buckets, so for now this is locked to Porter in us-east-1,
+        # regardless of which region Metric Export is running in.
+        PorterJobExecutionSnsTopicArn: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/porter-job-execution-topic-arn-us-east-1
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -109,6 +118,8 @@ Resources:
 
   WfmtStack:
     Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Parameters:
         RootStackName: !Ref RootStackName
