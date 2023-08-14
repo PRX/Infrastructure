@@ -2,10 +2,15 @@
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  */
 
+const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
 const { CloudFormation } = require('@aws-sdk/client-cloudformation');
 const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 
-const cloudformation = new CloudFormation({ apiVersion: '2010-05-15' });
+const cloudformation = new CloudFormation({
+  apiVersion: '2010-05-15',
+  // 0, 400, 800, 1600, 3200, 6400
+  retryStrategy: new ConfiguredRetryStrategy(6, 400),
+});
 const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
