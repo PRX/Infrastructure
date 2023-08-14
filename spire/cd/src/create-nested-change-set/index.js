@@ -2,14 +2,26 @@
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  */
 
-const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+const { StandardRetryStrategy } = require('@aws-sdk/middleware-retry');
+
+const MAXIMUM_ATTEMPTS = 6;
+const MAXIMUM_RETRY_DELAY = 10000;
+const customRetryStrategy = new StandardRetryStrategy(
+  async () => MAXIMUM_ATTEMPTS,
+  {
+    delayDecider: (_, attempts) =>
+      Math.floor(
+        Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempts * 400),
+      ),
+  },
+);
+
 const { CloudFormation } = require('@aws-sdk/client-cloudformation');
 const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 
 const cloudformation = new CloudFormation({
   apiVersion: '2010-05-15',
-  // 0, 400, 800, 1600, 3200, 6400
-  retryStrategy: new ConfiguredRetryStrategy(6, 400),
+  retryStrategy: customRetryStrategy,
 });
 const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
