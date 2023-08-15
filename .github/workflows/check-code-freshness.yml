@@ -30,15 +30,15 @@ jobs:
             list=$(echo $json | jq --raw-output -c --arg d "$threshold" '.Parameters[] | select( .Name | contains("/prx/prod/Spire/")) | select(.LastModifiedDate < $d) | .Name')
             echo $list
 
-            next_token=$(echo $json | jq -r ".NextToken")
-            if [ -z "$next_token" ]; then
-              echo "! Some parameters were not included in the list"
-            fi
-          fi
-
-          aws ses send-email \
+            aws ses send-email \
             --region us-east-1 \
             --from "${{secrets.MAIL_FROM}}" \
             --to "chris.kalafarski@prx.org" \
             --subject "Code Freshness Report" \
             --text "$list"
+
+            next_token=$(echo $json | jq -r ".NextToken")
+            if [ -z "$next_token" ]; then
+              echo "! Some parameters were not included in the list"
+            fi
+          fi
