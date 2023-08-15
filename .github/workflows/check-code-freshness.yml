@@ -22,45 +22,22 @@ jobs:
         run: |
           threshold=$(date --date="90 days ago" +%FT%H:%M:%SZ)
 
-          aws_command="aws ssm describe-parameters --region us-east-1 --parameter-filters Key=Name,Option=Contains,Values=pkg"
-          unset NEXT_TOKEN
+          aws_command="aws ssm describe-parameters --profile prx-legacy --parameter-filters Key=Name,Option=Contains,Values=pkg"
 
-          pkg_list=""
+          json=$($aws_command)
 
-          function process_parameter {
-            echo $1 | jq '.Name'
-            pkg_list+=$(echo $1 | jq '.Name')
-            pkg_list+=", "
-          }
+          if [ ! -z "$json" ]; then
+            list = $(echo $json | jq -c --arg d "$threshold" '.Parameters[] | select( .Name | contains("/prx/prod/Spire/")) | select(.LastModifiedDate < $d) | .Name')
 
-          function parse_output() {
-            if [ ! -z "$cli_output" ]; then
-              echo $cli_output | jq -c --arg d "$threshold" '.Parameters[] | select( .Name | contains("/prx/prod/Spire/")) | select(.LastModifiedDate < $d)' | while read param; do
-                process_parameter $param
-              done
-              NEXT_TOKEN=$(echo $cli_output | jq -r ".NextToken")
+            next_token=$(echo $json | jq -r ".NextToken")
+            if [ -z "$next_token" ]; then
+              echo "! Some parameters were not included in the list"
             fi
-          }
+          fi
 
-          # The command is run and output parsed in the below statements.
-          cli_output=$($aws_command)
-          parse_output
-
-          # The below while loop runs until either the command errors due to throttling or
-          # comes back with a pagination token.  In the case of being throttled / throwing
-          # an error, it sleeps for three seconds and then tries again.
-          while [ "$NEXT_TOKEN" != "null" ]; do
-            if [ "$NEXT_TOKEN" == "null" ] || [ -z "$NEXT_TOKEN" ] ; then
-              echo "now running: $aws_command "
-              sleep 3
-              cli_output=$($aws_command)
-              parse_output
-            else
-              echo "now paginating: $aws_command --starting-token $NEXT_TOKEN"
-              sleep 3
-              cli_output=$($aws_command --starting-token $NEXT_TOKEN)
-              parse_output
-            fi
-          done  #pagination loop
-
-          echo "$pkg_list"
+          aws ses send-email \
+            --region us-east-1 \
+            --from "${{secrets.MAIL_FROM}}" \
+            --to "chris.kalafarski@prx.org" \
+            --subject "Code Freshness Report" \
+            --text "$list"
