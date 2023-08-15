@@ -25,8 +25,12 @@ jobs:
           aws_command="aws ssm describe-parameters --region us-east-1 --parameter-filters Key=Name,Option=Contains,Values=pkg"
           unset NEXT_TOKEN
 
+          pkg_list=""
+
           function process_parameter {
             echo $1 | jq '.Name'
+            pkg_list+=$(echo $1 | jq '.Name')
+            pkg_list+=", "
           }
 
           function parse_output() {
@@ -58,3 +62,5 @@ jobs:
               parse_output
             fi
           done  #pagination loop
+
+          echo "$pkg_list"
