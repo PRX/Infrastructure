@@ -23,18 +23,16 @@ jobs:
           threshold=$(date --date="90 days ago" +%FT%H:%M:%SZ)
 
           json=$(aws ssm describe-parameters --region us-east-1 --parameter-filters Key=Name,Option=Contains,Values=pkg)
-          echo "$json"
 
           if [ ! -z "$json" ]; then
             list=$(echo $json | jq --raw-output -c --arg d "$threshold" '.Parameters[] | select( .Name | contains("/prx/prod/Spire/")) | select(.LastModifiedDate < $d) | .Name')
-            echo $list
 
-            # aws ses send-email \
-            #   --region us-east-1 \
-            #   --from "${{secrets.MAIL_FROM}}" \
-            #   --to "chris.kalafarski@prx.org" \
-            #   --subject "Code Freshness Report" \
-            #   --text "$list"
+            aws ses send-email \
+              --region us-east-1 \
+              --from "${{secrets.MAIL_FROM}}" \
+              --to "chris.kalafarski@prx.org" \
+              --subject "Code Freshness Report" \
+              --text "$list"
 
             next_token=$(echo $json | jq -r ".NextToken")
             if [ -z "$next_token" ]; then
