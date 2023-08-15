@@ -1,0 +1,25 @@
+name: Check code freshness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: us-west-2
+          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
+          role-session-name: GitHubActions-CheckCodeFreshness
+      - name: Deploy CloudFormation stack
+        working-directory: devops
+        run: |
+          threshold=$(date --date="90 days ago" +%FT%H:%M:%SZ)
+          echo $threshold
