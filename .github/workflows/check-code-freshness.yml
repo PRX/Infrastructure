@@ -15,14 +15,14 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-region: us-west-2
+          aws-region: us-east-2
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-CheckCodeFreshness
       - name: Check parameter ages
         run: |
           threshold=$(date --date="90 days ago" +%FT%H:%M:%SZ)
 
-          aws_command="aws ssm describe-parameters --parameter-filters Key=Name,Option=Contains,Values=pkg"
+          aws_command="aws ssm describe-parameters --region us-east-1 --parameter-filters Key=Name,Option=Contains,Values=pkg"
           unset NEXT_TOKEN
 
           function process_parameter {
@@ -41,3 +41,20 @@ jobs:
           # The command is run and output parsed in the below statements.
           cli_output=$($aws_command)
           parse_output
+
+          # The below while loop runs until either the command errors due to throttling or
+          # comes back with a pagination token.  In the case of being throttled / throwing
+          # an error, it sleeps for three seconds and then tries again.
+          while [ "$NEXT_TOKEN" != "null" ]; do
+            if [ "$NEXT_TOKEN" == "null" ] || [ -z "$NEXT_TOKEN" ] ; then
+              echo "now running: $aws_command "
+              sleep 3
+              cli_output=$($aws_command)
+              parse_output
+            else
+              echo "now paginating: $aws_command --starting-token $NEXT_TOKEN"
+              sleep 3
+              cli_output=$($aws_command --starting-token $NEXT_TOKEN)
+              parse_output
+            fi
+          done  #pagination loop
