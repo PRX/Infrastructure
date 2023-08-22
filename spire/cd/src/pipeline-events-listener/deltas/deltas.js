@@ -170,7 +170,7 @@ module.exports = {
 
     return {
       text: parameterDeltasList(allowedDeltas),
-      allowedDeltaCount: allowedDeltas,
+      allowedDeltaCount: allowedDeltas.length,
       hiddenDeltaCount: cleanedDeltas.length - allowedDeltas.length,
       rawDeltaCount: deltas.length,
     };
