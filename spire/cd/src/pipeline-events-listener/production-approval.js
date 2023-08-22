@@ -8,11 +8,13 @@
 /**
  * @typedef { import('aws-lambda').SNSEvent } SNSEvent
  * @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments
+ * @typedef { import('@slack/web-api').MessageAttachment } MessageAttachment
  * @typedef {import('@aws-sdk/client-codepipeline').PutApprovalResultInput} PutApprovalResultInput
  * @typedef {import('@aws-sdk/client-codepipeline').ApprovalResult} ApprovalResult
  */
 
 const { SNS } = require('@aws-sdk/client-sns');
+const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const regions = require('./etc/regions');
 const urls = require('./etc/urls');
 const pipelineNames = require('./etc/pipeline-names');
@@ -23,10 +25,13 @@ const sns = new SNS({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
+const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
  * Constructs a Slack message payload with information about stack parameter
- * changes, and interactive buttons to approve or reject a deploy
+ * changes, and interactive buttons to approve or reject a deploy. If there are
+ * no meaningful changes, the deploy is automatically rejected and the message
+ * does not include the buttons.
  * @param {CodePipelineApprovalNotification} approvalNotification
  * @returns {Promise<ChatPostMessageArguments>}
  */
@@ -79,116 +84,152 @@ async function buildMessage(approvalNotification) {
 
   const report = await deltas.report(StackName, ChangeSetName);
 
+  // If the change set has no meaningful parameter deltas it is automatically
+  // rejected
+  if (!report.allowedDeltaCount) {
+    await codepipeline.putApprovalResult({
+      pipelineName: approval.pipelineName,
+      stageName: approval.stageName,
+      actionName: approval.actionName,
+      token: approval.token,
+      result: {
+        status: 'Rejected',
+        summary: 'Automatically rejected no op',
+      },
+    });
+  }
+
   // The DevOps Slack app handles the button actions from this message, and is
   // designed to rewrite parts of the message, so it expects a specific message
   // payload structure. If this message changes, the reject/approve/annotate/etc
   // handlers may need to be updated as well.
+  //
+  // The standard third element (index=2), the actions block with the buttons,
+  // is added below, since it's only added if necessary.
+  /** @type {MessageAttachment[]} */
+  const attachments = [
+    {
+      color: '#0a4a74',
+      fallback: `${regionNickname} ${pipelineNickname} Approve the production change set deltas`,
+      blocks: [],
+    },
+  ];
+
+  // Always include the header and the status
+  attachments[0].blocks.push(
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: header,
+      },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text:
+          report.allowedDeltaCount > 0
+            ? 'Production stack change set has been created, and needs approval.'
+            : 'Production stack change set has been automatically rejected.',
+      },
+    },
+  );
+
+  // When the change set include meaningful deltas, include the buttons,
+  // otherwise skip it
+  if (report.allowedDeltaCount > 0) {
+    attachments[0].blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'Approve',
+            emoji: true,
+          },
+          style: 'primary',
+          value: JSON.stringify(
+            Object.assign(approvalParams, { result: approvedResult }),
+          ),
+          action_id: 'codepipeline-approval_approve-deploy',
+          confirm: {
+            title: {
+              type: 'plain_text',
+              text: 'Production Deploy Approval',
+            },
+            text: {
+              type: 'mrkdwn',
+              text: 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
+            },
+            confirm: {
+              type: 'plain_text',
+              text: 'Approve',
+            },
+            deny: {
+              type: 'plain_text',
+              text: 'Cancel',
+            },
+          },
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'Approve with notes',
+            emoji: true,
+          },
+          value: JSON.stringify(
+            Object.assign(approvalParams, { result: approvedResult }),
+          ),
+          action_id: 'codepipeline-approval_annotate-deploy',
+        },
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: 'Reject',
+            emoji: true,
+          },
+          style: 'danger',
+          value: JSON.stringify(
+            Object.assign(approvalParams, { result: rejectedResult }),
+          ),
+          action_id: 'codepipeline-approval_reject-deploy',
+        },
+      ],
+    });
+  }
+
+  // Always include the other information
+  attachments[0].blocks.push(
+    {
+      type: 'divider',
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: report.text,
+      },
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
+        },
+      ],
+    },
+  );
+
   return {
     username: 'AWS CodePipeline',
     icon_emoji: ':ops-codepipeline:',
     channel: `#ops-deploys-${approvalNotification.region}`,
-    attachments: [
-      {
-        color: '#0a4a74',
-        fallback: `${regionNickname} ${pipelineNickname} Approve the production change set deltas`,
-        blocks: [
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: header,
-            },
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: 'Production stack change set has been created, and needs approval.',
-            },
-          },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: 'Approve',
-                  emoji: true,
-                },
-                style: 'primary',
-                value: JSON.stringify(
-                  Object.assign(approvalParams, { result: approvedResult }),
-                ),
-                action_id: 'codepipeline-approval_approve-deploy',
-                confirm: {
-                  title: {
-                    type: 'plain_text',
-                    text: 'Production Deploy Approval',
-                  },
-                  text: {
-                    type: 'mrkdwn',
-                    text: 'Are you sure you want to approve this CloudFormation change set for the production stack? Approval will trigger an immediate update to the production stack!',
-                  },
-                  confirm: {
-                    type: 'plain_text',
-                    text: 'Approve',
-                  },
-                  deny: {
-                    type: 'plain_text',
-                    text: 'Cancel',
-                  },
-                },
-              },
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: 'Approve with notes',
-                  emoji: true,
-                },
-                value: JSON.stringify(
-                  Object.assign(approvalParams, { result: approvedResult }),
-                ),
-                action_id: 'codepipeline-approval_annotate-deploy',
-              },
-              {
-                type: 'button',
-                text: {
-                  type: 'plain_text',
-                  text: 'Reject',
-                  emoji: true,
-                },
-                style: 'danger',
-                value: JSON.stringify(
-                  Object.assign(approvalParams, { result: rejectedResult }),
-                ),
-                action_id: 'codepipeline-approval_reject-deploy',
-              },
-            ],
-          },
-          {
-            type: 'divider',
-          },
-          {
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: report.text,
-            },
-          },
-          {
-            type: 'context',
-            elements: [
-              {
-                type: 'mrkdwn',
-                text: `${report.hiddenDeltaCount} deltas were hidden. ${report.rawDeltaCount} parameters were unchanged or ignored.`,
-              },
-            ],
-          },
-        ],
-      },
-    ],
+    attachments,
   };
 }
 
