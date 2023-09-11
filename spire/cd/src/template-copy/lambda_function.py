@@ -1,7 +1,7 @@
 # Invoked by: CodePipeline
 # Returns: Error or status message
 #
-# In order for the root stack to launch nested stacks, the tempates for those
+# In order for the root stack to launch nested stacks, the templates for those
 # nested stacks much be available on S3. This function copies all files in the
 # Infrastructure repo artifact to S3 for that purpose.
 # Those files are copied to the template copy bucket, with an
@@ -60,11 +60,23 @@ def lambda_handler(event, context):
         archive = zipfile.ZipFile(archive_path, "r")
         names = archive.namelist()
         for name in names:
-            if f"{name}".startswith("stacks/"):
+            # `name` will be the full relative file path for the file as it
+            # exists in the Infrastructure repository.
+            # For example:
+            # - "README.md"
+            # - "dns/prx.mx-hosted_zone.yml"
+            # - "spire/templates/root.yml"
+            if f"{name}".startswith("spire/templates"):
                 print(f"...Uploading {name}...")
 
                 f = archive.open(name)
 
+                # The object key will match the name from above, with a Git
+                # hash (and slash) prepended.
+                # For example:
+                # - "046c0da3e8cb4…ec83755ad111/README.md"
+                # - "046c0da3e8cb4…ec83755ad111/dns/prx.mx-hosted_zone.yml"
+                # - "046c0da3e8cb4…ec83755ad111/spire/templates/root.yml"
                 output_key = "{0}/{1}".format(commit_hash, name)
                 s3.upload_fileobj(f, output_bucket_name, output_key)
 
