@@ -464,6 +464,33 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-memcached.yml
       TimeoutInMinutes: 40
 
+  # Requires VPC and ECS ASG SG
+  SharedAppRedisStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RegionMode: !FindInMap [RegionModeMap, !Ref AWS::Region, !Ref EnvironmentType]
+        RootStackId: !Ref AWS::StackId
+        RootStackName: !Ref AWS::StackName
+        SourceSecurityGroupId1: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
+        VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
+        VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-app-redis.yml
+      TimeoutInMinutes: 40
+
   # Requires VPC
   SharedRedisSecurityGroupStack:
     Type: AWS::CloudFormation::Stack
@@ -486,6 +513,7 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-redis/security-groups.yml
       TimeoutInMinutes: 20
   # Requires VPC and Redis SG
+  # This would more accurately be named "SharedDovetailRedisStack"
   SharedRedisStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
@@ -616,6 +644,8 @@ Resources:
         VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
+        SharedAppRedisEndpointAddress: !GetAtt SharedAppRedisStack.Outputs.CacheEndpointAddress
+        SharedAppRedisEndpointPort: !GetAtt SharedAppRedisStack.Outputs.CacheEndpointPort
         SharedMemcachedEndpointAddress: !GetAtt SharedMemcachedStack.Outputs.CacheEndpointAddress
         SharedMemcachedEndpointPort: !GetAtt SharedMemcachedStack.Outputs.CacheEndpointPort
         SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
@@ -707,9 +737,6 @@ Resources:
         RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
         RootStackName: !Ref AWS::StackName
         RootStackId: !Ref AWS::StackId
-        VpcPrivateSubnet1Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet1Id
-        VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
-        VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
         VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
         VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
         VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
@@ -721,6 +748,8 @@ Resources:
         SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
         SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
         SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
+        SharedAppRedisEndpointAddress: !GetAtt SharedAppRedisStack.Outputs.CacheEndpointAddress
+        SharedAppRedisEndpointPort: !GetAtt SharedAppRedisStack.Outputs.CacheEndpointPort
         SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
         SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
         SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
@@ -874,7 +903,8 @@ Resources:
         SharedAlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
 
         SharedMemcachedCacheName: !GetAtt SharedMemcachedStack.Outputs.CacheName
-        SharedRedisReplicationGroupName: !GetAtt SharedRedisStack.Outputs.ReplicationGroupName
+        SharedAppRedisCacheName: !GetAtt SharedAppRedisStack.Outputs.CacheName
+        DovetailRedisReplicationGroupName: !GetAtt SharedRedisStack.Outputs.ReplicationGroupName
 
         # TODO
         StackResourceGroupName: !If
