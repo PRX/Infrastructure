@@ -21,6 +21,19 @@ Parameters:
   kProductionUsEast1LoadBalancerHostname: { Type: String, Default: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com }
   kProductionUsWest2LoadBalancerHostname: { Type: String, Default: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com }
 
+Conditions:
+  HasProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2: !Not [!Equals [!Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2, ""]]
+  HasProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2: !Not [!Equals [!Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2, ""]]
+  CreateProdUsEast1HealthCheck: !And
+    - !Condition HasProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2
+    - !Condition HasProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2
+
+  HasProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2: !Not [!Equals [!Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2, ""]]
+  HasProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2: !Not [!Equals [!Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2, ""]]
+  CreateProdUsWest2HealthCheck: !And
+    - !Condition HasProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2
+    - !Condition HasProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2
+
 Resources:
   HostedZone:
     Type: AWS::Route53::HostedZone
@@ -37,6 +50,7 @@ Resources:
 
   ProdUsEast1HealthCheck:
     Type: AWS::Route53::HealthCheck
+    Condition: CreateProdUsEast1HealthCheck
     Properties:
       HealthCheckConfig:
         ChildHealthChecks:
@@ -54,6 +68,7 @@ Resources:
         - { Key: prx:dev:application, Value: Broadcast Delivery }
   ProdUsWest2HealthCheck:
     Type: AWS::Route53::HealthCheck
+    Condition: CreateProdUsWest2HealthCheck
     Properties:
       HealthCheckConfig:
         ChildHealthChecks:
@@ -92,7 +107,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -101,7 +116,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -111,7 +126,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -120,7 +135,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -130,7 +145,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -139,7 +154,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -149,7 +164,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -158,7 +173,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -168,7 +183,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -177,7 +192,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -187,7 +202,7 @@ Resources:
             DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
-          # HealthCheckId: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
@@ -196,7 +211,7 @@ Resources:
             DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
-          # HealthCheckId: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
