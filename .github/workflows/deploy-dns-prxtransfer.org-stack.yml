@@ -5,7 +5,7 @@ name: Deploy prxtransfer.org DNS
 on:
   push:
     branches: [main]
-    paths: [dns/prxtransfer.org-hosted_zone.yml]
+    paths: [dns/prxtransfer.org-hosted_zone/**]
 
 concurrency:
   group: ${{ github.workflow }}
@@ -18,21 +18,68 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: pip
+      - uses: aws-actions/setup-sam@v2
+
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-region: us-east-1
+          aws-region: us-east-2
           role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
           role-session-name: GitHubActions-DeployPrxtransferOrgStack
 
-      - name: Deploy CloudFormation Stack
-        working-directory: dns
+      # For each region that we run PRX Transfer FTP servers, we deploy several
+      # Lambda functions that continuously test connectivity. These functions
+      # are deployed to several regions for redundancy. The regions they are
+      # deployed to does not need to match the regions where the servers are
+      # running. Each testing stack will include Lambda for all server regions
+      # (meaning, each region this stack is deployed to tests all regions where
+      # the FTP servers are running).
+      #
+      # Currently we run servers in: [us-east-1, us-west-2]
+      # And run health checking in: [us-east-2, us-west-2]
+      - name: Deploy Health Checking Stacks
+        working-directory: dns/prxtransfer.org-hosted_zone/health-checking
         run: |
+          stack_name="hostedzone-prxtransfer-org-health-checks"
+
+          # Get the hostname for each production FTP server NBL
+          prod_us_east_1_ftp_nlb_hostname=$(aws cloudformation describe-stacks --region us-east-1 --stack-name infrastructure-cd-root-production --query "Stacks[0].Outputs[?OutputKey=='ExchangeFtpServerNlbDnsName'].OutputValue" --output text)
+          prod_us_west_2_ftp_nlb_hostname=$(aws cloudformation describe-stacks --region us-west-2 --stack-name infrastructure-cd-root-production --query "Stacks[0].Outputs[?OutputKey=='ExchangeFtpServerNlbDnsName'].OutputValue" --output text)
+
+          sam build
+
+          # Deploy the FTP connection testers to a handful of regions
+          sam deploy --region us-east-2 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --resolve-s3 --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
+          sam deploy --region us-west-2 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --resolve-s3 --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
+
+      # Deploy the hosted zone, which includes CALCULATED health checks that
+      # include child health checks from the stacks deployed above. The IDs for
+      # those health checks are looked up from CloudFormation outputs and
+      # passed into the stack as parameters.
+      - name: Deploy Hosted Zone Stack
+        working-directory: dns/prxtransfer.org-hosted_zone
+        run: |
+          stack_name="hostedzone-prxtransfer-org-health-checks"
+
+          ue2_health_check_id_for_us_east_1=$(aws cloudformation describe-stacks --region us-east-2 --stack-name "$stack_name" --query "Stacks[0].Outputs[?OutputKey=='ProdUsEast1ConntestHealthCheckId'].OutputValue" --output text)
+          ue2_health_check_id_for_us_west_2=$(aws cloudformation describe-stacks --region us-east-2 --stack-name "$stack_name" --query "Stacks[0].Outputs[?OutputKey=='ProdUsWest2ConntestHealthCheckId'].OutputValue" --output text)
+          uw2_health_check_id_for_us_east_1=$(aws cloudformation describe-stacks --region us-west-2 --stack-name "$stack_name" --query "Stacks[0].Outputs[?OutputKey=='ProdUsEast1ConntestHealthCheckId'].OutputValue" --output text --region us-west-2)
+          uw2_health_check_id_for_us_west_2=$(aws cloudformation describe-stacks --region us-west-2 --stack-name "$stack_name" --query "Stacks[0].Outputs[?OutputKey=='ProdUsWest2ConntestHealthCheckId'].OutputValue" --output text --region us-west-2)
+
           aws cloudformation deploy \
             --no-fail-on-empty-changeset \
             --region us-east-1 \
             --stack-name hostedzone-prxtransfer-org \
-            --template-file prxtransfer.org-hosted_zone.yml
+            --template-file prxtransfer.org-hosted_zone.yml \
+            --parameter-overrides \
+                ProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2=$ue2_health_check_id_for_us_east_1 \
+                ProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2=$uw2_health_check_id_for_us_east_1 \
+                ProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2=$ue2_health_check_id_for_us_west_2 \
+                ProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2=$uw2_health_check_id_for_us_west_2
