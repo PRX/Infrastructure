@@ -55,9 +55,30 @@ jobs:
 
           sam build
 
-          # Deploy the FTP connection testers to a handful of regions
-          sam deploy --region us-east-2 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --resolve-s3 --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
-          sam deploy --region us-west-2 --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "$stack_name" --resolve-s3 --s3-prefix "$stack_name" --capabilities CAPABILITY_IAM
+          # Deploy the FTP connection testers to a handful of regions. These
+          # don't need to be the regions where FTP servers are running.
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3 \
+            --region us-east-2 \
+            --stack-name "$stack_name" \
+            --s3-prefix "$stack_name" \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+                "ProductionUsEast1LoadBalancerHostname=$prod_us_east_1_ftp_nlb_hostname" \
+                "ProductionUsWest2LoadBalancerHostname=$prod_us_west_2_ftp_nlb_hostname"
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3 \
+            --region us-west-2 \
+            --stack-name "$stack_name" \
+            --s3-prefix "$stack_name" \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+                "ProductionUsEast1LoadBalancerHostname=$prod_us_east_1_ftp_nlb_hostname" \
+                "ProductionUsWest2LoadBalancerHostname=$prod_us_west_2_ftp_nlb_hostname"
 
       # Deploy the hosted zone, which includes CALCULATED health checks that
       # include child health checks from the stacks deployed above. The IDs for
