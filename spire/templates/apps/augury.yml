@@ -40,17 +40,15 @@ Parameters:
   NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
-  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   EcsLaunchEndpointsAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   KmsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedAppRedisEndpointAddress: { Type: String }
+  SharedAppRedisEndpointPort: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: String }
   SharedPostgresqlClientSecurityGroupId: { Type: String }
   CastlePostgresInstanceEndpointAddress: { Type: String }
   CastlePostgresInstanceEndpointPort: { Type: String }
@@ -83,70 +81,6 @@ Resources:
       WorkerLoggedErrorsMetricName: !Sub WorkerLoggedErrors${EnvironmentType}
       SlowWorkerLoggedErrorsMetricName: !Sub SlowWorkerLoggedErrors${EnvironmentType}
       WebLoggedErrorsMetricName: !Sub WebLoggedErrors${EnvironmentType}
-
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: IsPrimaryRegion
-    Properties:
-      GroupDescription: !Sub Augury ${EnvironmentType} Redis security group
-      SecurityGroupIngress:
-        - FromPort: 6379
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-          ToPort: 6379
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_augury_redis" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Augury }
-      VpcId: !Ref VpcId
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Condition: IsPrimaryRegion
-    Properties:
-      Description: !Sub Augury ${EnvironmentType} Redis subnet group
-      SubnetIds:
-        - !Ref VpcPrivateSubnet1Id
-        - !Ref VpcPrivateSubnet2Id
-        - !Ref VpcPrivateSubnet3Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Augury }
-  RedisCluster:
-    Type: AWS::ElastiCache::CacheCluster
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Condition: IsPrimaryRegion
-    Properties:
-      AutoMinorVersionUpgrade: false
-      CacheNodeType: !If [IsProduction, cache.t4g.small, cache.t4g.micro]
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      Engine: redis
-      EngineVersion: 6.x
-      NumCacheNodes: 1
-      PreferredMaintenanceWindow: sun:09:00-sun:10:00
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Augury }
-      VpcSecurityGroupIds:
-        - !Ref RedisSecurityGroup
 
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -365,9 +299,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointAddress
             - Name: REDIS_PORT
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointPort
             - Name: UPLOAD_ADFILE_SECRET_ACCESS_KEY
               Value: !GetAtt S3SigningAccessKey.SecretAccessKey
             - Name: UPLOAD_ADFILE_ACCESS_KEY_ID
@@ -504,9 +438,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointAddress
             - Name: REDIS_PORT
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointPort
             - Name: RAILS_SERVE_STATIC_FILES
               Value: "true"
             - Name: POSTGRES_POOL_SIZE
@@ -998,9 +932,9 @@ Resources:
             - Name: POSTGRES_PORT
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_HOST
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Address, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointAddress
             - Name: REDIS_PORT
-              Value: !If [IsPrimaryRegion, !GetAtt RedisCluster.RedisEndpoint.Port, !Ref "AWS::NoValue"]
+              Value: !Ref SharedAppRedisEndpointPort
             - Name: RAILS_SERVE_STATIC_FILES
               Value: "true"
             - Name: POSTGRES_POOL_SIZE

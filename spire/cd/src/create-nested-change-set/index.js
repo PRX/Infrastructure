@@ -92,7 +92,7 @@ exports.handler = async (event) => {
         'CAPABILITY_NAMED_IAM',
         'CAPABILITY_AUTO_EXPAND',
       ],
-      TemplateURL: `${templateUrlBase}/stacks/root.yml`,
+      TemplateURL: `${templateUrlBase}/spire/templates/root.yml`,
       Parameters: changeSetParamsArray,
       IncludeNestedStacks: true,
     });

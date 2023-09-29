@@ -29,7 +29,7 @@ If you want to remove things created by Infrastructure for CI/CD, do so in this 
 
 ## Other Resources
 
-Files found in `cd/`, `ci/`, `secrets/`, `stacks/` and `storage/` fall under the umbrella of CI/CD. Other types of resources, such as CloudFront distributions and DNS records, can also be found in this project.
+Files found in `cd/`, `ci/`, and `storage/` fall under the umbrella of CI/CD. Other types of resources, such as CloudFront distributions and DNS records, can also be found in this project.
 
 - `dns/` – DNS hosted zones and records
 - `cdn/` – CDN configurations (such as through [Amazon CloudFront](https://aws.amazon.com/cloudfront/))

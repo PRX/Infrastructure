@@ -1,3 +1,4 @@
+# dns/prxtransfer.org-hosted_zone/prxtransfer.org-hosted_zone.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
   Hosted zone and record sets for prxtransfer.org
@@ -7,6 +8,32 @@ Parameters:
     Default: prxtransfer.org.
     Description: The domain name and hosted zone
     Type: String
+
+  ProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2: { Type: String }
+  ProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2: { Type: String }
+  ProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2: { Type: String }
+  ProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2: { Type: String }
+
+  # Staging load balanced hostnames
+  kStagingUsEast1LoadBalancerHostname: { Type: String, Default: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com }
+  kStagingUsWest2LoadBalancerHostname: { Type: String, Default: infra-FtpSe-TF9DIS2J9L4Y-10b4eadefd902f88.elb.us-west-2.amazonaws.com }
+
+  # Production load balanced hostnames
+  kProductionUsEast1LoadBalancerHostname: { Type: String, Default: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com }
+  kProductionUsWest2LoadBalancerHostname: { Type: String, Default: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com }
+
+Conditions:
+  HasProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2: !Not [!Equals [!Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2, ""]]
+  HasProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2: !Not [!Equals [!Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2, ""]]
+  CreateProdUsEast1HealthCheck: !And
+    - !Condition HasProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2
+    - !Condition HasProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2
+
+  HasProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2: !Not [!Equals [!Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2, ""]]
+  HasProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2: !Not [!Equals [!Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2, ""]]
+  CreateProdUsWest2HealthCheck: !And
+    - !Condition HasProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2
+    - !Condition HasProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2
 
 Resources:
   HostedZone:
@@ -21,6 +48,43 @@ Resources:
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: Broadcast Delivery }
       Name: !Ref Domain
+
+  ProdUsEast1HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Condition: CreateProdUsEast1HealthCheck
+    Properties:
+      HealthCheckConfig:
+        ChildHealthChecks:
+          # All of these are testing the us-east-1 prod servers
+          - !Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsEast2
+          - !Ref ProdUsEast1HealthCheckChildHealthCheckIdFromUsWest2
+        HealthThreshold: 1 # Should always be 1
+        Type: CALCULATED
+      HealthCheckTags:
+        - { Key: Name, Value: delivery_prod_us-east-1 }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
+  ProdUsWest2HealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Condition: CreateProdUsWest2HealthCheck
+    Properties:
+      HealthCheckConfig:
+        ChildHealthChecks:
+          # All of these are testing the us-west-2 prod servers
+          - !Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsEast2
+          - !Ref ProdUsWest2HealthCheckChildHealthCheckIdFromUsWest2
+        HealthThreshold: 1 # Should always be 1
+        Type: CALCULATED
+      HealthCheckTags:
+        - { Key: Name, Value: delivery_prod_us-west-2 }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Broadcast Delivery }
 
   ProductionWildcards:
     Type: AWS::Route53::RecordSetGroup
@@ -41,102 +105,114 @@ Resources:
         # - *.west1.prxtransfer.org (Legacy routing for a few stations to hit specific server locations)
         - Name: !Ref Domain
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Ref Domain
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
 
         - Name: !Sub "*.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Sub "*.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
 
         - Name: !Sub "*.station.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Sub "*.station.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
 
         - Name: !Sub "*.east.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Sub "*.east.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
 
         - Name: !Sub "*.west.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Sub "*.west.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
 
         - Name: !Sub "*.west1.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-1W1OF5U4X8M3Z-284373e0ff42a3aa.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kProductionUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
+          # HealthCheckId: !If [CreateProdUsEast1HealthCheck, !GetAtt ProdUsEast1HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-east-1
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-east-1
           Type: A
         - Name: !Sub "*.west1.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-8HU0JXCWHS5S-c4fadec5f526520a.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kProductionUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
+          # HealthCheckId: !If [CreateProdUsWest2HealthCheck, !GetAtt ProdUsWest2HealthCheck.HealthCheckId, !Ref AWS::NoValue]
           Region: us-west-2
           SetIdentifier: !Sub ${AWS::StackName}-prod-us-west-2
           Type: A
@@ -158,7 +234,7 @@ Resources:
         # testing
         - Name: !Sub staging.${Domain}
           AliasTarget:
-            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kStagingUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
           Region: us-east-1
@@ -166,7 +242,7 @@ Resources:
           Type: A
         - Name: !Sub staging.${Domain}
           AliasTarget:
-            DNSName: infra-FtpSe-TF9DIS2J9L4Y-10b4eadefd902f88.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kStagingUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
           Region: us-west-2
@@ -175,7 +251,7 @@ Resources:
 
         - Name: !Sub "*.staging.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kStagingUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
           Region: us-east-1
@@ -183,7 +259,7 @@ Resources:
           Type: A
         - Name: !Sub "*.staging.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-TF9DIS2J9L4Y-10b4eadefd902f88.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kStagingUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
           Region: us-west-2
@@ -192,7 +268,7 @@ Resources:
 
         - Name: !Sub "*.station.staging.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-PVZ4TQZYADYA-dc6e2279abf01ee4.elb.us-east-1.amazonaws.com
+            DNSName: !Ref kStagingUsEast1LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z26RNL4JYFTOTI
           Region: us-east-1
@@ -200,7 +276,7 @@ Resources:
           Type: A
         - Name: !Sub "*.station.staging.${Domain}"
           AliasTarget:
-            DNSName: infra-FtpSe-TF9DIS2J9L4Y-10b4eadefd902f88.elb.us-west-2.amazonaws.com
+            DNSName: !Ref kStagingUsWest2LoadBalancerHostname
             EvaluateTargetHealth: true
             HostedZoneId: Z18D5FSROUN65G
           Region: us-west-2

@@ -19,6 +19,7 @@ Parameters:
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
+  AwsOrganizationId: { Type: String }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -29,12 +30,15 @@ Parameters:
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   DeploymentPackageBucketName: { Type: String }
+  AuguryHostname: { Type: String }
   BetaHostname: { Type: String }
   CmsHostname: { Type: String }
   ExchangeHostname: { Type: String }
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
   MetaHostname: { Type: String }
+  MetricsHostname: { Type: String }
+  PublishHostname: { Type: String }
   TheWorldSearchHostname: { Type: String }
   TheWorldSearchInternalHostname: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
@@ -117,6 +121,7 @@ Resources:
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        AwsOrganizationId: !Ref AwsOrganizationId
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
         CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
@@ -278,8 +283,12 @@ Resources:
         RootStackId: !Ref RootStackId
         AmazonSesSmtpCredentialsGeneratorServiceToken: !Ref AmazonSesSmtpCredentialsGeneratorServiceToken
         CloudWatchAlarmTaggerServiceToken: !Ref CloudWatchAlarmTaggerServiceToken
+        AuguryHostname: !Ref AuguryHostname
         ExchangeHostname: !Ref ExchangeHostname
+        FeederHostname: !Ref FeederHostname
         IdHostname: !Ref IdHostname
+        MetricsHostname: !Ref MetricsHostname
+        PublishHostname: !Ref PublishHostname
         MediajointS3BucketArn: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/${AWS::Region}/s3-bucket-arn
         PorterJobExecutionSnsTopicArn: !Ref PorterJobExecutionSnsTopicArn
         SharedAuroraMysqlEndpoint: !Ref SharedAuroraMysqlEndpoint
@@ -336,7 +345,6 @@ Resources:
         EcsClusterArn: !Ref EcsClusterArn
         VpcId: !Ref VpcId
         EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Play/pkg/docker-image-tag
-        ProxyEcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Play/proxy/pkg/docker-image-tag
         AlbListenerRulePriorityPrefix: !Ref PlaySharedAlbListenerRulePriorityPrefix
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
@@ -533,8 +541,6 @@ Outputs:
   IframelyTargetGroupFullName:
     Value: !GetAtt IframelyStack.Outputs.TargetGroupFullName
 
-  PlayProxyTargetGroupFullName:
-    Value: !GetAtt PlayStack.Outputs.ProxyTargetGroupFullName
   PlayWebTargetGroupFullName:
     Value: !GetAtt PlayStack.Outputs.WebTargetGroupFullName
 

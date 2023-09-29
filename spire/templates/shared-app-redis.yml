@@ -1,0 +1,107 @@
+# stacks/shared-app-redis.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a Redis cluster intended to be used by several applications. Unlike
+  the shared-redis/cluster.yml, this is a non-redundant single node redis. It
+  should only be used for pure FIFO caching, with no state we need to hold
+  onto if it should cycle or disappear. The cluster's security group will allow
+  only traffic from a security group provided as a stack parameter.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RegionMode: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  SourceSecurityGroupId1: { Type: AWS::EC2::SecurityGroup::Id }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  StagingInstanceType:
+    Type: String
+    Default: cache.t4g.micro
+  ProductionInstanceType:
+    Type: String
+    Default: cache.t4g.small
+
+Conditions:
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  SharedAppRedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: IsPrimaryRegion
+    Properties:
+      GroupDescription: !Sub Shared ${EnvironmentType} App Redis security group
+      SecurityGroupIngress:
+        - FromPort: 6379
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref SourceSecurityGroupId1
+          ToPort: 6379
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_app_redis" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+
+  SharedAppRedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Condition: IsPrimaryRegion
+    Properties:
+      Description: !Sub Shared ${EnvironmentType} App Redis subnet group
+      SubnetIds:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
+  SharedAppRedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Condition: IsPrimaryRegion
+    Properties:
+      AutoMinorVersionUpgrade: true
+      CacheNodeType: !If
+        - IsProduction
+        - !Ref ProductionInstanceType
+        - !Ref StagingInstanceType
+      CacheSubnetGroupName: !Ref SharedAppRedisSubnetGroup
+      Engine: redis
+      EngineVersion: 7.0
+      NumCacheNodes: 1
+      PreferredMaintenanceWindow: sun:09:00-sun:10:00
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcSecurityGroupIds:
+        - !Ref SharedAppRedisSecurityGroup
+
+Outputs:
+  CacheName:
+    Value: !If [IsPrimaryRegion, !Ref SharedAppRedisCluster, ""]
+  CacheEndpointAddress:
+    Description: Cache endpoint hostname
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Address, ""]
+  CacheEndpointPort:
+    Description: Cache endpoint port
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Port, ""]

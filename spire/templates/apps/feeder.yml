@@ -45,6 +45,8 @@ Parameters:
   NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
+  SharedAppRedisEndpointAddress: { Type: String }
+  SharedAppRedisEndpointPort: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   AnnounceResourcePrefix: { Type: String }
@@ -59,6 +61,7 @@ Parameters:
   FeederHostname: { Type: String }
   FeederAuthProxyHostname: { Type: String }
   FeederAuthProxyInternalHostname: { Type: String }
+  FeederCdnHostname: { Type: String }
   PublicFeedsHostname: { Type: String }
   DovetailAppleApiBridgeEndpointUrl: { Type: String }
 
@@ -75,6 +78,7 @@ Resources:
       ServiceToken: !Ref EchoServiceToken
       WorkerLoggedErrorsMetricName: !Sub WorkerLoggedErrors${EnvironmentType}
       WebLoggedErrorsMetricName: !Sub WebLoggedErrors${EnvironmentType}
+      PublicFeedsUrlPrefix: !Sub https://${PublicFeedsHostname}/f
 
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -644,7 +648,7 @@ Resources:
             - Name: DOVETAIL_HOST
               Value: !Ref DovetailRouterHostname
             - Name: FEEDER_CDN_HOST
-              Value: !Ref PublicFeedsHostname
+              Value: !Ref FeederCdnHostname
             - Name: FEEDER_CDN_PRIVATE_HOST
               Value: !Ref FeederAuthProxyHostname
             - Name: FEEDER_HOST
@@ -667,8 +671,14 @@ Resources:
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: PRX_HOST
               Value: !Ref BetaHostname
+            - Name: PUBLIC_FEEDS_URL_PREFIX
+              Value: !GetAtt Constants.PublicFeedsUrlPrefix
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
+            - Name: REDIS_HOST
+              Value: !Ref SharedAppRedisEndpointAddress
+            - Name: REDIS_PORT
+              Value: !Ref SharedAppRedisEndpointPort
             - Name: UPLOAD_BUCKET_NAME
               Value: !Ref FeederUploadsBucket
             - Name: UPLOAD_S3_ENDPOINT_HOST
@@ -784,7 +794,7 @@ Resources:
             - Name: DOVETAIL_HOST
               Value: !Ref DovetailRouterHostname
             - Name: FEEDER_CDN_HOST
-              Value: !Ref PublicFeedsHostname
+              Value: !Ref FeederCdnHostname
             - Name: FEEDER_CDN_PRIVATE_HOST
               Value: !Ref FeederAuthProxyHostname
             - Name: FEEDER_HOST
@@ -805,8 +815,14 @@ Resources:
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: PRX_HOST
               Value: !Ref BetaHostname
+            - Name: PUBLIC_FEEDS_URL_PREFIX
+              Value: !GetAtt Constants.PublicFeedsUrlPrefix
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
+            - Name: REDIS_HOST
+              Value: !Ref SharedAppRedisEndpointAddress
+            - Name: REDIS_PORT
+              Value: !Ref SharedAppRedisEndpointPort
             - Name: START_SAY_WHEN
               Value: true
             - Name: WORKER_COUNT
@@ -942,7 +958,7 @@ Resources:
       Description: !Sub Feeder ${EnvironmentType} private feed proxy server
       Environment:
         Variables:
-          PUBLIC_FEED_DOMAIN: !Ref PublicFeedsHostname
+          PUBLIC_FEED_DOMAIN: !Ref FeederCdnHostname
       Events:
         ApiRootRequest:
           Properties:
@@ -995,7 +1011,7 @@ Resources:
           const body = data.replace(
             /<enclosure url="([^"]+)"/g,
             `<enclosure url="$1?auth=${auth}"`,
-          );
+          ).replace(/{\?auth}"/g, `?auth=${auth}"`);
           const headers = {
             'Content-Type': resp.headers['content-type'],
             'Cache-Control': `public, max-age=300`,

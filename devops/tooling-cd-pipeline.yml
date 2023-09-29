@@ -11,7 +11,7 @@
 # 4. Add the output file of the `sam package` command to the artifacts files
 #    list of the CodeBuild project (which is the stack name).
 # 5. Add an action to the Deploy stage of the CodePipeline pipeline that
-#    deploys the template from the CodeBuils artifacts that you added in step 4.
+#    deploys the template from the CodeBuild artifacts that you added in step 4.
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -38,6 +38,9 @@ Parameters:
   kSlackAppStackName:
     Type: String
     Default: prx-devops-slack-app
+  kStatuspageStackName:
+    Type: String
+    Default: prx-devops-statuspage
   ######
   GitHubCodeStarConnectionArn: { Type: String }
   OrganizationId:
@@ -51,6 +54,7 @@ Parameters:
   PrxLegacyAccountId: { Type: String }
   SlackAccessToken: { Type: String }
   SlackSigningSecet: { Type: String }
+  StatuspageApiKey: { Type: String }
   FatalSmsContactListSnsTopicArn: { Type: String }
   CloudWatchAlarmReminderRegions: { Type: CommaDelimitedList }
   CloudWatchAlarmReminderAccountIds: { Type: CommaDelimitedList }
@@ -216,6 +220,9 @@ Resources:
 
                 - sam build --parallel --template-file ./devops/tooling/chat-ops/slack-app/template.yml
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kSlackAppStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/statuspage/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kStatuspageStackName}
           artifacts:
             files:
               - ${kCloudFormationMacroFunctionsStackName}
@@ -223,6 +230,7 @@ Resources:
               - ${kCloudWatchAlarmsStackName}
               - ${kCloudWatchAlarmRemindersStackName}
               - ${kSlackAppStackName}
+              - ${kStatuspageStackName}
             name: SamBuildArtifact
         Type: CODEPIPELINE
       Tags:
@@ -351,11 +359,14 @@ Resources:
               - Action: cloudformation:*
                 Effect: Allow
                 Resource:
+                  # Stacks
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationMacroFunctionsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationNotificationsStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kStatuspageStackName}/*
+                  # StackSets
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationNotificationTopicsStacksetName}:*
             Version: "2012-10-17"
           PolicyName: CloudFormationAccess
@@ -465,6 +476,26 @@ Resources:
               InputArtifacts:
                 - Name: SamBuildArtifact
               Namespace: slack_app_deploy
+              RunOrder: 1
+            - Name: Statuspage
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "StatuspageApiKey": "${StatuspageApiKey}"
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kStatuspageStackName
+                TemplatePath: !Sub SamBuildArtifact::${kStatuspageStackName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              Namespace: statuspage_deploy
               RunOrder: 1
             - Name: CloudWatch_Alarms
               ActionTypeId:
