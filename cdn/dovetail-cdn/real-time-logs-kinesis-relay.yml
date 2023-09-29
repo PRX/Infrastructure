@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+  EnvironmentTypeAbbreviation:
+    Type: String
+    AllowedValues:
+      - test
+      - stag
+      - prod
+  SourceKinesisStreamArn:
+    Type: String
+  DestinationKinesisStreamArn:
+    Type: String
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  KinesisRelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: real-time-logs-kinesis-relay/
+      Description: !Sub >-
+        ${EnvironmentType} Sends Kinesis records to another Kinesis stream
+      Events:
+        CountsBytesKinesisTrigger:
+          Properties:
+            BatchSize: 100
+            BisectBatchOnFunctionError: true
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref SourceKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 256
+      Runtime: nodejs18.x
+      Policies:
+        - Statement:
+            - Action: kinesis:PutRecords
+              Effect: Allow
+              Resource: !Ref DestinationKinesisStreamArn
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN
+      Timeout: 30
+  KinesisRelayLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${KinesisRelayFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+  KinesisRelayErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] Kinesis Relay <${EnvironmentTypeAbbreviation}> ELEVATED FUNCTION ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The Lambda function that relays data from a
+        CloudFront real time logs Kinesis stream (in the Dovetail CDN account)
+        to the Kenisis stream in the prx-legacy account is failing, meaning
+        data is not getting to the intended stream. These messages will be
+        retried, but if some records are getting sent before the failure, there
+        is risk of duplicate data.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref KinesisRelayFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  KinesisRelayIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] Kinesis Relay <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail CDN Kinesis relay function's iterator
+        age is higher than normal, which means some CDN logs from this region
+        are not being processed.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref KinesisRelayFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 900000 # milliseconds
+      TreatMissingData: notBreaching
+  KinesisRelayIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] Kinesis Relay <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail CDN Kinesis relay function's iterator
+        is significantly delayed, and is likely to continue to fall behind
+        without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref KinesisRelayFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: notBreaching

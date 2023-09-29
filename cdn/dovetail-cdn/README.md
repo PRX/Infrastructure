@@ -1,0 +1,13 @@
+TODO
+ - [x] Deploy CDN
+ - [x] Deploy CloudFront function
+ - [x] Create staging cert DNS
+ - [x] Create prod cert DNS
+ - [x] Create staging cert
+ - [ ] Create prod cert
+ - [x] Deploy Origin Request Lambda function
+ - [x] TEMP Add OAI policy to staging arranger buckets
+ - [ ] Remove TEMP OAI policy from staging arranger buckets
+ - [x] Create resource policy for Arranger Lambdas to allow being invoked by new origin request Lambdas
+ - [ ] Add Spire stack parameter for new OAI to be permanently added to arranger workspace buckets
+ - [ ] Create Kinesis proxy functions, which is subscribed to a Kinesis stream, and pushes all messages to another Kinesis stream

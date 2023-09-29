@@ -1,1 +1,570 @@
+# cdn/dovetail-cdn/cloudfront.yml
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a CloudFront distribution to validate and redirect viewer-requests,
+  invoke dovetail-cdn-arranger to stitch new arrangements, and origin-pull from
+  any dovetail-cdn-arranger S3 bucket.
+
+Parameters:
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+  DistributionDomain:
+    Type: String
+    Description: eg. dovetail3-cdn.prxu.org
+  ExpiredRedirectPrefix:
+    Type: String
+    Description: eg. https://dovetail.prxu.org
+  RealtimeLogKinesisStreamArn1:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogKinesisStreamArn2:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogKinesisStreamArn3:
+    Type: String
+    Description: eg. arn:aws:kinesis:<region>:<account>:stream/<name>
+  RealtimeLogFields:
+    Type: CommaDelimitedList
+    Default: timestamp,c-ip,sc-status,cs-method,cs-uri-stem,cs-user-agent,cs-referer,x-forwarded-for,sc-content-len,sc-range-start,sc-range-end
+  OriginBucket1:
+    Type: String
+    Description: eg. some-bucket-name.s3.region-name.amazonaws.com
+  OriginBucket2:
+    Type: String
+    Description: eg. some-bucket-name.s3.region-name.amazonaws.com
+  OriginBucket3:
+    Type: String
+    Description: eg. some-bucket-name.s3.region-name.amazonaws.com
+  CacheBehaviorPrefix1:
+    Type: String
+    Description: eg. /use1/*, /us-west-2/*
+  CacheBehaviorPrefix2:
+    Type: String
+    Description: eg. /use1/*, /us-west-2/*
+  CacheBehaviorPrefix3:
+    Type: String
+    Description: eg. /use1/*, /us-west-2/*
+  OriginRequestFunctionArn: { Type: String }
+
+Conditions:
+  IsNotTesting: !Not [!Equals [!Ref EnvironmentType, Testing]]
+  HasOriginBucket1: !Not [!Equals [!Ref OriginBucket1, ""]]
+  HasOriginBucket2: !Not [!Equals [!Ref OriginBucket2, ""]]
+  HasOriginBucket3: !Not [!Equals [!Ref OriginBucket3, ""]]
+  HasCacheBehaviorPrefix1: !Not [!Equals [!Ref CacheBehaviorPrefix1, ""]]
+  HasCacheBehaviorPrefix2: !Not [!Equals [!Ref CacheBehaviorPrefix2, ""]]
+  HasCacheBehaviorPrefix3: !Not [!Equals [!Ref CacheBehaviorPrefix3, ""]]
+  HasRealtimeLogKinesisStreamArn1: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn1, ""]]
+  HasRealtimeLogKinesisStreamArn2: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn2, ""]]
+  HasRealtimeLogKinesisStreamArn3: !Not [!Equals [!Ref RealtimeLogKinesisStreamArn3, ""]]
+  HasRegion1: !And
+    - !Condition HasOriginBucket1
+    - !Condition HasCacheBehaviorPrefix1
+    - !Condition HasRealtimeLogKinesisStreamArn1
+  HasRegion2: !And
+    - !Condition HasOriginBucket2
+    - !Condition HasCacheBehaviorPrefix2
+    - !Condition HasRealtimeLogKinesisStreamArn2
+  HasRegion3: !And
+    - !Condition HasOriginBucket3
+    - !Condition HasCacheBehaviorPrefix3
+    - !Condition HasRealtimeLogKinesisStreamArn3
+  HasAnyRegion: !Or
+    - !Condition HasRegion1
+    - !Condition HasRegion2
+    - !Condition HasRegion3
+  CreateAlarms: !And
+    - !Condition IsNotTesting
+    - !Condition HasAnyRegion
+  CreateRealtimeLogConfig1: !And
+    - !Condition HasAnyRegion
+    - !Condition HasRealtimeLogKinesisStreamArn1
+  CreateRealtimeLogConfig2: !And
+    - !Condition HasAnyRegion
+    - !Condition HasRealtimeLogKinesisStreamArn2
+  CreateRealtimeLogConfig3: !And
+    - !Condition HasAnyRegion
+    - !Condition HasRealtimeLogKinesisStreamArn3
+
+Resources:
+  # Only for use as the backing service of a CloudFormation custom resource.
+  # It downloads a file from GitHub and returns the contents as a property of
+  # the custom resource.
+  CloudFrontFunctionCodeFetcherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Deploys the contents of a zip archive to an S3 bucket
+      Environment:
+        Variables:
+          EXPIRED_REDIRECT_PREFIX: !Ref ExpiredRedirectPrefix
+      Handler: index.lambda_handler
+      InlineCode: |
+        import cfnresponse
+        import traceback
+        import urllib.request
+        import urllib.parse
+        import os
+
+
+        def lambda_handler(event, context):
+            try:
+                print(event)
+
+                url = "https://raw.githubusercontent.com/PRX/dovetail-cdn-viewer-request/main/index.js"
+                f = urllib.request.urlopen(url)
+                body = f.read().decode("utf-8")
+                body = body.replace("<EXPIRED_REDIRECT_PREFIX>", os.environ["EXPIRED_REDIRECT_PREFIX"])
+
+                props = {
+                  "ViewerRequestFunctionCode": body
+                }
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, props)
+
+            except Exception as e:
+                print("Function failed due to exception.")
+                print(e)
+                traceback.print_exc()
+                cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      MemorySize: 256
+      Runtime: python3.8
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN
+      Timeout: 60
+  CloudFrontFunctionCodeFetcherFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudFrontFunctionCodeFetcherFunction}
+      RetentionInDays: 5
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+
+  # Creates a custom resource that contains a property called `ViewerRequestFunctionCode`.
+  # Which can be accessed like `!GetAtt GithubCodeFetcher.ViewerRequestFunctionCode`
+  GithubCodeFetcher:
+    Type: Custom::CodeFetcher
+    Properties:
+      ServiceToken: !GetAtt CloudFrontFunctionCodeFetcherFunction.Arn
+      Cycle: 2 # Change this when the code in GitHub changes
+
+  # Creates a CloudFront function using the code returned from GithubCodeFetcher
+  ViewerRequestCloudFrontFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      AutoPublish: true # TODO
+      FunctionCode: !GetAtt GithubCodeFetcher.ViewerRequestFunctionCode
+      FunctionConfig:
+        Comment: Handle viewer-requests for Dovetail 3 CDN
+        Runtime: cloudfront-js-1.0
+      Name: !Sub ${AWS::StackName}-viewer-request
+  ViewerRequestCloudFrontFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub
+        - /aws/cloudfront/${name}
+        - name: !Select [1, !Split ["/", !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN]]
+      RetentionInDays: 5
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+
+  CloudFrontCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-CachePolicy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  CloudFrontOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Comment: !Sub Policy for ${AWS::StackName}
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        Name: !Sub ${AWS::StackName}-OriginRequestPolicy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+
+  CloudFrontOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub Dovetail CDN ${EnvironmentType}
+
+  RealtimeLogRole:
+    Type: AWS::IAM::Role
+    Condition: HasAnyRegion
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - kinesis:DescribeStreamSummary
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Effect: Allow
+                Resource:
+                  - !If [HasRealtimeLogKinesisStreamArn1, !Ref RealtimeLogKinesisStreamArn1, !Ref AWS::NoValue]
+                  - !If [HasRealtimeLogKinesisStreamArn2, !Ref RealtimeLogKinesisStreamArn2, !Ref AWS::NoValue]
+                  - !If [HasRealtimeLogKinesisStreamArn3, !Ref RealtimeLogKinesisStreamArn3, !Ref AWS::NoValue]
+                Sid: AllowStreamWrite
+          PolicyName: RealtimeLogKinesisPolicy
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+
+  RealtimeLogConfig1:
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Condition: CreateRealtimeLogConfig1
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn1
+          StreamType: Kinesis
+      Fields: !Ref RealtimeLogFields
+      Name: !Sub ${AWS::StackName}-RealtimeLogConfig1
+      SamplingRate: 100
+  RealtimeLogConfig2:
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Condition: CreateRealtimeLogConfig2
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn2
+          StreamType: Kinesis
+      Fields: !Ref RealtimeLogFields
+      Name: !Sub ${AWS::StackName}-RealtimeLogConfig2
+      SamplingRate: 100
+  RealtimeLogConfig3:
+    Type: AWS::CloudFront::RealtimeLogConfig
+    Condition: CreateRealtimeLogConfig3
+    Properties:
+      EndPoints:
+        - KinesisStreamConfig:
+            RoleArn: !GetAtt RealtimeLogRole.Arn
+            StreamArn: !Ref RealtimeLogKinesisStreamArn3
+          StreamType: Kinesis
+      Fields: !Ref RealtimeLogFields
+      Name: !Sub ${AWS::StackName}-RealtimeLogConfig3
+      SamplingRate: 100
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DistributionDomain
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+      ValidationMethod: DNS
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    # DependsOn: ViewerRequestFunction1
+    Condition: HasAnyRegion
+    Properties:
+      DistributionConfig:
+        # Aliases:
+        #   - !Ref DistributionDomain
+        CacheBehaviors:
+          - Fn::If:
+              - HasRegion1
+              - AllowedMethods: [HEAD, GET]
+                CachedMethods: [HEAD, GET]
+                CachePolicyId: !Ref CloudFrontCachePolicy
+                Compress: false
+                FunctionAssociations:
+                  - EventType: viewer-request
+                    FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+                LambdaFunctionAssociations:
+                  - EventType: origin-request
+                    LambdaFunctionARN: !Ref OriginRequestFunctionArn
+                OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+                PathPattern: !Ref CacheBehaviorPrefix1
+                RealtimeLogConfigArn: !Ref RealtimeLogConfig1
+                TargetOriginId: dovetail3-stitch-s3-1
+                ViewerProtocolPolicy: allow-all
+              - !Ref AWS::NoValue
+          - Fn::If:
+              - HasRegion2
+              - AllowedMethods: [HEAD, GET]
+                CachedMethods: [HEAD, GET]
+                CachePolicyId: !Ref CloudFrontCachePolicy
+                Compress: false
+                FunctionAssociations:
+                  - EventType: viewer-request
+                    FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+                LambdaFunctionAssociations:
+                  - EventType: origin-request
+                    LambdaFunctionARN: !Ref OriginRequestFunctionArn
+                OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+                PathPattern: !Ref CacheBehaviorPrefix2
+                RealtimeLogConfigArn: !Ref RealtimeLogConfig2
+                TargetOriginId: dovetail3-stitch-s3-2
+                ViewerProtocolPolicy: allow-all
+              - !Ref AWS::NoValue
+          - Fn::If:
+              - HasRegion3
+              - AllowedMethods: [HEAD, GET]
+                CachedMethods: [HEAD, GET]
+                CachePolicyId: !Ref CloudFrontCachePolicy
+                Compress: false
+                FunctionAssociations:
+                  - EventType: viewer-request
+                    FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+                LambdaFunctionAssociations:
+                  - EventType: origin-request
+                    LambdaFunctionARN: !Ref OriginRequestFunctionArn
+                OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+                PathPattern: !Ref CacheBehaviorPrefix3
+                RealtimeLogConfigArn: !Ref RealtimeLogConfig3
+                TargetOriginId: dovetail3-stitch-s3-3
+                ViewerProtocolPolicy: allow-all
+              - !Ref AWS::NoValue
+        Comment: !Sub ${EnvironmentType} Dovetail CDN
+        CustomErrorResponses:
+          # dovetail uploaded, but file wasn't there!
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 403
+          # unrecognized uri or arrangement not found
+          - ErrorCachingMinTTL: 300
+            ErrorCode: 404
+          # lambda caught an error
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 500
+          # callback(null, {invalid-response})
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 502
+          # timeout / memory-exceeded / callback(err)
+          - ErrorCachingMinTTL: 0
+            ErrorCode: 503
+          # unknown
+          - ErrorCachingMinTTL: 10
+            ErrorCode: 504
+        DefaultCacheBehavior:
+          # This default behavior would handle any traffic that doesn't match
+          # one of the provided CacheBehaviorPrefix values.
+          AllowedMethods: [HEAD, GET]
+          CachedMethods: [HEAD, GET]
+          CachePolicyId: !Ref CloudFrontCachePolicy
+          Compress: false
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt ViewerRequestCloudFrontFunction.FunctionMetadata.FunctionARN
+          LambdaFunctionAssociations:
+            - EventType: origin-request
+              LambdaFunctionARN: !Ref OriginRequestFunctionArn
+          OriginRequestPolicyId: !Ref CloudFrontOriginRequestPolicy
+          # This default cache behavior will use the first log config and
+          # origin that it can find, which affects requests that don't match
+          # one of the provided prefixes. If the source of this un-prefixed
+          # traffic doesn't match the origin and log config, counting some
+          # downloads may be impossible. For example, if Dovetail Router in
+          # ca-central-1 is generating un-prefixed traffic, but this default
+          # behavior references a Kinesis stream and bucket in us-west-2, those
+          # downloads may not get counted.
+          # tl;dr All traffic should include a prefix, and this should be a
+          # fallback that rarely gets used.
+          RealtimeLogConfigArn: !If
+            - HasRegion1
+            - !Ref RealtimeLogConfig1
+            - !If [HasRegion2, !Ref RealtimeLogConfig2, !Ref RealtimeLogConfig3]
+          TargetOriginId: !If
+            - HasRegion1
+            - dovetail3-stitch-s3-1
+            - !If [HasRegion2, dovetail3-stitch-s3-2, dovetail3-stitch-s3-3]
+          ViewerProtocolPolicy: allow-all
+        DefaultRootObject: index.html
+        Enabled: true
+        HttpVersion: http2
+        IPV6Enabled: true
+        # Logging:
+        #   Bucket: prx-dovetail.s3.amazonaws.com
+        #   IncludeCookies: false
+        #   Prefix: !Sub "${AWS::StackName}-logs"
+        Origins:
+          - Fn::If:
+              - HasRegion1
+              - DomainName: !Ref OriginBucket1
+                Id: dovetail3-stitch-s3-1
+                S3OriginConfig:
+                  OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+              - !Ref AWS::NoValue
+          - Fn::If:
+              - HasRegion2
+              - DomainName: !Ref OriginBucket2
+                Id: dovetail3-stitch-s3-2
+                S3OriginConfig:
+                  OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+              - !Ref AWS::NoValue
+          - Fn::If:
+              - HasRegion3
+              - DomainName: !Ref OriginBucket3
+                Id: dovetail3-stitch-s3-3
+                S3OriginConfig:
+                  OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+              - !Ref AWS::NoValue
+        PriceClass: PriceClass_200
+        # ViewerCertificate:
+        #   AcmCertificateArn: !Ref Certificate
+        #   SslSupportMethod: sni-only
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN }
+
+  CloudFrontDistribution400Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentType}> RETURNING 4XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentType} Dovetail CDN is returning an
+        unusually high rate of 4XX errors to end users. The usually doesn't
+        indicate any operational problems with any components of Dovetail.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 2
+      MetricName: 4xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 300
+      Statistic: Average
+      Threshold: 40
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistribution500Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] CDN <${EnvironmentType}> RETURNING 5XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentType} Dovetail CDN 5XX error rate is
+        higher than the baseline background noise rate, which could indicate a
+        problem with audio stitching or the CDN's origin.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 5
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Average
+      Threshold: 1
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistributionFatal500Alarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-CDN] CDN <${EnvironmentType}> RETURNING 5XX ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentType} Dovetail CDN 5XX error rate is
+        very high. This likely means a significant number of end users are not
+        able to download audio.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 3
+      MetricName: 5xxErrorRate
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Average
+      Threshold: 2
+      TreatMissingData: notBreaching
+      Unit: Percent
+  CloudFrontDistributionLambdaExecutionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-CDN] Edge Lambda <${EnvironmentType}> EXECUTION ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub >-
+        The ${EnvironmentType} Dovetail CDN Lambda@Edge functions
+        are failing. This could mean the stitching functions they call are also
+        failing, or working too slowly. Some audio downloads may be failing.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: Region
+          Value: Global
+        - Name: DistributionId
+          Value: !Ref CloudFrontDistribution
+      EvaluationPeriods: 1
+      MetricName: LambdaExecutionError
+      Namespace: AWS/CloudFront
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+      Unit: Count
