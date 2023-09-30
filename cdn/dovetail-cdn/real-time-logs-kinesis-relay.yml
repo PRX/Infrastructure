@@ -29,6 +29,9 @@ Resources:
       CodeUri: real-time-logs-kinesis-relay/
       Description: !Sub >-
         ${EnvironmentType} Sends Kinesis records to another Kinesis stream
+      Environment:
+        Variables:
+          DESTINATION_KINESIS_STREAM_ARN: !Ref DestinationKinesisStreamArn
       Events:
         CountsBytesKinesisTrigger:
           Properties:
@@ -40,12 +43,12 @@ Resources:
           Type: Kinesis
       Handler: index.handler
       MemorySize: 256
-      Runtime: nodejs18.x
+      Runtime: nodejs16.x
       Policies:
         - Statement:
-            - Action: kinesis:PutRecords
+            - Action: sts:AssumeRole
               Effect: Allow
-              Resource: !Ref DestinationKinesisStreamArn
+              Resource: "*" # TODO Limit this by account, and wildcard name if possible
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
