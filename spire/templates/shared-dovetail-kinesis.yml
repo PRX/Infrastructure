@@ -9,6 +9,7 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  AwsOrganizationId: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -25,6 +26,41 @@ Resources:
       RetentionPeriodHours: !If [IsProduction, 48, 24]
       StreamModeDetails:
         StreamMode: ON_DEMAND
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Counts }
+  DovetailCdnLogsKinesisStreamOrgWriterRole:
+    # This role exists so that it can be assumed by roles in other accounts, so
+    # that they can write to the Kinesis stream above
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        # TODO This should probably be limited in some way, at least so stag
+        # and prod can't cross contaminate
+        Statement:
+          - Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref AwsOrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: kinesis:PutRecords
+                Effect: Allow
+                Resource: !GetAtt DovetailCdnLogsKinesisStream.Arn
+                Sid: AllowRecordsWrite
+            Version: "2012-10-17"
+          PolicyName: OrgStreamWriterPolicy
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
