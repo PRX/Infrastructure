@@ -95,7 +95,7 @@ aws cloudformation deploy \
     --no-fail-on-empty-changeset \
     --capabilities CAPABILITY_IAM \
     --region us-east-1 \
-    --stack-name dovetail-cdn \
+    --stack-name "dovetail-cdn-$env_short" \
     --template-file cloudfront.yml \
     --parameter-overrides "EnvironmentType=$env_proper" \
         "ExpiredRedirectPrefix=$expired_redirect_prefix" \
