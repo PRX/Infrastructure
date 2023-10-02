@@ -1,0 +1,34 @@
+# cdn/dovetail-cdn/kinesis.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  CloudfrontRealTimeLogsStream:
+    Type: AWS::Kinesis::Stream
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionPeriodHours: !If [IsProduction, 48, 24]
+      StreamModeDetails:
+        StreamMode: ON_DEMAND
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Counts }
+
+Outputs:
+  RealTimeLogsStreamArn:
+    Value: !GetAtt CloudfrontRealTimeLogsStream.Arn

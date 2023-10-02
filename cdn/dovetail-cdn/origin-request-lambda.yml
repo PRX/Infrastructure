@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  LocalCodeDirPath: { Type: String }
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Testing
+      - Staging
+      - Production
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  OriginRequestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - edgelambda.amazonaws.com
+                - lambda.amazonaws.com
+        Version: "2012-10-17"
+      CodeUri: !Ref LocalCodeDirPath
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail CDN origin request Edge Lambda
+        function sources
+      Handler: !If [IsProduction, index-production.handler, index-staging.handler]
+      MemorySize: 256
+      Runtime: nodejs14.x
+      Policies:
+        - Statement:
+            - Action:
+                - lambda:GetFunction
+                - lambda:EnableReplication*
+                - iam:CreateServiceLinkedRole
+              Effect: Allow
+              Resource: "*"
+          Version: "2012-10-17"
+        - Statement:
+            - Action: lambda:InvokeFunction
+              Effect: Allow
+              Resource:
+                # explicit reference to this-region's arranger. in case the
+                # wildcard version breaks due to a resource name changing.
+                - !Sub arn:${AWS::Partition}:lambda:*:*:function:*ArrangerFunction*
+          Version: "2012-10-17"
+        - Statement:
+            - Action: s3:GetObject
+              Effect: Allow
+              Resource:
+                # explicit reference to this-region's S3 workspace. in case the
+                # wildcard version breaks due to a resource name changing.
+                - !Sub arn:${AWS::Partition}:s3:::*dtcdnarrangerworkspace*
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: CDN Origin Request
+      Timeout: 30
+  OriginRequestFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${OriginRequestFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Origin Request }
+
+  OriginRequestFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !GetAtt OriginRequestFunction.Arn
+
+Outputs:
+  OriginRequestFunctionArn: { Value: !GetAtt OriginRequestFunction.Arn }
+  OriginRequestFunctionVersionArn: { Value: !Ref OriginRequestFunctionVersion }
