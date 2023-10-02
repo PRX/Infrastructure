@@ -1,12 +1,7 @@
-// As of 2023-09-30, there's a bug in the AWS SDK that is included with Node.js
-// Lambda functions (3.188.0) that prevents this from working. I switched back
-// to nodejs-16.x to be able to use the v2 SDK, which does not have the bug.
-const AWS = require('aws-sdk');
+import { Kinesis, PutRecordsCommand } from '@aws-sdk/client-kinesis';
+import { STS, AssumeRoleCommand } from '@aws-sdk/client-sts';
 
-const sts = new AWS.STS({
-  apiVersion: '2011-06-15',
-  region: process.env.AWS_REGION,
-});
+const sts = new STS({ region: process.env.AWS_REGION });
 
 class Base64DecodeError extends Error {
   constructor(...params) {
@@ -23,7 +18,7 @@ function base64decode(str) {
   }
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   const recordsToRelay = event.Records.filter((r) => r.kinesis?.data);
   const Records = recordsToRelay.map((r) => {
     return {
@@ -31,20 +26,18 @@ exports.handler = async (event) => {
       PartitionKey: r.kinesis.partitionKey,
     };
   });
-  console.log(JSON.stringify(Records));
 
   const destinationStreamWriterRoleArn =
-    process.env.DESTINATION_STREAM_WRITER_ROLE_ARN;
+    process.env.DESTINATION_KINESIS_STREAM_WRITER_ROLE_ARN;
 
-  const role = await sts
-    .assumeRole({
+  const role = await sts.send(
+    new AssumeRoleCommand({
       RoleArn: destinationStreamWriterRoleArn,
       RoleSessionName: 'kinesis-relay',
-    })
-    .promise();
+    }),
+  );
 
-  const kinesis = new AWS.Kinesis({
-    apiVersion: '2013-12-02',
+  const kinesis = new Kinesis({
     region: process.env.AWS_REGION,
     credentials: {
       accessKeyId: role.Credentials.AccessKeyId,
@@ -53,10 +46,10 @@ exports.handler = async (event) => {
     },
   });
 
-  kinesis
-    .putRecords({
+  await kinesis.send(
+    new PutRecordsCommand({
       StreamARN: process.env.DESTINATION_KINESIS_STREAM_ARN,
       Records: Records,
-    })
-    .promise();
+    }),
+  );
 };

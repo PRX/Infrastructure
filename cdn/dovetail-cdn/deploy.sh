@@ -121,6 +121,7 @@ do
 
     src_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "real-time-logs-kinesis-$env_short" --profile "prx-dovetail-cdn-$env_lower" --query "Stacks[0].Outputs[?OutputKey=='RealTimeLogsStreamArn'].OutputValue" --output text)
     dest_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "infrastructure-cd-root-$env_lower" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamArn'].OutputValue" --output text)
+    dest_kin_role_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "infrastructure-cd-root-$env_lower" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamOrgWriterRoleArn'].OutputValue" --output text)
 
     sam build \
         --template-file real-time-logs-kinesis-relay.yml \
@@ -138,8 +139,9 @@ do
         --parameter-overrides \
             "EnvironmentType=$env_proper" \
             "EnvironmentTypeAbbreviation=$env_short" \
+            "SourceKinesisStreamArn=$src_kin_arn" \
             "DestinationKinesisStreamArn=$dest_kin_arn" \
-            "SourceKinesisStreamArn=$src_kin_arn"
+            "DestinationKinesisStreamWriterRoleArn=$dest_kin_role_arn"
 done
 
 
