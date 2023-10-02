@@ -18,7 +18,7 @@ if [[ $1 == "--production" ]]; then
     env_short="prod"
 
     expired_redirect_prefix="https://dovetail.prxu.org"
-    distribution_domain="dovetail3-cdn.prxu.org"
+    distribution_domain="dovetail-cdn.prxu.org"
 
     ue1_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-1wx20tpim5qh0"
     uw2_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-tu2g3c9pqlbl"
@@ -28,7 +28,7 @@ else
     env_short="stag"
 
     expired_redirect_prefix="https://dovetail.staging.prxu.org"
-    distribution_domain="dovetail3-cdn-staging.prxu.org"
+    distribution_domain="dovetail-cdn.staging.prxu.org"
 
     ue1_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-i9ouz16h7n37"
     uw2_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-1dllmagyts9py"
