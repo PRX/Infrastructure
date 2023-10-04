@@ -67,6 +67,30 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: Broadcast Delivery }
+  ProdUsEast1HealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProdUsEast1HealthCheck
+    Properties:
+      AlarmName: !Sub FATAL [FTP] us-east-1 Server Connectivity <prod> UNHEALTHY (${AWS::StackName})
+      AlarmDescription: >-
+        All connection tests for prodoction us-east-1 FTP servers are failing.
+        This likely means there is a service issue with Transfer Family,
+        Lambda, or RDS in us-east-1.
+
+        By the time this alarm has been triggered, the region has already been
+        removed from the DNS pool.
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !GetAtt ProdUsEast1HealthCheck.HealthCheckId
+      EvaluationPeriods: 1
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Period: 60
+      Statistic: Minimum
+      Threshold: 1
+      TreatMissingData: breaching
+
   ProdUsWest2HealthCheck:
     Type: AWS::Route53::HealthCheck
     Condition: CreateProdUsWest2HealthCheck
@@ -85,6 +109,29 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: Broadcast Delivery }
+  ProdUsWest2HealthCheckAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateProdUsWest2HealthCheck
+    Properties:
+      AlarmName: !Sub FATAL [FTP] us-west-2 Server Connectivity <prod> UNHEALTHY (${AWS::StackName})
+      AlarmDescription: >-
+        All connection tests for prodoction us-west-2 FTP servers are failing.
+        This likely means there is a service issue with Transfer Family,
+        Lambda, or RDS in us-east-1.
+
+        By the time this alarm has been triggered, the region has already been
+        removed from the DNS pool.
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: HealthCheckId
+          Value: !GetAtt ProdUsWest2HealthCheck.HealthCheckId
+      EvaluationPeriods: 1
+      MetricName: HealthCheckStatus
+      Namespace: AWS/Route53
+      Period: 60
+      Statistic: Minimum
+      Threshold: 1
+      TreatMissingData: breaching
 
   ProductionWildcards:
     Type: AWS::Route53::RecordSetGroup
