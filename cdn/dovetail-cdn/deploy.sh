@@ -22,6 +22,8 @@ if [[ $1 == "--production" ]]; then
 
     ue1_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-1wx20tpim5qh0"
     uw2_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-tu2g3c9pqlbl"
+
+    logging_prefix="cdn-dovetail-production-logs"
 else
     env_proper="Staging"
     env_lower="staging"
@@ -32,12 +34,14 @@ else
 
     ue1_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-i9ouz16h7n37"
     uw2_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-1dllmagyts9py"
+
+    logging_prefix="cdn-dovetail-staging-logs"
 fi
 
 #
 #
 #
-# Deploy stacks for real-time logs Kinesis streams to each region
+Deploy stacks for real-time logs Kinesis streams to each region
 for region in "${REGIONS[@]}"
 do
     echo "=> Deploying stack [real-time-logs-kinesis-$env_short] to $region"
@@ -109,7 +113,9 @@ aws cloudformation deploy \
         "OriginBucket3=" \
         "CacheBehaviorPrefix3=" \
         "DistributionDomain=$distribution_domain" \
-        "OriginRequestFunctionArn=$fn_arn"
+        "OriginRequestFunctionArn=$fn_arn" \
+        "StandardLoggingBucket=prx-dovetail.s3.amazonaws.com" \
+        "StandardLoggingPrefix=$logging_prefix" \
 
 #
 #
@@ -143,6 +149,5 @@ do
             "DestinationKinesisStreamArn=$dest_kin_arn" \
             "DestinationKinesisStreamWriterRoleArn=$dest_kin_role_arn"
 done
-
 
 trap "clean_up $tmp_dir" EXIT
