@@ -92,6 +92,7 @@ Resources:
         const crypto = require('crypto');
 
         const IPV4_MASK = /\.[0-9]{1,3}$/;
+
         const maskIp = (ip, field) => {
           if (ip.match(IPV4_MASK)) {
             return ip.replace(IPV4_MASK, '.0');
@@ -117,6 +118,16 @@ Resources:
             if (m === '/') { return '_'; }
             return '';
           });
+        };
+
+        const findIp = (xff, ip) => {
+          if (xff === '-') {
+            return ip;
+          } else if (xff) {
+            return xff.split(',').map(s => s.trim()).filter(s => s)[0];
+          } else {
+            return ip;
+          }
         };
 
         const PODCAST_IDS = process.env.PODCAST_IDS.split(',').map(s => s.trim()).filter(s => s);
@@ -146,6 +157,12 @@ Resources:
             // podcast id and episode guid (only works for dovetail3-cdn requests)
             const datas = mappedRows.filter(data => {
               const parts = data['cs-uri-stem'].split('/').filter(s => s);
+
+              // if the path starts with a region like usw2, shift that off
+              if (parts[0] && parts[0].match(/^[a-z][a-z0-9\-]+$/)) {
+                parts.shift();
+              }
+
               if (parts.length === 4) {
                 data['prx-podcast-id'] = parts[0];
                 data['prx-episode-guid'] = parts[1];
@@ -163,8 +180,7 @@ Resources:
             // calculate listener_ids
             datas.forEach(data => {
               // use leftmost XFF or IP
-              const xffParts = (data['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(s => s);
-              const leftMostIp = xffParts[0] || data['c-ip'];
+              const leftMostIp = findIp(data['x-forwarded-for'], data['c-ip']);
 
               // truncate ipv6 but not ipv4
               const truncatedIp = leftMostIp.includes(':') ? maskIp(leftMostIp, 'listener-id') : leftMostIp;
