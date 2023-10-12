@@ -922,26 +922,21 @@ Resources:
           Properties:
             Pattern:
               detail:
-                bucket:
-                  name:
-                    - !Select [5, !Split [":", !Ref FeedsS3BucketArn]]
                 object:
                   key:
                     - 815/feed-rss.xml
-                    - 284/feed-rss.xml
                     - 70/feed-rss.xml
-                    - criminal/feed-rss.xml
                     - themoth/feed-rss.xml
               detail-type:
                 - Object Created
               source:
                 - aws.s3
       Handler: index.handler
-      InlineCode: |
+      InlineCode: !Sub |
         const AWS = require('aws-sdk');
         const s3 = new AWS.S3();
-        const ddb = new AWS.DynamoDB({ region: 'us-east-1' });
-        const ecs = new AWS.ECS({ region: 'us-east-1' });
+        const ddb = new AWS.DynamoDB({ region: '${AWS::Region}' });
+        const ecs = new AWS.ECS({ region: '${AWS::Region}' });
 
         const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME;
         const CLUSTER_NAME = process.env.ECS_CLUSTER_NAME;
@@ -949,7 +944,6 @@ Resources:
         const SCALE_TO = {
           '815/feed-rss.xml': 4,
           '70/feed-rss.xml': 20,
-          'criminal/feed-rss.xml': 16,
           'themoth/feed-rss.xml': 20,
         };
 
@@ -967,7 +961,7 @@ Resources:
           for (const match of matches) {
             guids.push(match[1]);
           }
-          console.info(`Read ${guids.length} guids from s3://${Bucket}/${Key}`);
+          console.info(`Read ${!guids.length} guids from s3://${!Bucket}/${!Key}`);
 
           // break into chunks of 100
           const allKeys = guids.map((g) => ({ guid: { S: g } }));
@@ -984,7 +978,7 @@ Resources:
             data.Responses[TABLE_NAME].forEach((r) => (found[r.guid.S] = true));
           }
           const newGuids = guids.filter((g) => !found[g]);
-          console.info(`Found ${newGuids.length} new guids not in DDB`);
+          console.info(`Found ${!newGuids.length} new guids not in DDB`);
 
           // scale ECS service
           if (newGuids.length > 0) {
@@ -993,7 +987,7 @@ Resources:
             const count = res.services[0].desiredCount;
             const desiredCount = SCALE_TO[Key];
             if (count < desiredCount) {
-              console.info(`Scaling from ${count} to ${desiredCount}`);
+              console.info(`Scaling from ${!count} to ${!desiredCount}`);
               const updateParams = {
                 cluster: CLUSTER_NAME,
                 service: SERVICE_NAME,
@@ -1001,7 +995,7 @@ Resources:
               };
               await ecs.updateService(updateParams).promise();
             } else {
-              console.info(`Already at ${count}`);
+              console.info(`Already at ${!count}`);
             }
           }
 
