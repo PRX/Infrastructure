@@ -27,9 +27,11 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   CastleHostname: { Type: String }
   IdHostname: { Type: String }
+  MetricsHostname: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   HostHeaderListenerRule:
@@ -46,6 +48,7 @@ Resources:
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
   AltHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsProduction
     Properties:
       Actions:
         - TargetGroupArn: !Ref TargetGroup
@@ -56,6 +59,25 @@ Resources:
             - metrics.*
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
+  RedirectHostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsStaging
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: !Ref MetricsHostname
+            Path: "/#{path}"
+            Port: "#{port}"
+            Protocol: "#{protocol}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
+          Type: redirect
+      Conditions:
+        - Field: host-header
+          Values:
+            - metrics.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "02"]]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
