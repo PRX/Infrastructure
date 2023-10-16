@@ -31,7 +31,6 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
 
 Resources:
   HostHeaderListenerRule:
@@ -46,22 +45,8 @@ Resources:
             - metrics.dovetail.*
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
-  AltHostHeaderListenerRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsProduction
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref TargetGroup
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - metrics.*
-      ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
   RedirectHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsStaging
     Properties:
       Actions:
         - RedirectConfig:
