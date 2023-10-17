@@ -68,6 +68,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
@@ -95,6 +96,7 @@ Resources:
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
   AltHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsProduction
     Properties:
       Actions:
         - TargetGroupArn: !Ref WebTargetGroup2
@@ -105,6 +107,42 @@ Resources:
             - feeder.*
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "02"]]
+
+  Temp1ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsStaging
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref WebTargetGroup2
+          Type: forward
+      Conditions:
+        - Field: host-header
+          Values:
+            - feeder.*
+        - Field: path-pattern
+          Values:
+            - /api/v1/*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "07"]]
+  Temp2ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Condition: IsStaging
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: !Ref FeederHostname
+            Path: "/#{path}"
+            Port: "#{port}"
+            Protocol: "#{protocol}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
+          Type: redirect
+      Conditions:
+        - Field: host-header
+          Values:
+            - feeder.*
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "11"]]
 
   DefaultJobQueue:
     Type: AWS::SQS::Queue
