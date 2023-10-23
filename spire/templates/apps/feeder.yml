@@ -68,7 +68,6 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
@@ -82,6 +81,10 @@ Resources:
       WebLoggedErrorsMetricName: !Sub WebLoggedErrors${EnvironmentType}
       PublicFeedsUrlPrefix: !Sub https://${PublicFeedsHostname}/f
 
+  # The canonical address for this app is podcasts.dovetail.prx.org.
+  # API traffic to the old feeder.prx.org domain should continue to be handled
+  # directly.
+  # All other traffic to feeder.prx.org should redirect to the new domain.
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -94,23 +97,8 @@ Resources:
             - podcasts.dovetail.*
       ListenerArn: !Ref AlbHttpsListenerArn
       Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
-  AltHostHeaderListenerRule:
+  LegacyApiWildcardListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsProduction
-    Properties:
-      Actions:
-        - TargetGroupArn: !Ref WebTargetGroup2
-          Type: forward
-      Conditions:
-        - Field: host-header
-          Values:
-            - feeder.*
-      ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "02"]]
-
-  Temp1ListenerRule:
-    Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsStaging
     Properties:
       Actions:
         - TargetGroupArn: !Ref WebTargetGroup2
@@ -123,10 +111,9 @@ Resources:
           Values:
             - /api/*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "07"]]
-  Temp3ListenerRule:
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "20"]]
+  LegacyApiRootListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsStaging
     Properties:
       Actions:
         - TargetGroupArn: !Ref WebTargetGroup2
@@ -139,10 +126,9 @@ Resources:
           Values:
             - /api
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "08"]]
-  Temp2ListenerRule:
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "21"]]
+  LegacyRedirectListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
-    Condition: IsStaging
     Properties:
       Actions:
         - RedirectConfig:
@@ -158,7 +144,7 @@ Resources:
           Values:
             - feeder.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "11"]]
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "99"]]
 
   DefaultJobQueue:
     Type: AWS::SQS::Queue
