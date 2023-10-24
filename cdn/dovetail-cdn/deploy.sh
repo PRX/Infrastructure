@@ -41,7 +41,7 @@ fi
 #
 #
 #
-Deploy stacks for real-time logs Kinesis streams to each region
+# Deploy stacks for real-time logs Kinesis streams to each region
 for region in "${REGIONS[@]}"
 do
     echo "=> Deploying stack [real-time-logs-kinesis-$env_short] to $region"
