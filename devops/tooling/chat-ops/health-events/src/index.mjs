@@ -51,8 +51,7 @@ export const handler = async (event) => {
         Message: JSON.stringify({
           username: 'AWS Health Events',
           icon_emoji: ':ops-aws-health:',
-          // channel: 'G2QHC2N7K', // #ops-warn
-          channel: 'CHZTAGBM2', // #ops-warn
+          channel: 'G2QHC2N7K', // #ops-warn
           attachments: [
             {
               color,
