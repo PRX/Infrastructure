@@ -17,26 +17,33 @@ if [[ $1 == "--production" ]]; then
     env_lower="production"
     env_short="prod"
 
-    expired_redirect_prefix="https://dovetail.prxu.org"
-    distribution_domain="dovetail-cdn.prxu.org"
-
-    ue1_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-1wx20tpim5qh0"
-    uw2_bucket="infrastructure-cd-root-p-dtcdnarrangerworkspacebu-tu2g3c9pqlbl"
-
     logging_prefix="cdn-dovetail-production-logs"
 else
     env_proper="Staging"
     env_lower="staging"
     env_short="stag"
 
-    expired_redirect_prefix="https://dovetail.staging.prxu.org"
-    distribution_domain="dovetail-cdn.staging.prxu.org"
-
-    ue1_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-i9ouz16h7n37"
-    uw2_bucket="infrastructure-cd-root-s-dtcdnarrangerworkspacebu-1dllmagyts9py"
-
     logging_prefix="cdn-dovetail-staging-logs"
 fi
+
+# Currently all Spire root stacks follow this naming convention
+spire_root_stack_name="infrastructure-cd-root-$env_lower"
+
+# Get the Dovetail CDN hostname from Spire outputs. This value will be the same
+# in all regions, so it can be queried from any region.
+distribution_domain=$(aws cloudformation describe-stacks --region us-east-1 --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnHostname'].OutputValue" --output text)
+
+# Get the Dovetail Router hostname from Spire outputs. This value will be the
+# same in all regions, so it can be queried from any region.
+dovetail_router_domain=$(aws cloudformation describe-stacks --region us-east-1 --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailRouterHostname'].OutputValue" --output text)
+expired_redirect_prefix="https://$dovetail_router_domain"
+
+# Get the Arranger workspace buckets for each region. There should be as many
+# of these as there are items in REGIONS.
+ue1_bucket_arn=$(aws cloudformation describe-stacks --region us-east-1 --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnArrangerWorkspaceBucketArn'].OutputValue" --output text)
+ue1_bucket=$(echo $ue1_bucket_arn | sed 's/arn:aws:s3::://')
+uw2_bucket_arn=$(aws cloudformation describe-stacks --region us-west-2 --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnArrangerWorkspaceBucketArn'].OutputValue" --output text)
+uw2_bucket=$(echo $uw2_bucket_arn | sed 's/arn:aws:s3::://')
 
 #
 #
@@ -126,8 +133,8 @@ do
     echo "=> Deploying stack [real-time-logs-kinesis-relay-$env_short] to $region"
 
     src_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "real-time-logs-kinesis-$env_short" --profile "prx-dovetail-cdn-$env_lower" --query "Stacks[0].Outputs[?OutputKey=='RealTimeLogsStreamArn'].OutputValue" --output text)
-    dest_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "infrastructure-cd-root-$env_lower" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamArn'].OutputValue" --output text)
-    dest_kin_role_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "infrastructure-cd-root-$env_lower" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamOrgWriterRoleArn'].OutputValue" --output text)
+    dest_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamArn'].OutputValue" --output text)
+    dest_kin_role_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamOrgWriterRoleArn'].OutputValue" --output text)
 
     sam build \
         --template-file real-time-logs-kinesis-relay.yml \
