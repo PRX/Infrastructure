@@ -33,6 +33,27 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
+  ChangePasswordListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: !Ref IdHostname
+            Port: "443"
+            Path: /.well-known/change-password
+            Protocol: HTTPS
+            Query: ""
+            StatusCode: HTTP_302
+          Type: redirect
+      Conditions:
+        - Field: host-header
+          Values:
+            - metrics.dovetail.*
+        - Field: path-pattern
+          Values:
+            - /.well-known/change-password
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "10"]]
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -44,7 +65,7 @@ Resources:
           Values:
             - metrics.dovetail.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "00"]]
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "20"]]
   RedirectHostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -62,7 +83,7 @@ Resources:
           Values:
             - metrics.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "02"]]
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "30"]]
 
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup

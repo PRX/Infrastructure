@@ -140,6 +140,27 @@ Resources:
 
   # INTERNET-FACING WEB SERVER #################################################
 
+  PublicWebHostChangePasswordListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - RedirectConfig:
+            Host: !Ref IdHostname
+            Port: "443"
+            Path: /.well-known/change-password
+            Protocol: HTTPS
+            Query: ""
+            StatusCode: HTTP_302
+          Type: redirect
+      Conditions:
+        - Field: host-header
+          Values:
+            - networks.*
+        - Field: path-pattern
+          Values:
+            - /.well-known/change-password
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "10"]]
   PublicWebHostHeaderSharedAlbListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -151,7 +172,7 @@ Resources:
           Values:
             - networks.*
       ListenerArn: !Ref AlbHttpsListenerArn
-      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "20"]]
 
   PublicWebTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
