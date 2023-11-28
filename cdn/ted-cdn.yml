@@ -63,14 +63,19 @@ Resources:
 
             const feedPath = request.uri;
 
-            const map = {
+            const mapping = {
               "/TED_SusanDavid": { d: "f.prxu.org", p: "/292/feed-rss.xml", q: "" },
               "/TEDxSHORTS": { d: "f.prxu.org", p: "/298/feed-rss.xml", q: "" },
               "/FrenchPodcastEducation": { d: "www.ted.com", p: "/feeds/playlists/700.rss", q: "lang=fr&apikey=172BB350-0041" },
             };
 
-            if (map[feedPath]) {
-              const m = map[feedPath];
+            // Lowercase all paths
+            const imapping = Object.fromEntries(
+              Object.entries(mapping).map(([k, v]) => [k.toLowerCase(), v])
+            );
+
+            if (imapping[feedPath.toLowerCase()]) {
+              const m = imapping[feedPath];
 
               request.headers.host = [{ key: 'host', value: m.d }];
               request.origin.custom.domainName = m.d;
@@ -96,7 +101,7 @@ Resources:
         - { Key: prx:dev:application, Value: Feed CDN }
         - { Key: prx:biz:customer, Value: TED }
       Timeout: 1
-  OriginRequestFunctionVersionH:
+  OriginRequestFunctionVersionJ:
     Type: AWS::Lambda::Version
     Properties:
       FunctionName: !GetAtt OriginRequestFunction.Arn
@@ -153,7 +158,7 @@ Resources:
           Compress: true
           LambdaFunctionAssociations:
             - EventType: origin-request
-              LambdaFunctionARN: !Ref OriginRequestFunctionVersionH
+              LambdaFunctionARN: !Ref OriginRequestFunctionVersionJ
           OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
           TargetOriginId: blackhole-origin
           ViewerProtocolPolicy: redirect-to-https
