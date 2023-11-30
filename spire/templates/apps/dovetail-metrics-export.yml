@@ -239,3 +239,37 @@ Resources:
       FunctionName: !Ref ExportFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt TedNetworkExport.Arn
+
+  BoostrIntegration:
+    Type: AWS::Events::Rule
+    Condition: EnableProductionRules
+    Properties:
+      Description: Boostr integration impression export
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ExportFunction.Arn
+          Id: !Sub "${RootStackName}.Export.BoostrIntegration"
+          Input: |-
+            {
+              "Extractions": ["boostr_impressions"],
+              "IntegrationsIDs": [1],
+              "CompressionType": "NONE",
+              "DestinationFormat": "CSV",
+              "ObjectPrefix": "boostr/",
+              "Copies": [
+                {
+                  "Mode": "AWS/S3",
+                  "BucketName": "prx-boostr-data-exports"
+                }
+              ]
+            }
+  BoostrIntegrationInvokePermission:
+    Condition: EnableProductionRules
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BoostrIntegration.Arn
