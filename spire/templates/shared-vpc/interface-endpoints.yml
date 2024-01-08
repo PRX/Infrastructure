@@ -32,11 +32,15 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   Ec2ResourceTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   PublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   PublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   PublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 # !!!! IMPORTANT !!!!
 #
@@ -56,6 +60,8 @@ Parameters:
 
 # https://docs.aws.amazon.com/vpc/latest/userguide/vpce-interface.html
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   # Each XxxEndpointsAccessSecurityGroup is designed so that resources, such as
   # EC2 instances, ECS tasks, Lambda functions, etc, can be added to the group
   # and have access to the associated VPC Endpoint service or services.

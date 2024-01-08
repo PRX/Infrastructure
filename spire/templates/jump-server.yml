@@ -13,6 +13,7 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   CastlePostgresClientSecurityGroupId: { Type: String }
   CastlePostgresInstanceEndpointAddress: { Type: String }
   CastlePostgresInstanceEndpointPort: { Type: String }
@@ -33,8 +34,11 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasCastleSecurityGroup: !Not [!Equals [!Ref CastlePostgresClientSecurityGroupId, ""]]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:

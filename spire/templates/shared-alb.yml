@@ -61,6 +61,7 @@ Parameters:
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -73,8 +74,11 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsMaintenanceMode: !Equals [!Ref MaintenanceMode, "On"]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Properties:

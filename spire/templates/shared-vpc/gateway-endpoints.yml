@@ -7,13 +7,19 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   Ec2ResourceTaggerServiceToken: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   PublicRouteTableId: { Type: String }
   PrivateRouteTableId: { Type: String }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 # https://docs.aws.amazon.com/vpc/latest/userguide/vpce-gateway.html
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   S3Endpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
