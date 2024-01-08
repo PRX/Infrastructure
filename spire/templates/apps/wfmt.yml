@@ -20,6 +20,7 @@ Parameters:
     Type: Number
     Default: 3000
   #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   EnvironmentType: { Type: String }
@@ -44,14 +45,18 @@ Parameters:
   AnnounceResourcePrefix: { Type: String }
   PorterJobExecutionSnsTopicArn: { Type: String }
   ExchangeHostname: { Type: String }
+
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
   EnableWeb: !Condition HasAuroraEndpoint
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:

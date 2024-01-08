@@ -6,6 +6,7 @@ Description: >-
   multi-origin CloudFront distribution that is managed elsewhere.
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   S3StaticSiteDeployServiceToken: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -14,7 +15,12 @@ Parameters:
   EnvironmentType: { Type: String }
   StaticSiteCloudFrontOai: { Type: AWS::SSM::Parameter::Value<String> }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   S3StaticDeployService:
     Type: Custom::S3StaticDeploy
     Properties:

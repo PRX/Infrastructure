@@ -15,6 +15,7 @@ Parameters:
     Type: Number
     Default: 3000
   #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
   EcsClusterArn: { Type: String }
@@ -46,8 +47,11 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:

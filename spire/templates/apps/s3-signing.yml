@@ -7,8 +7,10 @@ Description: A serverless API application to generate S3 request signatures
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -21,6 +23,8 @@ Parameters:
   WfmtServicesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   UploadHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:

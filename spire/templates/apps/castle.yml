@@ -14,6 +14,7 @@ Parameters:
     Type: Number
     Default: 4000
   #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   AlbFullName: { Type: String }
   AlbHttpsListenerArn: { Type: String }
   EcsClusterArn: { Type: String }
@@ -41,8 +42,11 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:

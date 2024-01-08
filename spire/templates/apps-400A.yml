@@ -14,6 +14,7 @@ Parameters:
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   DeploymentPackageBucketName: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
@@ -40,13 +41,19 @@ Parameters:
   WfmtSharedAlbListenerRulePriorityPrefix: { Type: String }
   WfmtHostname: { Type: String }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   TheCastleStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
         EnvironmentType: !Ref EnvironmentType
@@ -83,6 +90,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RegionMode: !Ref RegionMode
@@ -119,6 +127,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
         EnvironmentType: !Ref EnvironmentType

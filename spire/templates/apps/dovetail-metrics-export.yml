@@ -7,6 +7,7 @@ Description: >-
   Creates a Lambda function that exports Dovetail metrics data from BigQuery
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RegionMode: { Type: String }
@@ -24,8 +25,11 @@ Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   EnableProductionRules: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   BigQueryLayer:
     Type: AWS::Lambda::LayerVersion
     DeletionPolicy: Delete
