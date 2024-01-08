@@ -7,8 +7,10 @@ Description: A serverless API application to batch api requests to Apple
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -18,6 +20,8 @@ Parameters:
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   AppleApiBridgeFunction:
     Type: AWS::Serverless::Function
     Properties:

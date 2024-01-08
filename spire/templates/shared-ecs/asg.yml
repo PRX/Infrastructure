@@ -30,6 +30,7 @@ Parameters:
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   SlackMessageRelaySnsTopicArn: { Type: String }
   AuthorizedKeys: { Type: CommaDelimitedList }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
@@ -52,8 +53,11 @@ Conditions:
   IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   KeepAsgAlive: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:

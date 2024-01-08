@@ -7,6 +7,7 @@ Description: >-
   CloudFront Edge function on origin requests for the Dovetail CDN.
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -17,8 +18,11 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   OriginRequestFunction:
     Type: AWS::Serverless::Function
     Properties:

@@ -9,6 +9,7 @@ Description: >-
   it's designed to proxy, such as prx.org and pri.org.
 
 Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   RootStackName: { Type: String }
@@ -21,8 +22,11 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   ProxyHttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:

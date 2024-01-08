@@ -15,6 +15,7 @@ Parameters:
     Type: String
     Default: PRX/Dovetail/CdnArranger
   #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   AwsOrganizationId: { Type: String }
@@ -33,7 +34,12 @@ Parameters:
   ArrangementsDynamodbTtl: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   DtCdnArrangerWorkspaceBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain

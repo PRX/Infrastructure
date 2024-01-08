@@ -9,11 +9,17 @@ Parameters:
   EnvironmentType: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   VpcCidrBlock: { Type: String }
   VpcIpv6CidrBlocks: { Type: CommaDelimitedList }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   PublicNetworkAcl:
     Type: AWS::EC2::NetworkAcl
     Properties:

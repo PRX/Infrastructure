@@ -21,6 +21,7 @@ Parameters:
     Type: String
     Default: logs-fs
   #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   EnvironmentType: { Type: String }
@@ -46,8 +47,11 @@ Conditions:
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:

@@ -16,6 +16,7 @@ Parameters:
   SourceSecurityGroupId1: { Type: AWS::EC2::SecurityGroup::Id }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   CloudWatchAlarmTaggerServiceToken: { Type: String }
   StagingInstanceType:
     Type: String
@@ -26,8 +27,11 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   SharedMemcachedSubnetGroup:
     Type: AWS::ElastiCache::SubnetGroup
     Properties:

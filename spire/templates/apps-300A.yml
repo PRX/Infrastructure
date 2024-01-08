@@ -18,6 +18,7 @@ Parameters:
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
@@ -61,13 +62,19 @@ Parameters:
 
   MetricsSharedAlbListenerRulePriorityPrefix: { Type: String }
 
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
 Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
   AuguryStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         AlbFullName: !Ref AlbFullName
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
@@ -122,6 +129,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
@@ -153,6 +161,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         EcsClusterArn: !Ref EcsClusterArn
         EcsClusterName: !Ref EcsClusterName
         VpcId: !Ref VpcId
@@ -197,6 +206,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         AlbFullName: !Ref AlbFullName
         AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
         EcsClusterArn: !Ref EcsClusterArn
@@ -229,6 +239,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
         RootStackName: !Ref RootStackName
@@ -255,6 +266,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         VpcId: !Ref VpcId
         VpcPublicSubnet1Id: !Ref VpcPublicSubnet1Id
         VpcPublicSubnet2Id: !Ref VpcPublicSubnet2Id
