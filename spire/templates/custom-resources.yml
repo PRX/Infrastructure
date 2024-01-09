@@ -487,11 +487,16 @@ Resources:
       Handler: index.handler
       InlineCode: |
         const response = require('cfn-response');
-        const AWS = require('aws-sdk');
-        const cloudwatch = new AWS.CloudWatch({
+        const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+        const {
+          CloudWatchClient,
+          TagResourceCommand,
+          UntagResourceCommand,
+        } = require('@aws-sdk/client-cloudwatch');
+
+        const cloudwatch = new CloudWatchClient({
           apiVersion: '2010-08-01',
-          maxRetries: 5,
-          retryDelayOptions: { base: 1100 }
+          retryStrategy: new ConfiguredRetryStrategy(6, 1100),
         });
 
         exports.handler = async (event, context) => {
@@ -508,36 +513,46 @@ Resources:
 
             if (event.RequestType === 'Create') {
               // Create all tags on the custom resource
-              await cloudwatch.tagResource({
-                ResourceARN: arn,
-                Tags: tags,
-              }).promise();
+              await cloudwatch.send(
+                new TagResourceCommand({
+                  ResourceARN: arn,
+                  Tags: tags,
+                }),
+              );
             } else if (event.RequestType === 'Update') {
               // Remove tags that were present in the old resource properties, but are
               // no longer present
               const previousTags = event.OldResourceProperties.Tags;
-              const currentTagKeys = tags.map(t => t.Key);
+              const currentTagKeys = tags.map((t) => t.Key);
 
-              const staleTags = previousTags.filter(p => !currentTagKeys.includes(p.Key));
+              const staleTags = previousTags.filter(
+                (p) => !currentTagKeys.includes(p.Key),
+              );
 
               if (staleTags.length) {
-                await cloudwatch.untagResource({
-                  ResourceARN: arn,
-                  TagKeys: staleTags.map(t => t.Key),
-                }).promise();
+                await cloudwatch.send(
+                  new UntagResourceCommand({
+                    ResourceARN: arn,
+                    TagKeys: staleTags.map((t) => t.Key),
+                  }),
+                );
               }
 
               // Create/update all values present in the current resource properties
-              await cloudwatch.tagResource({
-                ResourceARN: arn,
-                Tags: tags,
-              }).promise();
+              await cloudwatch.send(
+                new TagResourceCommand({
+                  ResourceARN: arn,
+                  Tags: tags,
+                }),
+              );
             } else if (event.RequestType === 'Delete') {
               // Remove all tags on the custom resource
-              await cloudwatch.untagResource({
-                ResourceARN: arn,
-                TagKeys: tags.map(t => t.Key),
-              }).promise();
+              await cloudwatch.send(
+                new UntagResourceCommand({
+                  ResourceARN: arn,
+                  TagKeys: tags.map((t) => t.Key),
+                }),
+              );
             }
 
             await response.send(event, context, response.SUCCESS, {});
@@ -555,7 +570,7 @@ Resources:
               Effect: Allow
               Resource: "*"
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -628,11 +643,16 @@ Resources:
       Handler: index.handler
       InlineCode: |
         const response = require('cfn-response');
-        const AWS = require('aws-sdk');
-        const ec2 = new AWS.EC2({
+        const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+        const {
+          EC2Client,
+          CreateTagsCommand,
+          DeleteTagsCommand,
+        } = require('@aws-sdk/client-ec2');
+
+        const ec2 = new EC2Client({
           apiVersion: '2016-11-15',
-          maxRetries: 5,
-          retryDelayOptions: { base: 1100 }
+          retryStrategy: new ConfiguredRetryStrategy(6, 1100),
         });
 
         exports.handler = async (event, context) => {
@@ -649,36 +669,46 @@ Resources:
 
             if (event.RequestType === 'Create') {
               // Create all tags on the custom resource
-              await ec2.createTags({
-                Resources: [id],
-                Tags: tags,
-              }).promise();
+              await ec2.send(
+                new CreateTagsCommand({
+                  Resources: [id],
+                  Tags: tags,
+                }),
+              );
             } else if (event.RequestType === 'Update') {
               // Remove tags that were present in the old resource properties, but are
               // no longer present
               const previousTags = event.OldResourceProperties.Tags;
-              const currentTagKeys = tags.map(t => t.Key);
+              const currentTagKeys = tags.map((t) => t.Key);
 
-              const staleTags = previousTags.filter(p => !currentTagKeys.includes(p.Key));
+              const staleTags = previousTags.filter(
+                (p) => !currentTagKeys.includes(p.Key),
+              );
 
               if (staleTags.length) {
-                await ec2.deleteTags({
-                  Resources: [id],
-                  Tags: staleTags,
-                }).promise();
+                await ec2.send(
+                  new DeleteTagsCommand({
+                    Resources: [id],
+                    Tags: staleTags,
+                  }),
+                );
               }
 
               // Create/update all values present in the current resource properties
-              await ec2.createTags({
-                Resources: [id],
-                Tags: tags,
-              }).promise();
+              await ec2.send(
+                new CreateTagsCommand({
+                  Resources: [id],
+                  Tags: tags,
+                }),
+              );
             } else if (event.RequestType === 'Delete') {
               // Remove all tags on the custom resource
-              await ec2.deleteTags({
-                Resources: [id],
-                Tags: tags,
-              }).promise();
+              await ec2.send(
+                new DeleteTagsCommand({
+                  Resources: [id],
+                  Tags: tags,
+                }),
+              );
             }
 
             await response.send(event, context, response.SUCCESS, {});
@@ -696,7 +726,7 @@ Resources:
               Effect: Allow
               Resource: "*"
           Version: "2012-10-17"
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -767,7 +797,7 @@ Resources:
       Handler: index.handler
       InlineCode: |
         const response = require('cfn-response');
-        const { createHash } = require('crypto');
+        const { createHash } = require('node:crypto');
 
         exports.handler = async (event, context) => {
           console.log(event);
@@ -794,7 +824,7 @@ Resources:
           }
         };
       MemorySize: 128
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -865,16 +895,25 @@ Resources:
       Handler: index.handler
       InlineCode: |
         const response = require('cfn-response');
-        const AWS = require('aws-sdk');
-        const transfer = new AWS.Transfer({
+        const {
+          TransferClient,
+          DescribeServerCommand,
+        } = require('@aws-sdk/client-transfer');
+        const {
+          EC2Client,
+          DescribeVpcEndpointsCommand,
+          DescribeNetworkInterfacesCommand,
+        } = require('@aws-sdk/client-ec2');
+        const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+
+        const transfer = new TransferClient({
           apiVersion: '2018-11-05',
-          maxRetries: 5,
-          retryDelayOptions: { base: 1100 }
+          retryStrategy: new ConfiguredRetryStrategy(6, 1100),
         });
-        const ec2 = new AWS.EC2({
+
+        const ec2 = new EC2Client({
           apiVersion: '2016-11-15',
-          maxRetries: 5,
-          retryDelayOptions: { base: 1100 }
+          retryStrategy: new ConfiguredRetryStrategy(6, 1100),
         });
 
         exports.handler = async (event, context) => {
@@ -883,26 +922,35 @@ Resources:
           try {
             const serverId = event.ResourceProperties.ServerId;
 
-            const serverDesc = await transfer.describeServer({ ServerId: serverId }).promise();
+            const serverDesc = await transfer.send(
+              new DescribeServerCommand({ ServerId: serverId }),
+            );
             const vpcEndpointId = serverDesc.Server.EndpointDetails.VpcEndpointId;
 
-            const vpcEndpointDesc = await ec2.describeVpcEndpoints({
-              VpcEndpointIds: [vpcEndpointId]
-            }).promise();
-            const networkInterfaceIds = vpcEndpointDesc.VpcEndpoints[0].NetworkInterfaceIds;
+            const vpcEndpointDesc = await ec2.send(
+              new DescribeVpcEndpointsCommand({
+                VpcEndpointIds: [vpcEndpointId],
+              }),
+            );
+            const networkInterfaceIds =
+              vpcEndpointDesc.VpcEndpoints[0].NetworkInterfaceIds;
 
-            const networkInterfacesDesc = await ec2.describeNetworkInterfaces({
-              NetworkInterfaceIds: networkInterfaceIds
-            }).promise();
+            const networkInterfacesDesc = await ec2.send(
+              new DescribeNetworkInterfacesCommand({
+                NetworkInterfaceIds: networkInterfaceIds,
+              }),
+            );
 
-            const privateIpAddresses = networkInterfacesDesc.NetworkInterfaces.map(i => i.PrivateIpAddress);
+            const privateIpAddresses = networkInterfacesDesc.NetworkInterfaces.map(
+              (i) => i.PrivateIpAddress,
+            );
 
             await response.send(event, context, response.SUCCESS, {
               PrivateIpAddresses: privateIpAddresses,
             });
           } catch (error) {
-              console.error(error);
-              await response.send(event, context, response.FAILED, {});
+            console.error(error);
+            await response.send(event, context, response.FAILED, {});
           }
         };
       MemorySize: 128
@@ -915,7 +963,7 @@ Resources:
                 - transfer:DescribeServer
               Effect: Allow
               Resource: "*"
-      Runtime: nodejs16.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
