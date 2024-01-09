@@ -77,9 +77,8 @@ exports.handler = async (event) => {
     );
 
     // Get all production Spire parameters
-    const productionParameters = await getAllParametersByPath(
-      '/prx/prod/Spire',
-    );
+    const productionParameters =
+      await getAllParametersByPath('/prx/prod/Spire');
     console.log(
       `Found ${productionParameters.Parameters.length} production parameters`,
     );
