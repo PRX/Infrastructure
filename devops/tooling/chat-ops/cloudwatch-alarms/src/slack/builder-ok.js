@@ -4,6 +4,7 @@
 /** @typedef {import('@aws-sdk/client-cloudwatch').GetMetricDataOutput} GetMetricDataOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').CloudWatch} CloudWatch */
 
+const { ScanBy } = require('@aws-sdk/client-cloudwatch');
 const urls = require('./urls');
 
 /**
@@ -92,7 +93,7 @@ async function metricData(event, cloudWatchClient, desc, startTime, endTime) {
   const params = {
     StartTime: startTime,
     EndTime: endTime,
-    ScanBy: 'TimestampAscending',
+    ScanBy: ScanBy.TIMESTAMP_ASCENDING,
     MetricDataQueries: [
       {
         Id: 'alarmMetricData',

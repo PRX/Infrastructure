@@ -53,6 +53,7 @@ async function buildMessage(approvalNotification) {
     actionName: approval.actionName,
     token: approval.token,
     result: {
+      // @ts-ignore
       status: '',
       summary: '',
     },
