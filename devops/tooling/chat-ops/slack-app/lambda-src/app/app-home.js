@@ -102,23 +102,6 @@ async function publishOpsView(userId, hash) {
             emoji: true,
           },
         },
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: 'Replay the stack parameters of the staging stack from a previous version. This will redeploy apps and services using previous code artifacts and secrets to staging, which can then be deployed to production. The only change this makes is to take a previous S3 object version of the staging stack parameters JSON file and recreate it as the current version.',
-          },
-          accessory: {
-            type: 'button',
-            style: 'primary',
-            text: {
-              type: 'plain_text',
-              text: 'Start replay',
-              emoji: true,
-            },
-            action_id: 'stack-replay_open-model',
-          },
-        },
       ],
     },
     hash,
