@@ -112,10 +112,9 @@ async function selectAccount(payload) {
               options: distributions.DistributionList.Items.map((d) => ({
                 text: {
                   type: 'plain_text',
-                  text: `${d.Id} (${d.Aliases.Items.join(', ')})`.substring(
-                    0,
-                    75,
-                  ),
+                  text: `${d.Id} (${
+                    d.Aliases?.Items?.join(', ') || d.Comment
+                  })`.substring(0, 75),
                 },
                 value: d.Id,
               })),
