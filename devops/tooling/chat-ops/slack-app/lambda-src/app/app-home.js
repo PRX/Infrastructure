@@ -7,20 +7,7 @@ async function publishOpsView(userId, hash) {
     view: {
       type: 'home',
       blocks: [
-        {
-          type: 'header',
-          text: { type: 'plain_text', text: `PRX DevOps Dashboard` },
-        },
-        {
-          type: 'section',
-          text: {
-            type: 'plain_text',
-            text: 'Charts and graphs and stuff',
-          },
-        },
-
         // CloudFormation
-        { type: 'divider' },
         {
           type: 'header',
           text: {
@@ -89,17 +76,6 @@ async function publishOpsView(userId, hash) {
               emoji: true,
             },
             action_id: 'codepipeline-transitions_open-model',
-          },
-        },
-
-        // Replays
-        { type: 'divider' },
-        {
-          type: 'header',
-          text: {
-            type: 'plain_text',
-            text: 'Stack Replays',
-            emoji: true,
           },
         },
       ],
