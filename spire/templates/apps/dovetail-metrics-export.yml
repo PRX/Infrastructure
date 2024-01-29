@@ -244,6 +244,49 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt TedNetworkExport.Arn
 
+  CneNetworkExport:
+    Type: AWS::Events::Rule
+    Condition: EnableProductionRules
+    Properties:
+      Description: CNE network data export
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ExportFunction.Arn
+          Id: !Sub "${RootStackName}.Export.CNENetwork"
+          Input: |-
+            {
+              "PodcastIDs": [
+                5571,
+                5604,
+                5637,
+                5670,
+                5703,
+                5736,
+                5769,
+                5770,
+                5802,
+                5835,
+                5868,
+                5901
+              ],
+              "Copies": [
+                {
+                  "Mode": "AWS/S3",
+                  "BucketName": "cn-dse-prx-us-prod"
+                }
+              ]
+            }
+  CneNetworkExportInvokePermission:
+    Condition: EnableProductionRules
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CneNetworkExport.Arn
+
   BoostrIntegration:
     Type: AWS::Events::Rule
     Condition: EnableProductionRules
