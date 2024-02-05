@@ -61,7 +61,7 @@ def daily_usage_cost_chart_url(start, end):
                     ],
                 }
             }
-        }
+        },
         # ,GroupBy=[
         #     {
         #         'Type': 'DIMENSION',
