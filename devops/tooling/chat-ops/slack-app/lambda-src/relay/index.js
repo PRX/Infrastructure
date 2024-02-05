@@ -30,10 +30,6 @@ exports.handler = async (event) => {
     if (
       event.Records[0].Sns.TopicArn !== process.env.CANONICAL_RELAY_TOPIC_ARN
     ) {
-      if (['remix'].includes(msg.username)) {
-        return;
-      }
-
       msg.channel = '#sandbox2';
       await web.chat.postMessage(msg);
     }
