@@ -7,7 +7,7 @@ function codebuildUrl(event) {
   const project = event.detail['project-name'];
   const uuid = event.detail['build-id'].split('/')[1].split(':')[1];
 
-  return `https://console.aws.amazon.com/codesuite/codebuild/${account}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
+  return `https://${region}.console.aws.amazon.com/codesuite/codebuild/${account}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
 }
 
 module.exports = {
