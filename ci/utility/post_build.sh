@@ -16,7 +16,7 @@ push_to_ecr() {
             label=$(docker inspect --format '{{ index .Config.Labels "org.prx.spire.publish.ecr"}}' "$image_id")
 
             echo "> Logging into ECR"
-            $(aws ecr get-login --no-include-email --region $AWS_DEFAULT_REGION)
+            aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
             echo "> Logged in to ECR"
 
             unsafe_ecr_repo_name="GitHub/${PRX_REPO}"
