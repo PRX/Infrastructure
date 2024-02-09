@@ -81,3 +81,32 @@ Permissions required for client credentials role (this should be a role that has
 - Choose the `auth-cert.pem` file created in step 1.
 - Save
 - Make note of `Certificate ID` on the new record
+
+## Possibly also useful
+
+This generates a token, but I don't remember what it's used for. Maybe making manual requests locally, like in Postman
+
+```ruby
+require 'jwt'
+
+cert = OpenSSL::X509::Certificate.new(File.new('./auth-cert.pem'))
+rsa_private = OpenSSL::PKey.read(File.new('./auth-key.pem'))
+rsa_public = rsa_private.public_key
+fingerprint = OpenSSL::Digest::SHA1.new(cert.to_der).to_s
+headers = {
+  typ: 'JWT',
+  kid: '____________' # Certificate ID from https://XXXXX-sb1.app.netsuite.com/app/oauth2/clientcredentials/setup.nl?whence=
+}
+now = Time.now
+payload = {
+  iss: '____________', # Client ID from Integration creation
+  scope: 'rest_webservices',
+  aud: 'https://XXXXX-sb1.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token',
+  exp: now.to_i + 600,
+  iat: now.to_i,
+}
+token = JWT.encode payload, rsa_private, 'RS256', headers
+puts token
+decoded_token = JWT.decode token, rsa_public, true, { algorithm: 'RS256' }
+
+```
