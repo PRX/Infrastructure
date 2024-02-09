@@ -1,6 +1,5 @@
-const crypto = require('crypto');
-// @ts-ignore
-const { App } = require('octokit');
+import { createHmac } from 'node:crypto';
+import { App } from 'octokit';
 
 const OK_RESPONSE = { statusCode: 200 };
 
@@ -52,13 +51,13 @@ async function handleIssue(payload) {
   }
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log(JSON.stringify(event));
   const githubSignature = event.headers['x-hub-signature'].split('=')[1];
 
   const key = process.env.GITHUB_WEBHOOK_SECRET;
   const data = event.body;
-  const check = crypto.createHmac('sha1', key).update(data).digest('hex');
+  const check = createHmac('sha1', key).update(data).digest('hex');
 
   if (githubSignature !== check) {
     throw new Error('Invalid signature!');
