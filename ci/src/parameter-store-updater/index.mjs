@@ -1,6 +1,6 @@
-const { SSM } = require('@aws-sdk/client-ssm');
+import { SSMClient, PutParameterCommand } from '@aws-sdk/client-ssm';
 
-const ssm = new SSM({ apiVersion: '2014-11-06' });
+const ssm = new SSMClient({ apiVersion: '2014-11-06' });
 
 /**
  * Updates a Parameter Store parameter with the given value, if the parameter
@@ -11,12 +11,14 @@ const ssm = new SSM({ apiVersion: '2014-11-06' });
 async function updateSsmParameter(parameterName, parameterValue) {
   if (parameterName.startsWith('/prx/stag/Spire/')) {
     console.log(`Setting: ${parameterName} = ${parameterValue}`);
-    await ssm.putParameter({
-      Name: parameterName,
-      Value: parameterValue,
-      Type: 'String',
-      Overwrite: true,
-    });
+    await ssm.send(
+      new PutParameterCommand({
+        Name: parameterName,
+        Value: parameterValue,
+        Type: 'String',
+        Overwrite: true,
+      }),
+    );
   }
 }
 
@@ -60,7 +62,7 @@ async function updateParameters(environmentVariables, environmentVariableName) {
   }
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log(JSON.stringify(event));
 
   const eventDetail = event.detail;

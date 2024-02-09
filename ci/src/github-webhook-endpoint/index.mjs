@@ -12,10 +12,13 @@
  * (push, pull_request, etc).
  */
 
-const crypto = require('crypto');
-const { EventBridge } = require('@aws-sdk/client-eventbridge');
+import { createHmac } from 'node:crypto';
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from '@aws-sdk/client-eventbridge';
 
-const eventbridge = new EventBridge({ apiVersion: '2015-10-07' });
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
 /** @typedef { import('aws-lambda').APIGatewayProxyStructuredResultV2 } APIGatewayProxyStructuredResultV2 */
 /** @typedef { import('aws-lambda').APIGatewayProxyEventV2 } APIGatewayProxyEventV2 */
@@ -28,14 +31,14 @@ const OK_RESPONSE = { statusCode: 200 };
  * @returns {Promise<APIGatewayProxyStructuredResultV2>} Proxy integration response
  * @throws GitHub webhook validation error
  */
-exports.handler = async (event) => {
+export const handler = async (event) => {
   const githubSignature = event.headers['x-hub-signature'].split('=')[1];
 
   console.log(`Checking event signature: ${githubSignature}`);
 
   const key = process.env.GITHUB_WEBHOOK_SECRET;
   const data = event.body;
-  const check = crypto.createHmac('sha1', key).update(data).digest('hex');
+  const check = createHmac('sha1', key).update(data).digest('hex');
 
   if (githubSignature !== check) {
     throw new Error('Invalid signature!');
@@ -53,15 +56,17 @@ exports.handler = async (event) => {
       // Blackhole `ping` events
       break;
     default:
-      await eventbridge.putEvents({
-        Entries: [
-          {
-            Detail: body,
-            DetailType: event.headers['x-github-event'],
-            Source: 'org.prx.ci.github-webhook',
-          },
-        ],
-      });
+      await eventbridge.send(
+        new PutEventsCommand({
+          Entries: [
+            {
+              Detail: body,
+              DetailType: event.headers['x-github-event'],
+              Source: 'org.prx.ci.github-webhook',
+            },
+          ],
+        }),
+      );
   }
 
   return OK_RESPONSE;

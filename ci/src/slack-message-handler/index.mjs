@@ -7,39 +7,41 @@
  * details that are included in the CodeBuild event.
  */
 
-const { SNS } = require('@aws-sdk/client-sns');
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import { statusBlocks } from './builder.mjs';
+import { statusColor } from './color.mjs';
 
-const sns = new SNS({
+const sns = new SNSClient({
   apiVersion: '2010-03-31',
   region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
 });
-const color = require('./color');
-const builder = require('./builder');
 
 async function buildAttachments(event) {
-  const blocks = await builder.blocks(event);
+  const blocks = await statusBlocks(event);
 
   return [
     {
-      color: color.value(event),
+      color: statusColor(event),
       // TODO fallback: '',
       blocks,
     },
   ];
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log(JSON.stringify(event));
 
   const attachments = await buildAttachments(event);
 
-  await sns.publish({
-    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-    Message: JSON.stringify({
-      channel: 'G5C36JDUY', // #ops-build
-      username: 'AWS CodeBuild',
-      icon_emoji: ':ops-codebuild:',
-      attachments,
+  await sns.send(
+    new PublishCommand({
+      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
+      Message: JSON.stringify({
+        channel: 'G5C36JDUY', // #ops-build
+        username: 'AWS CodeBuild',
+        icon_emoji: ':ops-codebuild:',
+        attachments,
+      }),
     }),
-  });
+  );
 };

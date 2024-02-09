@@ -1,4 +1,4 @@
-module.exports = (region) => {
+export default (region) => {
   switch (region) {
     case 'us-east-1':
       return 'N. Virginia';
