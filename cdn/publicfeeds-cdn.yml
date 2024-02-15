@@ -70,7 +70,9 @@ Resources:
           exports.handler = (event, context, callback) => {
             const request = event.Records[0].cf.request;
 
-            if (request.uri.startsWith('/f/')) {
+            if (request.uri.startsWith('/f/3954/feed-rss.xml')) {
+              callback(null, { status: 301, headers: { location: [{ key: 'Location', value: 'https://feeds.megaphone.fm/technically-optimistic' }] } });
+            } else if (request.uri.startsWith('/f/')) {
               request.uri = request.uri.slice(2);
             } else {
               callback(null, { status: 404 });
@@ -91,7 +93,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Feed CDN }
       Timeout: 1
-  OriginRequestFunctionVersionB:
+  OriginRequestFunctionVersionE:
     Type: AWS::Lambda::Version
     Properties:
       FunctionName: !GetAtt OriginRequestFunction.Arn
@@ -145,7 +147,7 @@ Resources:
             Compress: true
             LambdaFunctionAssociations:
               - EventType: origin-request
-                LambdaFunctionARN: !Ref OriginRequestFunctionVersionB
+                LambdaFunctionARN: !Ref OriginRequestFunctionVersionE
             OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
             PathPattern: "/f/*"
             TargetOriginId: feeder-cdn-origin
@@ -176,7 +178,7 @@ Resources:
           Compress: true
           LambdaFunctionAssociations:
             - EventType: origin-request
-              LambdaFunctionARN: !Ref OriginRequestFunctionVersionB
+              LambdaFunctionARN: !Ref OriginRequestFunctionVersionE
           OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
           TargetOriginId: blackhole-origin
           ViewerProtocolPolicy: redirect-to-https
