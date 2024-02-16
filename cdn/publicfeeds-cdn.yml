@@ -70,21 +70,45 @@ Resources:
           exports.handler = (event, context, callback) => {
             const request = event.Records[0].cf.request;
 
-            if (request.uri.startsWith('/f/3954/feed-rss.xml')) {
-              callback(null, { status: 301, headers: { location: [{ key: 'Location', value: 'https://feeds.megaphone.fm/technically-optimistic' }] } });
-            } else if (request.uri.startsWith('/f/')) {
+            // The `/f` path is reserved to indicate an f.prxu.org feed origin. The `/f`
+            // path part must be removed to make a valid origin request.
+            if (request.uri.startsWith('/f/')) {
               request.uri = request.uri.slice(2);
+
+              const headUrl = `https://${request.origin.custom.domainName}${request.uri}`;
+
+              // Check the feed file for a redirect marker
+              fetch(headUrl, { method: 'HEAD' }).then((res) => {
+                if (res.headers.has('x-amz-meta-dovetail-feed-cdn-redirect')) {
+                  // The feed file in S3 being requested has been marked with a
+                  // redirect header. Respond with a 301 to the given URL, rather than
+                  // with the actual feed.
+                  callback(null, {
+                    status: 301,
+                    headers: {
+                      location: [
+                        {
+                          key: 'Location',
+                          value: res.headers.get('x-amz-meta-dovetail-feed-cdn-redirect')
+                        }
+                      ]
+                    }
+                  });
+                } else {
+                  // Not a redirect; continue the origin request normally.
+                  callback(null, request);
+                }
+              });
             } else {
               callback(null, { status: 404 });
             }
-
-            callback(null, request);
           };
+
       Description: !Sub ${EnvironmentType} podcast feed CDN origin requests
       Handler: index.handler
       MemorySize: 128
       Role: !GetAtt EdgeLambdaRole.Arn
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -92,8 +116,8 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Feed CDN }
-      Timeout: 1
-  OriginRequestFunctionVersionE:
+      Timeout: 30
+  OriginRequestFunctionVersionF:
     Type: AWS::Lambda::Version
     Properties:
       FunctionName: !GetAtt OriginRequestFunction.Arn
@@ -147,7 +171,7 @@ Resources:
             Compress: true
             LambdaFunctionAssociations:
               - EventType: origin-request
-                LambdaFunctionARN: !Ref OriginRequestFunctionVersionE
+                LambdaFunctionARN: !Ref OriginRequestFunctionVersionF
             OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
             PathPattern: "/f/*"
             TargetOriginId: feeder-cdn-origin
@@ -178,7 +202,7 @@ Resources:
           Compress: true
           LambdaFunctionAssociations:
             - EventType: origin-request
-              LambdaFunctionARN: !Ref OriginRequestFunctionVersionE
+              LambdaFunctionARN: !Ref OriginRequestFunctionVersionF
           OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
           TargetOriginId: blackhole-origin
           ViewerProtocolPolicy: redirect-to-https
