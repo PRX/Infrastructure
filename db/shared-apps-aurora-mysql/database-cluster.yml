@@ -78,12 +78,32 @@ Conditions:
   HasMasterUserCredentials: !And [!Condition HasMasterUsername, !Condition HasMasterUserPassword]
 
 Resources:
+  DbClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: !Sub ${AWS::StackName} cluster parameters
+      Family: aurora-mysql8.0
+      Parameters:
+        # https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-write-forwarding-ams.html#aurora-global-database-write-forwarding-params-ams
+        aurora_replica_read_consistency: GLOBAL
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
   DbCluster:
     Type: AWS::RDS::DBCluster
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
       # BackupRetentionPeriod
+      DBClusterParameterGroupName: !If
+        - HasGlobalClusterIdentifier # indicates a secondary cluster
+        - !Ref DbClusterParameterGroup
+        - !Ref AWS::NoValue
       DBSubnetGroupName: !Ref DbSubnetGroup
       DeletionProtection: true
       EnableCloudwatchLogsExports:
@@ -97,6 +117,10 @@ Resources:
         - HasGlobalClusterIdentifier
         - !Ref GlobalClusterIdentifier
         - !Ref AWS::NoValue
+      EnableGlobalWriteForwarding: !If
+        - HasGlobalClusterIdentifier # indicates a secondary cluster
+        - true
+        - false
       MasterUsername: !If
         - HasMasterUserCredentials
         - !Ref DbClusterMasterUsername
