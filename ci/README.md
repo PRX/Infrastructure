@@ -12,15 +12,19 @@ The high-level goals of the system are:
 - Allow for code that passes build and test process to be packaged and pushed to destinations from which it can be deployed
 - Create small amounts of lightweight, reusable code to [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) up the amount of boilerplate needed for getting a project to support this type of continuous integration
 
+> [!IMPORTANT]
 > **Known Limitations:**
 >
-> - Out-of-order builds: If multiple builds for different commits of a single branch or pull request run concurrently, it is possible that the last (newest) commit does not complete after all other builds. In these cases, the newest commit's build may finish and publish an artifact as expected, but then an older commit's build will finish later and also publish an artifact. Because of how CI and CD are integrated, the most-recently created artifact will be deployed even if it is not the most recent commit.
+> - Out-of-order builds: If multiple builds for different commits of a single branch or pull request run concurrently, it is possible that the last (newest) commit does not complete after all other builds. In these cases, the newest commit's build may finish and publish an artifact as expected, but then an older commit's build will finish later and also publish an artifact. Because of how CI and Spire CD are integrated, the most-recently created artifact will be deployed even if it is not the most recent commit.
 
 ## Project architecture
 
 In order to build a system to accomplish all that, we spin up a number of AWS resources (using a CloudFormation template). Launching a stack from the `ci/template.yml` template is fairly straightforward, but this CI project is part of a larger, more comprehensive [DevOps project](https://github.com/PRX/Infrastructure), and relies on some resources created by other component stacks.
 
-While the CI stack is designed to be launched in any AWS region, regardless of where the applications running through it are hosted or deployed, it is the case that only one instance of the stack should be running at a time. There is likely nothing terrible that would happen if multiple instances were running, but the same tests would be running against the same code multiple times with no added benefit, and artifacts would be published several times for each set of code changes. It's unlikely this would break a deployment system, but it should be avoided.
+A CI stack should be launched in any AWS region where the arficats it creates are being deployed and hosted. This ensures that the build system is resilient to regional interruptions, and that all regions, including secondary regions, have up-to-date application artifacts. This is strictly necessary for [active-active](https://aws.amazon.com/blogs/architecture/disaster-recovery-dr-architecture-on-aws-part-iv-multi-site-active-active/) multi-region applications, and also ensures that application code is current during a failover for active-passive applications.
+
+> [!NOTE]
+> Running CI stacks in multiple regions increases costs associated linearly, and is not the only approach to a fault-tolerant system. Moving to a setup where CI builds happen in only a single region, but the resulting artifacts are pushed to multiple regions, may be explored in the future, so this aspect of the CI system is subject to change.
 
 ### System Components
 
@@ -28,23 +32,23 @@ The following describes each aspect of the CI system in the order that they usua
 
 #### GitHub Webhook
 
-For an organization in GitHub (e.g. [PRX](https://github.com/prx/)) a [webhook](https://developer.github.com/webhooks/) is configured which will be sent **pull request** and **push** events. This will cause GitHub to notify an HTTP endpoint every time either of those events takes place on *any* repository in the organization.
+For an organization in GitHub (e.g. [PRX](https://github.com/prx/)) a [webhook](https://developer.github.com/webhooks/) is configured which will be send **pull request** and **push** events. This will cause GitHub to notify an HTTP endpoint every time either of those events takes place on *any* repository in the organization. A separate webhook should be created in GitHub for every region where CI is deployed.
 
-An HTTP API is constructed using [Amazon API Gateway](https://aws.amazon.com/api-gateway/) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, and filters out some noise that is expected, and sends relevant events to an [Amazon EventBridge](https://aws.amazon.com/eventbridge/) for further processing.
+An HTTP API is constructed using [Lambda function URLs](https://docs.aws.amazon.com/lambda/latest/dg/lambda-urls.html) for the webhook to target. An [AWS Lambda](https://aws.amazon.com/lambda/) function is provided to handle any requests sent to the webhook endpoint. The function ensures that the requests are valid and authentic, filters out some noise that is expected, and sends relevant events to an [Amazon EventBridge](https://aws.amazon.com/eventbridge/) for further processing.
 
-The URL of the API to use for the webhook configuration is an output of the CloudFormation stack.
+The URL of the API to use for the webhook configuration in GitHub is an output of the CloudFormation stack.
 
 #### Starting a Build
 
-Event data that are published to EventBridge by the GitHub webhook request handler function get handled immediately by another Lambda function: the build handler function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
+Event data that are published to EventBridge by the GitHub webhook request handler function get processed immediately by another Lambda function: the build handler function. This function includes much more business logic about which events should pass through the CI process and how. This logic includes things like: checking to make sure the event originated from a project that is meant for CI, and filtering out feature branch code pushes that are not part of pull requests.
 
 If it's determined that an event represents code that should be built and tested, this function will configure and trigger a build for the code in [AWS CodeBuild](https://aws.amazon.com/codebuild/) for the GitHub repository and commit or pull request that caused the webhook.
 
 #### CodeBuild
 
-When the previous step triggers a build, it does so by calling `startBuild` on a CodeBuild project that was setup by the `ci/template.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
+When the previous step triggers a build, it does so by calling [`startBuild`](https://docs.aws.amazon.com/codebuild/latest/APIReference/API_StartBuild.html) on a CodeBuild project that was setup by the `ci/template.yml` template specifically for running CI builds. All builds, regardless of which project or GitHub repository triggered them, are run through this one CodeBuild project.
 
-CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers are dealt with _inside_ of CodeBuild's native Docker build environment container (ie, Docker running inside a Docker container).
+CodeBuild runs all builds in a Docker environment. Often it's the case that the code being built and tested is itself an application that runs on Docker. In such cases, those Docker containers are dealt with _inside_ of CodeBuild's native Docker build environment container (i.e., Docker running inside a Docker container).
 
 The configuration for each build is determined by the event Lambda function. This includes properties such as:
 
@@ -58,11 +62,11 @@ CodeBuild natively supports updating the code's build status in GitHub.
 
 Several additional Lambda functions are configured as targets for EventBridge rules that watch for state changes on the CodeBuild project. These functions are responsible for handling some or all of the various stages of a build (start, success, fail, etc). The purpose of these functions are things like sending a notification to developers through channels like [Slack](https://slack.com/) so the process is highly visible.
 
-Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update values in [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html), which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/main/cd) system to manage app deployments.
+Additionally, one of the build event Lambda functions is responsible for handling successful builds that generated new versions of deployable code artifacts. When a new version results from a build (such as a new Docker image that has been pushed to [Amazon ECR](https://aws.amazon.com/ecr/)), this Lambda function will update values in [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html), which can be used by the [continuous deployment](https://github.com/PRX/Infrastructure/tree/main/spire/cd) system to manage app deployments.
 
 ### Auxiliary Components
 
-A utility shell script called `post_build.sh` is maintained and can be executed as part of build spec at the end of a build run. This script can handle many aspects of the build run process that are common to most projects.
+A utility shell script called `post_build.sh` is maintained and can be executed as part of a build spec at the end of a build run. This script can handle many aspects of the build run process that are common to most projects.
 
 ## Continuous Integration Support
 
@@ -77,13 +81,13 @@ CI will attempt to run if the following conditions are met:
 
 Beyond this, there are no technical requirements to be compatible with the CI system. It will happily run any `buildspec` that it sees, making it possible to write bespoke build processes on a project-by-project basis.
 
-All builds take place within Linux environment where a fairly modern version of Docker is available. Aside from that, the specifics of the environment are not guaranteed. It's strongly recommended that the application's build and test processes happen in Docker, rather than directly in the Linux environment, to avoid issues if the build environment changes over time.
+All builds take place within Linux environments where a fairly modern version of Docker is available. Aside from that, the specifics of the environment are not guaranteed. It's strongly recommended that the application's build and test processes happen in Docker, rather than directly in the Linux environment, to avoid issues if the build environment changes over time.
 
-In general, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that CD can deploy from.
+In general, most projects will want to handle some parts of the build process in similar ways. By adhering to certain conventions and including shared code libraries, much of the work needed to get an app to play nicely with the continuous deployment system will be much easier. This primarily impacts the end of the build process, where any built code or code artifacts are published somewhere that Spire CD can deploy from.
 
-If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for CD. The script will only attempt to publish code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The build handler Lambda will set that by default for default branch events.
+If you opt in to using the common CI support code, the project must execute the `post_build.sh` script that is maintained in the Infrastructure repo. This is the code responsible for handling the common tasks associated with prepping apps for Spire CD. The script will only attempt to publish and deploy code if the `PRX_CI_PUBLISH` variable is set to the string value of `true`. The build handler Lambda will set that by default for events from a default branch (`main`, `master`, etc).
 
-A Lambda function that watches for successful builds in CodeBuild extracts information from the details of the build, and updates the staging environemnt's configuration values used within the CD system as necessary (e.g., updates the ECR image version to deploy for the app code that was built).
+A Lambda function that watches for successful builds in CodeBuild extracts information from the details of the build, and updates the staging environemnt's configuration values used within the Spire CD system as necessary (e.g., updates the ECR image version to deploy for the app code that was built).
 
 Setting `PRX_CI_PUBLISH` to `true` will result in code being published and the staging environment being updated. It should only be set to `true` if both of those actions are desired. If you need code to be published _without_ the environment being updated, like from a feature branch, you should set `PRX_CI_PRERELEASE` to the string value of `true`.
 
@@ -97,9 +101,9 @@ At the end of a build, if the `post_build` script is invoked, Docker images resu
 
 The images will be pushed to ECR repositories that correspond to their source GitHub repository. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an ECR repository named `github/prx/my-app`. The ECR repository will be in the same region that CI is running in.
 
-#### Updating CD Metadata
+#### Updating Spire CD Metadata
 
-In addition to pushing an image to ECR, CI can also update metadata used by CD for deciding which application code to deploy. When CI builds are configured to update these metadata, CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
+In addition to pushing an image to ECR, CI can also update metadata used by Spire CD for deciding which application code to deploy. When CI builds are configured to update these metadata, Spire CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
 
 To allow the metadata updates, a project's `buildspec.yml` should include an environment variable called `PRX_SPIRE_ECR_PKG_PARAMETERS`, whose value is one or more mappings of Docker image labels to Parameter Store parameter names.
 
@@ -144,9 +148,9 @@ The file that gets pushed to S3 will be copied out of the labeled Docker image. 
 
 How the code gets tested and zipped is in no way controlled or defined by the CI process. As the creator of a project, you need to make sure that the code is being tested appropriately during the execution of the `buildspec`, and that some Docker image exists at the end of the process that is labeled and contains the ZIP file. The implementation details of those steps are left up to you. You can reference existing projects for guidance.
 
-#### Updating CD Metadata
+#### Updating Spire CD Metadata
 
-In addition to pushing files to S3, CI can also update metadata used by CD for deciding which application code to deploy. When CI builds are configured to update these metadata, CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
+In addition to pushing files to S3, CI can also update metadata used by Spire CD for deciding which application code to deploy. When CI builds are configured to update these metadata, Spire CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
 
 To allow the metadata updates, a project's `buildspec.yml` should include an environment variable called `PRX_SPIRE_S3_PKG_PARAMETERS`, whose value is one or more mappings of Docker image labels to Parameter Store parameter names.
 
