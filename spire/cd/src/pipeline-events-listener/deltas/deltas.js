@@ -138,7 +138,10 @@ module.exports = {
     //
     // Any parameters effected by this limitation are filtered out.
     const cleanedDeltas = changeDeltas.filter(
-      (d) => !(d.changeSetValue || '').match(/\{\{IntrinsicFunction\:/),
+      (d) =>
+        !(d.changeSetValue || '').match(
+          /\{\{IntrinsicFunction\:|\{\{changeSet\:KNOWN_AFTER_APPLY\}\}/,
+        ),
     );
 
     // Some additional parameters that don't make sense to display in Slack are
