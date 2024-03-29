@@ -9,5 +9,170 @@ Parameters:
   OrganizationId: { Type: String }
 
 Resources:
-  Placeholder:
-    Type: AWS::SNS::Topic
+  CloudWatchAlarmTaggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - cloudwatch:TagResource
+                  - cloudwatch:UntagResource
+                Effect: Allow
+                Resource: "*"
+            Version: "2012-10-17"
+          PolicyName: SnsPolicy
+  CloudWatchAlarmTaggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Architectures: [arm64]
+      Code:
+        ZipFile: |
+          const response = require('cfn-response');
+          const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
+          const {
+            CloudWatchClient,
+            TagResourceCommand,
+            UntagResourceCommand,
+          } = require('@aws-sdk/client-cloudwatch');
+
+          const cloudwatch = new CloudWatchClient({
+            apiVersion: '2010-08-01',
+            retryStrategy: new ConfiguredRetryStrategy(6, 1100),
+          });
+
+          exports.handler = async (event, context) => {
+            console.log(event);
+
+            try {
+              const tags = event.ResourceProperties.Tags;
+              const arn = event.ResourceProperties.AlarmArn;
+
+              if (!tags || !tags.length || !arn) {
+                console.error('AlarmArn and Tags properties must be defined');
+                await response.send(event, context, response.FAILED, {});
+              }
+
+              if (event.RequestType === 'Create') {
+                // Create all tags on the custom resource
+                await cloudwatch.send(
+                  new TagResourceCommand({
+                    ResourceARN: arn,
+                    Tags: tags,
+                  }),
+                );
+              } else if (event.RequestType === 'Update') {
+                // Remove tags that were present in the old resource properties, but are
+                // no longer present
+                const previousTags = event.OldResourceProperties.Tags;
+                const currentTagKeys = tags.map((t) => t.Key);
+
+                const staleTags = previousTags.filter(
+                  (p) => !currentTagKeys.includes(p.Key),
+                );
+
+                if (staleTags.length) {
+                  await cloudwatch.send(
+                    new UntagResourceCommand({
+                      ResourceARN: arn,
+                      TagKeys: staleTags.map((t) => t.Key),
+                    }),
+                  );
+                }
+
+                // Create/update all values present in the current resource properties
+                await cloudwatch.send(
+                  new TagResourceCommand({
+                    ResourceARN: arn,
+                    Tags: tags,
+                  }),
+                );
+              } else if (event.RequestType === 'Delete') {
+                // Remove all tags on the custom resource
+                await cloudwatch.send(
+                  new UntagResourceCommand({
+                    ResourceARN: arn,
+                    TagKeys: tags.map((t) => t.Key),
+                  }),
+                );
+              }
+
+              await response.send(event, context, response.SUCCESS, {});
+            } catch (error) {
+              console.error(error);
+              await response.send(event, context, response.FAILED, {});
+            }
+          };
+      Description: Manages resource tags for CloudWatch Alarms.
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt CloudWatchAlarmTaggerRole.Arn
+      Runtime: nodejs20.x
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Infrastructure }
+      Timeout: 60
+  CloudWatchAlarmTaggerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      Principal: "*"
+      PrincipalOrgID: !Ref OrganizationId
+  CloudWatchAlarmTaggerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmTaggerFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Infrastructure }
+  CloudWatchAlarmTaggerFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [DevOps] Alarm Tagger <prod> FUNCTION ERRORS (${AWS::StackName})
+      AlarmDescription: !Sub |-
+        The global custom resource function for tagging CloudWatch alarms in
+        ${AWS::Region} is failing. This could mean that a stack update is
+        stalled, waiting for an HTTP callback from the function.
+
+        Be careful rolling back the stack; if the function fails again during
+        rollback it may become even more stuck. Making the callback request
+        manually may be possible, by looking at the function logs.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CloudWatchAlarmTaggerFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  CloudWatchAlarmTaggerFunctionErrorAlarmTags:
+    Type: Custom::CloudWatchAlarmTags
+    Properties:
+      ServiceToken: !GetAtt CloudWatchAlarmTaggerFunction.Arn
+      AlarmArn: !GetAtt CloudWatchAlarmTaggerFunctionErrorAlarm.Arn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Infrastructure }
