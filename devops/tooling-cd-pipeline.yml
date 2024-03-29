@@ -96,6 +96,31 @@ Resources:
                 Effect: Allow
                 Resource: "*"
                 Sid: AllowGlobalResourceUpdates
+              - Action:
+                  - iam:*
+                Effect: Allow
+                Resource:
+                  # We need to grant this role permissions to manage IAM roles
+                  # found in the stacks that it will be managing, but don't
+                  # want to grant wildcard access to all IAM resources. This is
+                  # a best-effort attempt to achieve least-privilege.
+                  #
+                  # Stacks managed by StackSets are always named like:
+                  # StackSet-my_stack. Roles created by those stacks will have
+                  # names that begin with the first several (~30) characters of
+                  # the stack. Therefore we know that for any given stack, a
+                  # role will be named like "StackSet-my_stack-MyRole-123ABC".
+                  #
+                  # We do define the stack name (e.g., my_stack) in this
+                  # template, so we can scope this permission down to only
+                  # those that appear to originate from these sort of StackSet-
+                  # managed stacks with names we know.
+                  #
+                  # Add a resource below for each stack that includes IAM roles
+                  # being managed in this way. Each ARN should end with a
+                  # wildcard ("*").
+                  - !Sub arn:aws:iam::${AWS::AccountId}:role/StackSet-cfn-custom-resources*
+                Sid: AllowStackSpecificIamUpdates
             Version: "2012-10-17"
           PolicyName: CfnResourceManipulation
       RoleName: AWSCloudFormationStackSetExecutionRole
