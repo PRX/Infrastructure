@@ -20,12 +20,16 @@ Description: >-
   and other resources needed to support the pipeline, for DevOps resources.
 
 Parameters:
+  kAllRegions:
+    Type: CommaDelimitedList
+    # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
+    Default: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
   kCloudFormationNotificationsStackName:
     Type: String
     Default: prx-devops-cloudformation-notifications
-  kCloudFormationNotificationTopicsStacksetName:
+  kCloudFormationCustomResourceLambdasStacksetName:
     Type: String
-    Default: regional-cloudformation-notification-topics
+    Default: cfn-custom-resources-all-regions
   kCloudFormationMacroFunctionsStackName:
     Type: String
     Default: prx-devops-cloudformation-macro-functions
@@ -372,7 +376,7 @@ Resources:
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kStatuspageStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kHealthEventsStackName}/*
                   # StackSets
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationNotificationTopicsStacksetName}:*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationCustomResourceLambdasStacksetName}:*
             Version: "2012-10-17"
           PolicyName: CloudFormationAccess
         # Allow PassRole to the CloudFormation role
@@ -433,7 +437,9 @@ Resources:
                 - Name: SamBuildArtifact
               RunOrder: 1
 
-        - Name: Deploy
+        # Everything in this stage is a standard, single CloudFormation stack
+        # deploy and is intended to have one instance globally
+        - Name: Deploy Once
           Actions:
             - Name: CloudFormation_Macro_Functions
               ActionTypeId:
@@ -589,6 +595,37 @@ Resources:
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
+
+        # Everything in this stage is deployed to all regions of the DevOps
+        # account, making those resources available within all regions, even
+        # from other accounts (using cross-account access). This is done using
+        # stacksets.
+        - Name: Deploy All Regions
+          Actions:
+            - Name: CloudFormation_CustomResource_Functions
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: !Ref kCloudFormationCustomResourceLambdasStacksetName
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                Description: >-
+                  Launches a stack in each region in the DevOps account
+                  to create Lambda functions that back CloudFormation custom
+                  resource types that are available organization-wide.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/tooling/cfn-custom-resources/template.yml
+                Parameters: !Sub |-
+                  ParameterKey=OrganizationId,ParameterValue=${OrganizationId}
+                PermissionModel: SELF_MANAGED
+                DeploymentTargets: !Ref AWS::AccountId
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 0
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfraRepoSourceArtifact
+              RunOrder: 1
 
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
