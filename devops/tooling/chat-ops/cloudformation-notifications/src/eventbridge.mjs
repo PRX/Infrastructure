@@ -1,5 +1,5 @@
-const regions = require('./regions');
-const accounts = require('./accounts');
+import regions from './regions.mjs';
+import accounts from './accounts.mjs';
 
 const SLACK_DEBUG_CHANNEL = 'G2QHC11SM'; // #ops-debug
 const SLACK_INFO_CHANNEL = 'G2QHBL6UX'; // #ops-info
@@ -69,7 +69,7 @@ const concerning = [
   'UPDATE_ROLLBACK_COMPLETE_CLEANUP_IN_PROGRESS',
 ];
 
-exports.message = function (event) {
+export default function message(event) {
   // Each event includes information about the stack where the change is
   // happening. These will be present on both stack status and resource status
   // events.
@@ -189,4 +189,4 @@ exports.message = function (event) {
   }
 
   return;
-};
+}

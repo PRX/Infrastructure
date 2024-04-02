@@ -1,4 +1,4 @@
-module.exports = (region) => {
+export default function regions(region) {
   switch (region) {
     case 'us-east-1':
       return 'N. Virginia';
@@ -45,4 +45,4 @@ module.exports = (region) => {
     default:
       return region;
   }
-};
+}

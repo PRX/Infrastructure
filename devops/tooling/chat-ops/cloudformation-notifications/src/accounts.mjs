@@ -1,4 +1,4 @@
-module.exports = (accountId) => {
+export default function accounts(accountId) {
   switch (accountId) {
     case '561178107736':
       return 'PRX Legacy';
@@ -23,4 +23,4 @@ module.exports = (accountId) => {
     default:
       return accountId;
   }
-};
+}
