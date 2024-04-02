@@ -10,7 +10,7 @@
 /** @typedef { import('aws-lambda').SNSEvent } SNSEvent */
 /** @typedef { import('@slack/web-api').ChatPostMessageArguments } ChatPostMessageArguments */
 
-const { WebClient } = require('@slack/web-api');
+import { WebClient } from '@slack/web-api';
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
@@ -19,7 +19,7 @@ const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
  * @param {*} event
  * @returns {Promise<void>}
  */
-exports.handler = async (event) => {
+export const handler = async (event) => {
   if (event?.Records?.[0]?.EventSource === 'aws:sns') {
     /** @type {ChatPostMessageArguments} */
     const msg = JSON.parse(event.Records[0].Sns.Message);
