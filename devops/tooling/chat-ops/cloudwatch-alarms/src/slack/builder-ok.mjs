@@ -2,9 +2,9 @@
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').GetMetricDataOutput} GetMetricDataOutput */
-/** @typedef {import('@aws-sdk/client-cloudwatch').CloudWatch} CloudWatch */
+/** @typedef {import('@aws-sdk/client-cloudwatch').CloudWatchClient} CloudWatchClient */
 
-import { ScanBy } from '@aws-sdk/client-cloudwatch';
+import { ScanBy, GetMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 import { metricsConsoleUrl, logsConsoleUrl } from './urls.mjs';
 
 /**
@@ -69,7 +69,7 @@ function conditionAlarmTime(event) {
 /**
  *
  * @param {EventBridgeCloudWatchAlarmsEvent} event
- * @param {CloudWatch} cloudWatchClient
+ * @param {CloudWatchClient} cloudWatchClient
  * @param {DescribeAlarmsOutput} desc
  * @param {Date} startTime
  * @param {Date} endTime
@@ -106,7 +106,7 @@ async function metricData(event, cloudWatchClient, desc, startTime, endTime) {
     ],
   };
 
-  return cloudWatchClient.getMetricData(params);
+  return cloudWatchClient.send(new GetMetricDataCommand(params));
 }
 
 /**
@@ -175,7 +175,7 @@ async function basics(event, desc, history) {
  * on the type of alarm and the total number of values.
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {DescribeAlarmsOutput} desc
- * @param {CloudWatch} cloudWatchClient
+ * @param {CloudWatchClient} cloudWatchClient
  * @returns {Promise<String[]>}
  */
 async function datapoints(event, desc, cloudWatchClient) {
@@ -268,7 +268,7 @@ async function datapoints(event, desc, cloudWatchClient) {
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @param {DescribeAlarmsOutput} desc
  * @param {DescribeAlarmHistoryOutput} history
- * @param {CloudWatch} cloudWatchClient
+ * @param {CloudWatchClient} cloudWatchClient
  * @returns {Promise<String[]>}
  */
 export async function detailLines(event, desc, history, cloudWatchClient) {
