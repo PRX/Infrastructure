@@ -1,0 +1,67 @@
+# devops/aws-management/organization-slack-relay-bus-rule.yml
+# This stack creates an EventBridge rule. It does **not** create an EventBridge
+# event bus.
+#
+# The rule is expected to exist on *all* default event buses within the AWS
+# Organization. Event buses are regional, thus this stack is intended to be
+# launched once for every region in every account within the organization.
+#
+# Not all regions support cross-region EventBridge rules, but as of 2024-04 all
+# regions that we use do.
+#
+# This rule SHOULD NOT be added to any custom event buses we create; only
+# default event buses.
+#
+# The rule will forward all Slack messages intended to be relayed that reach the
+# default bus to a *single* custom event bus in us-east-2 in the DevOps
+# account. These events will often be sent cross-region and cross-account.
+#
+# The definition for that bus can be found in
+# devops/tooling/chat-ops/slack-app/template.yml -> SlackMessageRelayEventBus
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates a EventBridge rule that forwards CloudFormation status change
+  events to the DevOps alarms bus. The DevOps event bus must be in a region
+  that supports cross-region EventBridge rules.
+
+Parameters:
+  SlackMessageRelayEventBusArn:
+    Type: String
+
+Resources:
+  EventRuleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: events:PutEvents
+                Effect: Allow
+                Resource: !Ref SlackMessageRelayEventBusArn
+            Version: "2012-10-17"
+          PolicyName: SlackMessageRelayEventBusPolicy
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - Slack Message Relay Message Payload
+      State: ENABLED
+      Targets:
+        - Arn: !Ref SlackMessageRelayEventBusArn
+          Id: devops-slack-message-relay-event-bus-fwd
+          RoleArn: !GetAtt EventRuleRole.Arn
