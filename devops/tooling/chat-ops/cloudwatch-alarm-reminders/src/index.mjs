@@ -1,33 +1,32 @@
-/**
- * TODO This Lambda function is subscribed to SNS topics, EventBridge buses, and
- * other message services. It expects that any message data it receives from
- * those sources is a fully-formed Slack message payload, and relays that
- * payload to Slack via the chat.postMessage Web API method [1].
- *
- * 1. https://api.slack.com/methods/chat.postMessage
- */
+/** @typedef { import('@aws-sdk/client-cloudwatch').AlarmType } AlarmType */
+/** @typedef { import('@aws-sdk/client-cloudwatch').StateValue } StateValue */
 
-const { SNS } = require('@aws-sdk/client-sns');
-const { STS } = require('@aws-sdk/client-sts');
-const { CloudWatch } = require('@aws-sdk/client-cloudwatch');
-const regions = require('./regions');
-const urls = require('./urls');
+import { STSClient, AssumeRoleCommand } from '@aws-sdk/client-sts';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from '@aws-sdk/client-eventbridge';
+import regions from './regions.mjs';
+import { alarmConsole } from './urls.mjs';
 
-const sns = new SNS({
-  apiVersion: '2010-03-31',
-  region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
-});
-const sts = new STS({ apiVersion: '2011-06-15' });
+const sts = new STSClient({ apiVersion: '2011-06-15' });
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
 async function cloudWatchClient(accountId, region) {
   const roleName = process.env.CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME;
 
-  const role = await sts.assumeRole({
-    RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
-    RoleSessionName: 'reminders_lambda_reader',
-  });
+  const role = await sts.send(
+    new AssumeRoleCommand({
+      RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
+      RoleSessionName: 'reminders_lambda_reader',
+    }),
+  );
 
-  return new CloudWatch({
+  return new CloudWatchClient({
     apiVersion: '2010-08-01',
     region: region,
     credentials: {
@@ -38,48 +37,50 @@ async function cloudWatchClient(accountId, region) {
   });
 }
 
-async function describeAllAlarms(client, nextToken) {
-  return new Promise((resolve, reject) => {
-    const params = {
-      StateValue: 'ALARM',
-      AlarmTypes: ['CompositeAlarm', 'MetricAlarm'],
-      ...(nextToken && { NextToken: nextToken }),
-    };
+/**
+ *
+ * @param {CloudWatchClient} cloudWatchClient
+ * @param {string} nextToken
+ * @returns {Promise<Object>}
+ */
+async function describeAllAlarms(cloudWatchClient, nextToken) {
+  /** @type {AlarmType[]} */
+  const alarmTypes = ['CompositeAlarm', 'MetricAlarm'];
 
-    client.describeAlarms(params, async (error, data) => {
-      if (error) {
-        reject(error);
-      } else {
-        const results = {
-          CompositeAlarms: [],
-          MetricAlarms: [],
-        };
+  /** @type {StateValue} */
+  const stateValue = 'ALARM';
 
-        if (data.CompositeAlarms) {
-          results.CompositeAlarms.push(...data.CompositeAlarms);
-        }
+  const params = {
+    StateValue: stateValue,
+    AlarmTypes: alarmTypes,
+    ...(nextToken && { NextToken: nextToken }),
+  };
 
-        if (data.MetricAlarms) {
-          results.MetricAlarms.push(...data.MetricAlarms);
-        }
+  const data = await cloudWatchClient.send(new DescribeAlarmsCommand(params));
 
-        if (data.NextToken) {
-          try {
-            const more = await describeAllAlarms(client, data.NextToken);
+  const results = {
+    CompositeAlarms: [],
+    MetricAlarms: [],
+  };
 
-            if (more) {
-              results.CompositeAlarms.push(...more.CompositeAlarms);
-              results.MetricAlarms.push(...more.MetricAlarms);
-            }
-          } catch (err) {
-            reject(err);
-          }
-        }
+  if (data.CompositeAlarms) {
+    results.CompositeAlarms.push(...data.CompositeAlarms);
+  }
 
-        resolve(results);
-      }
-    });
-  });
+  if (data.MetricAlarms) {
+    results.MetricAlarms.push(...data.MetricAlarms);
+  }
+
+  if (data.NextToken) {
+    const more = await describeAllAlarms(cloudWatchClient, data.NextToken);
+
+    if (more) {
+      results.CompositeAlarms.push(...more.CompositeAlarms);
+      results.MetricAlarms.push(...more.MetricAlarms);
+    }
+  }
+
+  return results;
 }
 
 function cleanName(alarmName) {
@@ -93,7 +94,7 @@ function cleanName(alarmName) {
 
 function title(alarmDetail) {
   const name = alarmDetail.AlarmName;
-  const region = regions.descriptor(alarmDetail.AlarmArn.split(':')[3]);
+  const region = regions(alarmDetail.AlarmArn.split(':')[3]);
   return `${alarmDetail.StateValue} | ${region} » ${cleanName(name)}`;
 }
 
@@ -180,7 +181,7 @@ function sortByDuration(a, b) {
   return -1;
 }
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log(JSON.stringify(event));
 
   const alarms = {
@@ -192,7 +193,7 @@ exports.handler = async (event) => {
     for (const region of process.env.SEARCH_REGIONS.split(',')) {
       const cloudwatch = await cloudWatchClient(accountId, region);
 
-      const data = await describeAllAlarms(cloudwatch);
+      const data = await describeAllAlarms(cloudwatch, undefined);
 
       alarms.CompositeAlarms.push(...data.CompositeAlarms);
       alarms.MetricAlarms.push(
@@ -225,7 +226,7 @@ exports.handler = async (event) => {
 
   blocks.push(
     ...alarms.MetricAlarms.map((a) => {
-      const lines = [`*<${urls.alarmConsole(a)}|${title(a)}>*`];
+      const lines = [`*<${alarmConsole(a)}|${title(a)}>*`];
 
       if (a.StateReasonData) {
         const reasonData = JSON.parse(a.StateReasonData);
@@ -244,19 +245,26 @@ exports.handler = async (event) => {
 
   console.log(blocks);
 
-  await sns.publish({
-    TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-    Message: JSON.stringify({
-      username: 'Amazon CloudWatch Alarms',
-      icon_emoji: ':ops-cloudwatch-alarm:',
-      channel: 'G2QH6NMEH', // #ops-error
-      attachments: [
+  await eventbridge.send(
+    new PutEventsCommand({
+      Entries: [
         {
-          color: '#a30200',
-          fallback: `There are *${count}* long-running alarms`,
-          blocks,
+          Source: 'org.prx.cloudwatch-alarm-reminders',
+          DetailType: 'Slack Message Relay Message Payload',
+          Detail: JSON.stringify({
+            username: 'Amazon CloudWatch Alarms',
+            icon_emoji: ':ops-cloudwatch-alarm:',
+            channel: 'G2QH6NMEH', // #ops-error
+            attachments: [
+              {
+                color: '#a30200',
+                fallback: `There are *${count}* long-running alarms`,
+                blocks,
+              },
+            ],
+          }),
         },
       ],
     }),
-  });
+  );
 };

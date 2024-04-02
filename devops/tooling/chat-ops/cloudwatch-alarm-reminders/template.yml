@@ -9,8 +9,6 @@ Description: >-
   of them to Slack.
 
 Parameters:
-  SlackMessageRelaySnsTopicArn:
-    Type: String
   CrossAccountCloudWatchAlarmIamRoleName:
     Type: String
   Regions:
@@ -29,7 +27,6 @@ Resources:
       Environment:
         Variables:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
-          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
           CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmIamRoleName
           SEARCH_REGIONS: !Join [",", !Ref Regions]
           SEARCH_ACCOUNTS: !Join [",", !Ref AccountIds]
@@ -52,16 +49,16 @@ Resources:
       MemorySize: 192
       Policies:
         - Statement:
-            - Action: sns:Publish
+            - Action: events:PutEvents
               Effect: Allow
-              Resource: !Ref SlackMessageRelaySnsTopicArn
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
           Version: "2012-10-17"
         - Statement:
             - Action: sts:AssumeRole
               Effect: Allow
               Resource: !Sub arn:aws:iam::*:role/${CrossAccountCloudWatchAlarmIamRoleName}
           Version: "2012-10-17"
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
@@ -71,6 +68,8 @@ Resources:
       Timeout: 60
   CloudWatchAlarmRemindersFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${CloudWatchAlarmRemindersFunction}
       RetentionInDays: 14
