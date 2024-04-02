@@ -14,7 +14,7 @@ import msgFromEventBridgeEvent from './eventbridge.mjs';
 
 const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
-exports.handler = async (event) => {
+export const handler = async (event) => {
   console.log(JSON.stringify(event));
 
   const message = msgFromEventBridgeEvent(event);
