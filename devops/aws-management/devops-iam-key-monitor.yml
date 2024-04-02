@@ -1,10 +1,20 @@
 # devops/aws-management/devops-iam-key-monitor.yml
+# The Lambda function deployed by this stack uses the
+# DevOps-CrossAccountAccessRole role to fetch necessary information from the
+# accounts that are being monitored.
+#
+# Ensure that the DevOps-CrossAccountAccessRole exists in each account prior
+# to launching this stack. See devops-cross-account-access-role.yml for more
+# details. This function expects List* and Read* permissions for several
+# different IAM resources (groups, keys, etc) to be present on
+# DevOps-CrossAccountAccessRole.
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Regularly scans IAM keys in various accounts looking for ones that are old
-  and should be rotated. Sends a Slack message
+  and should be rotated. Sends a Slack message. This stack should only be
+  launched once within the AWS Organization.
 
 Parameters:
   SlackMessageRelayTopicArn:
@@ -159,6 +169,8 @@ Resources:
       Timeout: 8
   MonitorFunctionLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/lambda/${MonitorFunction}
       RetentionInDays: 30
