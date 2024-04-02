@@ -1,0 +1,76 @@
+# devops/aws-managements/organization-cross-account-cfn-custom-resource-role.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Creates an IAM role that's intended to exist in each account within an AWS
+  Organization. This role provides specific, consistent access to various
+  resources and services within all accounts, so that certain actions can be
+  taken by CloudFormation custom resources that are available globally within
+  the organization. By default and convention, the role's name is:
+  DevOps-CrossAccountCfnCustomResourceRole. This template is intended to be
+  launched as part of a service-managed StackSet that automatically deploys to
+  all accounts within an organization. Only needs to be launched once per
+  account, since roles are global within an account.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: e.g. o-a1s2d3f4f5g
+    AllowedPattern: ^(o-[a-z0-9]{4,32})$
+  CrossAccountCfnCustomResourceRoleName:
+    Type: String
+    Default: DevOps-CrossAccountCfnCustomResourceRole
+    Description: >-
+      The name of cross-account access role. The default value is
+      "DevOps-CrossAccountCfnCustomResourceRole", and generally that should be
+      used so that it's predictable by other users and services.
+
+Resources:
+  ResourceTaggingPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudwatch:TagResource
+              - cloudwatch:UntagResource
+
+              - ec2:CreateTags
+              - ec2:DeleteTags
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowCloudWatchAlarmTagging
+        Version: "2012-10-17"
+
+  CrossAccountCfnCustomResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      # Allow any principal within the same AWS Organization to assume this
+      # role
+      # TODO This really should only allow AssumeRole for the roles associated
+      # with custom resource Lambda function handlers. Can't do partial
+      # wildcard matching with Principal ARNs, though. Maybe with a startsWith
+      # condition?
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref OrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+      ManagedPolicyArns:
+        # Include all the policies defined above
+        - !Ref ResourceTaggingPolicy
+      RoleName: !Sub ${CrossAccountCfnCustomResourceRoleName}
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+Outputs:
+  RoleNamePattern:
+    Value: !Ref CrossAccountCfnCustomResourceRole
