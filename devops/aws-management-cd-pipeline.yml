@@ -43,6 +43,8 @@ Parameters:
     Type: String
   DevOpsCloudFormationNotificationsBusArn:
     Type: String
+  DevOpsSlackRelayBusArn:
+    Type: String
   CloudTrailProjectionRegions:
     Description: >-
       A list of regions that will be included in Glue table partitions for
@@ -964,7 +966,7 @@ Resources:
           # pipeline, which creates stacks in all regions in every account in
           # the organization except the management account
           Actions:
-            # CloudWatch Alarms event bus
+            # CloudWatch Alarms event bus rule
             - Name: CloudWatchAlarmsBus
               ActionTypeId:
                 Category: Deploy
@@ -990,7 +992,7 @@ Resources:
               InputArtifacts:
                 - Name: InfrastructureRepoSourceArtifact
               RunOrder: 1
-            # CloudFormation Notifications event bus
+            # CloudFormation Notifications event bus rule
             - Name: CloudFormationNotificationsBus
               ActionTypeId:
                 Category: Deploy
@@ -1007,6 +1009,32 @@ Resources:
                 TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-cfn-bus.yml
                 Parameters: !Sub |-
                   ParameterKey=DevOpsCloudFormationNotificationsBusArn,ParameterValue=${DevOpsCloudFormationNotificationsBusArn}
+                PermissionModel: SERVICE_MANAGED
+                OrganizationsAutoDeployment: EnabledWithStackRetention
+                DeploymentTargets: !Ref OrganizationRootId
+                Regions: !Join [",", !Ref kAllRegions]
+                FailureTolerancePercentage: 10
+                MaxConcurrentPercentage: 100
+              InputArtifacts:
+                - Name: InfrastructureRepoSourceArtifact
+              RunOrder: 1
+            # Slack Message Relay event bus rule
+            - Name: SlackMessageRelayBusRule
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormationStackSet
+                Version: "1"
+              Configuration:
+                StackSetName: org-slack-relay-event-bus-rule
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                Description: >-
+                  Launches a stack in each region in each account in an AWS Organization
+                  to create a rule on the default event bus that forwards Slack messages
+                  to the custom event bus in the DevOps accounts.
+                TemplatePath: InfrastructureRepoSourceArtifact::devops/aws-management/organization-slack-relay-bus-rule.yml
+                Parameters: !Sub |-
+                  ParameterKey=SlackMessageRelayEventBusArn,ParameterValue=${DevOpsSlackRelayBusArn}
                 PermissionModel: SERVICE_MANAGED
                 OrganizationsAutoDeployment: EnabledWithStackRetention
                 DeploymentTargets: !Ref OrganizationRootId
