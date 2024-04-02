@@ -14,8 +14,9 @@ const { WebClient } = require('@slack/web-api');
 
 const web = new WebClient(process.env.SLACK_ACCESS_TOKEN);
 
+// TODO event param should be type SNSEvent|ChatPostMessageArguments
 /**
- * @param {SNSEvent} event
+ * @param {*} event
  * @returns {Promise<void>}
  */
 exports.handler = async (event) => {
@@ -33,5 +34,12 @@ exports.handler = async (event) => {
       msg.channel = '#sandbox2';
       await web.chat.postMessage(msg);
     }
+  } else {
+    // If the event didn't come through SNS, assume that it's a raw Slack
+    // message payload. This is true when messages are sent via the EventBridge
+    // custom bus.
+    console.log(JSON.stringify(event));
+    const msg = event;
+    await web.chat.postMessage(msg);
   }
 };
