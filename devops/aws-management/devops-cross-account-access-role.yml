@@ -7,7 +7,8 @@ Description: >-
   centrally. By default and convention, the role's name is:
   DevOps-CrossAccountAccessRole. This template is intended to be launched as
   part of a service-managed StackSet that automatically deploys to all accounts
-  within an organization.
+  within an organization. Only needs to be launched once per account, since
+  roles are global within an account.
 
 Parameters:
   OrganizationId:
@@ -22,6 +23,27 @@ Parameters:
       "DevOps-CrossAccountAccessRole", and generally that should be used so
       that it's predictable by other users and services.
 
+# Creates a role with a known name, which will exist in all accounts within
+# the AWS Organization. This role can also be assumed by any other role within
+# the organization.
+#
+# Since we know the role will exist and can be assumed, we can use this role to
+# perform some common tasks against all accounts within the organization,
+# regardless of where those tasks are being performed or which IAM role is
+# otherwise being used to perform them. (I.e., a Lambda function in any account,
+# with any execution role, can assume this role and perform one of the allowed
+# IAM actions.)
+#
+# IMPORTANT !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#
+# The permissions given to this role through the actions and resources listed
+# in the following IAM policies should only include EXTREMELY safe permissions.
+# This role should never be used for CRUD operations of actual resources. It is
+# intended for things like read-only Get and List operations on some resource
+# types, or very safe maintenance tasks, like creating a CloudFront
+# invalidation.
+#
+# New permissions should be added to this role very deliberately andjudiciously.
 Resources:
   CodePipelinePolicy:
     Type: AWS::IAM::ManagedPolicy

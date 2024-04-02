@@ -1,8 +1,29 @@
 # devops/aws-management/organization-alarms-bus.yml
+# This stack creates an EventBridge rule. It does **not** create an EventBridge
+# event bus.
+#
+# The rule is expected to exist on *all* default event buses within the AWS
+# Organization. Event buses are regional, thus this stack is intended to be
+# launched once for every region in every account within the organization.
+#
+# Not all regions support cross-region EventBridge rules, but as of 2024-04 all
+# regions that we use do.
+#
+# This rule SHOULD NOT be added to any custom event buses we create; only
+# default event buses.
+#
+# The rule will forward all CloudWatch Alarm State Change events that reach the
+# default bus to a *single* custom event bus in us-east-2 in the DevOps
+# account. These events will often be sent cross-region and cross-account. All
+# CloudWatch Alarms events must end up at that custom bus to be handled
+# correctly.
+#
+# The definition for that bus can be found in
+# devops/tooling/chat-ops/cloudwatch-alarms/template.yml -> CloudWatchAlarmsEventBus
 
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Creates a EventBridge rule that forwards all CloudWatch Alarms state change
+  Creates an EventBridge rule that forwards all CloudWatch Alarms state change
   events to the DevOps alarms bus. The DevOps event bus must be in a region
   that supports cross-region EventBridge rules.
 
