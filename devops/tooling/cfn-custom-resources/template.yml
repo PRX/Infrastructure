@@ -19,21 +19,27 @@ Resources:
             Principal:
               Service: lambda.amazonaws.com
         Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyDocument:
             Statement:
-              - Action:
-                  - cloudwatch:TagResource
-                  - cloudwatch:UntagResource
+              - Action: sts:AssumeRole
                 Effect: Allow
-                Resource: "*"
+                Resource: arn:aws:iam::*:role/DevOps-CrossAccountCfnCustomResourceRole
+                Sid: AllowCrossAccountRoleAssumption
             Version: "2012-10-17"
-          PolicyName: SnsPolicy
+          PolicyName: ResourceAccess
   CloudWatchAlarmTaggerFunction:
     Type: AWS::Lambda::Function
     Properties:
       Architectures: [arm64]
       Code:
+        # TODO This doesn't currently work because this function always runs in
+        # some region in the dev-ops account, and Lambda invocation role won't
+        # have any access to CloudWatch Alarms in other accounts. It will try
+        # to (un)tag them, but fail. There will need to be a role that it can
+        # assume in every account with permission to
         ZipFile: |
           const response = require('cfn-response');
           const { ConfiguredRetryStrategy } = require('@aws-sdk/util-retry');
