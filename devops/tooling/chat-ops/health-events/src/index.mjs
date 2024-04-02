@@ -1,8 +1,9 @@
-import { SNS, PublishCommand } from '@aws-sdk/client-sns';
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from '@aws-sdk/client-eventbridge';
 
-const sns = new SNS({
-  region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
-});
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
 const GREEN = '#2eb886';
 const RED = '#a30200';
@@ -45,37 +46,42 @@ export const handler = async (event) => {
   if (scope === 'PUBLIC' && category === 'issue') {
     const color = status === 'closed' ? GREEN : RED;
 
-    await sns.send(
-      new PublishCommand({
-        TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-        Message: JSON.stringify({
-          username: 'AWS Health Events',
-          icon_emoji: ':ops-aws-health:',
-          channel: 'G2QHC2N7K', // #ops-warn
-          attachments: [
-            {
-              color,
-              fallback: event.detail.eventTypeCode,
-              blocks: [
+    await eventbridge.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'org.prx.health-events',
+            DetailType: 'Slack Message Relay Message Payload',
+            Detail: JSON.stringify({
+              username: 'AWS Health Events',
+              icon_emoji: ':ops-aws-health:',
+              channel: 'G2QHC2N7K', // #ops-warn
+              attachments: [
                 {
-                  type: 'section',
-                  text: {
-                    type: 'mrkdwn',
-                    text: [
-                      `*Service:* ${service}`,
-                      `*Region:* ${region}`,
-                      `*Event Code:* ${code}`,
-                      '\n',
-                      `*Started:* ${timeSince(new Date(startTs))} ago`,
-                      '\n',
-                      description,
-                    ].join('\n'),
-                  },
+                  color,
+                  fallback: event.detail.eventTypeCode,
+                  blocks: [
+                    {
+                      type: 'section',
+                      text: {
+                        type: 'mrkdwn',
+                        text: [
+                          `*Service:* ${service}`,
+                          `*Region:* ${region}`,
+                          `*Event Code:* ${code}`,
+                          '\n',
+                          `*Started:* ${timeSince(new Date(startTs))} ago`,
+                          '\n',
+                          description,
+                        ].join('\n'),
+                      },
+                    },
+                  ],
                 },
               ],
-            },
-          ],
-        }),
+            }),
+          },
+        ],
       }),
     );
   }

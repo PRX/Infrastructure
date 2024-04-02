@@ -6,10 +6,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: >-
   Receives EventBridge events for AWS Health Events and sends them to Slack
 
-Parameters:
-  SlackMessageRelaySnsTopicArn:
-    Type: String
-
 Resources:
   HealthEventsFunction:
     Type: AWS::Serverless::Function
@@ -20,7 +16,6 @@ Resources:
       Environment:
         Variables:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
-          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         PublicHealthEvent:
           Properties:
@@ -34,11 +29,11 @@ Resources:
       MemorySize: 192
       Policies:
         - Statement:
-            - Action: sns:Publish
+            - Action: events:PutEvents
               Effect: Allow
-              Resource: !Ref SlackMessageRelaySnsTopicArn
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
           Version: "2012-10-17"
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
