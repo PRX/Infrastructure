@@ -1,11 +1,11 @@
-/** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('./index.mjs').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').GetMetricDataOutput} GetMetricDataOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').CloudWatch} CloudWatch */
 
-const { ScanBy } = require('@aws-sdk/client-cloudwatch');
-const urls = require('./urls');
+import { ScanBy } from '@aws-sdk/client-cloudwatch';
+import { metricsConsoleUrl, logsConsoleUrl } from './urls.mjs';
 
 /**
  * Returns the number of decimal places in a number
@@ -156,12 +156,12 @@ async function basics(event, desc, history) {
   line = line.concat(duration(event));
 
   // Can always generate the CloudWatch Metrics link
-  const metricsUrl = urls.metricsConsole(event, desc, history);
+  const metricsUrl = metricsConsoleUrl(event, desc, history);
   line = line.concat(`*CloudWatch:* <${metricsUrl}|Metrics>`);
 
   // Not all alarms can be associated with logs, so only add when there
   // is a URL to use
-  const logsUrl = await urls.logsConsole(event, desc);
+  const logsUrl = await logsConsoleUrl(event, desc);
   if (logsUrl) {
     line = line.concat(` • <${logsUrl}|Logs>`);
   }
@@ -264,18 +264,16 @@ async function datapoints(event, desc, cloudWatchClient) {
   return [];
 }
 
-module.exports = {
-  /**
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {DescribeAlarmsOutput} desc
-   * @param {DescribeAlarmHistoryOutput} history
-   * @param {CloudWatch} cloudWatchClient
-   * @returns {Promise<String[]>}
-   */
-  async detailLines(event, desc, history, cloudWatchClient) {
-    return [
-      ...(await basics(event, desc, history)),
-      ...(await datapoints(event, desc, cloudWatchClient)),
-    ];
-  },
-};
+/**
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
+ * @param {CloudWatch} cloudWatchClient
+ * @returns {Promise<String[]>}
+ */
+export async function detailLines(event, desc, history, cloudWatchClient) {
+  return [
+    ...(await basics(event, desc, history)),
+    ...(await datapoints(event, desc, cloudWatchClient)),
+  ];
+}

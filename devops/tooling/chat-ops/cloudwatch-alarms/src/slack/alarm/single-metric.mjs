@@ -1,10 +1,10 @@
-/** @typedef {import('../index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('../index.mjs').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').MetricAlarm} MetricAlarm */
 
-const operators = require('../operators');
-const urls = require('../urls');
+import { comparison } from '../operators.mjs';
+import { metricsConsoleUrl, logsConsoleUrl } from '../urls.mjs';
 
 /**
  * Returns the number of decimal places in a number
@@ -60,11 +60,11 @@ async function started(event, desc, history) {
         durationUnit = 'minutes';
       }
 
-      const metricsUrl = urls.metricsConsole(event, desc, history);
+      const metricsUrl = metricsConsoleUrl(event, desc, history);
 
       let console = `*CloudWatch:* <${metricsUrl}| Metrics>`;
 
-      const logsUrl = await urls.logsConsole(event, desc);
+      const logsUrl = await logsConsoleUrl(event, desc);
       if (logsUrl) {
         console = console.concat(` • <${logsUrl}|Logs>`);
       }
@@ -232,9 +232,7 @@ function cause(event, desc, history) {
       `of \`${alarm.MetricName}\` metric was`,
 
       // E.g., ≥ 150
-      `\`${operators.comparison(alarm.ComparisonOperator)} ${
-        alarm.Threshold
-      }\``,
+      `\`${comparison(alarm.ComparisonOperator)} ${alarm.Threshold}\``,
 
       // A human-readable summary of the interval evaluation
       evaluationSummary(
@@ -249,19 +247,17 @@ function cause(event, desc, history) {
   ];
 }
 
-module.exports = {
-  /**
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {DescribeAlarmsOutput} desc
-   * @param {DescribeAlarmHistoryOutput} history
-   * @returns {Promise<String[]>}
-   */
-  async detailLines(event, desc, history) {
-    return [
-      ...cause(event, desc, history),
-      ...(await started(event, desc, history)),
-      ...datapoints(event, desc),
-      ...last24Hours(history),
-    ];
-  },
-};
+/**
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
+ * @returns {Promise<String[]>}
+ */
+export async function detailLines(event, desc, history) {
+  return [
+    ...cause(event, desc, history),
+    ...(await started(event, desc, history)),
+    ...datapoints(event, desc),
+    ...last24Hours(history),
+  ];
+}

@@ -53,21 +53,25 @@
 
 /** @typedef { import('aws-lambda').EventBridgeEvent<'CloudWatch Alarm State Change', EventBridgeCloudWatchAlarmsEventDetail> } EventBridgeCloudWatchAlarmsEvent */
 
-const { SNS } = require('@aws-sdk/client-sns');
-const color = require('./color');
-const builder = require('./builder');
-const channels = require('./channels');
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from '@aws-sdk/client-eventbridge';
 
-const sns = new SNS({
-  apiVersion: '2010-03-31',
-  region: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN.split(':')[3],
-});
+import { value as colorValue } from './color.mjs';
+import { channel } from './channels.mjs';
+import {
+  blocks as buildBlocks,
+  fallback as buildFallback,
+} from './builder.mjs';
+
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
 /**
  * @param {EventBridgeCloudWatchAlarmsEvent} event
  * @returns {Promise<void>}
  */
-exports.handler = async (event) => {
+export const handler = async (event) => {
   try {
     console.log(JSON.stringify(event));
 
@@ -83,41 +87,55 @@ exports.handler = async (event) => {
       return;
     }
 
-    const blocks = await builder.blocks(event);
-    const fallback = await builder.fallback(event);
+    const blocks = await buildBlocks(event);
+    const fallback = await buildFallback(event);
 
-    await sns.publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-      Message: JSON.stringify({
-        username: 'Amazon CloudWatch Alarms',
-        icon_emoji: ':ops-cloudwatch-alarm:',
-        channel: channels.channel(event),
-        attachments: [
+    await eventbridge.send(
+      new PutEventsCommand({
+        Entries: [
           {
-            color: color.value(event),
-            fallback,
-            blocks,
+            Source: 'org.prx.cloudwatch-alarms',
+            DetailType: 'Slack Message Relay Message Payload',
+            Detail: JSON.stringify({
+              username: 'Amazon CloudWatch Alarms',
+              icon_emoji: ':ops-cloudwatch-alarm:',
+              channel: channel(event),
+              attachments: [
+                {
+                  color: colorValue(event),
+                  fallback,
+                  blocks,
+                },
+              ],
+            }),
           },
         ],
       }),
-    });
+    );
   } catch (error) {
     console.log(error);
 
-    await sns.publish({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN,
-      Message: JSON.stringify({
-        username: 'Amazon CloudWatch Alarms',
-        icon_emoji: ':ops-cloudwatch-alarm:',
-        channel: 'G2QHC2N7K', // #ops-warn
-        text: [
-          'The following CloudWatch alarm event was not handled successfully:',
-          `\n\n*Event ID:* \`${event.id}\`\n\n`,
-          '```',
-          JSON.stringify(event),
-          '```',
-        ].join(''),
+    await eventbridge.send(
+      new PutEventsCommand({
+        Entries: [
+          {
+            Source: 'org.prx.cloudwatch-alarms',
+            DetailType: 'Slack Message Relay Message Payload',
+            Detail: JSON.stringify({
+              username: 'Amazon CloudWatch Alarms',
+              icon_emoji: ':ops-cloudwatch-alarm:',
+              channel: 'G2QHC2N7K', // #ops-warn
+              text: [
+                'The following CloudWatch alarm event was not handled successfully:',
+                `\n\n*Event ID:* \`${event.id}\`\n\n`,
+                '```',
+                JSON.stringify(event),
+                '```',
+              ].join(''),
+            }),
+          },
+        ],
       }),
-    });
+    );
   }
 };

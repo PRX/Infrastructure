@@ -11,8 +11,6 @@ Parameters:
   OrganizationId:
     Type: String
     AllowedPattern: ^$|^(o-[a-z0-9]{4,32})$
-  SlackMessageRelaySnsTopicArn:
-    Type: String
   FatalSmsContactListSnsTopicArn:
     Type: String
   CrossAccountCloudWatchAlarmIamRoleName:
@@ -49,7 +47,6 @@ Resources:
       Environment:
         Variables:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
-          SLACK_MESSAGE_RELAY_SNS_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
           CROSS_ACCOUNT_CLOUDWATCH_ALARM_IAM_ROLE_NAME: !Ref CrossAccountCloudWatchAlarmIamRoleName
       Events:
         Alarms:
@@ -65,16 +62,16 @@ Resources:
       MemorySize: 192
       Policies:
         - Statement:
-            - Action: sns:Publish
+            - Action: events:PutEvents
               Effect: Allow
-              Resource: !Ref SlackMessageRelaySnsTopicArn
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
           Version: "2012-10-17"
         - Statement:
             - Action: sts:AssumeRole
               Effect: Allow
               Resource: !Sub arn:aws:iam::*:role/${CrossAccountCloudWatchAlarmIamRoleName}
           Version: "2012-10-17"
-      Runtime: nodejs18.x
+      Runtime: nodejs20.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName

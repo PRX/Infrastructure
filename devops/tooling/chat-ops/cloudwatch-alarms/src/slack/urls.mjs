@@ -1,9 +1,9 @@
-/** @typedef {import('./index').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
+/** @typedef {import('./index.mjs').EventBridgeCloudWatchAlarmsEvent} EventBridgeCloudWatchAlarmsEvent */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmsOutput} DescribeAlarmsOutput */
 /** @typedef {import('@aws-sdk/client-cloudwatch').DescribeAlarmHistoryOutput} DescribeAlarmHistoryOutput */
 
-const operators = require('./operators');
-const logGroups = require('./log-groups');
+import { ascii } from './operators.mjs';
+import { logGroupName } from './log-groups.mjs';
 
 /**
  * Serializes the input to a URL string component compatible with the
@@ -146,7 +146,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
       annotations: {
         horizontal: [
           {
-            label: `${alarm.MetricName} ${operators.ascii(
+            label: `${alarm.MetricName} ${ascii(
               alarm.ComparisonOperator,
             )} ${alarm.Threshold} for ${m} datapoints within ${n} periods`,
             value: alarm.Threshold,
@@ -179,7 +179,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
  * @returns {Promise<String>}
  */
 async function logsInsightsConsole(event, desc) {
-  const logGroup = await logGroups.logGroup(event, desc);
+  const logGroup = await logGroupName(event, desc);
 
   if (!logGroup) {
     return;
@@ -257,35 +257,35 @@ async function logsInsightsConsole(event, desc) {
   ].join('');
 }
 
-module.exports = {
-  /**
-   * Returns a URL to CloudWatch Alarms console for the alarm that triggered
-   * the event.
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @returns {String}
-   */
-  alarmConsole(event) {
-    const name = event.detail.alarmName;
-    const encoded = encodeURI(name.replace(/\ /g, '+')).replace(/%/g, '$');
-    return `https://console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
-  },
-  /**
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {DescribeAlarmsOutput} desc
-   * @param {DescribeAlarmHistoryOutput} history
-   * @returns {String}
-   */
-  metricsConsole(event, desc, history) {
-    if (event.detail.configuration.metrics.length === 1) {
-      return singleMetricAlarmMetricsConsole(event, desc, history);
-    }
-  },
-  /**
-   * @param {EventBridgeCloudWatchAlarmsEvent} event
-   * @param {DescribeAlarmsOutput} desc
-   * @returns {Promise<String>}
-   */
-  async logsConsole(event, desc) {
-    return await logsInsightsConsole(event, desc);
-  },
-};
+/**
+ * Returns a URL to CloudWatch Alarms console for the alarm that triggered
+ * the event.
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @returns {String}
+ */
+export function alarmConsoleUrl(event) {
+  const name = event.detail.alarmName;
+  const encoded = encodeURI(name.replace(/\ /g, '+')).replace(/%/g, '$');
+  return `https://console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
+}
+
+/**
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {DescribeAlarmsOutput} desc
+ * @param {DescribeAlarmHistoryOutput} history
+ * @returns {String}
+ */
+export function metricsConsoleUrl(event, desc, history) {
+  if (event.detail.configuration.metrics.length === 1) {
+    return singleMetricAlarmMetricsConsole(event, desc, history);
+  }
+}
+
+/**
+ * @param {EventBridgeCloudWatchAlarmsEvent} event
+ * @param {DescribeAlarmsOutput} desc
+ * @returns {Promise<String>}
+ */
+export async function logsConsoleUrl(event, desc) {
+  return await logsInsightsConsole(event, desc);
+}
