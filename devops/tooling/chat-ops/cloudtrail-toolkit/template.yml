@@ -1,0 +1,38 @@
+# devops/tooling/chat-ops/cloudtrail/template.yml
+# This template is continuously deployed by the DevOps CD pipeline
+#
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >-
+  Creates an custom EventBridge event bus to handle some CloudTrail activity
+  from all accounts and all regions and send notification to Slack. Event rules
+  deployed to those regions/accounts look for specific activity; not all
+  CloudTrail activity is forwarded to this bus.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    AllowedPattern: ^$|^(o-[a-z0-9]{4,32})$
+
+Resources:
+  CloudTrailEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Ref AWS::StackName
+  CloudTrailEventBusPolicy:
+    # Allow PutEvents from anywhere within the organization
+    # TODO Should have a Condition to limit this to events sent by events.amazonaws.com
+    # since it's only intended to get events from other event busses, not from
+    # any arbitrary sender
+    Type: AWS::Events::EventBusPolicy
+    Properties:
+      EventBusName: !Ref CloudTrailEventBus
+      StatementId: AllowOrganizationPutEvents
+      Statement:
+        Action: events:PutEvents
+        Condition:
+          StringEquals:
+            aws:PrincipalOrgID: !Ref OrganizationId
+        Effect: Allow
+        Principal: "*"
+        Resource: !GetAtt CloudTrailEventBus.Arn
