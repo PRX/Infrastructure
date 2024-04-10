@@ -27,6 +27,9 @@ Parameters:
   kCloudFormationNotificationsStackName:
     Type: String
     Default: prx-devops-cloudformation-notifications
+  kCloudTrailToolkitStackName:
+    Type: String
+    Default: cloudtrail-toolkit
   kCloudFormationCustomResourceLambdasStacksetName:
     Type: String
     Default: cfn-custom-resources-all-regions
@@ -258,6 +261,9 @@ Resources:
 
                 - sam build --parallel --template-file ./devops/tooling/chat-ops/health-events/template.yml
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kHealthEventsStackName}
+
+                - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudtrail-toolkit/template.yml
+                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudTrailToolkitStackName}
           artifacts:
             files:
               - ${kCloudFormationMacroFunctionsStackName}
@@ -267,6 +273,7 @@ Resources:
               - ${kSlackAppStackName}
               - ${kStatuspageStackName}
               - ${kHealthEventsStackName}
+              - ${kCloudTrailToolkitStackName}
             name: SamBuildArtifact
         Type: CODEPIPELINE
       Tags:
@@ -403,6 +410,7 @@ Resources:
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationNotificationsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kStatuspageStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kHealthEventsStackName}/*
+                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudTrailToolkitStackName}/*
                   # StackSets
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationCustomResourceLambdasStacksetName}:*
             Version: "2012-10-17"
@@ -612,6 +620,25 @@ Resources:
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudFormationNotificationsStackName
                 TemplatePath: !Sub SamBuildArtifact::${kCloudFormationNotificationsStackName}
+              InputArtifacts:
+                - Name: SamBuildArtifact
+              RunOrder: 2
+            - Name: CloudTrail_Toolkit
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
+                ParameterOverrides: !Sub |
+                  {
+                    "OrganizationId": "${OrganizationId}"
+                  }
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                StackName: !Ref kCloudTrailToolkitStackName
+                TemplatePath: !Sub SamBuildArtifact::${kCloudTrailToolkitStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 2
