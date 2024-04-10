@@ -36,3 +36,77 @@ Resources:
         Effect: Allow
         Principal: "*"
         Resource: !GetAtt CloudTrailEventBus.Arn
+
+  RootActivityMonitorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/root-activity-monitor
+      Description: >-
+        Sends messages to Slack in response to root account activity found in
+        CloudTrail
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+      Events:
+        PublicHealthEvent:
+          Properties:
+            Pattern:
+              detail-type:
+                - AWS Health Event
+              source:
+                - aws.health
+          Type: EventBridgeRule
+      Handler: index.handler
+      MemorySize: 192
+      Policies:
+        - Statement:
+            - Action: events:PutEvents
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+          Version: "2012-10-17"
+      Runtime: nodejs20.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:ops:environment: Production
+        prx:dev:application: Security
+      Timeout: 20
+  RootActivityMonitorLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${RootActivityMonitorFunction}
+      RetentionInDays: 90
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Security }
+  RootActivityMonitorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [CloudTrail] Root Activity Monitor <prod> FUNCTION ERRORS (${AWS::StackName})
+      AlarmDescription: >-
+        The Lambda function that relays CloudTrail root account activity to
+        Slack is experiencing errors, which means there could be security
+        events that need to be investigated.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RootActivityMonitorFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: Security }
+      Threshold: 0
+      TreatMissingData: notBreaching
