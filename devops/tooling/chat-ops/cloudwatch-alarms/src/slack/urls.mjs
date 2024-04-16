@@ -131,7 +131,7 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
   const n = alarm.EvaluationPeriods;
   const stat = alarm.Statistic ? alarm.Statistic : alarm.ExtendedStatistic;
 
-  return [
+  const consoleUrl = [
     'https://console.aws.amazon.com/cloudwatch/home?',
     `region=${event.region}`,
     '#metricsV2:graph=',
@@ -170,6 +170,10 @@ function singleMetricAlarmMetricsConsole(event, desc, history) {
       ],
     }),
   ].join('');
+
+  const deepConsoleUrl = ssoDeepLink(event.account, consoleUrl);
+
+  return deepConsoleUrl;
 }
 
 /**
@@ -249,12 +253,17 @@ async function logsInsightsConsole(event, desc) {
 
   // Everything after #logsV2:logs-insights is escaped, and the value of
   // `queryDetail` is escaped again
-  return [
+  const consoleUrl = [
     `https://${event.region}.console.aws.amazon.com/cloudwatch/home?`,
     `region=${event.region}`,
     '#logsV2:logs-insights',
     encodedQuery,
   ].join('');
+
+  // Escape the entire URL and put it inside an SSO shortcut deep link
+  const deepConsoleUrl = ssoDeepLink(event.account, consoleUrl);
+
+  return deepConsoleUrl;
 }
 
 /**
@@ -266,7 +275,9 @@ async function logsInsightsConsole(event, desc) {
 export function alarmConsoleUrl(event) {
   const name = event.detail.alarmName;
   const encoded = encodeURI(name.replace(/\ /g, '+')).replace(/%/g, '$');
-  return `https://console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
+  const consoleUrl = `https://${event.region}.console.aws.amazon.com/cloudwatch/home?region=${event.region}#alarmsV2:alarm/${encoded}`;
+  const deepConsoleUrl = ssoDeepLink(event.account, consoleUrl);
+  return deepConsoleUrl;
 }
 
 /**
@@ -288,4 +299,17 @@ export function metricsConsoleUrl(event, desc, history) {
  */
 export async function logsConsoleUrl(event, desc) {
   return await logsInsightsConsole(event, desc);
+}
+
+/**
+ * Creates a deep link to an AWS Console URL in a specific account, using an
+ * IAM Identity Center access role
+ * @param {String} accountId
+ * @param {String} url
+ * @returns
+ */
+export function ssoDeepLink(accountId, url) {
+  const deepLinkRoleName = 'ViewOnlyAccess';
+  const urlEncodedStackUrl = encodeURIComponent(url);
+  return `https://d-906713e952.awsapps.com/start/#/console?account_id=${accountId}&role_name=${deepLinkRoleName}&destination=${urlEncodedStackUrl}`;
 }
