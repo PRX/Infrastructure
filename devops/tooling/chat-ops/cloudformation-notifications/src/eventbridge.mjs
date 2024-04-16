@@ -90,12 +90,16 @@ export default function message(event) {
   const physicalResourceId = event.detail['physical-resource-id'];
 
   const region = event.region;
-  const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home?region=${region}#/stack/stackinfo?stackId=${stackId}`;
+  const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home?region=${region}#/stacks/stackinfo?stackId=${stackId}`;
+
+  const deepLinkRoleName = 'ViewOnlyAccess';
+  const urlEncodedStackUrl = encodeURIComponent(stackUrl);
+  const deepStackUrl = `https://d-906713e952.awsapps.com/start/#/console?account_id=${event.account}&role_name=${deepLinkRoleName}&destination=${urlEncodedStackUrl}`;
 
   const regionNickname = regions(region);
   const accountNickname = accounts(event.account);
   const header = [
-    `*<${stackUrl}|${accountNickname} - ${regionNickname} » ${stackName}>*`,
+    `*<${deepStackUrl}|${accountNickname} - ${regionNickname} » ${stackName}>*`,
     resourceType
       ? `Resource Status Change: *${status}* for \`${resourceType}\``
       : `Stack Status Change: *${status}*`,
