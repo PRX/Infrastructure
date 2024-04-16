@@ -90,7 +90,7 @@ export default function message(event) {
   const physicalResourceId = event.detail['physical-resource-id'];
 
   const region = event.region;
-  const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home#/stack/detail?stackId=${stackId}`;
+  const stackUrl = `https://${region}.console.aws.amazon.com/cloudformation/home?region=${region}#/stack/stackinfo?stackId=${stackId}`;
 
   const regionNickname = regions(region);
   const accountNickname = accounts(event.account);
