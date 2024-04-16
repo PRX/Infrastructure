@@ -1,0 +1,219 @@
+# stacks/apps/dovetail-clickhouse.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an EC2 server running Clickhouse database.
+
+Parameters:
+  AuthorizedKeys: { Type: CommaDelimitedList }
+  EnvironmentType: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  RegionMode: { Type: String }
+  RootStackId: { Type: String }
+  RootStackName: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: IsPrimaryRegion
+    Properties:
+      Roles:
+        - !Ref InstanceRole
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Condition: IsPrimaryRegion
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: IsPrimaryRegion
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} Clickhouse inbound traffic
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 9000
+          ToPort: 9000
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 9004
+          ToPort: 9004
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: tcp
+          FromPort: 9005
+          ToPort: 9005
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}-clickhouse_sg" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+      VpcId: !Ref VpcId
+
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Condition: IsPrimaryRegion
+    Properties:
+      KeyName: !Sub ${RootStackName}-clickhouse-2024-04-16
+      KeyType: ed25519
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+
+  ClickhouseServer:
+    Type: AWS::EC2::Instance
+    Condition: IsPrimaryRegion
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          commands:
+            01_add_authorized_keys:
+              # For more information, see:
+              # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  echo "Adding developer public keys to authorized_keys"
+                  truncate -s 0 /home/ec2-user/.ssh/authorized_keys
+                  echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
+                - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
+          files:
+            /etc/cfn/cfn-hup.conf:
+              # Create a configuration file for cfn-hup
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-config-file
+              content: !Sub |
+                [main]
+                stack=${AWS::StackId}
+                region=${AWS::Region}
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              # Define the actions to run when the resource metadata (found at
+              # the given path) changes during a stack update.
+              # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-hup.html#cfn-hup-hook-file
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.ClickhouseServer.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer
+                runas=root
+          packages:
+            yum:
+              jq: []
+              bind-utils: []
+          services:
+            sysvinit:
+              cfn-hup:
+                # Starts the cfn-hup service, and restarts the service if
+                # cfn-init modifies the specified configuration files
+                enabled: "true"
+                ensureRunning: "true"
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp2
+            VolumeSize: 100
+      CreditSpecification:
+        CPUCredits: unlimited
+      DisableApiTermination: false
+      IamInstanceProfile: !Ref InstanceProfile
+      ImageId: ami-05adadbbe8cf9fb48
+      InstanceInitiatedShutdownBehavior: stop
+      InstanceType: !If [IsProduction, t4g.medium, t4g.medium]
+      KeyName: !Ref KeyPair
+      Monitoring: false
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: false
+          DeleteOnTermination: true
+          DeviceIndex: 0
+          GroupSet:
+            - !GetAtt SecurityGroup.GroupId
+          SubnetId: !Ref VpcPrivateSubnet1Id
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}-clickhouse_server" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+      UserData:
+        # User data runs commands on EC2 instances when they are launched. To
+        # support configuration updates on running EC2 instance, the user
+        # data should primarily be used to run cfn-init. Any further launch
+        # scripts or tasks should be defined in the resource metadata that
+        # cfn-init loads, and that cfn-hup watches for changes.
+        # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/user-data.html
+        # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/bootstrap_container_instance.html#multi-part_user_data
+        # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-amazon-amis
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            # The logs for this are found in: /var/log/cloud-init-output.log
+            # Except the cfn-signal seems to get logged to /var/log/cfn-init.log
+            # along with the rest of the cfn-init logs
+            #
+            # Despite what the docs say, the CloudFormation helper scripts are not preinstalled, so we install them
+            # with aws-cfn-bootstrap. aws-cli fails to install as part of the cfn-init packages, so it's installed
+            # here, even though they both use yum. Other packages should be installed through cfn-init.
+            yum install -y aws-cfn-bootstrap aws-cli
+
+            # --resource is the logical ID of the resource in a CloudFormation stack (generally a stack launched from
+            # this template) that includes AWS::CloudFormation::Init metadata. By convention, this is the same
+            # resource where this user data script (what you're reading right now) is defined.
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
+            # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer
+
+Outputs:
+  PrivateDnsName:
+    Description: The Private DNS name of the clickhouse server
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer.PrivateDnsName, ""]
+  PrivateIp:
+    Description: The Private IP address of the clickhouse server
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer.PrivateIp, ""]
