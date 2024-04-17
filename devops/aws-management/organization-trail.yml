@@ -216,18 +216,19 @@ Resources:
       Name: Organization Trail error codes
       QueryString: !Sub |
         SELECT
-          eventTime,
-          account AS "log account",
-          recipientAccountId,
-          userIdentity.accountId AS "user account",
-          awsRegion,
-          eventType,
-          eventName,
-          eventSource,
-          userIdentity.type AS "user type",
-          userIdentity.arn AS "user ARN",
-          errorCode,
-          errorMessage
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By",
+          errorCode AS "Error Code",
+          errorMessage AS "Error Message"
         FROM "${GlueDatabase}"."${CommonTrailTable}"
         WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
           AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
@@ -245,19 +246,20 @@ Resources:
       Name: Organization Trail basic scan
       QueryString: !Sub |
         SELECT
-          eventTime,
-          account AS "log account",
-          recipientAccountId,
-          userIdentity.accountId AS "user account",
-          awsRegion,
-          eventType,
-          eventName,
-          eventSource,
-          userIdentity.type AS "user type",
-          userIdentity.arn AS "user ARN"
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By"
         FROM "${GlueDatabase}"."${CommonTrailTable}"
         WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
           AND "account" = '000000000000'
         ORDER BY eventTime ASC
   WriteOperationScanQuery:
@@ -269,19 +271,20 @@ Resources:
       Name: Organization Trail write operations scan
       QueryString: !Sub |
         SELECT
-          eventTime,
-          account AS "log account",
-          recipientAccountId,
-          userIdentity.accountId AS "user account",
-          awsRegion,
-          eventType,
-          eventName,
-          eventSource,
-          userIdentity.type AS "user type",
-          userIdentity.arn AS "user ARN"
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By"
         FROM "${GlueDatabase}"."${CommonTrailTable}"
         WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
           AND "readOnly" = 'false'
           AND "account" = '000000000000'
           -- Exclude some common events
@@ -298,18 +301,23 @@ Resources:
       Name: Organization Trail error code report
       QueryString: !Sub |
         SELECT
-          count(*) AS totalEvents,
-          errorCode,
+          count(*) AS "Event Count",
+          errorCode AS "Error Code",
+          recipientAccountId AS "Recipient Account",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.arn AS "Identity ARN"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+          AND errorCode <> ''
+        GROUP BY
           recipientAccountId,
           eventType,
           eventName,
           eventSource,
-          userIdentity.type AS "user type",
-          userIdentity.arn AS "user ARN"
-        FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
-          AND "account" = '000000000000'
-          AND errorCode <> ''
-        GROUP BY recipientAccountId, eventType, eventName, eventSource, userIdentity.type, userIdentity.arn, errorCode
-        ORDER BY totalEvents DESC
+          userIdentity.arn,
+          errorCode
+        ORDER BY "Event Count" DESC
