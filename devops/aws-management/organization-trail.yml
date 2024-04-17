@@ -14,7 +14,6 @@
 # AWSLogs/o-aabbccdd1122/1234567890/CloudTrail/ap-northeast-1/2024/04/01/048723829744_CloudTrail_ap-northeast-1_20240401T0105Z_bOL7464b6HTXPi7x.json.gz
 
 AWSTemplateFormatVersion: "2010-09-09"
-Transform: AWS::Serverless-2016-10-31
 Description: Creates a CloudTrail Organization trail
 
 Parameters:
@@ -217,18 +216,98 @@ Resources:
       Name: Organization Trail error codes
       QueryString: !Sub |
         SELECT
-          awsRegion,
-          recipientAccountId,
           eventTime,
-          eventSource,
+          account AS "log account",
+          recipientAccountId,
+          userIdentity.accountId AS "user account",
+          awsRegion,
           eventType,
           eventName,
-          userIdentity.arn AS "User ARN",
+          eventSource,
+          userIdentity.type AS "user type",
+          userIdentity.arn AS "user ARN",
           errorCode,
           errorMessage
         FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" > date_format(current_date - interval '1' day, '%Y/%m/%d')
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
           AND errorCode <> ''
           AND errorMessage <> 'No updates are to be performed.'
           AND errorMessage <> 'The specified log group already exists'
         ORDER BY eventTime DESC
+  FullScanQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Scans all recent events for a given account
+      Name: Organization Trail basic scan
+      QueryString: !Sub |
+        SELECT
+          eventTime,
+          account AS "log account",
+          recipientAccountId,
+          userIdentity.accountId AS "user account",
+          awsRegion,
+          eventType,
+          eventName,
+          eventSource,
+          userIdentity.type AS "user type"
+          userIdentity.arn AS "user ARN",
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+        ORDER BY eventTime ASC
+  WriteOperationScanQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Scans for write operations (i.e., exclude read-only) for a given account
+      Name: Organization Trail write operations scan
+      QueryString: !Sub |
+        SELECT
+          eventTime,
+          account AS "log account",
+          recipientAccountId,
+          userIdentity.accountId AS "user account",
+          awsRegion,
+          eventType,
+          eventName,
+          eventSource,
+          userIdentity.type AS "user type"
+          userIdentity.arn AS "user ARN",
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "readOnly" = 'false'
+          AND "account" = '000000000000'
+          -- Filter some common events
+          -- AND eventName NOT IN ('CreateLogStream')
+        ORDER BY eventTime ASC
+  ErrorReportQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Groups events by errorCode to find high volume errors
+      Name: Organization Trail error code report
+      QueryString: !Sub |
+        SELECT
+          count(*) AS totalEvents,
+          errorCode,
+          recipientAccountId,
+          eventType,
+          eventName,
+          eventSource,
+          userIdentity.type AS "user type",
+          userIdentity.arn AS "user ARN"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+          AND errorCode <> ''
+        GROUP BY recipientAccountId, eventType, eventName, eventSource, userIdentity.type, userIdentity.arn, errorCode
+        ORDER BY totalEvents DESC
