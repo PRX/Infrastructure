@@ -29,8 +29,6 @@ Parameters:
     Type: String
   PrxLegacyAccountId:
     Type: String
-  OrganizationId:
-    Type: String
 
 Resources:
   HttpApi:
@@ -93,7 +91,7 @@ Resources:
           AWS_ORGANIZATION_CROSS_ACCOUNT_SHARING_ROLE_ARN: !Ref AwsOrganizationCrossAccountSharingRoleArn
           DEVOPS_CROSS_ACCOUNT_ACCESS_ROLE_NAME: !Ref DevOpsCrossAccountAccessRoleName
           DEVOPS_SLACK_USER_IDS: !Ref DevOpsSlackUserIds
-          PRX_LEGACY_ACCOUNT_ID: !Ref PrxLegacyAccountId
+          PRX_LEGACY_ACCOUNT_ID: !Ref PrxLegacyAccountId # TODO Seems unused
       Events:
         EventRequest:
           Properties:
@@ -305,7 +303,7 @@ Resources:
           - Action: sns:Publish
             Condition:
               StringEquals:
-                aws:PrincipalOrgID: !Ref OrganizationId
+                aws:ResourceOrgID: ${aws:PrincipalOrgID}
             Effect: Allow
             Sid: OrganizationPublish
             Principal:
@@ -327,7 +325,7 @@ Resources:
         Action: events:PutEvents
         Condition:
           StringEquals:
-            aws:PrincipalOrgID: !Ref OrganizationId
+            aws:ResourceOrgID: ${aws:PrincipalOrgID}
         Effect: Allow
         Principal: "*"
         Resource: !GetAtt SlackMessageRelayEventBus.Arn
