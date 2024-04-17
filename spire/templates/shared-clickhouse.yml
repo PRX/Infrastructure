@@ -7,6 +7,10 @@ Description: >-
 Parameters:
   AuthorizedKeys: { Type: CommaDelimitedList }
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  GoogleStorageBucket: { Type: AWS::SSM::Parameter::Value<String> }
+  GoogleStorageHmacKeyId: { Type: AWS::SSM::Parameter::Value<String> }
+  GoogleStorageHmacKeySecret: { Type: AWS::SSM::Parameter::Value<String> }
   NestedChangeSetScrubbingResourcesState: { Type: String }
   RegionMode: { Type: String }
   RootStackId: { Type: String }
@@ -116,6 +120,14 @@ Resources:
                   truncate -s 0 /home/ec2-user/.ssh/authorized_keys
                   echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
                 - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
+            02_install_clickhouse:
+              # For more information, see:
+              # https://clickhouse.com/docs/en/install#from-rpm-packages
+              command:
+                yum-config-manager --add-repo https://packages.clickhouse.com/rpm/clickhouse.repo
+                yum install -y clickhouse-server clickhouse-client
+                systemctl enable clickhouse-server
+                systemctl start clickhouse-server
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
@@ -136,6 +148,15 @@ Resources:
                 path=Resources.ClickhouseServer.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer
                 runas=root
+            /etc/systemd/system/clickhouse-server.service.d/override.conf:
+              content: !Sub |
+                [Service]
+                Environment="CLICKHOUSE_DB=prx_rollups_${EnvironmentTypeAbbreviation}"
+                Environment="GOOGLE_STORAGE_BUCKET=${GoogleStorageBucket}"
+                Environment="GOOGLE_STORAGE_HMAC_KEY_ID=${GoogleStorageHmacKeyId}"
+                Environment="GOOGLE_STORAGE_HMAC_KEY_SECRET=${GoogleStorageHmacKeySecret}"
+            #/etc/clickhouse-server/config.d/castle.xml:
+            #TODO
           packages:
             yum:
               jq: []
