@@ -77,7 +77,7 @@ Resources:
             Principal:
               Service: cloudtrail.amazonaws.com
             Action: s3:PutObject
-            Resource: !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${OrganizationId}/*
+            Resource: !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${!aws:PrincipalOrgID}/*
             Condition:
               StringEquals:
                 s3:x-amz-acl: bucket-owner-full-control
@@ -90,10 +90,10 @@ Resources:
               - s3:ListBucket
             Resource:
               - !GetAtt CloudTrailS3Bucket.Arn
-              - !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${OrganizationId}/${!aws:PrincipalAccount}/*
+              - !Sub ${CloudTrailS3Bucket.Arn}/AWSLogs/${!aws:PrincipalOrgID}/${!aws:PrincipalAccount}/*
             Condition:
               StringEquals:
-                aws:PrincipalOrgID: !Ref OrganizationId
+                aws:ResourceOrgID: ${aws:PrincipalOrgID}
               StringLike:
                 aws:PrincipalArn: arn:aws:iam::${aws:PrincipalAccount}:role/service-role/AccessAnalyzerMonitorServiceRole*
         Version: "2012-10-17"
