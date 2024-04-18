@@ -103,7 +103,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Clickhouse }
 
-  ClickhouseServer:
+  ClickhouseServer1:
     Type: AWS::EC2::Instance
     Condition: IsPrimaryRegion
     Metadata:
@@ -124,10 +124,13 @@ Resources:
               # For more information, see:
               # https://clickhouse.com/docs/en/install#from-rpm-packages
               command: !Sub |
-                yum-config-manager --add-repo https://packages.clickhouse.com/rpm/clickhouse.repo
-                yum install -y clickhouse-server clickhouse-client
-                systemctl enable clickhouse-server
-                systemctl start clickhouse-server
+                #!/bin/bash
+                if ! command -v clickhouse-server &> /dev/null; then
+                  yum-config-manager --add-repo https://packages.clickhouse.com/rpm/clickhouse.repo
+                  yum install -y clickhouse-server clickhouse-client
+                  systemctl enable clickhouse-server
+                  systemctl start clickhouse-server
+                fi
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
@@ -145,8 +148,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.ClickhouseServer.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer
+                path=Resources.ClickhouseServer1.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer1
                 runas=root
             /etc/systemd/system/clickhouse-server.service.d/override.conf:
               content: !Sub |
@@ -231,14 +234,12 @@ Resources:
             # resource where this user data script (what you're reading right now) is defined.
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
-            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer
-
-            # changing this comment triggers rebuilding this EC2 version=1
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer1
 
 Outputs:
   PrivateDnsName:
     Description: The Private DNS name of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer.PrivateDnsName, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer1.PrivateDnsName, ""]
   PrivateIp:
     Description: The Private IP address of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer.PrivateIp, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer1.PrivateIp, ""]
