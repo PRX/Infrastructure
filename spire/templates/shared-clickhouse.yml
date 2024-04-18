@@ -103,7 +103,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Clickhouse }
 
-  ClickhouseServer1:
+  ClickhouseServer2:
     Type: AWS::EC2::Instance
     Condition: IsPrimaryRegion
     Metadata:
@@ -148,8 +148,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.ClickhouseServer1.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer1
+                path=Resources.ClickhouseServer2.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer2
                 runas=root
             /etc/systemd/system/clickhouse-server.service.d/override.conf:
               content: !Sub |
@@ -159,8 +159,6 @@ Resources:
                 Environment="GOOGLE_STORAGE_HMAC_KEY_ID=${GoogleStorageHmacKeyId}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_SECRET=${GoogleStorageHmacKeySecret}"
             /etc/clickhouse-server/config.d/overrides.xml:
-              group: clickhouse
-              owner: clickhouse
               source: https://github.com/PRX/castlehouse/blob/main/overrides.xml
           packages:
             yum:
@@ -176,8 +174,6 @@ Resources:
                 files:
                   - /etc/cfn/cfn-hup.conf
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
-          users:
-            clickhouse: {}
     Properties:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -236,12 +232,12 @@ Resources:
             # resource where this user data script (what you're reading right now) is defined.
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
-            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer1
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer2
 
 Outputs:
   PrivateDnsName:
     Description: The Private DNS name of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer1.PrivateDnsName, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer2.PrivateDnsName, ""]
   PrivateIp:
     Description: The Private IP address of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer1.PrivateIp, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer2.PrivateIp, ""]
