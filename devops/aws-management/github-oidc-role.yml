@@ -7,6 +7,14 @@ Parameters:
     Default: PRX/Infrastructure
 
 Resources:
+  # Creates an OIDC provider to represent the external GitHub Action identity
+  # provider (IdP). The OIDCProvider basically stands in for GitHub in IAM role
+  # trust relationships as the principal. The trust policy will say "this role
+  # can be assumed by the OIDCProvider", which will mean "this role can be
+  # assumed by GitHub Actions identities".
+  # https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+  # https://github.com/aws-actions/configure-aws-credentials?tab=readme-ov-file#oidc
+  # https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html
   GitHubOidc:
     Type: AWS::IAM::OIDCProvider
     Properties:
@@ -316,6 +324,151 @@ Resources:
         Version: "2012-10-17"
       PolicyName: CfnResourceManipulation
       Roles: [!Ref Role]
+
+  # One of the primary functions of our GitHub actions is to operate on
+  # CloudFormation stacks. The IAM role being used in the actions needs to be
+  # able to do most operations on stacks (create, update, handle change sets,
+  # etc). GitHub actions should never be deleting stacks or entire stack sets,
+  # so that is explicitly denied.
+  #
+  # When dealing with CloudFormation, the GitHub action role only needs
+  # permissions to work with CloudFormation. A different service role is passed
+  # to the CloudFormation operations that will have permission to manage
+  # resources in the stacks. This role should **not** be given those broad
+  # permissions.
+  CloudFormationStackUpdatePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows access to specific actions needed by GitHub OIDC
+      PolicyDocument:
+        Statement:
+          - Action:
+              - cloudformation:DeleteStack
+              - cloudformation:DeleteStackSet
+            Effect: Deny
+            Resource: "*"
+            Sid: DenyStackDelete
+          - Action:
+              - cloudformation:*
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowStackUpdates
+
+          - Action: cloudformation:*
+            Effect: Allow
+            Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
+            Sid: AllowServerlessTransformFullAccess
+        Version: "2012-10-17"
+
+  # Some GitHub actions use AWS SAM to manage CloudFormation stacks. SAM
+  # creates its own S3 buckets to manage files, so the GitHub actions role
+  # needs to be able to add files to those buckets.
+  AwsSamS3AccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows write access to AWS SAM CLI S3 buckets
+      PolicyDocument:
+        Statement:
+          - Action:
+              # Allows AWS SAM CLI to upload to default managed S3 buckets
+              - s3:PutObject
+            Effect: Allow
+            Resource: arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket*/*
+            Sid: AllowGlobalSamCliS3Access
+        Version: "2012-10-17"
+
+  # #
+  # CodePipelineStartExecutionPolicy:
+  #   Type: AWS::IAM::ManagedPolicy
+  #   Properties:
+  #     Description: Allows write access to AWS SAM CLI S3 buckets
+  #     PolicyDocument:
+  #       Statement:
+  #         - Action:
+  #             # Allows GitHub actions to start execution of any CodePipeline
+  #             - codepipeline:StartPipelineExecution
+  #           Effect: Allow
+  #           Resource: "*"
+  #           Sid: AllowStartPipelineExecution
+  #       Version: "2012-10-17"
+
+  # The GitHub action role will pass the CloudFormation service role to stack
+  # operations, so it needs explicit permission to do that.
+  PassCloudFormationRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows this role to pass the service role to CloudFormation
+      PolicyDocument:
+        Statement:
+          - Action: iam:PassRole
+            Effect: Allow
+            Resource: !GetAtt CloudFormationServiceRole.Arn
+            Sid: AllowPassingCloudFormationServiceRole
+        Version: "2012-10-17"
+
+  GitHubActionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: repo:PRX/*:*
+            Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProvider
+      ManagedPolicyArns:
+        - !Ref CloudFormationStackUpdatePolicy
+        - !Ref AwsSamS3AccessPolicy
+        # - !Ref CodePipelineStartExecutionPolicy
+        - !Ref PassCloudFormationRolePolicy
+      RoleName: PRX-GHA-AccessRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+  CloudFormationServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - s3:DeleteObject
+                  - rds:DeleteDBSnapshot
+                Effect: Deny
+                Resource: "*"
+                Sid: DenyAlwaysDangerousActions
+
+              - Action: "*"
+                Condition:
+                  StringEquals: { aws:CalledViaFirst: cloudformation.amazonaws.com } # Limit this role to being a CloudFormation service role
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowResourceManipulation
+
+          PolicyName: ActionCloudFormationPolicy
+      RoleName: PRX-GHA-ServiceRoleForCloudFormation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
 
 Outputs:
   RoleArn:
