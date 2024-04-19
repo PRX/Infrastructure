@@ -46,19 +46,17 @@ Parameters:
     Description: >-
       The Arn of a previously-created and configured CodeStar Connection, which
       has access to the any Git repositories used as sources in the template
-  SlackMessageRelaySnsTopicArn:
-    Type: String
 
 Resources:
   # Common IAM policies
-  SlackRelaySnsPublishOnlyAccessPolicy:
+  DefaultEventBusPutPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       PolicyDocument:
         Statement:
-          - Action: sns:Publish
+          - Action: events:PutEvents
             Effect: Allow
-            Resource: !Ref SlackMessageRelaySnsTopicArn
+            Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
         Version: "2012-10-17"
   CodePipelineJobResultWriteAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
@@ -253,7 +251,6 @@ Resources:
         when necessary.
       Environment:
         Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
           PIPELINE_NAME: !Ref Pipeline
       Events:
         ParamChanges:
@@ -271,7 +268,6 @@ Resources:
       Handler: index.handler
       MemorySize: 128
       Policies:
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
         - Statement:
             - Action:
                 - codepipeline:StartPipelineExecution
@@ -333,9 +329,6 @@ Resources:
     Properties:
       CodeUri: src/pipeline-events-listener/
       Description: Responds to pipeline execution state change events
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         StateChange:
           Properties:
@@ -354,7 +347,7 @@ Resources:
       MemorySize: 128
       Policies:
         - !Ref CodePipelineStateReadOnlyAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - !Ref DefaultEventBusPutPolicy
       Runtime: nodejs18.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -956,9 +949,6 @@ Resources:
         Sends a message about stack changes in a CloudFormation change set, and
         also automatically approves the invoking approval action in the
         pipeline
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         SnsMessages:
           Properties:
@@ -968,7 +958,7 @@ Resources:
       MemorySize: 128
       Policies:
         - !Ref CloudFormationReadOnlyAccessPolicy
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - !Ref DefaultEventBusPutPolicy
         - Statement:
             - Action: codepipeline:PutApprovalResult
               Effect: Allow
@@ -1042,9 +1032,6 @@ Resources:
       Description: >-
         Receives notifications from CodePipeline when approval is required, and
         builds a messages to alert externally
-      Environment:
-        Variables:
-          SLACK_MESSAGE_RELAY_TOPIC_ARN: !Ref SlackMessageRelaySnsTopicArn
       Events:
         SnsMessages:
           Properties:
@@ -1053,7 +1040,7 @@ Resources:
       Handler: production-approval.handler
       MemorySize: 256
       Policies:
-        - !Ref SlackRelaySnsPublishOnlyAccessPolicy
+        - !Ref DefaultEventBusPutPolicy
         - !Ref CloudFormationReadOnlyAccessPolicy
         - Statement:
             - Action: codepipeline:PutApprovalResult

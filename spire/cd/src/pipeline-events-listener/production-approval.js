@@ -13,7 +13,10 @@
  * @typedef {import('@aws-sdk/client-codepipeline').ApprovalResult} ApprovalResult
  */
 
-const { SNS } = require('@aws-sdk/client-sns');
+const {
+  EventBridgeClient,
+  PutEventsCommand,
+} = require('@aws-sdk/client-eventbridge');
 const { CodePipeline } = require('@aws-sdk/client-codepipeline');
 const regions = require('./etc/regions');
 const urls = require('./etc/urls');
@@ -21,10 +24,7 @@ const pipelineNames = require('./etc/pipeline-names');
 const deltas = require('./deltas/deltas');
 const { emoji } = require('./etc/execution-emoji');
 
-const sns = new SNS({
-  apiVersion: '2010-03-31',
-  region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
-});
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 const codepipeline = new CodePipeline({ apiVersion: '2015-07-09' });
 
 /**
@@ -249,8 +249,15 @@ exports.handler = async (event) => {
 
   const slackMessage = await buildMessage(approvalNotification);
 
-  await sns.publish({
-    TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-    Message: JSON.stringify(slackMessage),
-  });
+  await eventbridge.send(
+    new PutEventsCommand({
+      Entries: [
+        {
+          Source: 'org.prx.spire-cd',
+          DetailType: 'Slack Message Relay Message Payload',
+          Detail: JSON.stringify(slackMessage),
+        },
+      ],
+    }),
+  );
 };
