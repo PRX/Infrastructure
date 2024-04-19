@@ -121,7 +121,6 @@ Resources:
                   echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
                 - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
             02_install_clickhouse:
-              # For more information, see:
               # https://clickhouse.com/docs/en/install#from-rpm-packages
               command: !Sub |
                 #!/bin/bash
@@ -130,6 +129,17 @@ Resources:
                   yum install -y clickhouse-server clickhouse-client
                   systemctl enable clickhouse-server
                   systemctl start clickhouse-server
+                fi
+            03_setup_schema:
+              # https://github.com/PRX/castlehouse/tree/main
+              command: !Sub |
+                #!/bin/bash
+                export DBNAME=prx_rollups_${EnvironmentTypeAbbreviation}
+                if test -z "$(clickhouse -d $DBNAME -q 'show tables')"; then
+                  clickhouse-client -q "CREATE DATABASE $DBNAME"
+                  clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/tables.sql)
+                  clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_backfill.sql)
+                  clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_increments.sql)
                 fi
           files:
             /etc/cfn/cfn-hup.conf:
@@ -155,7 +165,7 @@ Resources:
               content: !Sub |
                 [Service]
                 Environment="CLICKHOUSE_DB=prx_rollups_${EnvironmentTypeAbbreviation}"
-                Environment="GOOGLE_STORAGE_BUCKET=${GoogleStorageBucket}"
+                Environment="GOOGLE_STORAGE_BUCKET_ENDPOINT=https://storage.googleapis.com/${GoogleStorageBucket}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_ID=${GoogleStorageHmacKeyId}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_SECRET=${GoogleStorageHmacKeySecret}"
             /etc/clickhouse-server/config.d/overrides.xml:
