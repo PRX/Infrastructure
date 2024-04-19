@@ -11,13 +11,13 @@ function deepLink(accountId, url) {
 
 function codebuildUrl(event) {
   const region = event.region;
-  const account = event.account;
+  const accountId = event.account;
   const project = event.detail['project-name'];
   const uuid = event.detail['build-id'].split('/')[1].split(':')[1];
 
-  const codeBuildUrl = `https://${region}.console.aws.amazon.com/codesuite/codebuild/${account}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
+  const codeBuildUrl = `https://${region}.console.aws.amazon.com/codesuite/codebuild/${accountId}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
 
-  return deepLink(codeBuildUrl);
+  return deepLink(accountId, codeBuildUrl);
 }
 
 export async function statusBlocks(event) {
@@ -108,7 +108,7 @@ export async function statusBlocks(event) {
           const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
 
           const ecrUrl = `https://${region}.console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
-          const deepEcrUrl = deepLink(ecrUrl);
+          const deepEcrUrl = deepLink(accountId, ecrUrl);
 
           moreLines.push(
             `» Docker image pushed to <${deepEcrUrl}|ECR> with tag \`${tag}…\``,
@@ -146,7 +146,7 @@ export async function statusBlocks(event) {
           const accountId = event.account;
 
           const s3url = `https://${region}.console.aws.amazon.com/s3/object/${codeBucket}?region=${region}&prefix=${objectKey}`;
-          const deepS3Url = deepLink(s3url);
+          const deepS3Url = deepLink(accountId, s3url);
 
           moreLines.push(
             `» Code package pushed to <${deepS3Url}|S3> bucket \`${codeBucket}\``,
