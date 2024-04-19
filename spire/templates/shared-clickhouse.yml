@@ -96,7 +96,7 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Clickhouse }
 
-  ClickhouseServer3:
+  ClickhouseServer4:
     Type: AWS::EC2::Instance
     Condition: IsPrimaryRegion
     Metadata:
@@ -128,12 +128,17 @@ Resources:
               command: !Sub |
                 #!/bin/bash
                 export DBNAME=prx_rollups_${EnvironmentTypeAbbreviation}
-                if test -z "$(clickhouse -d $DBNAME -q 'show tables')"; then
+                if test -z "$(clickhouse-client -d $DBNAME -q 'show tables')"; then
                   clickhouse-client -q "CREATE DATABASE $DBNAME"
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/tables.sql)
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_backfill.sql)
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_increments.sql)
                 fi
+            04_setup_users:
+              command: !Sub |
+                #!/bin/bash
+                clickhouse-client -q "CREATE USER OR REPLACE readonly IDENTIFIED BY '${ReadonlyPassword}' SETTINGS PROFILE 'readonly'"
+                clickhouse-client -q "GRANT SHOW TABLES, SELECT ON prx_rollups_${EnvironmentTypeAbbreviation}.* TO readonly"
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
@@ -151,8 +156,8 @@ Resources:
               content: !Sub |
                 [cfn-auto-reloader-hook]
                 triggers=post.update
-                path=Resources.ClickhouseServer3.Metadata.AWS::CloudFormation::Init
-                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer3
+                path=Resources.ClickhouseServer4.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer4
                 runas=root
             /etc/systemd/system/clickhouse-server.service.d/override.conf:
               content: !Sub |
@@ -190,7 +195,7 @@ Resources:
       IamInstanceProfile: !Ref InstanceProfile
       ImageId: ami-05adadbbe8cf9fb48
       InstanceInitiatedShutdownBehavior: stop
-      InstanceType: !If [IsProduction, t4g.medium, t4g.medium]
+      InstanceType: !If [IsProduction, t4g.large, t4g.medium]
       KeyName: !Ref KeyPair
       Monitoring: false
       NetworkInterfaces:
@@ -236,12 +241,12 @@ Resources:
             # resource where this user data script (what you're reading right now) is defined.
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-init.html
             # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-init.html
-            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer3
+            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer4
 
 Outputs:
   PrivateDnsName:
     Description: The Private DNS name of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer3.PrivateDnsName, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer4.PrivateDnsName, ""]
   PrivateIp:
     Description: The Private IP address of the clickhouse server
-    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer3.PrivateIp, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt ClickhouseServer4.PrivateIp, ""]
