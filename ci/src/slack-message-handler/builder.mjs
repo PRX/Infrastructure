@@ -2,13 +2,22 @@
 import { compareCommits } from './github.mjs';
 import regions from './regions.mjs';
 
+function deepLink(accountId, url) {
+  const deepLinkRoleName = 'ViewOnlyAccess';
+
+  const urlEncodedUrl = encodeURIComponent(url);
+  return `https://d-906713e952.awsapps.com/start/#/console?account_id=${accountId}&role_name=${deepLinkRoleName}&destination=${urlEncodedUrl}`;
+}
+
 function codebuildUrl(event) {
   const region = event.region;
   const account = event.account;
   const project = event.detail['project-name'];
   const uuid = event.detail['build-id'].split('/')[1].split(':')[1];
 
-  return `https://${region}.console.aws.amazon.com/codesuite/codebuild/${account}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
+  const codeBuildUrl = `https://${region}.console.aws.amazon.com/codesuite/codebuild/${account}/projects/${project}/build/${project}%3A${uuid}?region=${region}`;
+
+  return deepLink(codeBuildUrl);
 }
 
 export async function statusBlocks(event) {
@@ -81,17 +90,28 @@ export async function statusBlocks(event) {
       if (parts.length === 2) {
         // e.g., "MY_APP"
         const imageEnvarName = parts[0];
+        // allEnvVars will have a key-value pair like:
+        // { MY_APP: "github/prx/my-app:165df6a5fd675dcf67" }
+        // imageName will be like "github/prx/my-app:165df6a5fd675dcf67"
         const imageName = allEnvVars[imageEnvarName];
 
+        // For builds that don't publish an image to ECR, this value won't
+        // exist
         if (imageName) {
           const region = event.region;
           const accountId = event.account;
-          const repoName = imageName.match(/\/([^:]+):/)[1];
+          // The ECR repository name, like:
+          // github/prx/my-app
+          const repoName = imageName.split(':')[0];
+          // The image tag (truncated), like
+          // 165df6a
           const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
 
-          const ecrUrl = `https://console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
+          const ecrUrl = `https://${region}.console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
+          const deepEcrUrl = deepLink(ecrUrl);
+
           moreLines.push(
-            `» Docker image pushed to <${ecrUrl}|ECR> with tag \`${tag}…\``,
+            `» Docker image pushed to <${deepEcrUrl}|ECR> with tag \`${tag}…\``,
           );
         }
       }
@@ -122,9 +142,14 @@ export async function statusBlocks(event) {
         // For builds that don't publish an object to S3, this value won't
         // exist
         if (objectKey) {
-          const s3url = `https://s3.console.aws.amazon.com/s3/object/${codeBucket}?region=us-east-1&prefix=${objectKey}`;
+          const region = event.region;
+          const accountId = event.account;
+
+          const s3url = `https://${region}.console.aws.amazon.com/s3/object/${codeBucket}?region=${region}&prefix=${objectKey}`;
+          const deepS3Url = deepLink(s3url);
+
           moreLines.push(
-            `» Code package pushed to <${s3url}|S3> bucket \`${codeBucket}\``,
+            `» Code package pushed to <${deepS3Url}|S3> bucket \`${codeBucket}\``,
           );
         }
       }
