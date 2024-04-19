@@ -12,6 +12,7 @@ Parameters:
   GoogleStorageHmacKeyId: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   GoogleStorageHmacKeySecret: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   NestedChangeSetScrubbingResourcesState: { Type: String }
+  ReadonlyPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   RegionMode: { Type: String }
   RootStackId: { Type: String }
   RootStackName: { Type: String }
@@ -68,14 +69,6 @@ Resources:
           IpProtocol: tcp
           FromPort: 9000
           ToPort: 9000
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 9004
-          ToPort: 9004
-        - CidrIp: 0.0.0.0/0
-          IpProtocol: tcp
-          FromPort: 9005
-          ToPort: 9005
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}-clickhouse_sg" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -165,6 +158,7 @@ Resources:
               content: !Sub |
                 [Service]
                 Environment="CLICKHOUSE_DB=prx_rollups_${EnvironmentTypeAbbreviation}"
+                Environment="CLICKHOUSE_READONLY_PASS=${ReadonlyPassword}"
                 Environment="GOOGLE_STORAGE_BUCKET_ENDPOINT=https://storage.googleapis.com/${GoogleStorageBucket}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_ID=${GoogleStorageHmacKeyId}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_SECRET=${GoogleStorageHmacKeySecret}"
