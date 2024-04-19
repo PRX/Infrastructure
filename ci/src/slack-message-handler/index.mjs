@@ -7,14 +7,14 @@
  * details that are included in the CodeBuild event.
  */
 
-import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import {
+  EventBridgeClient,
+  PutEventsCommand,
+} from '@aws-sdk/client-eventbridge';
 import { statusBlocks } from './builder.mjs';
 import { statusColor } from './color.mjs';
 
-const sns = new SNSClient({
-  apiVersion: '2010-03-31',
-  region: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN.split(':')[3],
-});
+const eventbridge = new EventBridgeClient({ apiVersion: '2015-10-07' });
 
 async function buildAttachments(event) {
   const blocks = await statusBlocks(event);
@@ -33,15 +33,20 @@ export const handler = async (event) => {
 
   const attachments = await buildAttachments(event);
 
-  await sns.send(
-    new PublishCommand({
-      TopicArn: process.env.SLACK_MESSAGE_RELAY_TOPIC_ARN,
-      Message: JSON.stringify({
-        channel: 'G5C36JDUY', // #ops-build
-        username: 'AWS CodeBuild',
-        icon_emoji: ':ops-codebuild:',
-        attachments,
-      }),
+  await eventbridge.send(
+    new PutEventsCommand({
+      Entries: [
+        {
+          Source: 'org.prx.ci',
+          DetailType: 'Slack Message Relay Message Payload',
+          Detail: JSON.stringify({
+            channel: 'G5C36JDUY', // #ops-build
+            username: 'AWS CodeBuild',
+            icon_emoji: ':ops-codebuild:',
+            attachments,
+          }),
+        },
+      ],
     }),
   );
 };
