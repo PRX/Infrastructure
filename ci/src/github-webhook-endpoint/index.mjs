@@ -1,6 +1,5 @@
 /**
- * Invoked by: API Gateway
- * Returns: Error, or API Gateway proxy response object
+ * Invoked by: Function URL
  *
  * Handles GitHub webhook event payload requests. It does a bit of validation
  * on the request, and then forwards the payload to EventBridge, where other
