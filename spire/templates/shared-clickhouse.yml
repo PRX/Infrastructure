@@ -134,6 +134,11 @@ Resources:
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_backfill.sql)
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_increments.sql)
                 fi
+            04_setup_users:
+              command: !Sub |
+                #!/bin/bash
+                clickhouse-client -q "CREATE USER OR REPLACE readonly IDENTIFIED BY '${ReadonlyPassword}' SETTINGS PROFILE 'readonly'"
+                clickhouse-client -q "GRANT SHOW TABLES, SELECT ON prx_rollups_${EnvironmentTypeAbbreviation}.* TO readonly"
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
