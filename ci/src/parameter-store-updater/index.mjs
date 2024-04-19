@@ -1,3 +1,21 @@
+/**
+ * Invoked by: EventBridge rule
+ *
+ * Runs every time the CI CodeBuild project reports a successful build. The
+ * final build environment is examined and, when necessary, identifiers for
+ * published code artifacts (like new ECR image tags, or new S3 objects) are
+ * sent to Parameter Store to update the corresponding **staging** environment
+ * parameter values.
+ *
+ * The Spire CD pipeline is generally triggered when staging parameters are
+ * changed, so the result of this is usually also a Spire deployment, but this
+ * Lambda isn't triggering that directly.
+ *
+ * (Production parameter values are never updated directly in this way, since
+ * we would only want those to update once the new build has been tested in the
+ * staging environment.)
+ */
+
 import { SSMClient, PutParameterCommand } from '@aws-sdk/client-ssm';
 
 const ssm = new SSMClient({ apiVersion: '2014-11-06' });
@@ -84,6 +102,9 @@ export const handler = async (event) => {
   // PRX_CI_PUBLISH will be true when the build is publishing some sort of
   // deployable code artifact. Parameters only need to be updated when
   // something has been published.
+  //
+  // Do **not** match on PRX_CI_PRERELEASE. The purpose of that flag is to skip
+  // parameter updates _even if_ artifacts have been published.
   if (
     allEnvars.PRX_CI_PUBLISH === 'true' &&
     eventDetail['build-status'] === 'SUCCEEDED'
