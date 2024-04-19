@@ -25,8 +25,6 @@ export async function compareCommits(ownerAndRepo, before, after) {
       },
     };
 
-    console.log(options.path);
-
     const req = request(options, (res) => {
       res.setEncoding('utf8');
 
