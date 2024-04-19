@@ -361,7 +361,7 @@ Resources:
   AwsSamS3AccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: Allows write access to AWS SAM CLI S3 buckets
+      Description: Allows read and some write access to AWS SAM CLI S3 buckets
       PolicyDocument:
         Statement:
           - Action:
@@ -374,20 +374,21 @@ Resources:
             Sid: AllowGlobalSamCliS3Access
         Version: "2012-10-17"
 
-  # #
-  # CodePipelineStartExecutionPolicy:
-  #   Type: AWS::IAM::ManagedPolicy
-  #   Properties:
-  #     Description: Allows write access to AWS SAM CLI S3 buckets
-  #     PolicyDocument:
-  #       Statement:
-  #         - Action:
-  #             # Allows GitHub actions to start execution of any CodePipeline
-  #             - codepipeline:StartPipelineExecution
-  #           Effect: Allow
-  #           Resource: "*"
-  #           Sid: AllowStartPipelineExecution
-  #       Version: "2012-10-17"
+  # Some GitHub actions are used to watch for changes to specific files and
+  # trigger pipeline executions in CodePipline (CodePipeline now supports this
+  # feature, but didn't when this practice was implemented). The access role is
+  # allowed to start executions on all pipelines.
+  CodePipelineStartExecutionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows starting pipeline executions
+      PolicyDocument:
+        Statement:
+          - Action: codepipeline:StartPipelineExecution
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowStartPipelineExecution
+        Version: "2012-10-17"
 
   # The GitHub action role will pass the CloudFormation service role to stack
   # operations, so it needs explicit permission to do that.
@@ -420,7 +421,7 @@ Resources:
       ManagedPolicyArns:
         - !Ref CloudFormationStackUpdatePolicy
         - !Ref AwsSamS3AccessPolicy
-        # - !Ref CodePipelineStartExecutionPolicy
+        - !Ref CodePipelineStartExecutionPolicy
         - !Ref PassCloudFormationRolePolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
