@@ -47,7 +47,9 @@ Resources:
             Statement:
               - Action: events:PutEvents
                 Effect: Allow
-                Resource: !Ref DevOpsCloudWatchAlarmsBusArn
+                Resource:
+                  - !Ref DevOpsCloudWatchAlarmsBusArn
+                  - arn:aws:events:us-east-2:578003269847:event-bus/CloudWatch-org-sink
             Version: "2012-10-17"
           PolicyName: CloudWatchAlarmsBusPolicy
       Tags:
@@ -56,6 +58,7 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
+
   EventRule:
     Type: AWS::Events::Rule
     Properties:
@@ -68,4 +71,17 @@ Resources:
       Targets:
         - Arn: !Ref DevOpsCloudWatchAlarmsBusArn
           Id: devops-cloudwatch-alarms-event-bus-fwd
+          RoleArn: !GetAtt EventRuleRole.Arn
+  EventRule2:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - CloudWatch Alarm State Change
+        source:
+          - aws.cloudwatch
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudWatch-org-sink
+          Id: fwd-to-cloudwatch-org-sink
           RoleArn: !GetAtt EventRuleRole.Arn
