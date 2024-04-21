@@ -25,18 +25,28 @@ jobs:
             stack: infrastructure-ci
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
+
       - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-east-1
-          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
-          role-session-name: GitHubActions-DeployCiStack
+          aws-region: ${{ matrix.region }}
+          role-to-assume: arn:aws:iam::561178107736:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-ci
+
       - name: Deploy CloudFormation stack
         working-directory: ci
         run: |
-          bucket_name=$(aws cloudformation describe-stacks --region ${{ matrix.region }} --stack-name aws-sam-cli-managed-default | jq -r ".Stacks[0].Outputs[0].OutputValue")
-          sam deploy --region ${{ matrix.region }} --no-confirm-changeset --no-fail-on-empty-changeset --stack-name "${{ matrix.stack }}" --s3-bucket "$bucket_name" --s3-prefix "${{ matrix.stack }}" --capabilities CAPABILITY_IAM
+          sam deploy \
+            --region ${{ matrix.region }} \
+            --resolve_s3 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name "${{ matrix.stack }}" \
+            --s3-bucket "$bucket_name" \
+            --s3-prefix "${{ matrix.stack }}" \
+            --capabilities CAPABILITY_IAM \
+            --role-arn arn:aws:iam::561178107736:role/PRX-GHA-ServiceRoleForCloudFormation
