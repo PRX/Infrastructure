@@ -24,9 +24,6 @@ Parameters:
     Type: CommaDelimitedList
     # Excludes: af-south-1, eu-south-1, me-south-1, ap-east-1
     Default: us-east-1,us-east-2,us-west-1,us-west-2,ap-south-1,ap-northeast-3,ap-northeast-2,ap-southeast-1,ap-southeast-2,ap-northeast-1,ca-central-1,eu-central-1,eu-west-1,eu-west-2,eu-west-3,eu-north-1,sa-east-1
-  kCloudTrailToolkitStackName:
-    Type: String
-    Default: cloudtrail-toolkit
   kCloudFormationCustomResourceLambdasStacksetName:
     Type: String
     Default: cfn-custom-resources-all-regions
@@ -242,16 +239,12 @@ Resources:
 
                 - sam build --parallel --template-file ./devops/tooling/chat-ops/health-events/template.yml
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kHealthEventsStackName}
-
-                - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudtrail-toolkit/template.yml
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudTrailToolkitStackName}
           artifacts:
             files:
               - ${kCloudWatchAlarmsStackName}
               - ${kCloudWatchAlarmRemindersStackName}
               - ${kSlackAppStackName}
               - ${kHealthEventsStackName}
-              - ${kCloudTrailToolkitStackName}
             name: SamBuildArtifact
         Type: CODEPIPELINE
       Tags:
@@ -385,7 +378,6 @@ Resources:
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kHealthEventsStackName}/*
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudTrailToolkitStackName}/*
                   # StackSets
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/${kCloudFormationCustomResourceLambdasStacksetName}:*
             Version: "2012-10-17"
@@ -535,21 +527,6 @@ Resources:
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 StackName: !Ref kCloudWatchAlarmRemindersStackName
                 TemplatePath: !Sub SamBuildArtifact::${kCloudWatchAlarmRemindersStackName}
-              InputArtifacts:
-                - Name: SamBuildArtifact
-              RunOrder: 1
-            - Name: CloudTrail_Toolkit
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: "1"
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                RoleArn: !GetAtt CloudFormationRole.Arn
-                StackName: !Ref kCloudTrailToolkitStackName
-                TemplatePath: !Sub SamBuildArtifact::${kCloudTrailToolkitStackName}
               InputArtifacts:
                 - Name: SamBuildArtifact
               RunOrder: 1
