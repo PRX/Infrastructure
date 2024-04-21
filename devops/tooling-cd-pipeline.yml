@@ -30,9 +30,6 @@ Parameters:
   kCloudFormationCustomResourceLambdasStacksetName:
     Type: String
     Default: cfn-custom-resources-all-regions
-  kCloudFormationMacroFunctionsStackName:
-    Type: String
-    Default: prx-devops-cloudformation-macro-functions
   kCloudWatchAlarmsStackName:
     Type: String
     Default: prx-devops-cloudwatch-alarms-to-slack
@@ -234,9 +231,6 @@ Resources:
                 python: latest
             build:
               commands:
-                - sam build --parallel --template-file ./devops/tooling/cfn-macro-functions/template.yml
-                - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudFormationMacroFunctionsStackName}
-
                 - sam build --parallel --template-file ./devops/tooling/chat-ops/cloudwatch-alarms/template.yml
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudWatchAlarmsStackName}
 
@@ -253,7 +247,6 @@ Resources:
                 - sam package --s3-bucket ${PipelineArtifactStore} --output-template-file ./${kCloudTrailToolkitStackName}
           artifacts:
             files:
-              - ${kCloudFormationMacroFunctionsStackName}
               - ${kCloudWatchAlarmsStackName}
               - ${kCloudWatchAlarmRemindersStackName}
               - ${kSlackAppStackName}
@@ -391,7 +384,6 @@ Resources:
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudWatchAlarmRemindersStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kSlackAppStackName}/*
-                  - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudFormationMacroFunctionsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kHealthEventsStackName}/*
                   - !Sub arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${kCloudTrailToolkitStackName}/*
                   # StackSets
@@ -460,25 +452,6 @@ Resources:
         # deploy and is intended to have one instance globally
         - Name: Deploy_Once
           Actions:
-            - Name: CloudFormation_Macro_Functions
-              ActionTypeId:
-                Category: Deploy
-                Owner: AWS
-                Provider: CloudFormation
-                Version: "1"
-              Configuration:
-                ActionMode: CREATE_UPDATE
-                Capabilities: CAPABILITY_IAM,CAPABILITY_AUTO_EXPAND
-                ParameterOverrides: !Sub |
-                  {
-                    "OrganizationId": "${OrganizationId}"
-                  }
-                RoleArn: !GetAtt CloudFormationRole.Arn
-                StackName: !Ref kCloudFormationMacroFunctionsStackName
-                TemplatePath: !Sub SamBuildArtifact::${kCloudFormationMacroFunctionsStackName}
-              InputArtifacts:
-                - Name: SamBuildArtifact
-              RunOrder: 1
             - Name: Slack_App
               ActionTypeId:
                 Category: Deploy
