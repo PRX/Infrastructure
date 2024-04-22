@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  CloudFormationServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - s3:DeleteObject
+                  - rds:DeleteDBSnapshot
+                Effect: Deny
+                Resource: "*"
+                Sid: DenyAlwaysDangerousActions
+
+              - Action: cloudformation:*
+                Effect: Allow
+                Resource: arn:aws:cloudformation:*:aws:transform/Serverless-2016-10-31
+                Sid: AllowServerlessTransformFullAccess
+
+              - Action: "*"
+                Condition:
+                  StringEquals: { aws:CalledViaFirst: cloudformation.amazonaws.com } # Limit this role to being a CloudFormation service role
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowResourceManipulation
+
+          PolicyName: ActionCloudFormationPolicy
+      RoleName: PRX-GHA-ServiceRoleForCloudFormation
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
