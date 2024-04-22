@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+# Create:
+# aws cloudformation create-stack-set --stack-set-name CloudWatch-CrossAccountSharingRole --template-body
+#
+# Delete:
+# aws cloudformation delete-stack-instances --stack-set-name CloudWatch-CrossAccountSharingRole --deployment-targets OrganizationalUnitIds=r-r7ht --regions us-east-2 --no-retain-stacks --operation-preferences FailureTolerancePercentage=100,MaxConcurrentPercentage=100,ConcurrencyMode=SOFT_FAILURE_TOLERANCE,RegionConcurrencyType=PARALLEL
+
+Resources:
+  # This role is mainly intended to be used by AWS Console. But if you have
+  # other needs for the sort of read-only CloudWatch access that is provides,
+  # you can use it for other things. Be aware that it uses AWS managed policies,
+  # so the actual permissions it has may change over time.
+  CrossAccountSharingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:ResourceOrgID: ${aws:PrincipalOrgID}
+            Effect: Allow
+            Principal:
+              AWS: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchReadOnlyAccess
+        - arn:aws:iam::aws:policy/CloudWatchAutomaticDashboardsAccess
+        - arn:aws:iam::aws:policy/AWSXrayReadOnlyAccess
+      RoleName: CloudWatch-CrossAccountSharingRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+
+Outputs:
+  RoleNamePattern:
+    Value: !Ref CrossAccountSharingRole
