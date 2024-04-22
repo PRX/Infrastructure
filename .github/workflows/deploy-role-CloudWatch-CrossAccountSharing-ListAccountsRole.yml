@@ -1,0 +1,39 @@
+name: Deploy CloudWatch-CrossAccountSharing-ListAccountsRole
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - iam-roles/CloudWatch-CrossAccountSharing-ListAccountsRole/template.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::048723829744:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-cw-list-role
+
+      - name: Deploy to management account
+        working-directory: iam-roles/CloudWatch-CrossAccountSharing-ListAccountsRole
+        run: |
+          aws cloudformation deploy \
+            --region us-east-2 \
+            --stack-name CloudWatch-CrossAccountSharing-ListAccountsRole \
+            --template-file template.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset \
+            --role-arn arn:aws:iam::048723829744:role/PRX-GHA-ServiceRoleForCloudFormation
