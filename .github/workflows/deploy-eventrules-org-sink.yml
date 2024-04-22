@@ -27,7 +27,16 @@ jobs:
           role-to-assume: arn:aws:iam::048723829744:role/PRX-GHA-AccessRole
           role-session-name: gha-deploy-org-sink-rules
 
-      # TODO Deploy stack set to management account
+      - name: Deploy to management account
+        working-directory: event-rules/org-sink-rules
+        run: |
+          template_body=$(cat template.yml)
+
+          aws cloudformation update-stack-set \
+            --stack-set-name org-sink-event-rules-management-account \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --template-body "$template_body" \
+            --operation-preferences FailureTolerancePercentage=100,MaxConcurrentPercentage=100,ConcurrencyMode=SOFT_FAILURE_TOLERANCE,RegionConcurrencyType=PARALLEL
 
       - name: Update stack set
         working-directory: event-rules/org-sink-rules
