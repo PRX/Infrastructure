@@ -26,7 +26,7 @@ jobs:
         with:
           aws-region: us-east-2
           role-to-assume: arn:aws:iam::048723829744:role/PRX-GHA-AccessRole
-          role-session-name: gha-deploy-trax-dns
+          role-session-name: gha-deploy-cw-share-role
 
       - name: Deploy to management account
         working-directory: iam-roles/CloudWatch-CrossAccountSharingRole
@@ -39,15 +39,15 @@ jobs:
             --no-fail-on-empty-changeset \
             --role-arn arn:aws:iam::048723829744:role/PRX-GHA-ServiceRoleForCloudFormation
 
-      # - name: Update stack set
-      #   working-directory: iam-roles/CloudWatch-CrossAccountSharingRole
-      #   run: |
-      #     template_body=$(cat template.yml)
+      - name: Update stack set
+        working-directory: iam-roles/CloudWatch-CrossAccountSharingRole
+        run: |
+          template_body=$(cat template.yml)
 
-      #     aws cloudformation update-stack-set \
-      #       --stack-set-name CloudWatch-CrossAccountSharingRole \
-      #       --capabilities CAPABILITY_NAMED_IAM \
-      #       --template-body "$template_body" \
-      #       --operation-preferences FailureTolerancePercentage=100,MaxConcurrentPercentage=100,ConcurrencyMode=SOFT_FAILURE_TOLERANCE,RegionConcurrencyType=PARALLEL \
-      #       --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
-      #       --regions us-east-2 \
+          aws cloudformation update-stack-set \
+            --stack-set-name CloudWatch-CrossAccountSharingRole \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --template-body "$template_body" \
+            --operation-preferences FailureTolerancePercentage=100,MaxConcurrentPercentage=100,ConcurrencyMode=SOFT_FAILURE_TOLERANCE,RegionConcurrencyType=PARALLEL \
+            --auto-deployment Enabled=true,RetainStacksOnAccountRemoval=false \
+            --regions us-east-2 \
