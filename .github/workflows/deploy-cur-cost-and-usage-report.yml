@@ -1,0 +1,38 @@
+name: Deploy Cost and Usage Report
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - cur/cost-and-usage-report/template.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::048723829744:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-cur-report
+
+      - name: Deploy to management account
+        working-directory: cur/cost-and-usage-report
+        run: |
+          aws cloudformation deploy \
+            --region us-east-1 \
+            --stack-name cur \
+            --template-file template.yml \
+            --no-fail-on-empty-changeset \
+            --role-arn arn:aws:iam::048723829744:role/PRX-GHA-ServiceRoleForCloudFormation
