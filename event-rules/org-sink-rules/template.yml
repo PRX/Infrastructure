@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Resources:
+  CloudWatchAlarmStateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - CloudWatch Alarm State Change
+        source:
+          - aws.cloudwatch
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudWatch-org-sink
+          Id: org-sink-alarm-state-change
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudWatchOrgSinkRole
+
+  CloudFormationStateChangeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - CloudFormation Resource Status Change
+          - CloudFormation Stack Status Change
+        source:
+          - aws.cloudformation
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudFormation-org-sink
+          Id: org-sink-cfn-state-change
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudFormationOrgSinkRole
+
+  CloudTrailRootActivityRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail:
+          userIdentity:
+            type:
+              - Root
+        detail-type:
+          - AWS API Call via CloudTrail
+          - AWS Console Sign In via CloudTrail
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudTrail-org-sink
+          Id: org-sink-trail-root-activity
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudTrailOrgSinkRole
+
+  SlackMessageRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - Slack Message Relay Message Payload
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/SlackMessageRelay-org-sink
+          Id: org-sink-slack-message-payload
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-SlackOrgSinkRole
