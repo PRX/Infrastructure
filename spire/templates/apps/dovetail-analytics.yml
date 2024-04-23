@@ -901,45 +901,6 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
 
-  # TODO Adzerk Pingbacks are probably no longer necessary to track
-  AnalyticsPingbacksFunctionAdzerkMetricFilter:
-    # Counts the number of pingbacks sent to Adzerk
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      FilterPattern: '{ $.dest = "*.adzerk.net" }'
-      LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
-      MetricTransformations:
-        - MetricName: !Sub "pingbacks_adzerk_${AnalyticsPingbacksFunction}"
-          MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
-  AnalyticsPingbacksFunctionAdzerkTrafficLowAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
-    Properties:
-      AlarmName: !Sub FATAL [Dovetail-Analytics] Pingbacks Lambda function <${EnvironmentTypeAbbreviation}> FEW ADZERK PINGBACKS (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail Analytics Pingback Lambda function is
-        sending a suspiciously low amount of traffic to Adzerk, which could
-        mean that input data is not reaching the function.
-      ComparisonOperator: LessThanThreshold
-      EvaluationPeriods: 1
-      MetricName: !Sub "pingbacks_adzerk_${AnalyticsPingbacksFunction}"
-      Namespace: !Ref kMetricFilterNamespace
-      Period: 300
-      Statistic: Sum
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref AnalyticsPingbacksFunctionLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Analytics }
-      Threshold: 4000
-      TreatMissingData: breaching
-
   AnalyticsPingbacksFunctionNotAdzerkMetricFilter:
     # Counts the number of pingbacks sent everywhere except Adzerk
     Type: AWS::Logs::MetricFilter
