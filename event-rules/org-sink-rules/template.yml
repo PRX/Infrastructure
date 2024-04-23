@@ -60,3 +60,25 @@ Resources:
         - Arn: arn:aws:events:us-east-2:578003269847:event-bus/Slack-org-sink
           Id: org-sink-slack-message-payload
           RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-SlackOrgSinkRole
+
+  AutoScalingRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail-type:
+          - EC2 Instance Launch Successful
+          - EC2 Instance Launch Unsuccessful
+          - EC2 Instance Terminate Successful
+          - EC2 Instance Terminate Unsuccessful
+          - EC2 Auto Scaling Instance Refresh Checkpoint Reached
+          - EC2 Auto Scaling Instance Refresh Started
+          - EC2 Auto Scaling Instance Refresh Succeeded
+          - EC2 Auto Scaling Instance Refresh Failed
+          - EC2 Auto Scaling Instance Refresh Cancelled
+        source:
+          - aws.autoscaling
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/AutoScaling-org-sink
+          Id: org-autoscaling-events
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-AutoScalingOrgSinkRole
