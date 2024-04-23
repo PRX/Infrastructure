@@ -38,6 +38,7 @@ Resources:
         - !Ref CloudFormationStackUpdatePolicy
         - !Ref AwsSamS3AccessPolicy
         - !Ref CodePipelineStartExecutionPolicy
+        - !Ref SesMailSendPolicy
         - !Ref PassCloudFormationRolePolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
@@ -110,6 +111,20 @@ Resources:
             Effect: Allow
             Resource: "*"
             Sid: AllowStartPipelineExecution
+        Version: "2012-10-17"
+
+  # Allow sending emails via SES from GitHub actions, which is used for some
+  # external-facing notifications
+  SesMailSendPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows sending emails vai SES
+      PolicyDocument:
+        Statement:
+          - Action: ses:SendEmail
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowEmailSend
         Version: "2012-10-17"
 
   # The GitHub action role will pass the CloudFormation service role to stack
