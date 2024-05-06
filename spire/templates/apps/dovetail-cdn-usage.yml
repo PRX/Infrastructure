@@ -15,6 +15,7 @@ Parameters:
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  BigQueryClientConfig: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -33,12 +34,22 @@ Resources:
         ${EnvironmentType} Dovetail CDN Usage
       Environment:
         Variables:
+          ATHENA_DB: cloudfront_logs
+          ATHENA_TABLE: !If [IsProduction, dovetail3_cdn_production, dovetail3_cdn_staging]
+          BQ_CLIENT_CONFIG: !Ref BigQueryClientConfig
           BQ_DATASET: !If [IsProduction, production, staging]
       Handler: index.handler
       MemorySize: 512
       Runtime: nodejs20.x
       Policies:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - Statement:
+            - Action:
+                - athena:StartQueryExecution
+                - athena:GetQueryExecution
+                - athena:GetQueryResults
+              Effect: Allow
+              Resource: arn:aws:s3:::prx-ryan/*
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
