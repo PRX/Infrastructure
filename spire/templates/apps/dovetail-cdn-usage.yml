@@ -11,6 +11,7 @@ Parameters:
   NestedChangeSetScrubbingResourcesState: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
@@ -24,9 +25,61 @@ Parameters:
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  DovetailCdnUsageEventRule:
+    Condition: IsPrimaryRegion
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Nightly export of Dovetail CDN usage to BigQueery
+      RoleArn: !GetAtt DovetailCdnUsageEventRuleIamRole.Arn
+      ScheduleExpression: cron(30 0 * * ? *) # 00:30 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt DovetailCdnUsageFunction.Arn
+          Id: DovetailUsageCronTarget
+
+  DovetailCdnUsageEventRuleIamRole:
+    Condition: IsPrimaryRegion
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: lambda:InvokeFunction
+                Effect: Allow
+                Resource: !GetAtt DovetailCdnUsageFunction.Arn
+                Sid: AllowLambdaInvoke
+            Version: "2012-10-17"
+          PolicyName: EventRuleTargets
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: CDN Usage }
+
+  DovetailCdnUsageInvokePermission:
+    Condition: IsPrimaryRegion
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DovetailCdnUsageFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DovetailCdnUsageEventRule.Arn
 
   DovetailCdnUsageFunction:
     Type: AWS::Serverless::Function
