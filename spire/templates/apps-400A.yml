@@ -42,6 +42,7 @@ Parameters:
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
@@ -95,7 +96,12 @@ Resources:
         RootStackId: !Ref RootStackId
         CodeS3Bucket: !Ref DeploymentPackageBucketName
         CodeS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-CDN_Usage/pkg/s3-object-key
+        AthenaDb: cloudfront_logs
+        AthenaTable: !If [IsProduction, dovetail3_cdn_production, dovetail3_cdn_staging]
         BigQueryClientConfig: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-CDN_Usage/big-query-client-config
+        BigQueryDataset: !If [IsProduction, production, staging]
+        DovetailCdnLogBucket: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-CDN_Usage/dovetail-cdn-log-bucket
+        DovetailCdnLogPrefix: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-CDN_Usage/dovetail-cdn-log-prefix
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
