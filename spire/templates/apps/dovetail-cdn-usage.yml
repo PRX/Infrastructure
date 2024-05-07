@@ -15,10 +15,14 @@ Parameters:
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
   CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  AthenaDb: { Type: String }
+  AthenaTable: { Type: String }
   BigQueryClientConfig: { Type: AWS::SSM::Parameter::Value<String> }
+  BigQueryDataset: { Type: String }
+  DovetailCdnLogBucket: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailCdnLogPrefix: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
-  IsProduction: !Equals [!Ref EnvironmentType, Production]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -34,10 +38,10 @@ Resources:
         ${EnvironmentType} Dovetail CDN Usage
       Environment:
         Variables:
-          ATHENA_DB: cloudfront_logs
-          ATHENA_TABLE: !If [IsProduction, dovetail3_cdn_production, dovetail3_cdn_staging]
+          ATHENA_DB: !Ref AthenaDb
+          ATHENA_TABLE: !Ref AthenaTable
           BQ_CLIENT_CONFIG: !Ref BigQueryClientConfig
-          BQ_DATASET: !If [IsProduction, production, staging]
+          BQ_DATASET: !Ref BigQueryDataset
       Handler: index.handler
       MemorySize: 512
       Runtime: nodejs20.x
@@ -49,7 +53,31 @@ Resources:
                 - athena:GetQueryExecution
                 - athena:GetQueryResults
               Effect: Allow
-              Resource: arn:aws:s3:::prx-ryan/*
+              Resource: !Sub arn:aws:athena:*:${AWS::AccountId}:workgroup/primary
+            - Action:
+                - glue:GetDatabase
+                - glue:GetTable
+              Effect: Allow
+              Resource:
+                - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog
+                - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/${AthenaDb}
+                - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/${AthenaDb}/${AthenaTable}
+            - Action:
+                - s3:GetObject
+              Effect: Allow
+              Resource: !Sub arn:aws:s3:::${DovetailCdnLogBucket}/${DovetailCdnLogPrefix}/*
+            - Action:
+                - s3:GetBucketLocation
+                - s3:GetObject
+                - s3:ListBucket
+                - s3:ListBucketMultipartUploads
+                - s3:ListMultipartUploadParts
+                - s3:AbortMultipartUpload
+                - s3:CreateBucket
+                - s3:PutObject
+              Effect: Allow
+              Resource: !Sub aws-athena-query-results-${AWS::Region}-${AWS::AccountId}
+          Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
