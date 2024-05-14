@@ -69,7 +69,6 @@ echo "=> Deploying origin request Lambda function to us-east-1"
 code_dir="$tmp_dir/dovetail-cdn-origin-request"
 mkdir "$code_dir"
 git clone https://github.com/PRX/dovetail-cdn-origin-request.git "$code_dir"
-echo "18.15.0" > "$tmp_dir/dovetail-cdn-origin-request/.nvmrc"
 sam build \
     --template-file origin-request-lambda.yml \
     --parameter-overrides \
