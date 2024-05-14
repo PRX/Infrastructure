@@ -33,6 +33,7 @@ Parameters:
   S3SigningAccessKeyId: { Type: String }
   CastleHostname: { Type: String }
   CmsHostname: { Type: String }
+  FeederHostname: { Type: String }
   IdHostname: { Type: String }
   MetricsHostname: { Type: String }
   PlayHostname: { Type: String }
@@ -69,8 +70,14 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
       Actions:
-        - TargetGroupArn: !Ref TargetGroup
-          Type: forward
+        - RedirectConfig:
+            Host: !Ref FeederHostname
+            Path: "/"
+            Port: "443"
+            Protocol: HTTPS
+            Query: ""
+            StatusCode: HTTP_301
+          Type: redirect
       Conditions:
         - Field: host-header
           Values:
@@ -142,7 +149,7 @@ Resources:
       DeploymentConfiguration:
         MaximumPercent: 200
         MinimumHealthyPercent: 50
-      DesiredCount: !If [IsProduction, 2, 1]
+      DesiredCount: 0
       EnableECSManagedTags: true
       LoadBalancers:
         - ContainerName: !Ref kContainerName
