@@ -40,6 +40,7 @@ Resources:
         - !Ref CodePipelineStartExecutionPolicy
         - !Ref SesMailSendPolicy
         - !Ref PassCloudFormationRolePolicy
+        - !Ref EcrPublicPushPolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -139,4 +140,25 @@ Resources:
             Effect: Allow
             Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-GHA-ServiceRoleForCloudFormation
             Sid: AllowPassingCloudFormationServiceRole
+        Version: "2012-10-17"
+
+  # Allows GitHub actions to build and publish Docker images
+  EcrPublicPushPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows this role to pass the service role to CloudFormation
+      PolicyDocument:
+        Statement:
+          - Action:
+              - ecr-public:BatchCheckLayerAvailability
+              - ecr-public:CompleteLayerUpload
+              - ecr-public:GetAuthorizationToken
+              - ecr-public:InitiateLayerUpload
+              - ecr-public:PutImage
+              - ecr-public:TagResource
+              - ecr-public:UploadLayerPart
+              - sts:GetServiceBearerToken
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowEcrPublicRepoImagePush
         Version: "2012-10-17"
