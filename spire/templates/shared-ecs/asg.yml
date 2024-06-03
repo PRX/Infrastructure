@@ -30,7 +30,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   NestedChangeSetScrubbingResourcesState: { Type: String }
-  SlackMessageRelaySnsTopicArn: { Type: String }
   AuthorizedKeys: { Type: CommaDelimitedList }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -76,11 +75,12 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
-              - Action: sns:Publish
+              - Action: events:PutEvents
                 Effect: Allow
-                Resource: !Ref SlackMessageRelaySnsTopicArn
+                Resource: !Sub arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+                Sid: AllowDefaultEventBusPut
             Version: "2012-10-17"
-          PolicyName: SlackRelaySnsPublish
+          PolicyName: DefaultEventBus
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -268,10 +268,8 @@ Resources:
 
                       INSTANCE_ID=`ec2-metadata -i | cut -d " " -f 2`
 
-                      aws sns publish \
-                        --region ${region} \
-                        --topic-arn ${topic} \
-                        --message '{ "channel": "${channel}", "username": "AWS Auto Scaling", "icon_emoji": ":ops-autoscaling:", "text": "${text}" }'
+                      aws events put-events \
+                        --entries 'Source="org.prx.spire.asg",DetailType="Slack Message Relay Message Payload",Detail="{ \"channel\": \"${channel}\", \"username\": \"AWS Auto Scaling\", \"icon_emoji\": \":ops-autoscaling:\", \"text\": \"${text}\" }"'
 
                       aws autoscaling set-instance-health \
                         --instance-id "$INSTANCE_ID" \
@@ -291,8 +289,6 @@ Resources:
                   text: !Sub >-
                     EC2 instance `'"$INSTANCE_ID"'` could not connect to `${SharedRedisReplicationGroupEndpointAddress}`
                     at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
-                  topic: !Ref SlackMessageRelaySnsTopicArn
-                  region: !Select [3, !Split [":", !Ref SlackMessageRelaySnsTopicArn]]
             02_add_authorized_keys:
               # For more information, see:
               # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
