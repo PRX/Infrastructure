@@ -5,6 +5,9 @@ set -a
 # Look for any Docker images labeled with "org.prx.spire.publish.ecr"
 push_to_ecr() {
     echo ">>> Looking for publishable Docker images"
+    # image_ids are IDs of images that would have been created earlier in the
+    # CodeBuild run, generally the result of something like `docker build .` in
+    # an app's buildspec.
     image_ids=$(docker images --filter "label=org.prx.spire.publish.ecr" --format "{{.ID}}")
 
     if [ -z "$image_ids" ]; then
@@ -19,9 +22,11 @@ push_to_ecr() {
             aws ecr get-login-password --region "${AWS_DEFAULT_REGION}" | docker login --username AWS --password-stdin "${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
             echo "> Logged in to ECR"
 
+            # e.g., GitHub/PRX/Porter
             unsafe_ecr_repo_name="GitHub/${PRX_REPO}"
             # Do any transformations necessary to satisfy ECR naming requirements:
             # Start with letter, [a-z0-9-_/.] (maybe, docs are unclear)
+            # e.g., github/prx/porter
             safe_ecr_repo_name=$(echo "$unsafe_ecr_repo_name" | tr '[:upper:]' '[:lower:]')
 
             # Need to allow errors temporarily to check if the repo exists
@@ -36,8 +41,26 @@ push_to_ecr() {
             fi
             set -e
 
-            image_tag="${PRX_COMMIT}"
+            # PRX_CI_PUBLISH is the indicator that production artifacts should
+            # be published. If it is present, the image tag should be the Git
+            # hash of the commit that triggered this build. (This is true even
+            # if PRX_CI_PRERELEASE is also set.)
+            #
+            # If PRX_CI_PUBLISH is not set, we can assume this is a prerelease
+            # build (generally because PRX_CI_PRERELEASE is set), so the image
+            # tag should include a `prerelease-` prefix.
+            if [ "$PRX_CI_PUBLISH" = "true" ]
+            then
+                # e.g., de67a8d77768093b20a9ae961a78313a3c0ef096
+                image_tag="${PRX_COMMIT}"
+            else
+                # e.g., prerelease-de67a8d77768093b20a9ae961a78313a3c0ef096
+                image_tag="prerelease-${PRX_COMMIT}"
+            fi
+
+            # e.g., github/prx/porter
             image_name="${safe_ecr_repo_name}"
+            # e.g., github/prx/porter:de67a8d77768093b20a9ae961a78313a3c0ef096
             tagged_image_name="${image_name}:${image_tag}"
 
             ecr_domain="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
