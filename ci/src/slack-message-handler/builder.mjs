@@ -105,7 +105,9 @@ export async function statusBlocks(event) {
           const repoName = imageName.split(':')[0];
           // The image tag (truncated), like
           // 165df6a
-          const tag = imageName.match(/:([a-f0-9]+)$/)[1].substring(0, 7);
+          const tag = imageName
+            .match(/:(prerelease\-)?([a-f0-9]+)$/)[1]
+            .substring(0, 7);
 
           const ecrUrl = `https://${region}.console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
           const deepEcrUrl = deepLink(accountId, ecrUrl);
