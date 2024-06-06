@@ -106,7 +106,7 @@ export async function statusBlocks(event) {
           // The image tag (truncated), like
           // 165df6a
           const tag = imageName
-            .match(/:([a-z]+)?-?([a-f0-9]+)$/)[2]
+            .match(/:([a-z\-]+)?([a-f0-9]+)$/)[2]
             .substring(0, 7);
 
           const ecrUrl = `https://${region}.console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
