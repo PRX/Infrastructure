@@ -65,7 +65,6 @@ Parameters:
   FeederAuthProxyInternalHostname: { Type: String }
   FixerHostname: { Type: String }
   IdHostname: { Type: String }
-  MetricsHostname: { Type: String }
   NetworksHostname: { Type: String }
   PlayHostname: { Type: String }
   FeederCdnHostname: { Type: String }
@@ -87,8 +86,6 @@ Parameters:
   FeederSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   NetworksSharedAlbListenerRulePriorityPrefix: { Type: String }
-
-  PublishSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
 
@@ -346,46 +343,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/networks.yml
       TimeoutInMinutes: 30
 
-  PublishStack:
-    Type: AWS::CloudFormation::Stack
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Parameters:
-        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Publish/pkg/docker-image-tag
-        AlbListenerRulePriorityPrefix: !Ref PublishSharedAlbListenerRulePriorityPrefix
-        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        S3SigningUserName: !Ref S3SigningUserName
-        S3SigningEndpointUrl: !Ref S3SigningEndpointUrl
-        S3SigningAccessKeyId: !Ref S3SigningAccessKeyId
-        CastleHostname: !Ref CastleHostname
-        CmsHostname: !Ref CmsHostname
-        FeederHostname: !Ref FeederHostname
-        IdHostname: !Ref IdHostname
-        MetricsHostname: !Ref MetricsHostname
-        PlayHostname: !Ref PlayHostname
-
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Publish }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/publish.yml
-      TimeoutInMinutes: 20
-
   RemixStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
@@ -460,9 +417,6 @@ Outputs:
 
   NetworksPublicWebTargetGroupFullName:
     Value: !GetAtt NetworksStack.Outputs.PublicWebTargetGroupFullName
-
-  PublishTargetGroupFullName:
-    Value: !GetAtt PublishStack.Outputs.TargetGroupFullName
 
   RemixTargetGroupFullName:
     Value: !GetAtt RemixStack.Outputs.TargetGroupFullName
