@@ -1,6 +1,7 @@
 name: Deploy Spire CD pipeline CloudFormation stack
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -12,11 +13,18 @@ concurrency:
   group: ${{ github.workflow }}
 
 jobs:
-  deploy_us_east_1:
+  deploy:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
+    strategy:
+      matrix:
+        include:
+          - region: us-east-1
+            stack: infrastructure-cd
+          - region: us-west-2
+            stack: infrastructure-cd
     steps:
       - uses: actions/checkout@v4
 
@@ -27,54 +35,19 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-west-2
+          aws-region: ${{ matrix.region }}
           role-to-assume: arn:aws:iam::561178107736:role/PRX-GHA-AccessRole
           role-session-name: gha-deploy-spire-cd
 
       - name: Deploy CloudFormation stack
         working-directory: spire/cd
         run: |
-          region="us-east-1"
-          stack_name="infrastructure-cd"
-          sam build
           sam deploy \
-            --region "$region" \
+            --region "${{ matrix.region }}" \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --stack-name "$stack_name" \
+            --stack-name "${{ matrix.stack }}" \
             --resolve-s3 \
-            --s3-prefix "$stack_name" \
-            --capabilities CAPABILITY_IAM
-
-  deploy_us_west_2:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: aws-actions/setup-sam@v2
-        with:
-          use-installer: true
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-region: us-west-2
-          role-to-assume: arn:aws:iam::561178107736:role/PRX-GHA-AccessRole
-          role-session-name: gha-deploy-spire-cd
-
-      - name: Deploy CloudFormation stack
-        working-directory: spire/cd
-        run: |
-          region="us-west-2"
-          stack_name="infrastructure-cd"
-          sam build
-            --region "$region" \
-            --no-confirm-changeset \
-            --no-fail-on-empty-changeset \
-            --stack-name "$stack_name" \
-            --resolve-s3 \
-            --s3-prefix "$stack_name" \
-            --capabilities CAPABILITY_IAM
+            --s3-prefix "${{ matrix.stack }}" \
+            --capabilities CAPABILITY_IAM \
+            --role-arn arn:aws:iam::561178107736:role/PRX-GHA-ServiceRoleForCloudFormation
