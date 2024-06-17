@@ -25,6 +25,7 @@ Parameters:
   SharedEcsClusterName: { Type: String }
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedPostgresqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedClickhouseClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
@@ -71,6 +72,9 @@ Resources:
       GroupDescription: !Sub >-
         The security group for ${EnvironmentType} Jump Server inbound traffic
       SecurityGroupIngress:
+        # Allows inbound traffic from all sources on purpose. The intent is to
+        # allow us to connect to something within the VPC from anywhere outside
+        # the VPC.
         - CidrIp: 0.0.0.0/0
           IpProtocol: tcp
           FromPort: 22
@@ -190,6 +194,7 @@ Resources:
             - !Ref SharedMysqlClientSecurityGroupId
             - !Ref SharedPostgresqlClientSecurityGroupId
             - !Ref SharedRedisClientSecurityGroupId
+            - !Ref SharedClickhouseClientSecurityGroupId
           SubnetId: !Ref VpcPublicSubnet1Id
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}-jump_server" }

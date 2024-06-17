@@ -1,0 +1,128 @@
+# stacks/shared-clickhouse/security-groups.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates security groups for the shared ClickHouse instance and for the clients
+  that connect to it. They are created in this stack to prevent circular
+  dependencies.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  # Only ClickHouse instances should belong to this security group
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The primary security group for ${EnvironmentType} ClickHouse instance.
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_clickhouse_instance" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+      VpcId: !Ref VpcId
+  InstanceSecurityGroupSshIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow SSH traffic to the ClickHouse Instance security group
+      FromPort: 22
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt ClientSecurityGroup.GroupId
+      ToPort: 22
+  InstanceSecurityGroupClickHouseHttpInterfaceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the HTTP
+        interface and REST API
+      FromPort: 8123
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt ClientSecurityGroup.GroupId
+      ToPort: 8123
+  InstanceSecurityGroupClickHouseNativeInterfaceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the
+        native protocol interface
+      FromPort: 9000
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt ClientSecurityGroup.GroupId
+      ToPort: 9000
+
+  # Any clients that need to communicate with ClickHouse should belong to this
+  # security group
+  ClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Shared ${EnvironmentType} ClickHouse client security group
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_clickhouse-client" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+      VpcId: !Ref VpcId
+  ClientSecurityGroupClickHouseSshEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow SSH traffic to the ClickHouse Instance security group
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 22
+      GroupId: !GetAtt ClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  ClientSecurityGroupClickHouseHttpInterfaceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the HTTP
+        interface and REST API
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 8123
+      GroupId: !GetAtt ClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 8123
+  ClientSecurityGroupClickHouseNativeInterfaceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the
+        native protocol interface
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 9000
+      GroupId: !GetAtt ClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 9000
+
+Outputs:
+  InstanceSecurityGroupId:
+    Value: !GetAtt InstanceSecurityGroup.GroupId
+  ClientSecurityGroupId:
+    Value: !GetAtt ClientSecurityGroup.GroupId
