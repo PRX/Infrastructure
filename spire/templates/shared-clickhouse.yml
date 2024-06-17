@@ -12,6 +12,9 @@ Parameters:
   GoogleStorageHmacKeySecret: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   NestedChangeSetScrubbingResourcesState: { Type: String }
   RegionMode: { Type: String }
+  AuguryDatabase: { Type: AWS::SSM::Parameter::Value<String> }
+  AuguryPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
+  AuguryUsername: { Type: AWS::SSM::Parameter::Value<String> }
   RollupsDatabase: { Type: AWS::SSM::Parameter::Value<String> }
   RollupsPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   RollupsUsername: { Type: AWS::SSM::Parameter::Value<String> }
@@ -132,6 +135,7 @@ Resources:
               # https://github.com/PRX/castlehouse/tree/main
               command: !Sub |
                 #!/bin/bash
+                # Rollups
                 export DBNAME=${RollupsDatabase}
                 if test -z "$(clickhouse-client -d $DBNAME -q 'show tables')"; then
                   clickhouse-client -q "CREATE DATABASE $DBNAME"
@@ -139,11 +143,20 @@ Resources:
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_backfill.sql)
                   clickhouse-client -d $DBNAME --queries-file <(curl -s https://raw.githubusercontent.com/PRX/castlehouse/main/schema/mv_increments.sql)
                 fi
+                # Augury
+                export DBNAME=${AuguryDatabase}
+                if test -z "$(clickhouse-client -d $DBNAME -q 'show tables')"; then
+                  clickhouse-client -q "CREATE DATABASE $DBNAME"
+                fi
             04_setup_users:
               command: !Sub |
                 #!/bin/bash
+                # Rollups
                 clickhouse-client -q "CREATE USER OR REPLACE ${RollupsUsername} IDENTIFIED BY '${RollupsPassword}' SETTINGS PROFILE 'readonly'"
                 clickhouse-client -q "GRANT SHOW TABLES, SELECT ON ${RollupsDatabase}.* TO ${RollupsUsername}"
+                # Augury
+                clickhouse-client -q "CREATE USER OR REPLACE ${AuguryUsername} IDENTIFIED BY '${AuguryPassword}'"
+                clickhouse-client -q "GRANT ALL ON ${AuguryDatabase}.* TO ${AuguryUsername}"
           files:
             /etc/cfn/cfn-hup.conf:
               # Create a configuration file for cfn-hup
