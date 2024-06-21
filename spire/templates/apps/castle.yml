@@ -37,6 +37,7 @@ Parameters:
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
+  ClickhouseLegacyClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -401,6 +402,15 @@ Resources:
       GroupId: !GetAtt PostgresSecurityGroup.GroupId
       IpProtocol: tcp
       SourceSecurityGroupId: !GetAtt PostgresClientSecurityGroup.GroupId
+      ToPort: 5432
+  PostgresSecurityGroupLegacyClickhouseClientIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: Allows inbound traffic from PG/CH client resources
+      FromPort: 5432
+      GroupId: !GetAtt PostgresSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref ClickhouseLegacyClientSecurityGroupId
       ToPort: 5432
 
   PostgresInstance:

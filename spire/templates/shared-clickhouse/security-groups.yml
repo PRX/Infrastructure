@@ -69,6 +69,28 @@ Resources:
       IpProtocol: tcp
       SourceSecurityGroupId: !GetAtt ClientSecurityGroup.GroupId
       ToPort: 9000
+  InstanceSecurityGroupLegacyClickHouseHttpInterfaceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the HTTP
+        interface and REST API
+      FromPort: 8123
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      ToPort: 8123
+  InstanceSecurityGroupLegacyClickHouseNativeInterfaceIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the
+        native protocol interface
+      FromPort: 9000
+      GroupId: !GetAtt InstanceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      ToPort: 9000
 
   # Any clients that need to communicate with ClickHouse should belong to this
   # security group
@@ -121,8 +143,73 @@ Resources:
       IpProtocol: tcp
       ToPort: 9000
 
+  # Any clients that need to communicate with ClickHouse AND Castle PG should
+  # belong to this security group (if they can't belong to each of the
+  # respective client security groups individually).
+  # TODO Remove once Castle PG is gone
+  LegacyClientSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Shared ${EnvironmentType} ClickHouse client security group
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_clickhouse-client" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Clickhouse }
+      VpcId: !Ref VpcId
+  LegacyClientSecurityGroupClickHouseSshEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow SSH traffic to the ClickHouse Instance security group
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 22
+      GroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 22
+  LegacyClientSecurityGroupClickHouseHttpInterfaceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the HTTP
+        interface and REST API
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 8123
+      GroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 8123
+  LegacyClientSecurityGroupClickHouseNativeInterfaceEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allow traffic to the ClickHouse Instance security group using the
+        native protocol interface
+      DestinationSecurityGroupId: !GetAtt InstanceSecurityGroup.GroupId
+      FromPort: 9000
+      GroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 9000
+  LegacyClientSecurityGroupPostgreEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: >-
+        Allow traffic to PostgreSQL
+      FromPort: 5432
+      GroupId: !GetAtt LegacyClientSecurityGroup.GroupId
+      IpProtocol: tcp
+      ToPort: 5432
+
 Outputs:
   InstanceSecurityGroupId:
     Value: !GetAtt InstanceSecurityGroup.GroupId
   ClientSecurityGroupId:
     Value: !GetAtt ClientSecurityGroup.GroupId
+  LegacyClientSecurityGroupId:
+    Value: !GetAtt LegacyClientSecurityGroup.GroupId
