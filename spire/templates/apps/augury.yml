@@ -59,7 +59,6 @@ Parameters:
   ClickhouseLegacyClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   CastlePostgresInstanceEndpointAddress: { Type: String }
   CastlePostgresInstanceEndpointPort: { Type: String }
-  CastlePostgresClientSecurityGroupId: { Type: String }
   AdFilesHostname: { Type: String }
   AuguryHostname: { Type: String }
   FeederHostname: { Type: String }
@@ -1148,9 +1147,10 @@ Resources:
           SECURITY_GROUP_1: !GetAtt SlowWorkerSecurityGroup.GroupId
           SECURITY_GROUP_2: !Ref EcsLaunchEndpointsAccessSecurityGroupId
           SECURITY_GROUP_3: !Ref KmsEndpointAccessSecurityGroupId
-          SECURITY_GROUP_4: !Ref CastlePostgresClientSecurityGroupId
+          # Using the combined legacy clickhouse + castle security groups for
+          # now to overcome the security group limit.
+          SECURITY_GROUP_4: !Ref ClickhouseLegacyClientSecurityGroupId
           SECURITY_GROUP_5: !Ref SharedPostgresqlClientSecurityGroupId
-          SECURITY_GROUP_6: !Ref SharedClickhouseClientSecurityGroupId
           STARTED_BY: !Ref AWS::StackName
           ENVIRONMENT_TYPE: !Ref EnvironmentType
           ROOT_STACK_ID: !Ref RootStackId
@@ -1199,9 +1199,6 @@ Resources:
                   process.env.SECURITY_GROUP_3,
                   process.env.SECURITY_GROUP_4,
                   process.env.SECURITY_GROUP_5,
-                  // TODO: There is a max of 5 security groups per task
-                  // TODO: Find a way to add the 6th security group
-                  // process.env.SECURITY_GROUP_6,
                 ],
               },
             },
