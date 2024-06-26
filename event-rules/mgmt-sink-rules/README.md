@@ -1,0 +1,3 @@
+Similar to event rules created for _organization sink_ setups. There are some events that only occur within the management account of an AWS Organization. In order to capture and funnel those events to a single consumer, rules are created on the default event buses in all regions of the management account, which forward the events to purpose-built custom buses, to which the consumers subscribe.
+
+This template should be deployed to CloudFormation stacks using a StackSet. The StackSet should be created once in the management account, and configured to deploy to every region of the management account.

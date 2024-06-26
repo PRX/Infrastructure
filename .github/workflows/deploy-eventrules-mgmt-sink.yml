@@ -1,0 +1,39 @@
+name: Deploy management sink rules
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - event-rules/mgmt-sink-rules/template.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-2
+          role-to-assume: arn:aws:iam::048723829744:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-mgmt-sink-rules
+
+      - name: Deploy to management account
+        working-directory: event-rules/mgmt-sink-rules
+        run: |
+          template_body=$(cat template.yml)
+
+          aws cloudformation update-stack-set \
+            --stack-set-name mgmt-sink-event-rules \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --template-body "$template_body" \
+            --operation-preferences FailureTolerancePercentage=100,MaxConcurrentPercentage=100,ConcurrencyMode=SOFT_FAILURE_TOLERANCE,RegionConcurrencyType=PARALLEL
