@@ -3,7 +3,7 @@ import { compareCommits } from './github.mjs';
 import regions from './regions.mjs';
 
 function deepLink(accountId, url) {
-  const deepLinkRoleName = 'ViewOnlyAccess';
+  const deepLinkRoleName = 'AdministratorAccess';
 
   const urlEncodedUrl = encodeURIComponent(url);
   return `https://d-906713e952.awsapps.com/start/#/console?account_id=${accountId}&role_name=${deepLinkRoleName}&destination=${urlEncodedUrl}`;
