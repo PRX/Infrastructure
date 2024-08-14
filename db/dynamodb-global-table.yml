@@ -2,7 +2,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
-  Create a global primary-key-lookup DynamoDB table
+  Create a global primary-key-lookup DynamoDB table with an optional sort key
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -11,8 +11,10 @@ Metadata:
           default: Table Definition
         Parameters:
           - TableName
-          - PrimaryKey
-          - PrimaryType
+          - PartitionKey
+          - PartitionType
+          - SortKey
+          - SortType
           - ExpirationField
       - Label:
           default: Optional Regions
@@ -46,10 +48,14 @@ Metadata:
     ParameterLabels:
       TableName:
         default: Table name
-      PrimaryKey:
-        default: Primary key field
-      PrimaryType:
-        default: Primary key type
+      PartitionKey:
+        default: Partition key field
+      PartitionType:
+        default: Partition key type
+      SortKey:
+        default: Sort key field
+      SortType:
+        default: Sort key type
       ExpirationField:
         default: Field to enable expiration on
       Region2:
@@ -91,12 +97,22 @@ Parameters:
   TableName:
     Type: String
     Description: The unique DynamoDB table name.
-  PrimaryKey:
+  PartitionKey:
     Type: String
-    Description: The name of the primary key field
-  PrimaryType:
+    Description: The name of the partition key field
+  PartitionType:
     Type: String
-    Description: The type of the primary key field
+    Description: The type of the partition key field
+    AllowedValues:
+      - String
+      - Numeric
+      - Binary
+  SortKey:
+    Type: String
+    Description: The name of the sort key field (optional)
+  SortType:
+    Type: String
+    Description: The type of the sort key field
     AllowedValues:
       - String
       - Numeric
@@ -179,6 +195,7 @@ Conditions:
   HasForeignAccount: !Not [!Equals [!Ref ForeignAccountId, ""]]
   HasForeignRole: !Not [!Equals [!Ref ForeignRoleName, ""]]
   HasProvisionedBilling: !Equals [!Ref BillingMode, "PROVISIONED"]
+  HasSortKey: !Not [!Equals [!Ref SortKey, ""]]
 
 Mappings:
   DataTypesMap:
@@ -194,12 +211,22 @@ Resources:
     Type: AWS::DynamoDB::GlobalTable
     Properties:
       AttributeDefinitions:
-        - AttributeName: !Ref PrimaryKey
-          AttributeType: !FindInMap [DataTypesMap, !Ref PrimaryType, Symbol]
+        - AttributeName: !Ref PartitionKey
+          AttributeType: !FindInMap [DataTypesMap, !Ref PartitionType, Symbol]
+        - !If
+          - HasSortKey
+          - AttributeName: !Ref SortKey
+            AttributeType: !FindInMap [DataTypesMap, !Ref SortType, Symbol]
+          - !Ref AWS::NoValue
       BillingMode: !Ref BillingMode
       KeySchema:
-        - AttributeName: !Ref PrimaryKey
+        - AttributeName: !Ref PartitionKey
           KeyType: HASH
+        - !If
+          - HasSortKey
+          - AttributeName: !Ref SortKey
+            KeyType: RANGE
+          - !Ref AWS::NoValue
       Replicas:
         - ReadProvisionedThroughputSettings: !If
             - HasProvisionedBilling
