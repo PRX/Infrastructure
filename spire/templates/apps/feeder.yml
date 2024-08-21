@@ -340,6 +340,39 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Feeder }
       VisibilityTimeout: 3600 # 1 hour
+  FixerCallbackQueueMessageAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [Feeder] Fixer queue <${EnvironmentTypeAbbreviation}> HAS OLD MESSAGES (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Feeder's Fixer callback queue contains messages that
+        are significantly older than expected, which means some Porter job
+        callbacks are not being processed as quickly as normal.
+
+        This generally means that some users are already seeing problems with
+        their file uploads.
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt FixerCallbackQueue.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Feeder }
+      Threshold: 900 # 15 minutes; ApproximateAgeOfOldestMessage is reported in seconds
+      TreatMissingData: notBreaching
   FixerCallbackDeadletterQueue:
     Type: AWS::SQS::Queue
     DeletionPolicy: Delete
@@ -369,8 +402,8 @@ Resources:
       AlarmName: !Sub ERROR [Feeder] Fixer dead-letter queue <${EnvironmentTypeAbbreviation}> NOT EMPTY (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Feeder's dead-letter queue for the Fixer callback
-        queue is not empty, which means some Fixer or Porter job callbacks were
-        not successfully processed.
+        queue is not empty, which means some Porter job callbacks were not
+        successfully processed.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: QueueName
