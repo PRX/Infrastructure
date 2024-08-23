@@ -7,6 +7,7 @@ Description: >-
 Parameters:
   AuthorizedKeys: { Type: CommaDelimitedList }
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   GoogleStorageBucket: { Type: AWS::SSM::Parameter::Value<String> }
   GoogleStorageHmacKeyId: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   GoogleStorageHmacKeySecret: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
@@ -22,6 +23,7 @@ Parameters:
   RootStackName: { Type: String }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   SharedClickhouseInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  CloudWatchLogsEndpointAccessSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -149,6 +151,59 @@ Resources:
                 path=Resources.ClickhouseServer5.Metadata.AWS::CloudFormation::Init
                 action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ClickhouseServer5
                 runas=root
+            /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json:
+              content: !Sub |
+                {
+                  "agent": {
+                    "metrics_collection_interval": 60
+                  },
+                  "logs": {
+                    "logs_collected": {
+                      "files": {
+                        "collect_list": [
+                          {
+                            "file_path": "/var/log/clickhouse-server/clickhouse-server.log",
+                            "log_group_name": "${EnvironmentTypeAbbreviation}-clickhouse-server.log",
+                            "log_stream_name": "{instance_id}"
+                          },
+                          {
+                            "file_path": "/var/log/clickhouse-server/clickhouse-server.err.log",
+                            "log_group_name": "${EnvironmentTypeAbbreviation}-clickhouse-server.err.log",
+                            "log_stream_name": "{instance_id}"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "metrics": {
+                    "aggregation_dimensions": [["InstanceId", "Environment"]],
+                    "append_dimensions": {
+                      "AutoScalingGroupName": "${!aws:AutoScalingGroupName}",
+                      "Environment": "${EnvironmentType}",
+                      "ImageId": "${!aws:ImageId}",
+                      "InstanceId": "${!aws:InstanceId}",
+                      "InstanceType": "${!aws:InstanceType}"
+                    },
+                    "metrics_collected": {
+                      "cpu": {
+                        "measurement": ["cpu_usage_guest", "cpu_usage_nice"],
+                        "metrics_collection_interval": 60,
+                        "resources": ["*"]
+                      },
+                      "disk": {
+                        "measurement": ["used_percent"],
+                        "metrics_collection_interval": 60,
+                        "resources": ["*"]
+                      },
+                      "mem": {
+                        "measurement": ["mem_used_percent"],
+                        "metrics_collection_interval": 60
+                      }
+                    }
+                  }
+                }
+              owner: root
+              group: root
             /etc/systemd/system/clickhouse-server.service.d/override.conf:
               content: !Sub |
                 [Service]
@@ -165,6 +220,7 @@ Resources:
             yum:
               jq: []
               bind-utils: []
+              amazon-cloudwatch-agent: []
           services:
             sysvinit:
               cfn-hup:
@@ -175,6 +231,11 @@ Resources:
                 files:
                   - /etc/cfn/cfn-hup.conf
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+              amazon-cloudwatch-agent:
+                enabled: "true"
+                ensureRunning: "true"
+                files:
+                  - /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
     Properties:
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
@@ -196,6 +257,7 @@ Resources:
           DeviceIndex: 0
           GroupSet:
             - !Ref SharedClickhouseInstanceSecurityGroupId
+            - !Ref CloudWatchLogsEndpointAccessSecurityGroupId
           SubnetId: !Ref VpcPublicSubnet1Id
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}-clickhouse_server" }
