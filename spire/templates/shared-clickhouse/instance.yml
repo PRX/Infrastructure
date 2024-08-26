@@ -16,6 +16,8 @@ Parameters:
   AuguryDatabase: { Type: AWS::SSM::Parameter::Value<String> }
   AuguryPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   AuguryUsername: { Type: AWS::SSM::Parameter::Value<String> }
+  MonitoringPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
+  MonitoringUsername: { Type: AWS::SSM::Parameter::Value<String> }
   RollupsDatabase: { Type: AWS::SSM::Parameter::Value<String> }
   RollupsPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   RollupsUsername: { Type: AWS::SSM::Parameter::Value<String> }
@@ -140,6 +142,8 @@ Resources:
             04_setup_users:
               command: !Sub |
                 #!/bin/bash
+                # Monitoring
+                clickhouse-client -q "CREATE USER OR REPLACE ${MonitoringUsername} IDENTIFIED BY '${MonitoringPassword}' DEFAULT ROLE monitoring"
                 # Readonly
                 clickhouse-client -q "CREATE USER OR REPLACE ${RollupsUsername} IDENTIFIED BY '${RollupsPassword}' SETTINGS PROFILE 'readonly'"
                 clickhouse-client -q "GRANT SHOW TABLES, SELECT ON ${RollupsDatabase}.* TO ${RollupsUsername}"
