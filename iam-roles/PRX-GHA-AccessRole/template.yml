@@ -41,6 +41,7 @@ Resources:
         - !Ref SesMailSendPolicy
         - !Ref PassCloudFormationRolePolicy
         - !Ref EcrPublicPushPolicy
+        - !Ref PrivateEcrPushPolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -162,3 +163,20 @@ Resources:
             Resource: "*"
             Sid: AllowEcrPublicRepoImagePush
         Version: "2012-10-17"
+
+  # GH actions push to private ECR repos
+  PrivateEcrPushPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: Allows pushing Docker images to private ECR repositories
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ecr:BatchCheckLayerAvailability
+                - ecr:InitiateLayerUpload
+                - ecr:UploadLayerPart
+                - ecr:CompleteLayerUpload
+                - ecr:PutImage
+              Resource: "*"
