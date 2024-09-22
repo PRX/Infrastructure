@@ -6,7 +6,8 @@ Transform: AWS::Serverless-2016-10-31
 Description: >-
   Creates a number of Lambda functions that collect Dovetail metrics data
   from Kinesis streams, and process and forward that data to various
-  destinations, like BigQuery and third-parties as pingback.
+  destinations, like BigQuery, 3rd-party pingbacks, and DynamoDB for 
+  campaign impressions and listener frequency.
 
 Parameters:
   kMetricFilterNamespace:
@@ -29,6 +30,8 @@ Parameters:
   DovetailCountedKinesisStreamName: { Type: String }
   DovetailRouterHosts: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -722,6 +725,278 @@ Resources:
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: "1"
 
+  # Frequency
+  AnalyticsFrequencyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub >-
+        ${EnvironmentType} Dovetail Analytics saving Frequency data to DynamoDB
+      Environment:
+        Variables:
+          AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+          FREQUENCY: "true" # set function mode = frequency
+          DDB_FREQUENCY_TABLE: !Ref FrequencyDynamodbTableName
+          DDB_TTL: !Ref kDynamoDbTtl
+      Events:
+        FrequencyKinesisTrigger:
+          Properties:
+            BatchSize: 50
+            BisectBatchOnFunctionError: true
+            Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCountedKinesisStreamArn
+          Type: Kinesis
+      Handler: index.handler
+      MemorySize: 512
+      Runtime: nodejs16.x
+      Policies:
+        - !Ref ParameterStoreReadPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - Statement:
+            - Action:
+                - dynamodb:DescribeTable
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Effect: Allow
+              # TODO: can this be done with an AWS::Partition Sub?
+              Resource: !Split
+                - ","
+                - Fn::Sub:
+                    - arn:aws:dynamodb:*:*:table/${inner}
+                    - inner:
+                        Fn::Join:
+                          - ",arn:aws:dynamodb:*:*:table/"
+                          - !Split [",", !Ref FrequencyDynamodbTableName]
+          Version: "2012-10-17"
+        - Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Resource: !Split [",", !Ref FrequencyDynamodbAccessRoleArn]
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Analytics
+      Timeout: 30
+  AnalyticsFrequencyFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AnalyticsFrequencyFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+  AnalyticsFrequencyFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Frequency Lambda function is
+        failing, but tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsFrequencyFunction
+      EvaluationPeriods: 5
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      Threshold: 0
+      TreatMissingData: notBreaching
+  AnalyticsFrequencyFunctionLogGroupToKinesisSubscriptionFilterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: !Sub logs.${AWS::Region}.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyName: AnalyticsFrequencySubscriptionKinesisPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:DescribeStream
+                  - kinesis:PutRecord
+                  - kinesis:PutRecords
+                Resource: !Ref DovetailVerifiedMetricsKinesisStreamArn
+            Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+  AnalyticsFrequencyFunctionLogGroupImpressionsToKinesisSubscriptionFilter:
+    # Send impression data from Frequency Lambda function's logs to Kinesis
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      DestinationArn: !Ref DovetailVerifiedMetricsKinesisStreamArn
+      FilterPattern: "{$.msg = impression}"
+      LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
+      RoleArn: !GetAtt AnalyticsFrequencyFunctionLogGroupToKinesisSubscriptionFilterRole.Arn
+
+  AnalyticsFrequencyFunctionKinesisIteratorBehindAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Frequency Lambda function's
+        Kinesis iterator age is higher than normal, tktktk.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsFrequencyFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      Threshold: 900000 # milliseconds
+      TreatMissingData: missing
+      Unit: Milliseconds
+  AnalyticsFrequencyFunctionKinesisIteratorStalledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub FATAL [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR STALLED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Frequency Lambda function's
+        Kinesis iterator is significantly delayed, and is likely to continue to
+        fall behind without intervention.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AnalyticsFrequencyFunction
+      EvaluationPeriods: 1
+      MetricName: IteratorAge
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      Threshold: 3600000 # milliseconds
+      TreatMissingData: missing
+      Unit: Milliseconds
+
+  AnalyticsFrequencyFunctionErrorLevelLogMetricFilter:
+    # Counts the number of logged errors
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub frequency_errors_${AnalyticsFrequencyFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  AnalyticsFrequencyFunctionLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Dovetail Analytics Frequency Lambda function has
+        logged some errors during execution.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: !Sub frequency_errors_${AnalyticsFrequencyFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref AnalyticsFrequencyFunctionLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Analytics }
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  AnalyticsFrequencyFunctionInsertsMetricFilter:
+    # Counts the number of rows inserted to DynamoDB
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "dynamodb" }'
+      LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub frequency_inserts_${AnalyticsFrequencyFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+
+  AnalyticsFrequencyFunctionLookupsMetricFilter:
+    # Count the number of redirect-datas we've looked up and shuffeld along to
+    # the metrics-kinesis stream
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.dest = "kinesis*" }'
+      LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub frequency_lookups_${AnalyticsFrequencyFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: $.rows
+
+  AnalyticsFrequencyFunctionRetriesMetricFilter:
+    # Counts the number of retried DynamoDB operations
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $.ddb = "retrying" }'
+      LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub frequency_retries_${AnalyticsFrequencyFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+
   # Pingbacks
   AnalyticsPingbacksFunction:
     Type: AWS::Serverless::Function
@@ -942,6 +1217,7 @@ Resources:
                     [ "${kMetricFilterNamespace}", "bigquery_downloads_${AnalyticsBigqueryFunction}", { "label": "BigQuery Download Records", "color": "#1f77b4" } ],
                     [ "${kMetricFilterNamespace}", "bigquery_impressions_${AnalyticsBigqueryFunction}", { "label": "BigQuery Impression Records", "color": "#ff7f0e" } ],
                     [ "${kMetricFilterNamespace}", "pingbacks_other_${AnalyticsPingbacksFunction}", { "label": "Pingbacks", "color": "#d62728" } ]
+                    [ "${kMetricFilterNamespace}", "frequency_${AnalyticsFrequencyFunction}", { "label": "Frequency", "color": "#ff9896" } ]
                   ],
                   "view": "timeSeries",
                   "stacked": false,
@@ -967,6 +1243,7 @@ Resources:
                     [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsBigqueryFunction}", { "label": "BigQuery Lambda" } ],
                     [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "DynamoDB Lambda" } ],
                     [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsPingbacksFunction}", { "label": "Pingbacks Lambda" } ]
+                    [ "AWS/Lambda", "IteratorAge", "FunctionName", "${AnalyticsFrequencyFunction}", { "label": "Frequency Lambda" } ]
                   ],
                   "view": "timeSeries",
                   "stacked": false,
@@ -1074,6 +1351,46 @@ Resources:
                   "metrics": [
                     [ "AWS/Lambda", "Duration", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "Average", "stat": "Average" } ],
                     [ "AWS/Lambda", "Duration", "FunctionName", "${AnalyticsDynamoDbFunction}", { "label": "Max", "stat": "Maximum" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "DDB Duration",
+                  "period": 60,
+                  "liveData": true
+                }
+              },
+
+              {
+                "height": 4,
+                "width": 6,
+                "y": 4,
+                "x": 12,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "AWS/Lambda", "Invocations", "FunctionName", "${AnalyticsFrequencyFunction}", { "label": "Invocations" } ],
+                    [ "AWS/Lambda", "Errors", "FunctionName", "${AnalyticsFrequencyFunction}", { "label": "[max: ${!MAX}] Errors", "yAxis": "right" } ]
+                  ],
+                  "view": "timeSeries",
+                  "stacked": false,
+                  "region": "${AWS::Region}",
+                  "title": "DDB Health",
+                  "period": 60,
+                  "liveData": true,
+                  "stat": "Sum"
+                }
+              },
+              {
+                "height": 4,
+                "width": 6,
+                "y": 4,
+                "x": 18,
+                "type": "metric",
+                "properties": {
+                  "metrics": [
+                    [ "AWS/Lambda", "Duration", "FunctionName", "${AnalyticsFrequencyFunction}", { "label": "Average", "stat": "Average" } ],
+                    [ "AWS/Lambda", "Duration", "FunctionName", "${AnalyticsFrequencyFunction}", { "label": "Max", "stat": "Maximum" } ]
                   ],
                   "view": "timeSeries",
                   "stacked": false,
