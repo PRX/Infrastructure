@@ -57,6 +57,7 @@ Resources:
       Engine: Redis
       EngineVersion: 7.1
       MultiAZEnabled: true
+      # If node groups or replica quanities change, update the memory alarms
       NumNodeGroups: 1 # NodeGroups are Shards. This replication group will always use cluster mode due to the parameter group.
       ReplicasPerNodeGroup: 1 # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
       ReplicationGroupDescription: !Sub Dovetail ${EnvironmentType} Redis
@@ -82,16 +83,39 @@ Resources:
         ${EnvironmentType} shared Redis's database memory usage has exceeded
         the recommended safe level
       ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
-        - Name: CacheNodeId
-          Value: "0001"
       EvaluationPeriods: 2
-      MetricName: DatabaseMemoryUsagePercentage
-      Namespace: AWS/ElastiCache
-      Period: 120
-      Statistic: Maximum
+      Metrics:
+        - Id: node1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${RedisReplicationGroup}-0001-001
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: node2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${RedisReplicationGroup}-0001-002
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: max
+          Expression: "MAX(METRICS())"
+          ReturnData: true
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -102,7 +126,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       Threshold: 0.85
       TreatMissingData: notBreaching
-      Unit: Percent
 
   RedisMemoryVeryLowAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -113,16 +136,39 @@ Resources:
         ${EnvironmentType} shared Redis's database memory usage has reached a
         critically high level
       ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-        - Name: CacheClusterId
-          Value: !Ref RedisReplicationGroup
-        - Name: CacheNodeId
-          Value: "0001"
       EvaluationPeriods: 2
-      MetricName: DatabaseMemoryUsagePercentage
-      Namespace: AWS/ElastiCache
-      Period: 120
-      Statistic: Maximum
+      Metrics:
+        - Id: node1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${RedisReplicationGroup}-0001-001
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: node2
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${RedisReplicationGroup}-0001-002
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: max
+          Expression: "MAX(METRICS())"
+          ReturnData: true
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -133,7 +179,6 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       Threshold: 0.93
       TreatMissingData: notBreaching
-      Unit: Percent
 
 Outputs:
   ReplicationGroupName:
