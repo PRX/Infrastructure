@@ -739,7 +739,7 @@ Resources:
           AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
           FREQUENCY: "true" # set function mode = frequency
           DDB_FREQUENCY_TABLE: !Ref FrequencyDynamodbTableName
-          DDB_TTL: !Ref kDynamoDbTtl
+          DDB_ROLE: !Ref FrequencyDynamodbAccessRoleArn
       Events:
         FrequencyKinesisTrigger:
           Properties:
@@ -757,9 +757,16 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
         - Statement:
             - Action:
+                - dynamodb:BatchGetItem
+                - dynamodb:BatchWriteItem
+                - dynamodb:ConditionCheck
+                - dynamodb:DeleteItem
                 - dynamodb:DescribeTable
+                - dynamodb:DescribeTimeToLive
                 - dynamodb:GetItem
                 - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
               Effect: Allow
               # TODO: can this be done with an AWS::Partition Sub?
               Resource: !Split

@@ -94,6 +94,8 @@ Parameters:
   DovetailCdnHostname: { Type: String }
   DovetailRouterHostname: { Type: String }
   DovetailCdnRedirectPrefix: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -739,6 +741,25 @@ Resources:
             Effect: Allow
             Principal:
               Service: ecs-tasks.amazonaws.com
+          - Action:
+              - dynamodb:BatchGetItem
+              - dynamodb:ConditionCheck
+              - dynamodb:DescribeTable
+              - dynamodb:DescribeTimeToLive
+              - dynamodb:GetItem
+              - dynamodb:Query
+            Effect: Allow
+            Resource: !Split
+              - ","
+              - Fn::Sub:
+                  - arn:aws:dynamodb:*:*:table/${inner}
+                  - inner:
+                      Fn::Join:
+                        - ",arn:aws:dynamodb:*:*:table/"
+                        - !Split [",", !Ref FrequencyDynamodbTableName]
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Resource: !Split [",", !Ref FrequencyDynamodbAccessRoleArn]
         Version: "2012-10-17"
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -801,6 +822,10 @@ Resources:
               Value: !Ref NewRelicApiKeyPrxLite
             - Name: AGENTS_URL
               Value: https://raw.githubusercontent.com/PRX/prx-podagent/main/db/agents.lock.json
+            - Name: DDB_FREQUENCY_TABLE
+              Value: !Ref FrequencyDynamodbTableName
+            - Name: DDB_ROLE
+              Value: !Ref FrequencyDynamodbAccessRoleArn
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LogConfiguration:
