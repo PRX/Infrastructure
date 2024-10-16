@@ -769,19 +769,13 @@ Resources:
                 - dynamodb:UpdateItem
               Effect: Allow
               # TODO: can this be done with an AWS::Partition Sub?
-              Resource: !Split
-                - ","
-                - Fn::Sub:
-                    - arn:aws:dynamodb:*:*:table/${inner}
-                    - inner:
-                        Fn::Join:
-                          - ",arn:aws:dynamodb:*:*:table/"
-                          - !Split [",", !Ref FrequencyDynamodbTableName]
+              Resource:
+                - !Sub "arn:aws:dynamodb:*:*:table/${FrequencyDynamodbTableName}"
           Version: "2012-10-17"
         - Statement:
             - Action: sts:AssumeRole
               Effect: Allow
-              Resource: !Split [",", !Ref FrequencyDynamodbAccessRoleArn]
+              Resource: !Ref FrequencyDynamodbAccessRoleArn
           Version: "2012-10-17"
       Tags:
         prx:meta:tagging-version: "2021-04-07"
@@ -815,8 +809,7 @@ Resources:
     Properties:
       AlarmName: !Sub WARN [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
-        ${EnvironmentType} Dovetail Analytics Frequency Lambda function is
-        failing, but tktktk.
+        ${EnvironmentType} Dovetail Analytics Frequency Lambda function is failing.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
@@ -882,7 +875,7 @@ Resources:
       AlarmName: !Sub WARN [Dovetail-Analytics] Frequency Lambda function <${EnvironmentTypeAbbreviation}> KINESIS ITERATOR FALLING BEHIND (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} Dovetail Analytics Frequency Lambda function's
-        Kinesis iterator age is higher than normal, tktktk.
+        Kinesis iterator age is higher than normal.
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: FunctionName
