@@ -94,6 +94,8 @@ Parameters:
   DovetailCdnHostname: { Type: String }
   DovetailRouterHostname: { Type: String }
   DovetailCdnRedirectPrefix: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
+  FrequencyDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -740,6 +742,28 @@ Resources:
             Principal:
               Service: ecs-tasks.amazonaws.com
         Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:ConditionCheck
+                  - dynamodb:DescribeTable
+                  - dynamodb:DescribeTimeToLive
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                Effect: Allow
+                Resource:
+                  - !Sub "arn:aws:dynamodb:*:*:table/${FrequencyDynamodbTableName}"
+            Version: "2012-10-17"
+          PolicyName: FrequencyDdbActions
+        - PolicyDocument:
+            Statement:
+              - Action: sts:AssumeRole
+                Effect: Allow
+                Resource: !Ref FrequencyDynamodbAccessRoleArn
+            Version: "2012-10-17"
+          PolicyName: FrequencyDdbAssumeRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -801,6 +825,10 @@ Resources:
               Value: !Ref NewRelicApiKeyPrxLite
             - Name: AGENTS_URL
               Value: https://raw.githubusercontent.com/PRX/prx-podagent/main/db/agents.lock.json
+            - Name: DDB_FREQUENCY_TABLE
+              Value: !Ref FrequencyDynamodbTableName
+            - Name: DDB_ROLE
+              Value: !Ref FrequencyDynamodbAccessRoleArn
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LogConfiguration:
