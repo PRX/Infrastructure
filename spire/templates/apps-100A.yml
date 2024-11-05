@@ -39,8 +39,6 @@ Parameters:
   MetaHostname: { Type: String }
   MetricsHostname: { Type: String }
   PlayHostname: { Type: String }
-  TheWorldSearchHostname: { Type: String }
-  TheWorldSearchInternalHostname: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -422,36 +420,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/styleguide.yml
       TimeoutInMinutes: 20
 
-  TheWorldSearchStack:
-    Type: AWS::CloudFormation::Stack
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      Parameters:
-        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        CodeS3Bucket: !Ref DeploymentPackageBucketName
-        CodeS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Search/pkg/s3-object-key
-        GoogleapisLayerS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Search/googleapis-layer/pkg/s3-object-key
-        TheWorldSearchGoogleCustomSearchEngineId: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Search/google-custom-search-engine-id
-        TheWorldSearchGoogleCustomSearchApiKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Search/google-custom-search-api-key
-        TheWorldSearchHostname: !Ref TheWorldSearchHostname
-        TheWorldSearchInternalHostname: !Ref TheWorldSearchInternalHostname
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Search }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/theworld-search.yml
-      TimeoutInMinutes: 5
-
   TheWorldWebsiteStack:
     Type: AWS::CloudFormation::Stack
     UpdateReplacePolicy: Delete
@@ -520,8 +488,3 @@ Outputs:
 
   PlayWebTargetGroupFullName:
     Value: !GetAtt PlayStack.Outputs.WebTargetGroupFullName
-
-  TheWorldSearchApiId:
-    Value: !GetAtt TheWorldSearchStack.Outputs.ApiId
-  TheWorldSearchApiEndpoint:
-    Value: !GetAtt TheWorldSearchStack.Outputs.ApiEndpoint
