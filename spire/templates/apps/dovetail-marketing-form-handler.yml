@@ -107,6 +107,9 @@ Resources:
                 const email = params.get('inputEmail');
                 const name = params.get('inputName') || 'Unknown';
                 const organization = params.get('textOrganization') || 'Unknown';
+                const type = params.get('messageType') || 'Unknown';
+                const sourceIp = event.requestContext.http.sourceIp;
+                const userAgent = event.requestContext.http.userAgent;
 
                 if (!email) {
                     return {
@@ -117,7 +120,7 @@ Resources:
 
                 // Concat all form fields from the request as the ticket
                 // comment body
-                let comment = '';
+                let comment = `sourceIp: ${sourceIp}\n\nuserAgent: ${userAgent}\n\n-----\n\n`;
                 for (const [key, value] of params) {
                     comment = comment.concat(`${key}: ${value}\n\n`);
                 }
@@ -129,7 +132,7 @@ Resources:
                             email,
                             name,
                         },
-                        subject: `Website form submission: ${organization}`,
+                        subject: `Website form submission: ${type} - ${organization}`,
                         comment: {
                             body: comment,
                         }
