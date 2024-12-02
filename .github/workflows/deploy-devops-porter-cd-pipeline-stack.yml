@@ -34,13 +34,20 @@ jobs:
           - us-west-2
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: us-west-2
-          role-to-assume: arn:aws:iam::561178107736:role/DevOps-GitHubOidcFederatedRole
-          role-session-name: GitHubActions-DeployPorterCdPipelineStack
+          aws-region: ${{ matrix.region }}
+          role-to-assume: arn:aws:iam::561178107736:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-porter-cd
+
       - name: Deploy CloudFormation stack
         working-directory: devops
         run: |
-          aws cloudformation deploy --region ${{ matrix.region }} --stack-name porter-cd-pipeline --template-file porter-cd-pipeline.yml --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset
+          aws cloudformation deploy \
+            --region ${{ matrix.region }} \
+            --stack-name porter-cd-pipeline \
+            --template-file porter-cd-pipeline.yml \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset
