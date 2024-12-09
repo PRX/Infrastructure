@@ -135,6 +135,87 @@ Resources:
       Threshold: 0
       TreatMissingData: notBreaching
 
+  TaskUser:
+    Type: AWS::IAM::User
+    Properties:
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPublish
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - sqs:ChangeMessageVisibility
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
+                Effect: Allow
+                Resource:
+                  - !GetAtt AudioCallbackQueue.Arn
+                  - !GetAtt ImageCallbackQueue.Arn
+                  - !GetAtt PodcastImportQueue.Arn
+                  - !GetAtt SearchIndexerQueue.Arn
+                  - !GetAtt DefaultJobQueue.Arn
+                Sid: AllowShoryuken
+            Version: "2012-10-17"
+          PolicyName: AppQueues
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Sub arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AnnounceResourcePrefix}*
+                Sid: AllowPublish
+            Version: "2012-10-17"
+          PolicyName: Announce
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:ListBucket
+                  - s3:ListAllMyBuckets
+                Effect: Allow
+                Resource: "*" # TODO Seems very permissive
+            Version: "2012-10-17"
+          PolicyName: S3ReadOnly
+        - PolicyDocument:
+            Statement:
+              - Action: s3:ListAllMyBuckets
+                Effect: Allow
+                Resource: "*"
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:Get*
+                  - s3:List*
+                  - s3:Put*
+                  - s3:RestoreObject
+                Effect: Allow
+                Resource:
+                  - !Sub ${FeedsS3BucketArn}/*
+                  - !Ref FeedsS3BucketArn
+            Version: "2012-10-17"
+          PolicyName: S3FeedBucket
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Network }
+  TaskUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref TaskUser
+
   TaskRole:
     Type: AWS::IAM::Role
     Properties:
@@ -329,6 +410,10 @@ Resources:
               Value: !Ref AWS::Region
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref TaskUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: DB_PORT_3306_TCP_ADDR
@@ -442,6 +527,10 @@ Resources:
               Value: !Ref AWS::Region
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
+            - Name: AWS_ACCESS_KEY_ID
+              Value: !Ref TaskUserAccessKey
+            - Name: AWS_SECRET_ACCESS_KEY
+              Value: !GetAtt TaskUserAccessKey.SecretAccessKey
             - Name: MEMCACHE_SERVERS
               Value: !Ref SharedMemcachedEndpointAddress
             - Name: DB_PORT_3306_TCP_ADDR
