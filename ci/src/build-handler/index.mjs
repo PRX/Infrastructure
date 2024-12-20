@@ -68,6 +68,40 @@ function eventIsPullRequest(event) {
 }
 
 /**
+ *
+ * @param {GitHubPullRequestWebhookPayload|GitHubPushWebhookPayload} event
+ * @param {string} buildspec
+ * @param {object} environmentVariables
+ * @param {string} projectName
+ * @param {object} extraEnvironmentVariables
+ */
+async function startBuild(
+  event,
+  buildspec,
+  environmentVariables,
+  projectName,
+  extraEnvironmentVariables,
+) {
+  const environmentVariablesOverride = {
+    ...environmentVariables,
+    ...extraEnvironmentVariables,
+  };
+
+  return codebuild.send(
+    new StartBuildCommand({
+      projectName,
+      sourceTypeOverride: 'GITHUB',
+      sourceLocationOverride: event.repository.clone_url,
+      sourceVersion: eventIsPullRequest(event)
+        ? `pr/${event.pull_request.number}`
+        : event.after,
+      buildspecOverride: buildspec,
+      environmentVariablesOverride,
+    }),
+  );
+}
+
+/**
  * `startBuild` returns a Build object
  * https://docs.aws.amazon.com/codebuild/latest/APIReference/API_Build.html
  * @param {string} ciContentsResponse - The response from the GitHub repository contents API for buildspec.yml
@@ -147,18 +181,40 @@ async function triggerBuild(ciContentsResponse, event) {
     environmentVariables.push({ name: 'PRX_GITHUB_AFTER', value: after });
   }
 
-  await codebuild.send(
-    new StartBuildCommand({
-      projectName: process.env.CODEBUILD_PROJECT_NAME,
-      sourceTypeOverride: 'GITHUB',
-      sourceLocationOverride: event.repository.clone_url,
-      sourceVersion: eventIsPullRequest(event)
-        ? `pr/${event.pull_request.number}`
-        : event.after,
-      buildspecOverride: buildspec,
-      environmentVariablesOverride: environmentVariables,
-    }),
-  );
+  // If the buildspec explicitly specifies any architectures, only include the
+  // architectures listed
+  if (
+    buildspec.includes('PRX_BUILD_X86_64') ||
+    buildspec.includes('PRX_BUILD_AARCH64')
+  ) {
+    if (buildspec.includes('PRX_BUILD_X86_64')) {
+      await startBuild(
+        event,
+        buildspec,
+        environmentVariables,
+        process.env.X64_CODEBUILD_PROJECT_NAME,
+        { name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' },
+      );
+    }
+
+    if (buildspec.includes('PRX_BUILD_AARCH64')) {
+      await startBuild(
+        event,
+        buildspec,
+        environmentVariables,
+        process.env.ARM_CODEBUILD_PROJECT_NAME,
+        { name: 'PRX_TARGET_ARCHITECTURE', value: 'aarch64' },
+      );
+    }
+  } else {
+    await startBuild(
+      event,
+      buildspec,
+      environmentVariables,
+      process.env.X64_CODEBUILD_PROJECT_NAME,
+      { name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' },
+    );
+  }
 
   console.log('CodeBuild started');
 }

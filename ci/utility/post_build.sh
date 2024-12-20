@@ -41,18 +41,20 @@ push_to_ecr() {
             fi
             set -e
 
+            arch="${PRX_TARGET_ARCHITECTURE}"
+
             # e.g., github/prx/porter
             image_name="${safe_ecr_repo_name}"
 
             # e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com
             ecr_domain="${PRX_AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
 
-            # This is always just the Git commit hash
-            # e.g., de67a8d77768093b20a9ae961a78313a3c0ef096
-            commit_image_tag="${PRX_COMMIT}"
-            # e.g., github/prx/porter:de67a8d77768093b20a9ae961a78313a3c0ef096
+            # This is the Git commit hash with the architecture
+            # e.g., de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
+            commit_image_tag="${PRX_COMMIT}-${arch}"
+            # e.g., github/prx/porter:de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
             commit_tagged_image_name="${image_name}:${commit_image_tag}"
-            # 123456789012.dkr.ecr.us-east-1.amazonaws.com/github/prx/porter:de67a8d77768093b20a9ae961a78313a3c0ef096
+            # 123456789012.dkr.ecr.us-east-1.amazonaws.com/github/prx/porter:de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
             commit_full_image_uri="${ecr_domain}/${commit_tagged_image_name}"
 
             # PRX_CI_PUBLISH is the indicator that production artifacts should
@@ -65,16 +67,16 @@ push_to_ecr() {
             # tag should include a `prerelease-` prefix.
             if [ "$PRX_CI_PUBLISH" = "true" ]
             then
-                # e.g., release-de67a8d77768093b20a9ae961a78313a3c0ef096
-                prefix_image_tag="release-${PRX_COMMIT}"
+                # e.g., release-de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
+                prefix_image_tag="release-${PRX_COMMIT}-${arch}"
             else
-                # e.g., prerelease-de67a8d77768093b20a9ae961a78313a3c0ef096
-                prefix_image_tag="prerelease-${PRX_COMMIT}"
+                # e.g., prerelease-de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
+                prefix_image_tag="prerelease-${PRX_COMMIT}-${arch}"
             fi
 
-            # e.g., github/prx/porter:release-de67a8d77768093b20a9ae961a78313a3c0ef096
+            # e.g., github/prx/porter:release-de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
             prefix_tagged_image_name="${image_name}:${prefix_image_tag}"
-            # 123456789012.dkr.ecr.us-east-1.amazonaws.com/github/prx/porter:release-de67a8d77768093b20a9ae961a78313a3c0ef096
+            # 123456789012.dkr.ecr.us-east-1.amazonaws.com/github/prx/porter:release-de67a8d77768093b20a9ae961a78313a3c0ef096-aarch64
             prefix_full_image_uri="${ecr_domain}/${prefix_tagged_image_name}"
 
             # Export a variable whose name is the LABEL from the Dockerfile,
@@ -83,6 +85,10 @@ push_to_ecr() {
             # this would set WEB_SERVER=1234.dkr.ecr.us-eas-1.amazonaws.com...
             declare -gx "$label"="$commit_tagged_image_name"
 
+            # The image is tagged and pushed twice, which results in one image
+            # in ECR with both tags. The "commit" tag is what is used in
+            # Parameter Store, ECS tasks, etc, but the "prefix" tag is added
+            # so that ECR lifecycle rules can handle releases properly.
             echo "> Pushing image $image_id to ECR $commit_full_image_uri"
             docker tag $image_id $commit_full_image_uri
             docker push $commit_full_image_uri
