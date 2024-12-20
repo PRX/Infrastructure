@@ -82,10 +82,10 @@ async function startBuild(
   projectName,
   extraEnvironmentVariables,
 ) {
-  const environmentVariablesOverride = {
+  const environmentVariablesOverride = [
     ...environmentVariables,
     ...extraEnvironmentVariables,
-  };
+  ];
 
   return codebuild.send(
     new StartBuildCommand({
