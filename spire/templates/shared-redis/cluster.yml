@@ -11,6 +11,7 @@ Parameters:
   RootStackId: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
+  RegionMode: { Type: String }
   NestedChangeSetScrubbingResourcesState: { Type: String }
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -19,6 +20,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -49,7 +51,7 @@ Resources:
       AtRestEncryptionEnabled: false
       AutomaticFailoverEnabled: true
       AutoMinorVersionUpgrade: false
-      CacheNodeType: !If [IsProduction, cache.m6g.large, cache.t4g.small]
+      CacheNodeType: !If [IsProduction, !If [IsPrimaryRegion, cache.m6g.large, cache.t4g.medium], cache.t4g.small]
       CacheParameterGroupName: default.redis7.cluster.on
       CacheSubnetGroupName: !Ref RedisSubnetGroup
       Engine: Redis
