@@ -193,7 +193,7 @@ async function triggerBuild(ciContentsResponse, event) {
         buildspec,
         environmentVariables,
         process.env.X64_CODEBUILD_PROJECT_NAME,
-        { name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' },
+        [{ name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' }],
       );
     }
 
@@ -203,7 +203,7 @@ async function triggerBuild(ciContentsResponse, event) {
         buildspec,
         environmentVariables,
         process.env.ARM_CODEBUILD_PROJECT_NAME,
-        { name: 'PRX_TARGET_ARCHITECTURE', value: 'aarch64' },
+        [{ name: 'PRX_TARGET_ARCHITECTURE', value: 'aarch64' }],
       );
     }
   } else {
@@ -212,7 +212,7 @@ async function triggerBuild(ciContentsResponse, event) {
       buildspec,
       environmentVariables,
       process.env.X64_CODEBUILD_PROJECT_NAME,
-      { name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' },
+      [{ name: 'PRX_TARGET_ARCHITECTURE', value: 'x86_64' }],
     );
   }
 
