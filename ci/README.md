@@ -103,7 +103,7 @@ The images will be pushed to ECR repositories that correspond to their source Gi
 
 #### Targeting Specific Architectures
 
-By default, ECR builds will occur in an `x86_64` CodeBuild environment. If you want your builds to target `aarch64`, add `PRX_BUILD_AARCH64: "true"` to the buildspec's `variables`. Once any build target architecture is listed in the buildspec, only that architecture will be built. Use `PRX_BUILD_X86_64: "true"` to include `x86_64` builds. **Note: the value of this variable is ignored! It is the presence of the strings `PRX_BUILD_AARCH64` or `PRX_BUILD_X86_64` that determine build architectures.**
+By default, ECR builds will occur in an `x86_64` CodeBuild environment. If you want your builds to target `aarch64`, add `PRX_BUILD_AARCH64: "true"` to the buildspec's `variables`. Once any build target architecture is listed in the buildspec, only those architectures that are explicitly listed will be built. Use `PRX_BUILD_X86_64: "true"` to include `x86_64` builds. **Note: the value of this variable is ignored! It is the presence of the strings `PRX_BUILD_AARCH64` or `PRX_BUILD_X86_64` that determine build architectures.**
 
 #### Updating Spire CD Metadata
 
