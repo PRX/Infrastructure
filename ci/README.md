@@ -101,6 +101,10 @@ At the end of a build, if the `post_build` script is invoked, Docker images resu
 
 The images will be pushed to ECR repositories that correspond to their source GitHub repository. For example, a project in the GitHub repository `PRX/my-app` will be pushed to an ECR repository named `github/prx/my-app`. The ECR repository will be in the same region that CI is running in.
 
+#### Targeting Specific Architectures
+
+By default, ECR builds will occur in an `x86_64` CodeBuild environment. If you want your builds to target `aarch64`, add `PRX_BUILD_AARCH64: "true"` to the buildspec's `variables`. Once any build target architecture is listed in the buildspec, only that architecture will be built. Use `PRX_BUILD_X86_64: "true"` to include `x86_64` builds. **Note: the value of this variable is ignored! It is the presence of the strings `PRX_BUILD_AARCH64` or `PRX_BUILD_X86_64` that determine build architectures.**
+
 #### Updating Spire CD Metadata
 
 In addition to pushing an image to ECR, CI can also update metadata used by Spire CD for deciding which application code to deploy. When CI builds are configured to update these metadata, Spire CD pipeline deploys will begin automatically, resulting in the new code being continuously deployed to staging environments.
