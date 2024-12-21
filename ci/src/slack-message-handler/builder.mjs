@@ -41,6 +41,7 @@ export async function statusBlocks(event) {
   const branch = allEnvVars.PRX_BRANCH;
   const pr = allEnvVars.PRX_GITHUB_PR;
   const codeBucket = allEnvVars.PRX_APPLICATION_CODE_BUCKET;
+  const targetArch = allEnvVars.PRX_TARGET_ARCHITECTURE;
 
   const verb = {
     IN_PROGRESS: 'Building',
@@ -58,6 +59,7 @@ export async function statusBlocks(event) {
     `${regionNickname} » <${codebuildUrl(event)}|${
       verb[event.detail['build-status']]
     }>`,
+    targetArch,
     ownerAndRepo,
     pr
       ? `<https://github.com/${ownerAndRepo}/pull/${pr}|#${pr}>`
