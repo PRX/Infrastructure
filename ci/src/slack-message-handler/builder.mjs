@@ -92,7 +92,10 @@ export async function statusBlocks(event) {
         const imageEnvarName = parts[0];
         // allEnvVars will have a key-value pair like:
         // { MY_APP: "github/prx/my-app:165df6a5fd675dcf67" }
-        // imageName will be like "github/prx/my-app:165df6a5fd675dcf67"
+        // imageName will be like:
+        //      "github/prx/my-app:165df6a5fd675dcf67"
+        //      "github/prx/my-app:release-165df6a5fd675dcf67"
+        //      "github/prx/my-app:release-165df6a5fd675dcf67-aarch64"
         const imageName = allEnvVars[imageEnvarName];
 
         // For builds that don't publish an image to ECR, this value won't
@@ -106,7 +109,7 @@ export async function statusBlocks(event) {
           // The image tag (truncated), like
           // 165df6a
           const tag = imageName
-            .match(/:([a-z\-]+)?([a-f0-9_\-]+)$/)[2]
+            .match(/:([a-z\-]+)?([a-f0-9]+)(-[a-z0-9_]+)?$/)
             .substring(0, 7);
 
           const ecrUrl = `https://${region}.console.aws.amazon.com/ecr/repositories/private/${accountId}/${repoName}?region=${region}`;
