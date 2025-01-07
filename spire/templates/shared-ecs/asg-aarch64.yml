@@ -1,4 +1,4 @@
-# stacks/shared-ecs/asg.yml
+# stacks/shared-ecs/asg-aarch64.yml
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -14,16 +14,16 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     # Update this value to change which AMI the launch template uses. You can
     # find the latest image name here:
-    # https://us-east-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_name
+    # https://us-east-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_name
     #                                                         ▼                   Put it here                    ▼
-    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/al2023-ami-ecs-hvm-2023.0.20241115-kernel-6.1-x86_64/image_id
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/al2023-ami-ecs-hvm-2023.0.20241217-kernel-6.1-arm64/image_id
   kProductionImageId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     # Update this value to change which AMI the launch template uses. You can
     # find the latest image name here:
-    # https://us-east-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2023/recommended/image_name
+    # https://us-east-1.console.aws.amazon.com/systems-manager/parameters/aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_name
     #                                                         ▼                   Put it here                    ▼
-    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/al2023-ami-ecs-hvm-2023.0.20241115-kernel-6.1-x86_64/image_id
+    Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/al2023-ami-ecs-hvm-2023.0.20241217-kernel-6.1-arm64/image_id
   ########
   EnvironmentType: { Type: String }
   RegionMode: { Type: String }
@@ -49,7 +49,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  # IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   KeepAsgAlive: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -94,7 +94,7 @@ Resources:
   InstanceRoleSetHealthPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: AutoscalingSetInstanceHealth
+      PolicyName: AutoscalingSetInstanceHealthAarch64
       PolicyDocument:
         Statement:
           - Action: autoscaling:SetInstanceHealth
@@ -110,23 +110,23 @@ Resources:
   # the load balancer to the EC2 instances). It does NOT allow ingress traffic
   # from the load balancer to the EC2 instances; that is handled by a rule on
   # the instance security group.
-  LoadBalancerSecurityGroupInstanceEgress:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      Description: >-
-        Allow all egress traffic from the LB SG to the instance SG.
-      # Based on the following recommednation
-      # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
-      DestinationSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
-      FromPort: 0
-      GroupId: !Ref LoadBalancerSecurityGroupId
-      IpProtocol: tcp
-      ToPort: 65535
+  # LoadBalancerSecurityGroupInstanceEgress:
+  #   Type: AWS::EC2::SecurityGroupEgress
+  #   Properties:
+  #     Description: >-
+  #       Allow all egress traffic from the LB SG to the instance SG.
+  #     # Based on the following recommednation
+  #     # https://aws.amazon.com/premiumsupport/knowledge-center/troubleshoot-unhealthy-checks-ecs/#Correctly_configure_the_security_groups_attached_to_your_load_balancer_and_container_instance
+  #     DestinationSecurityGroupId: !Ref SharedEcsAsgInstanceSecurityGroupId
+  #     FromPort: 0
+  #     GroupId: !Ref LoadBalancerSecurityGroupId
+  #     IpProtocol: tcp
+  #     ToPort: 65535
 
   AsgInstanceKeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Sub ${RootStackName}-asg-2022-05
+      KeyName: !Sub ${RootStackName}-asg-2022-05-aarch64
       KeyType: ed25519
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -151,8 +151,8 @@ Resources:
         ImageId: !If [IsProduction, !Ref kProductionImageId, !Ref kStagingImageId]
         InstanceType: !If
           - IsProduction
-          - m6a.large
-          - t3a.medium
+          - m8g.large
+          - t4g.medium
         KeyName: !Ref AsgInstanceKeyPair
         Monitoring:
           Enabled: false # Specifies whether detailed monitoring is enabled
@@ -337,7 +337,7 @@ Resources:
         # The number of success signals required before the ASG resource can
         # be considered succesfully created. This value must not be larger than
         # the default MinSize of the ASG, or it will never succeed.
-        Count: !If [IsProduction, 5, 0] # TODO Find a good value
+        Count: !If [IsProduction, 4, 0] # TODO Find a good value
         # How long to wait for signals from EC2 instances
         Timeout: PT5M
     UpdatePolicy:
@@ -392,7 +392,7 @@ Resources:
       MinSize: !If [KeepAsgAlive, "7", "0"]
       NewInstancesProtectedFromScaleIn: false
       Tags:
-        - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg" }
+        - { PropagateAtLaunch: true, Key: Name, Value: !Sub "${RootStackName}_shared-asg-aarch64" }
         - { PropagateAtLaunch: true, Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { PropagateAtLaunch: true, Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { PropagateAtLaunch: true, Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
@@ -408,44 +408,44 @@ Resources:
         - !Ref VpcPublicSubnet2Id
         - !Ref VpcPublicSubnet3Id
 
-  DefaultCapacityProvider:
-    Type: AWS::ECS::CapacityProvider
-    Properties:
-      AutoScalingGroupProvider:
-        AutoScalingGroupArn: !Ref Asg
-        ManagedDraining: ENABLED
-        ManagedScaling:
-          InstanceWarmupPeriod: 180
-          MaximumScalingStepSize: 10
-          MinimumScalingStepSize: 1
-          Status: ENABLED
-          TargetCapacity: !If
-            - IsProduction
-            - 100
-            - 100
-        ManagedTerminationProtection: DISABLED
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-  ClusterCapacityProviderAssociation:
-    Type: AWS::ECS::ClusterCapacityProviderAssociations
-    Properties:
-      Cluster: !Ref EcsClusterName
-      CapacityProviders:
-        - !Ref DefaultCapacityProvider
-        - !If [IsStaging, FARGATE, !Ref "AWS::NoValue"]
-        - !If [IsStaging, FARGATE_SPOT, !Ref "AWS::NoValue"]
-      DefaultCapacityProviderStrategy:
-        # With only one default capacity provider, the base and weight won't
-        # factor into scheduling; everything will be even within the ASG
-        - Base: 0
-          Weight: 1
-          CapacityProvider: !Ref DefaultCapacityProvider
+  # DefaultCapacityProvider:
+  #   Type: AWS::ECS::CapacityProvider
+  #   Properties:
+  #     AutoScalingGroupProvider:
+  #       AutoScalingGroupArn: !Ref Asg
+  #       ManagedDraining: ENABLED
+  #       ManagedScaling:
+  #         InstanceWarmupPeriod: 180
+  #         MaximumScalingStepSize: 10
+  #         MinimumScalingStepSize: 1
+  #         Status: ENABLED
+  #         TargetCapacity: !If
+  #           - IsProduction
+  #           - 100
+  #           - 100
+  #       ManagedTerminationProtection: DISABLED
+  #     Tags:
+  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+  #       - { Key: prx:dev:application, Value: Common }
+  # ClusterCapacityProviderAssociation:
+  #   Type: AWS::ECS::ClusterCapacityProviderAssociations
+  #   Properties:
+  #     Cluster: !Ref EcsClusterName
+  #     CapacityProviders:
+  #       - !Ref DefaultCapacityProvider
+  #       - !If [IsStaging, FARGATE, !Ref "AWS::NoValue"]
+  #       - !If [IsStaging, FARGATE_SPOT, !Ref "AWS::NoValue"]
+  #     DefaultCapacityProviderStrategy:
+  #       # With only one default capacity provider, the base and weight won't
+  #       # factor into scheduling; everything will be even within the ASG
+  #       - Base: 0
+  #         Weight: 1
+  #         CapacityProvider: !Ref DefaultCapacityProvider
 
 Outputs:
   AsgName:
