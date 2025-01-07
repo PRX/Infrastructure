@@ -73,7 +73,10 @@ async function updateParameters(environmentVariables, environmentVariableName) {
           // An environment variable was exported from the CodeBuild build
           // with the value that the parameter should be updated to.
           const newValue = environmentVariables[imageEnvarName];
-          await updateSsmParameter(parameterName, newValue);
+
+          if (newValue) {
+            await updateSsmParameter(parameterName, newValue);
+          }
         }
       }
     }
