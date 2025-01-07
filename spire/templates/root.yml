@@ -390,7 +390,7 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-ecs/asg-sg.yml
       TimeoutInMinutes: 20
   # Requires VPC, ALB, and more
-  SharedEcsAsgStack:
+  SharedEcsAsgStack: # This is the x86-64 ASG
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
@@ -426,6 +426,43 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
       TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-ecs/asg-x86-64.yml
+      TimeoutInMinutes: 1440
+  SharedEcsAsgAarch64Stack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
+        RootStackName: !Ref AWS::StackName
+        RootStackId: !Ref AWS::StackName
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        AuthorizedKeys: !Join [",", !Ref AuthorizedKeys]
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
+        EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
+        SharedEcsAsgInstanceSecurityGroupId: !GetAtt SharedEcsAsgSecurityGroupStack.Outputs.InstanceSecurityGroupId
+        LoadBalancerSecurityGroupId: !GetAtt SharedAlbStack.Outputs.LoadBalancerSecurityGroupId
+        SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
+        SharedPostgresqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedPostgresqlClientSecurityGroupId
+        SharedRedisClientSecurityGroupId: !GetAtt SharedRedisSecurityGroupStack.Outputs.ClientSecurityGroupId
+        SharedClickhouseClientSecurityGroupId: !GetAtt SharedClickhouseSecurityGroupStack.Outputs.ClientSecurityGroupId
+        EcsLaunchEndpointsAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
+        KmsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.KmsEndpointAccessSecurityGroupId
+        StsEndpointAccessSecurityGroupId: !GetAtt SharedVpcStack.Outputs.StsEndpointAccessSecurityGroupId
+        SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
+        SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      TemplateURL: !Sub ${TemplateUrlBase}/spire/templates/shared-ecs/asg-aarch64.yml
       TimeoutInMinutes: 1440
 
   # # Requires database and ECS/ASG security groups
@@ -990,7 +1027,8 @@ Resources:
         SharedVpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         SharedVpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
 
-        SharedEcsAsgName: !GetAtt SharedEcsAsgStack.Outputs.AsgName
+        SharedEcsAsgX86Name: !GetAtt SharedEcsAsgStack.Outputs.AsgName
+        SharedEcsAsgAarch64Name: !GetAtt SharedEcsAsgAarch64Stack.Outputs.AsgName
 
         SharedAlbArn: !GetAtt SharedAlbStack.Outputs.AlbArn
         SharedAlbName: !GetAtt SharedAlbStack.Outputs.AlbName
