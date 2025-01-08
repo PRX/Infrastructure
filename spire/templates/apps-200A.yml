@@ -87,6 +87,8 @@ Parameters:
 
   FeederSharedAlbListenerRulePriorityPrefix: { Type: String }
 
+  InsightsSharedAlbListenerRulePriorityPrefix: { Type: String }
+
   NetworksSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   RemixSharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -299,6 +301,39 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/feeder.yml
       TimeoutInMinutes: 20
 
+  InsightsStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/pkg/docker-image-tag
+        NewRelicApiKeyPrxLite: !Ref NewRelicApiKeyPrxLite
+        AlbListenerRulePriorityPrefix: !Ref InsightsSharedAlbListenerRulePriorityPrefix
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
+        RegionMode: !Ref RegionMode
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        IdHostname: !Ref IdHostname
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Insights }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-insights.yml
+      TimeoutInMinutes: 20
+
   NetworksStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
@@ -425,6 +460,9 @@ Outputs:
     Value: !GetAtt FeederStack.Outputs.AuthApiId
   FeederWebTargetGroupFullName:
     Value: !GetAtt FeederStack.Outputs.WebTargetGroupFullName
+
+  InsightsWebTargetGroupFullName:
+    Value: !GetAtt InsightsStack.Outputs.WebTargetGroupFullName
 
   NetworksPublicWebTargetGroupFullName:
     Value: !GetAtt NetworksStack.Outputs.PublicWebTargetGroupFullName
