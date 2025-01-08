@@ -41,7 +41,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
-  # IsStaging: !Equals [!Ref EnvironmentType, Staging]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   KeepAsgAlive: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -400,44 +400,44 @@ Resources:
         - !Ref VpcPublicSubnet2Id
         - !Ref VpcPublicSubnet3Id
 
-  # DefaultCapacityProvider:
-  #   Type: AWS::ECS::CapacityProvider
-  #   Properties:
-  #     AutoScalingGroupProvider:
-  #       AutoScalingGroupArn: !Ref Asg
-  #       ManagedDraining: ENABLED
-  #       ManagedScaling:
-  #         InstanceWarmupPeriod: 180
-  #         MaximumScalingStepSize: 10
-  #         MinimumScalingStepSize: 1
-  #         Status: ENABLED
-  #         TargetCapacity: !If
-  #           - IsProduction
-  #           - 100
-  #           - 100
-  #       ManagedTerminationProtection: DISABLED
-  #     Tags:
-  #       - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-  #       - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-  #       - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-  #       - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-  #       - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-  #       - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-  #       - { Key: prx:dev:application, Value: Common }
-  # ClusterCapacityProviderAssociation:
-  #   Type: AWS::ECS::ClusterCapacityProviderAssociations
-  #   Properties:
-  #     Cluster: !Ref EcsClusterName
-  #     CapacityProviders:
-  #       - !Ref DefaultCapacityProvider
-  #       - !If [IsStaging, FARGATE, !Ref "AWS::NoValue"]
-  #       - !If [IsStaging, FARGATE_SPOT, !Ref "AWS::NoValue"]
-  #     DefaultCapacityProviderStrategy:
-  #       # With only one default capacity provider, the base and weight won't
-  #       # factor into scheduling; everything will be even within the ASG
-  #       - Base: 0
-  #         Weight: 1
-  #         CapacityProvider: !Ref DefaultCapacityProvider
+  DefaultCapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref Asg
+        ManagedDraining: ENABLED
+        ManagedScaling:
+          InstanceWarmupPeriod: 180
+          MaximumScalingStepSize: 10
+          MinimumScalingStepSize: 1
+          Status: ENABLED
+          TargetCapacity: !If
+            - IsProduction
+            - 100
+            - 100
+        ManagedTerminationProtection: DISABLED
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+  ClusterCapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref EcsClusterName
+      CapacityProviders:
+        - !Ref DefaultCapacityProvider
+        - !If [IsStaging, FARGATE, !Ref "AWS::NoValue"]
+        - !If [IsStaging, FARGATE_SPOT, !Ref "AWS::NoValue"]
+      DefaultCapacityProviderStrategy:
+        # With only one default capacity provider, the base and weight won't
+        # factor into scheduling; everything will be even within the ASG
+        - Base: 0
+          Weight: 1
+          CapacityProvider: !Ref DefaultCapacityProvider
 
 Outputs:
   AsgName:
