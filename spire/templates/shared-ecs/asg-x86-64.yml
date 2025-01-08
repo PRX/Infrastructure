@@ -34,6 +34,7 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  Aarch64AsgCapacityProviderName: { Type: String }
   EcsClusterName: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
@@ -433,11 +434,15 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
   ClusterCapacityProviderAssociation:
+    # This is handling associations for capacity providers, even ones not
+    # created in this template. It exists here because we used to only have one
+    # ASG template, and moving it is sort of a pain.
     Type: AWS::ECS::ClusterCapacityProviderAssociations
     Properties:
       Cluster: !Ref EcsClusterName
       CapacityProviders:
         - !Ref DefaultCapacityProvider
+        - !Ref Aarch64AsgCapacityProviderName
         - !If [IsStaging, FARGATE, !Ref "AWS::NoValue"]
         - !If [IsStaging, FARGATE_SPOT, !Ref "AWS::NoValue"]
       DefaultCapacityProviderStrategy:
