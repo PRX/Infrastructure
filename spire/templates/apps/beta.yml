@@ -1,4 +1,5 @@
 # stacks/apps/beta.yml
+# 200A
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
@@ -8,14 +9,11 @@ Description: >-
 
 Parameters:
   NestedChangeSetScrubbingResourcesState: { Type: String }
-  S3StaticSiteDeployServiceToken: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   CodeS3Bucket: { Type: String }
-  StaticSiteArchiveS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
-  StaticSiteCloudFrontOai: { Type: AWS::SSM::Parameter::Value<String> }
   FeederHostname: { Type: String }
   ExchangeHostname: { Type: String }
   PlayHostname: { Type: String }
@@ -27,47 +25,6 @@ Conditions:
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
-
-  S3StaticDeployService:
-    Type: Custom::S3StaticDeploy
-    Properties:
-      ServiceToken: !Ref S3StaticSiteDeployServiceToken
-      Region: !Ref AWS::Region
-      StaticSiteArchiveS3Bucket: !Ref CodeS3Bucket
-      StaticSiteArchiveS3Object: !Ref StaticSiteArchiveS3ObjectKey
-      StaticSiteS3DeployBucket: !Ref BetaBucket
-
-  BetaBucket:
-    Type: AWS::S3::Bucket
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-    Properties:
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Beta }
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref BetaBucket
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Action: s3:GetObject
-            Effect: Allow
-            Principal:
-              AWS: !Ref StaticSiteCloudFrontOai
-            Resource: !Sub arn:${AWS::Partition}:s3:::${BetaBucket}/*
-            Sid: Grant read access to a CloudFront Origin Identity
 
   RedirectFunction:
     Type: AWS::Serverless::Function
@@ -137,7 +94,3 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Beta }
-
-Outputs:
-  DeployBucketRegionalDomainName:
-    Value: !GetAtt BetaBucket.RegionalDomainName
