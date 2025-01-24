@@ -24,6 +24,7 @@ Parameters:
   VpcId: { Type: AWS::EC2::VPC::Id }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
+  X8664AsgCapacityProviderName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -128,6 +129,10 @@ Resources:
   EcsService:
     Type: AWS::ECS::Service
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200

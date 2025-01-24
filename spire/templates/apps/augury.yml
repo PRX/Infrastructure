@@ -68,6 +68,7 @@ Parameters:
   DovetailRouterHostname: { Type: String }
   AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
   SlackMessageRelaySnsTopicArn: { Type: String }
+  X8664AsgCapacityProviderName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -260,6 +261,10 @@ Resources:
     Type: AWS::ECS::Service
     Condition: HasAuroraEndpoint # See README
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -291,6 +296,10 @@ Resources:
     Type: AWS::ECS::Service
     Condition: EnableWorkers # See README
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -1144,6 +1153,7 @@ Resources:
           ROOT_STACK_NAME: !Ref RootStackName
           STACK_ID: !Ref AWS::StackName
           STACK_NAME: !Ref AWS::StackId
+          X86_64_ASG_CAPACITY_PROVIDER_NAME: !Ref X8664AsgCapacityProviderName
       Events:
         SqsMessages:
           Type: SQS
@@ -1170,6 +1180,13 @@ Resources:
         // ECS runTask parameters
         const runParams = (name) => {
           return {
+            capacityProviderStrategy: [
+              {
+                capacityProvider: process.env.X86_64_ASG_CAPACITY_PROVIDER_NAME,
+                base: 0,
+                weight: 1
+              }
+            ],
             cluster: process.env.ECS_CLUSTER_ARN,
             launchType: 'FARGATE',
             networkConfiguration: {

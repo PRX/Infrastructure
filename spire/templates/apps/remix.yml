@@ -40,6 +40,7 @@ Parameters:
   TransferS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
   RemixHostname: { Type: String }
   ExchangeHostname: { Type: String }
+  X8664AsgCapacityProviderName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -227,6 +228,10 @@ Resources:
     Type: AWS::ECS::Service
     Condition: HasAuroraEndpoint # See README
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -514,6 +519,10 @@ Resources:
       Targets:
         - Arn: !Ref EcsClusterArn
           EcsParameters:
+            CapacityProviderStrategy:
+              - Base: 0
+                CapacityProvider: !Ref X8664AsgCapacityProviderName
+                Weight: 1
             TaskCount: 1
             TaskDefinitionArn: !Ref WorkerTaskDefinition
           Id: RemixWorkerRuleTarget
