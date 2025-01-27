@@ -36,6 +36,7 @@ Parameters:
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   IdHostname: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -177,6 +178,10 @@ Resources:
     Type: AWS::ECS::Service
     # Condition: HasAuroraEndpoint # See README
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
