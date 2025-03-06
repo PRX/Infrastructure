@@ -68,7 +68,7 @@ Parameters:
   DovetailRouterHostname: { Type: String }
   AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
   SlackMessageRelaySnsTopicArn: { Type: String }
-  X8664AsgCapacityProviderName: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -263,7 +263,7 @@ Resources:
     Properties:
       CapacityProviderStrategy:
         - Base: 0
-          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
           Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -277,7 +277,7 @@ Resources:
           TargetGroupArn: !Ref TargetGroup
       PlacementConstraints:
         - Type: memberOf
-          Expression: attribute:ecs.cpu-architecture == x86_64
+          Expression: attribute:ecs.cpu-architecture == arm64
       PlacementStrategies:
         - Field: instanceId
           Type: spread
@@ -298,7 +298,7 @@ Resources:
     Properties:
       CapacityProviderStrategy:
         - Base: 0
-          CapacityProvider: !Ref X8664AsgCapacityProviderName
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
           Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
@@ -308,7 +308,7 @@ Resources:
       EnableECSManagedTags: true
       PlacementConstraints:
         - Type: memberOf
-          Expression: attribute:ecs.cpu-architecture == x86_64
+          Expression: attribute:ecs.cpu-architecture == arm64
       PropagateTags: TASK_DEFINITION
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -951,6 +951,8 @@ Resources:
   SlowWorkerTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
+      RuntimePlatform:
+        CpuArchitecture: ARM64
       ContainerDefinitions:
         - Command:
             - workslow
@@ -1213,6 +1215,9 @@ Resources:
               ],
             },
             platformVersion: '1.4.0',
+            runtimePlatform: {
+              cpuArchitecture: "ARM64"
+            },
             startedBy: startedBy(name),
             taskDefinition: process.env.ECS_TASK_DEFINITION_ARN,
             tags: [
