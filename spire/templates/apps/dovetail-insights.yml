@@ -33,6 +33,8 @@ Parameters:
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   NewRelicApiKeyPrxLite: { Type: String }
+  SharedAuroraPostgresqlEndpoint: { Type: String }
+  SharedAuroraPostgresqlPort: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   IdHostname: { Type: String }
@@ -227,6 +229,8 @@ Resources:
       ContainerDefinitions:
         - Cpu: !If [IsProduction, 200, 128]
           Environment:
+            - Name: DATABASE_POOL_SIZE
+              Value: 16
             - Name: ID_HOST
               Value: !Ref IdHostname
             - Name: NEW_RELIC_KEY
@@ -237,6 +241,10 @@ Resources:
               Value: !Ref kWebApplicationPort
             - Name: RAILS_ENV
               Value: !Ref EnvironmentTypeLowercase
+            - Name: POSTGRES_HOST
+              Value: !Ref SharedAuroraPostgresqlEndpoint
+            - Name: POSTGRES_PORT
+              Value: !Ref SharedAuroraPostgresqlPort
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -256,6 +264,12 @@ Resources:
           Secrets:
             - Name: BIGQUERY_CREDENTIALS
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/big-query-client-config
+            - Name: POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/database-name
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/database-password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/database-username
             - Name: SECRET_KEY_BASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/secret-key-base
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
