@@ -35,45 +35,6 @@ Conditions:
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
 
-  SharedAppRedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Condition: IsPrimaryRegion
-    Properties:
-      GroupDescription: !Sub Shared ${EnvironmentType} App Redis security group
-      SecurityGroupIngress:
-        - FromPort: 6379
-          IpProtocol: tcp
-          SourceSecurityGroupId: !Ref SourceSecurityGroupId1
-          ToPort: 6379
-      Tags:
-        - { Key: Name, Value: !Sub "${RootStackName}_shared_app_redis" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      VpcId: !Ref VpcId
-
-  SharedAppRedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Condition: IsPrimaryRegion
-    Properties:
-      Description: !Sub Shared ${EnvironmentType} App Redis subnet group
-      SubnetIds:
-        - !Ref VpcPrivateSubnet1Id
-        - !Ref VpcPrivateSubnet2Id
-        - !Ref VpcPrivateSubnet3Id
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-
   SharedAppRedisCluster:
     Type: AWS::ElastiCache::CacheCluster
     DeletionPolicy: Delete
@@ -135,13 +96,10 @@ Resources:
 
 Outputs:
   CacheName:
-    # Value: !If [IsPrimaryRegion, !Ref SharedAppRedisCluster, ""]
     Value: !If [IsPrimaryRegion, !Select ["6", !Split [":", !GetAtt SharedAppServerlessValkeyCluster.ARN]], ""]
   CacheEndpointAddress:
     Description: Cache endpoint hostname
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Address, ""]
     Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Address, ""]
   CacheEndpointPort:
     Description: Cache endpoint port
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Port, ""]
     Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Port, ""]
