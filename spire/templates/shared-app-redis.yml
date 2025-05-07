@@ -20,9 +20,16 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  StagingInstanceType:
+    Type: String
+    Default: cache.t4g.micro
+  ProductionInstanceType:
+    Type: String
+    Default: cache.t4g.small
 
 Conditions:
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -49,23 +56,11 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       VpcId: !Ref VpcId
 
-  SharedAppServerlessValkeyCluster:
-    Type: AWS::ElastiCache::ServerlessCache
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  SharedAppRedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
     Condition: IsPrimaryRegion
     Properties:
-      CacheUsageLimits:
-        DataStorage:
-          Maximum: 2
-          Minimum: 1
-          Unit: GB
-      Description: !Sub Shared App ${EnvironmentType} Valkey cluster
-      Engine: valkey
-      MajorEngineVersion: 8
-      SecurityGroupIds:
-        - !Ref SharedAppRedisSecurityGroup
-      ServerlessCacheName: !Sub ${EnvironmentTypeAbbreviation}-shared-app
+      Description: !Sub Shared ${EnvironmentType} App Redis subnet group
       SubnetIds:
         - !Ref VpcPrivateSubnet1Id
         - !Ref VpcPrivateSubnet2Id
@@ -76,19 +71,43 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:billing:pricing-intent, Value: Reserved }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
+  SharedAppRedisCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Condition: IsPrimaryRegion
+    Properties:
+      AutoMinorVersionUpgrade: true
+      CacheNodeType: !If
+        - IsProduction
+        - !Ref ProductionInstanceType
+        - !Ref StagingInstanceType
+      CacheSubnetGroupName: !Ref SharedAppRedisSubnetGroup
+      Engine: valkey
+      EngineVersion: 8.0
+      NumCacheNodes: 1
+      PreferredMaintenanceWindow: sun:09:00-sun:10:00
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:billing:pricing-intent, Value: Reserved }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcSecurityGroupIds:
+        - !Ref SharedAppRedisSecurityGroup
+
 Outputs:
   CacheName:
-    # Value: !If [IsPrimaryRegion, !Ref SharedAppRedisCluster, ""]
-    Value: !If [IsPrimaryRegion, !Select ["6", !Split [":", !GetAtt SharedAppServerlessValkeyCluster.ARN]], ""]
+    Value: !If [IsPrimaryRegion, !Ref SharedAppRedisCluster, ""]
   CacheEndpointAddress:
     Description: Cache endpoint hostname
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Address, ""]
-    Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Address, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Address, ""]
   CacheEndpointPort:
     Description: Cache endpoint port
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Port, ""]
-    Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Port, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Port, ""]
