@@ -23,6 +23,8 @@ Parameters:
   AlbHttpsListenerArn: { Type: String }
   AlbInsecureHttpListenerArn: { Type: String }
   NewRelicApiKeyPrxLite: { Type: String }
+  SharedAppRedisEndpointAddress: { Type: String }
+  SharedAppRedisEndpointPort: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
@@ -33,10 +35,16 @@ Parameters:
   S3SigningAccessKeyId: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   X8664AsgCapacityProviderName: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
 
+  AuguryHostname: { Type: String }
   ExchangeHostname: { Type: String }
+  FeederHostname: { Type: String }
+  IdHostname: { Type: String }
 
   TheCastleSharedAlbListenerRulePriorityPrefix: { Type: String }
+
+  SpotsSharedAlbListenerRulePriorityPrefix: { Type: String }
 
   WfmtSharedAlbListenerRulePriorityPrefix: { Type: String }
   WfmtHostname: { Type: String }
@@ -153,6 +161,45 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-metrics-export.yml
       TimeoutInMinutes: 10
 
+  SpotsStack:
+    Type: AWS::CloudFormation::Stack
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        AlbFullName: !Ref AlbFullName
+        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
+        EcsClusterArn: !Ref EcsClusterArn
+        VpcId: !Ref VpcId
+        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/pkg/docker-image-tag
+        AlbListenerRulePriorityPrefix: !Ref SpotsSharedAlbListenerRulePriorityPrefix
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EnvironmentTypeLowercase: !Ref EnvironmentTypeLowercase
+        RegionMode: !Ref RegionMode
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        SharedAppRedisEndpointAddress: !Ref SharedAppRedisEndpointAddress
+        SharedAppRedisEndpointPort: !Ref SharedAppRedisEndpointPort
+        SharedAuroraPostgresqlEndpoint: !Ref SharedAuroraPostgresqlEndpoint
+        SharedAuroraPostgresqlPort: !Ref SharedAuroraPostgresqlPort
+        AuguryHostname: !Ref AuguryHostname
+        FeederHostname: !Ref FeederHostname
+        IdHostname: !Ref IdHostname
+        Aarch64AsgCapacityProviderName: !Ref Aarch64AsgCapacityProviderName
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/dovetail-spots.yml
+      TimeoutInMinutes: 20
+
   WfmtStack:
     Type: AWS::CloudFormation::Stack
     DeletionPolicy: Delete
@@ -198,5 +245,7 @@ Resources:
 Outputs:
   TheCastleTargetGroupFullName:
     Value: !GetAtt TheCastleStack.Outputs.TargetGroupFullName
+  SpotsWebTargetGroupFullName:
+    Value: !GetAtt SpotsStack.Outputs.WebTargetGroupFullName
   WfmtTargetGroupFullName:
     Value: !GetAtt WfmtStack.Outputs.TargetGroupFullName
