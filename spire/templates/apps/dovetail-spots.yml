@@ -109,6 +109,29 @@ Resources:
                 Sid: AllowDefaultEventBusPut
             Version: "2012-10-17"
           PolicyName: DefaultEventBus
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                  - s3:ListBucketVersions
+                Effect: Allow
+                Resource: !GetAtt SpotsUploadsBucket.Arn
+                Sid: AllowBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:Get*
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:PutObjectVersionAcl
+                Effect: Allow
+                Resource: !Sub ${SpotsUploadsBucket.Arn}/*
+                Sid: AllowObjectActions
+            Version: "2012-10-17"
+          PolicyName: S3UploadAccess
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -246,6 +269,8 @@ Resources:
               Value: !Ref SharedAuroraPostgresqlPort
             - Name: REDIS_URL
               Value: !Sub rediss://${SharedAppRedisEndpointAddress}:${SharedAppRedisEndpointPort}
+            - Name: S3_BUCKET
+              Value: !Ref SpotsUploadsBucket
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -287,6 +312,49 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Spots }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  SpotsUploadsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - DELETE
+              - GET
+              - HEAD
+              - POST
+              - PUT
+            AllowedOrigins:
+              - "*"
+            ExposedHeaders:
+              - ETag
+              - Content-Type
+              - Content-Length
+              - Date
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 7
+            Prefix: cache/
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
 
 Outputs:
   WebTargetGroupFullName:
