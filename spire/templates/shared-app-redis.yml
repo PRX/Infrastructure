@@ -20,9 +20,16 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  StagingInstanceType:
+    Type: String
+    Default: cache.t4g.micro
+  ProductionInstanceType:
+    Type: String
+    Default: cache.t4g.small
 
 Conditions:
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -49,27 +56,45 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       VpcId: !Ref VpcId
 
-  SharedAppServerlessValkeyCluster:
-    Type: AWS::ElastiCache::ServerlessCache
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  SharedAppRedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
     Condition: IsPrimaryRegion
     Properties:
-      CacheUsageLimits:
-        DataStorage:
-          Maximum: 2
-          Minimum: 1
-          Unit: GB
-      Description: !Sub Shared App ${EnvironmentType} Valkey cluster
-      Engine: valkey
-      MajorEngineVersion: 8
-      SecurityGroupIds:
-        - !Ref SharedAppRedisSecurityGroup
-      ServerlessCacheName: !Sub ${EnvironmentTypeAbbreviation}-shared-app
+      Description: !Sub Shared ${EnvironmentType} App Redis subnet group
       SubnetIds:
         - !Ref VpcPrivateSubnet1Id
         - !Ref VpcPrivateSubnet2Id
         - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
+  SharedAppRedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Condition: IsPrimaryRegion
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AtRestEncryptionEnabled: false
+      AutomaticFailoverEnabled: false
+      AutoMinorVersionUpgrade: true
+      CacheNodeType: !If [IsProduction, !Ref ProductionInstanceType, !Ref StagingInstanceType]
+      CacheParameterGroupName: default.valkey8
+      CacheSubnetGroupName: !Ref SharedAppRedisSubnetGroup
+      Engine: valkey
+      EngineVersion: 8.0 # aws elasticache describe-cache-engine-versions --engine valkey --query "CacheEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
+      MultiAZEnabled: false
+      # NumNodeGroups: 1 # NodeGroups are Shards.
+      ReplicasPerNodeGroup: 0 # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
+      ReplicationGroupDescription: !Sub Shared App ${EnvironmentType} Redis
+      SecurityGroupIds:
+        - !Ref SharedAppRedisSecurityGroup
+      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -82,13 +107,10 @@ Resources:
 
 Outputs:
   CacheName:
-    # Value: !If [IsPrimaryRegion, !Ref SharedAppRedisCluster, ""]
-    Value: !If [IsPrimaryRegion, !Select ["6", !Split [":", !GetAtt SharedAppServerlessValkeyCluster.ARN]], ""]
+    Value: !If [IsPrimaryRegion, !Ref SharedAppRedisReplicationGroup, ""]
   CacheEndpointAddress:
     Description: Cache endpoint hostname
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Address, ""]
-    Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Address, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisReplicationGroup.ConfigurationEndPoint.Address, ""]
   CacheEndpointPort:
     Description: Cache endpoint port
-    # Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisCluster.RedisEndpoint.Port, ""]
-    Value: !If [IsPrimaryRegion, !GetAtt SharedAppServerlessValkeyCluster.Endpoint.Port, ""]
+    Value: !If [IsPrimaryRegion, !GetAtt SharedAppRedisReplicationGroup.ConfigurationEndPoint.Port, ""]
