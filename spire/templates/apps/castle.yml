@@ -43,6 +43,7 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  IsPrimaryProduction: !And [!Condition IsProduction, !Condition IsPrimaryRegion]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -251,9 +252,9 @@ Resources:
             - Name: NEW_RELIC_APP_NAME
               Value: !If [IsProduction, Castle Production, Castle Staging]
             - Name: PG_HOST
-              Value: !GetAtt PostgresInstance.Endpoint.Address
+              Value: !If [IsPrimaryRegion, !GetAtt PostgresInstance.Endpoint.Address, "NONE"]
             - Name: PG_PORT
-              Value: !GetAtt PostgresInstance.Endpoint.Port
+              Value: !If [IsPrimaryRegion, !GetAtt PostgresInstance.Endpoint.Port, "99999"]
             - Name: PG_POOL_SIZE
               Value: !If [IsProduction, "25", "10"]
           Essential: true
@@ -423,6 +424,7 @@ Resources:
 
   PostgresInstance:
     Type: AWS::RDS::DBInstance
+    Condition: IsPrimaryRegion
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -462,7 +464,7 @@ Resources:
         - !GetAtt PostgresSecurityGroup.GroupId
   PostgresInstanceDiskSpaceAlarm:
     Type: AWS::CloudWatch::Alarm
-    Condition: IsProduction
+    Condition: IsPrimaryProduction
     Properties:
       ActionsEnabled: true
       AlarmName: !Sub ERROR [Castle] Database <${EnvironmentTypeAbbreviation}> DISK SPACE LOW (${RootStackName})
@@ -517,11 +519,11 @@ Outputs:
   TargetGroupFullName:
     Value: !GetAtt TargetGroup.TargetGroupFullName
   PostgresInstanceEndpointAddress:
-    Value: !GetAtt PostgresInstance.Endpoint.Address
+    Value: !If [IsPrimaryRegion, !GetAtt PostgresInstance.Endpoint.Address, "NONE"]
   PostgresInstanceEndpointPort:
-    Value: !GetAtt PostgresInstance.Endpoint.Port
+    Value: !If [IsPrimaryRegion, !GetAtt PostgresInstance.Endpoint.Port, 99999]
   PostgresInstanceId:
-    Value: !Ref PostgresInstance
+    Value: !If [IsPrimaryRegion, !Ref PostgresInstance, "NONE"]
   QuicksightVpcSecurityGroupId:
     Value: !GetAtt QuicksightVpcSecurityGroup.GroupId
   PostgresClientSecurityGroupId:
