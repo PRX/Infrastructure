@@ -14,6 +14,12 @@ Parameters:
   kWebApplicationPort:
     Type: Number
     Default: 3000
+  kWorkerContainerName:
+    Type: String
+    Default: spots-worker
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Spots
   #######
   NestedChangeSetScrubbingResourcesState: { Type: String }
   AlbFullName: { Type: String }
@@ -22,6 +28,7 @@ Parameters:
   VpcId: { Type: AWS::EC2::VPC::Id }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
+  EchoServiceToken: { Type: String }
   EnvironmentType: { Type: String }
   EnvironmentTypeAbbreviation: { Type: String }
   EnvironmentTypeLowercase: { Type: String }
@@ -42,10 +49,18 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraPostgresqlEndpoint, ""]]
+  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  Constants:
+    Type: Custom::Echo
+    Properties:
+      ServiceToken: !Ref EchoServiceToken
+      WebLoggedErrorsMetricName: !Sub WebLoggedErrors${EnvironmentType}
+      WorkerLoggedErrorsMetricName: !Sub WorkerLoggedErrors${EnvironmentType}
 
   HostHeaderListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
@@ -323,6 +338,128 @@ Resources:
         - { Key: prx:dev:application, Value: Spots }
       TaskRoleArn: !GetAtt TaskRole.Arn
 
+  WorkerEcsService:
+    Type: AWS::ECS::Service
+    Condition: EnableWorkers # See README
+    Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
+          Weight: 1
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      EnableECSManagedTags: true
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: attribute:ecs.cpu-architecture == arm64
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+      TaskDefinition: !Ref WorkerTaskDefinition
+  WorkerTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command: [worker]
+          Cpu: !If [IsProduction, 200, 128]
+          Environment:
+            - Name: AUGURY_HOST
+              Value: !Ref AuguryHostname
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: BIGQUERY_DATASET
+              Value: !If [IsProduction, production, staging]
+            - Name: BIGQUERY_PROJECT
+              Value: prx-metrics
+            - Name: CONSOLE_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
+            - Name: ID_HOST
+              Value: !Ref IdHostname
+            - Name: NEW_RELIC_LICENSE_KEY
+              Value: !Ref NewRelicApiKeyPrxLite
+            - Name: NEW_RELIC_APP_NAME
+              Value: !If [IsProduction, Spots Production, Spots Staging]
+            - Name: PORT
+              Value: !Ref kWebApplicationPort
+            - Name: POSTGRES_HOST
+              Value: !Ref SharedAuroraPostgresqlEndpoint
+            - Name: POSTGRES_PORT
+              Value: !Ref SharedAuroraPostgresqlPort
+            - Name: REDIS_URL
+              Value: !Sub rediss://${SharedAppRedisEndpointAddress}:${SharedAppRedisEndpointPort}
+            - Name: S3_BUCKET
+              Value: !Ref SpotsUploadsBucket
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
+          Name: !Ref kWebContainerName
+          PortMappings:
+            - ContainerPort: !Ref kWebApplicationPort
+              HostPort: 0
+          Secrets:
+            - Name: BIGQUERY_CREDENTIALS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/bigquery-credentials
+            - Name: POSTGRES_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/database-name
+            - Name: POSTGRES_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/database-password
+            - Name: POSTGRES_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/database-username
+            - Name: PRX_CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/id-auth-client-id
+            - Name: PRX_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/id-auth-client-secret
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/secret-key-base
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
   SpotsUploadsBucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: Retain
@@ -365,6 +502,75 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Spots }
+
+  WebLoggedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { ($.level = "error") || ($.level = "fatal") }
+      LogGroupName: !Ref WebTaskLogGroup
+      MetricTransformations:
+        - MetricName: !GetAtt Constants.WebLoggedErrorsMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  WebLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Spots] Web <${EnvironmentTypeAbbreviation}> IS LOGGING ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Spots web task has logged an error. Check the logs!
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !GetAtt Constants.WebLoggedErrorsMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+      Threshold: 0
+      TreatMissingData: notBreaching
+  WorkersLoggedErrorsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { ($.level = "error") || ($.level = "fatal") }
+      LogGroupName: !Ref WorkerTaskLogGroup
+      MetricTransformations:
+        - MetricName: !GetAtt Constants.WorkerLoggedErrorsMetricName
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  WorkerLoggedErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Spots] Worker <${EnvironmentTypeAbbreviation}> IS LOGGING ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Feeder's worker task has logged an error. Check the logs!
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !GetAtt Constants.WorkerLoggedErrorsMetricName
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 300
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Spots }
+      Threshold: 0
+      TreatMissingData: notBreaching
 
 Outputs:
   WebTargetGroupFullName:
