@@ -42,6 +42,7 @@ Resources:
         - !Ref PassCloudFormationRolePolicy
         - !Ref EcrPublicPushPolicy
         - !Ref PrivateEcrPushPolicy
+        - !Ref SsmParameterPutPolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -183,3 +184,16 @@ Resources:
               - ecr:UploadLayerPart
               - sts:GetServiceBearerToken
             Resource: "*"
+
+  # GH actions update pkg parameters
+  SsmParameterPutPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows pushing Docker images to private ECR repositories
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:PutParameter
+            Resource: "arn:aws:ssm:*:*:parameter/*/pkg/docker-image-tag"
