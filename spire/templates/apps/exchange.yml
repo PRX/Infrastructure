@@ -77,6 +77,7 @@ Parameters:
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
@@ -1597,8 +1598,6 @@ Resources:
         - !If [IsProduction, FTP, !Ref AWS::NoValue]
         - !If [IsProduction, FTPS, !Ref AWS::NoValue]
       SecurityPolicyName: TransferSecurityPolicy-2020-06
-      StructuredLogDestinations:
-        - !GetAtt FtpServerStructuredLogGroup.Arn
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1622,21 +1621,19 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
-  FtpServerStructuredLogGroup:
-    Type: AWS::Logs::LogGroup
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
+  FtpServerLogGroupTransformer:
+    Type: AWS::Logs::Transformer
+    Condition: IsStaging
     Properties:
-      LogGroupName: !Sub /aws/transfer/${EnvironmentTypeAbbreviation}/exchange
-      RetentionInDays: 14
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Exchange }
+      LogGroupIdentifier: !Ref FtpServerLogGroup
+      TransformerConfig:
+        - Grok:
+            Match: "%{NOTSPACE:connection} %{NOTSPACE:op} %{NOTSPACE:filepath} BytesOut=%{POSINT:bytesout}"
+            Source: "@message"
+          SplitString:
+            Entries:
+              - Delimeter: "."
+                Source: "connection"
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
