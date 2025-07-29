@@ -1621,19 +1621,28 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
-  FtpServerLogGroupTransformer:
-    Type: AWS::Logs::Transformer
-    Condition: IsStaging
-    Properties:
-      LogGroupIdentifier: !Ref FtpServerLogGroup
-      TransformerConfig:
-        - Grok:
-            Match: "%{NOTSPACE:usersession} %{NOTSPACE:op} %{NOTSPACE:filepath} BytesOut=%{POSINT:bytesout}"
-            Source: "@message"
-        - SplitString:
-            Entries:
-              - Delimiter: "."
-                Source: "usersession"
+  # FtpServerLogGroupTransformer:
+  #   Type: AWS::Logs::Transformer
+  #   Condition: IsStaging
+  #   Properties:
+  #     LogGroupIdentifier: !Ref FtpServerLogGroup
+  #     TransformerConfig:
+  #       - Grok:
+  #           Match: "%{NOTSPACE:usersession} %{NOTSPACE:op} %{NOTSPACE:filepath} BytesOut=%{POSINT:bytesout}"
+  #           Source: "@message"
+  #       - SplitString:
+  #           Entries:
+  #             - Delimiter: "."
+  #               Source: "usersession"
+  # FtpUserBytesSentFilter:
+  #   Type: AWS::Logs::MetricFilter
+  #   Properties:
+  #     FilterPattern: '{ $.msg = "impression" }'
+  #     LogGroupName: !Ref TaskLogGroup
+  #     MetricTransformations:
+  #       - MetricName: !Sub Impressions${EnvironmentType}
+  #         MetricNamespace: !Ref kMetricFilterNamespace
+  #         MetricValue: $.download.adCount
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
