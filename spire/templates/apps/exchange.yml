@@ -1629,21 +1629,32 @@ Resources:
       TransformerConfig:
         - Grok:
             # https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatch-Logs-Transformation-Processors.html#Grok-Patterns
-            Match: "%{NOTSPACE:user_session} %{DATA:op} Path=%{DATA:filepath} BytesOut=%{POSINT:bytes_out}"
+            Match: "%{NOTSPACE:user_and_session} %{DATA:op} Path=%{DATA:filepath} BytesOut=%{POSINT:bytes_out}"
             Source: "@message"
         - SplitString:
             Entries:
               - Delimiter: "."
-                Source: "user_session"
-  # FtpUserBytesSentFilter:
-  #   Type: AWS::Logs::MetricFilter
-  #   Properties:
-  #     FilterPattern: '{ $.msg = "impression" }'
-  #     LogGroupName: !Ref TaskLogGroup
-  #     MetricTransformations:
-  #       - MetricName: !Sub Impressions${EnvironmentType}
-  #         MetricNamespace: !Ref kMetricFilterNamespace
-  #         MetricValue: $.download.adCount
+                Source: "user_and_session"
+        - AddKeys:
+            Entries:
+              - Key: env
+                Value: !Ref EnvironmentTypeLowercase
+  FtpUserBytesOutFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      ApplyOnTransformedLogs: true
+      FilterPattern: '{ $.filepath != "not_a_real_file" }' # BytesOut logs should already be filtered by the grok pattern, so this is meant to match all transformed logs
+      LogGroupName: !Ref FtpServerLogGroup
+      MetricTransformations:
+        - Dimensions:
+            - Key: Environment
+              Value: $.env
+            - Key: Station
+              Value: $.user_and_session[0]
+          MetricName: BytesOut
+          MetricNamespace: PRX/Transfer
+          MetricValue: $.bytes_out
+          Unit: Bytes
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
