@@ -1621,19 +1621,20 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Exchange }
-  # FtpServerLogGroupTransformer:
-  #   Type: AWS::Logs::Transformer
-  #   Condition: IsStaging
-  #   Properties:
-  #     LogGroupIdentifier: !Ref FtpServerLogGroup
-  #     TransformerConfig:
-  #       - Grok:
-  #           Match: "%{NOTSPACE:usersession} %{NOTSPACE:op} %{NOTSPACE:filepath} BytesOut=%{POSINT:bytesout}"
-  #           Source: "@message"
-  #       - SplitString:
-  #           Entries:
-  #             - Delimiter: "."
-  #               Source: "usersession"
+  FtpServerLogGroupTransformer:
+    Type: AWS::Logs::Transformer
+    Condition: IsStaging
+    Properties:
+      LogGroupIdentifier: !Ref FtpServerLogGroup
+      TransformerConfig:
+        - Grok:
+            # https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CloudWatch-Logs-Transformation-Processors.html#Grok-Patterns
+            Match: "%{NOTSPACE:user_session} %{DATA:op} Path=%{DATA:filepath} BytesOut=%{POSINT:bytes_out}"
+            Source: "@message"
+        - SplitString:
+            Entries:
+              - Delimiter: "."
+                Source: "user_session"
   # FtpUserBytesSentFilter:
   #   Type: AWS::Logs::MetricFilter
   #   Properties:
