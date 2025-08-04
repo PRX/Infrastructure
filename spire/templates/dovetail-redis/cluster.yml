@@ -83,12 +83,12 @@ Resources:
     Properties:
       AtRestEncryptionEnabled: false
       AutomaticFailoverEnabled: true
-      AutoMinorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
       CacheNodeType: !If [IsProduction, !If [IsPrimaryRegion, cache.m6g.large, cache.t4g.medium], cache.t4g.small]
       CacheParameterGroupName: default.valkey8.cluster.on
       CacheSubnetGroupName: !Ref RedisSubnetGroup
-      Engine: Redis
-      EngineVersion: 8.1 # aws elasticache describe-cache-engine-versions --engine redis --query "CacheEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
+      Engine: valkey
+      EngineVersion: 8.1 # aws elasticache describe-cache-engine-versions --engine valkey --query "CacheEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
       MultiAZEnabled: true
       # If node groups or replica quanities change, update the memory alarms
       NumNodeGroups: 1 # NodeGroups are Shards. This replication group will always use cluster mode due to the parameter group.
@@ -106,6 +106,7 @@ Resources:
         - { Key: prx:billing:pricing-intent, Value: Reserved }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+      TransitEncryptionEnabled: true
 
   RedisMemoryLowAlarm:
     Type: AWS::CloudWatch::Alarm
