@@ -34,6 +34,8 @@ Parameters:
   DovetailCountedKinesisStreamArn: { Type: String }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
+  DovetailRedisReplicationGroupEndpointAddress: { Type: String }
+  DovetailRedisReplicationGroupEndpointPort: { Type: String }
   SharedRedisClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
@@ -82,6 +84,11 @@ Resources:
           ARRANGEMENTS_DDB_TABLE: !Ref ArrangementsDynamodbTableName
           KINESIS_IMPRESSION_STREAM: !Ref DovetailCountedKinesisStreamArn
           REDIS_URL: !Sub cluster://${SharedRedisReplicationGroupEndpointAddress}:${SharedRedisReplicationGroupEndpointPort}
+          REDIS_BACKUP_URL:
+            - Fn::If:
+                - IsProduction
+                - !Ref AWS::NoValue
+                - !Sub cluster://${DovetailRedisReplicationGroupEndpointAddress}:${DovetailRedisReplicationGroupEndpointPort}
       Events:
         CountsBytesKinesisTrigger:
           Properties:

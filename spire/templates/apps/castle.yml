@@ -34,6 +34,8 @@ Parameters:
   CastlePostgresUserPassword: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   SharedRedisReplicationGroupEndpointAddress: { Type: String }
   SharedRedisReplicationGroupEndpointPort: { Type: String }
+  DovetailRedisReplicationGroupEndpointAddress: { Type: String }
+  DovetailRedisReplicationGroupEndpointPort: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
@@ -230,9 +232,9 @@ Resources:
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
             - Name: REDIS_HOST
-              Value: !Ref SharedRedisReplicationGroupEndpointAddress
+              Value: !If [IsProduction, !Ref SharedRedisReplicationGroupEndpointAddress, !Ref DovetailRedisReplicationGroupEndpointAddress]
             - Name: REDIS_PORT
-              Value: !Ref SharedRedisReplicationGroupEndpointPort
+              Value: !If [IsProduction, !Ref SharedRedisReplicationGroupEndpointPort, !Ref DovetailRedisReplicationGroupEndpointPort]
             - Name: REDIS_NAMESPACE
               Value: castle
             - Name: REDIS_POOL_SIZE
