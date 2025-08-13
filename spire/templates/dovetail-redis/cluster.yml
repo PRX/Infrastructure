@@ -16,7 +16,7 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  SharedRedisClusterSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  DovetailRedisClusterSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -43,37 +43,6 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
-  RedisReplicationGroup:
-    Type: AWS::ElastiCache::ReplicationGroup
-    UpdatePolicy:
-      UseOnlineResharding: true
-    Properties:
-      AtRestEncryptionEnabled: false
-      AutomaticFailoverEnabled: true
-      AutoMinorVersionUpgrade: false
-      CacheNodeType: !If [IsProduction, !If [IsPrimaryRegion, cache.m6g.large, cache.t4g.medium], cache.t4g.small]
-      CacheParameterGroupName: default.redis7.cluster.on
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      Engine: Redis
-      EngineVersion: 7.1 # aws elasticache describe-cache-engine-versions --engine redis --query "CacheEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
-      MultiAZEnabled: true
-      # If node groups or replica quanities change, update the memory alarms
-      NumNodeGroups: 1 # NodeGroups are Shards. This replication group will always use cluster mode due to the parameter group.
-      ReplicasPerNodeGroup: 1 # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
-      ReplicationGroupDescription: !Sub Dovetail ${EnvironmentType} Redis
-      SecurityGroupIds:
-        - !Ref SharedRedisClusterSecurityGroupId
-      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:billing:pricing-intent, Value: Reserved }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-
   ValkeyReplicationGroup:
     Type: AWS::ElastiCache::ReplicationGroup
     UpdatePolicy:
@@ -93,7 +62,7 @@ Resources:
       ReplicasPerNodeGroup: 1 # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
       ReplicationGroupDescription: !Sub Dovetail ${EnvironmentType} Valkey
       SecurityGroupIds:
-        - !Ref SharedRedisClusterSecurityGroupId
+        - !Ref DovetailRedisClusterSecurityGroupId
       SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -123,7 +92,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: CacheClusterId
-                  Value: !Sub ${RedisReplicationGroup}-0001-001
+                  Value: !Sub ${ValkeyReplicationGroup}-0001-001
                 - Name: CacheNodeId
                   Value: "0001"
               MetricName: DatabaseMemoryUsagePercentage
@@ -137,7 +106,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: CacheClusterId
-                  Value: !Sub ${RedisReplicationGroup}-0001-002
+                  Value: !Sub ${ValkeyReplicationGroup}-0001-002
                 - Name: CacheNodeId
                   Value: "0001"
               MetricName: DatabaseMemoryUsagePercentage
@@ -176,7 +145,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: CacheClusterId
-                  Value: !Sub ${RedisReplicationGroup}-0001-001
+                  Value: !Sub ${ValkeyReplicationGroup}-0001-001
                 - Name: CacheNodeId
                   Value: "0001"
               MetricName: DatabaseMemoryUsagePercentage
@@ -190,7 +159,7 @@ Resources:
             Metric:
               Dimensions:
                 - Name: CacheClusterId
-                  Value: !Sub ${RedisReplicationGroup}-0001-002
+                  Value: !Sub ${ValkeyReplicationGroup}-0001-002
                 - Name: CacheNodeId
                   Value: "0001"
               MetricName: DatabaseMemoryUsagePercentage
@@ -214,14 +183,6 @@ Resources:
       TreatMissingData: notBreaching
 
 Outputs:
-  ReplicationGroupName:
-    Value: !Ref RedisReplicationGroup
-  ReplicationGroupEndpointAddress:
-    Description: Cluster endpoint hostname
-    Value: !GetAtt RedisReplicationGroup.ConfigurationEndPoint.Address
-  ReplicationGroupEndpointPort:
-    Description: Cluster endpoint port
-    Value: !GetAtt RedisReplicationGroup.ConfigurationEndPoint.Port
   ValkeyReplicationGroupName:
     Value: !Ref ValkeyReplicationGroup
   ValkeyReplicationGroupEndpointAddress:
