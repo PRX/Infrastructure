@@ -1,0 +1,175 @@
+# stacks/shared-vpc/private-subnets.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates private subnets in the shared VPC, which have no internet gateway,
+  and a route table for the subnets.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcCidrBlock: { Type: String }
+  VpcIpv6CidrBlocks: { Type: CommaDelimitedList }
+  AvailabilityZoneSelectorServiceToken: { Type: String }
+  NetworkAclName: { Type: String }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  AvailabilityZoneSelectorService:
+    Type: Custom::AvailabilityZoneSelector
+    Properties:
+      ServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+
+  # Routing for private subnets. A subnet being associated with this route
+  # table is what makes it a private subnet, since there is no internet gateway
+  # associated with the route table.
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_private" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  # Private subnets
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [3, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [3, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_private-1_${ZoneName}
+              - ZoneName: !Select [0, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+  PrivateSubnet1NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      NetworkAclId: !Ref NetworkAclName
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [1, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [4, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [4, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_private-2_${ZoneName}
+              - ZoneName: !Select [1, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+  PrivateSubnet2NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      NetworkAclId: !Ref NetworkAclName
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [2, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [5, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [5, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_private-3_${ZoneName}
+              - ZoneName: !Select [2, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet3
+  PrivateSubnet3NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      NetworkAclId: !Ref NetworkAclName
+
+Outputs:
+  RouteTableId:
+    Description: ID of the private route table
+    Value: !Ref PrivateRouteTable
+
+  Subnet1Id:
+    Description: ID of private subnet 1
+    Value: !Ref PrivateSubnet1
+  Subnet1AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PrivateSubnet1.AvailabilityZone
+
+  Subnet2Id:
+    Description: ID of private subnet 2
+    Value: !Ref PrivateSubnet2
+  Subnet2AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PrivateSubnet2.AvailabilityZone
+
+  Subnet3Id:
+    Description: ID of private subnet 3
+    Value: !Ref PrivateSubnet3
+  Subnet3AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PrivateSubnet3.AvailabilityZone

@@ -1,0 +1,173 @@
+# stacks/dashboards.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates CloudWatch dashboards for resources in the stack
+
+Parameters:
+  EnvironmentType: { Type: String }
+
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+
+  SharedCdnCloudFrontDistributionId: { Type: String }
+
+  SharedEcsClusterName: { Type: String }
+
+  SharedValkeyCacheName: { Type: String }
+
+  SharedEcsAsgAarch64Name: { Type: String }
+
+  SharedAlbArn: { Type: String }
+  SharedAlbName: { Type: String }
+  SharedAlbFullName: { Type: String }
+
+  WordPressWebServiceName: { Type: String }
+  WordPressWebTargetGroupFullName: { Type: String }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  WordPressDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody: !Sub |-
+        {
+          "widgets": [
+            {
+              "height": 8,
+              "width": 6,
+              "y": 0,
+              "x": 0,
+              "type": "text",
+              "properties": {
+                "markdown": "\n# AWS Console\n"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApplicationELB", "RequestCount", "TargetGroup", "${WordPressWebTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "WordPress req" } ],
+                  [ "AWS/ApplicationELB", "HTTPCode_Target_3XX_Count", "TargetGroup", "${WordPressWebTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "WordPress 3xx" } ],
+                  [ "AWS/ApplicationELB", "HTTPCode_Target_4XX_Count", "TargetGroup", "${WordPressWebTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "WordPress 4xx" } ],
+                  [ "AWS/ApplicationELB", "HTTPCode_Target_5XX_Count", "TargetGroup", "${WordPressWebTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "WordPress 5xx" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "title": "ALB",
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "properties": {
+                "metrics": [
+                  [ "AWS/CloudFront", "Requests", "Region", "Global", "DistributionId", "${SharedCdnCloudFrontDistributionId}", { "stat": "Sum" } ],
+                  [ "AWS/CloudFront", "5xxErrorRate", "Region", "Global", "DistributionId", "${SharedCdnCloudFrontDistributionId}", { "yAxis": "right" } ],
+                  [ "AWS/CloudFront", "4xxErrorRate", "Region", "Global", "DistributionId", "${SharedCdnCloudFrontDistributionId}", { "yAxis": "right" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "title": "CDN",
+                "stat": "Maximum"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 6,
+              "height": 4,
+              "properties": {
+                "metrics": [
+                  [ "AWS/AutoScaling", "GroupDesiredCapacity", "AutoScalingGroupName", "${SharedEcsAsgAarch64Name}", { "label": "aarch64 Desired Capacity" } ],
+                  [ "AWS/AutoScaling", "GroupInServiceInstances", "AutoScalingGroupName", "${SharedEcsAsgAarch64Name}", { "label": "aarch64 In Service Instances" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "title": "Auto-Scaling Group"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 4,
+              "width": 6,
+              "height": 4,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApplicationELB", "TargetResponseTime", "TargetGroup", "${WordPressWebTargetGroupFullName}", "LoadBalancer", "${SharedAlbFullName}", { "label": "Avg" } ],
+                  [ "...", { "label": "p90", "stat": "p90" } ],
+                  [ "...", { "label": "p95", "stat": "p95" } ],
+                  [ "...", { "label": "p99", "stat": "p99" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "title": "WordPress Response Time"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 18,
+              "y": 0,
+              "width": 6,
+              "height": 4,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ElastiCache", "DatabaseCapacityUsagePercentage", "CacheClusterId", "${SharedValkeyCacheName}-001", "CacheNodeId", "0001" ],
+                  [ "AWS/ElastiCache", "CPUUtilization", "CacheClusterId", "${SharedValkeyCacheName}-001", "CacheNodeId", "0001" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "stat": "Maximum",
+                "period": 300,
+                "title": "Valkey"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 18,
+              "y": 0,
+              "width": 6,
+              "height": 4,
+              "properties": {
+                "metrics": [
+                  [ "AWS/ECS", "CPUUtilization", "ServiceName", "${WordPressWebServiceName}", "ClusterName", "${SharedEcsClusterName}" ],
+                  [ "AWS/ECS", "MemoryUtilization", "ServiceName", "${WordPressWebServiceName}", "ClusterName", "${SharedEcsClusterName}" ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "stat": "Average",
+                "period": 300,
+                "title": "WordPress ECS Service"
+              }
+            }
+          ]
+        }
+      DashboardName: !Sub ${RootStackName}-${AWS::Region}-Overview
