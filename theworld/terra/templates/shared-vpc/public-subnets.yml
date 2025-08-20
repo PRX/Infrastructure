@@ -1,0 +1,213 @@
+# stacks/shared-vpc/public-subnets.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates public subnets in the shared VPC, along with the internet gateway
+  that makes them public, and a route table for the subnets and gateway.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcCidrBlock: { Type: String }
+  VpcIpv6CidrBlocks: { Type: CommaDelimitedList }
+  AvailabilityZoneSelectorServiceToken: { Type: String }
+  NetworkAclName: { Type: String }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  AvailabilityZoneSelectorService:
+    Type: Custom::AvailabilityZoneSelector
+    Properties:
+      ServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+
+  # Internet gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_public" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VpcId
+
+  # Routing for public subnets. A subnet being associated with this route table
+  # is what makes it a public subnet, since there's an internet gateway
+  # associated with the route table.
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_public" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  IPv4Route:
+    DependsOn: VpcGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+  IPv6Route:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      DestinationIpv6CidrBlock: ::/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTable
+
+  # Public subnets
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [0, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_public-1_${ZoneName}
+              - ZoneName: !Select [0, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+  PublicSubnet1NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      NetworkAclId: !Ref NetworkAclName
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [1, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_public-2_${ZoneName}
+              - ZoneName: !Select [1, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+  PublicSubnet2NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      NetworkAclId: !Ref NetworkAclName
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AvailabilityZone: !Select [2, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+      CidrBlock: !Select [2, !Cidr [!Ref VpcCidrBlock, 16, 12]]
+      Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !Ref VpcIpv6CidrBlocks], 16, 64]]
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub:
+              - ${RootStackName}_shared_public-3_${ZoneName}
+              - ZoneName: !Select [2, !GetAtt AvailabilityZoneSelectorService.ZoneNames]
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  PublicSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet3
+  PublicSubnet3NetworkAclAssociation:
+    Type: AWS::EC2::SubnetNetworkAclAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      NetworkAclId: !Ref NetworkAclName
+
+Outputs:
+  RouteTableId:
+    Description: ID of the public route table
+    Value: !Ref PublicRouteTable
+
+  InternetGatewayName:
+    Description: The name of the internet gateway
+    Value: !Ref InternetGateway
+
+  Subnet1Id:
+    Description: ID of public subnet 1
+    Value: !Ref PublicSubnet1
+  Subnet1AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet1.AvailabilityZone
+
+  Subnet2Id:
+    Description: ID of public subnet 2
+    Value: !Ref PublicSubnet2
+  Subnet2AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet2.AvailabilityZone
+
+  Subnet3Id:
+    Description: ID of public subnet 3
+    Value: !Ref PublicSubnet3
+  Subnet3AZ:
+    Description: Resource ID for the VPC
+    Value: !GetAtt PublicSubnet3.AvailabilityZone

@@ -1,0 +1,370 @@
+# stacks/shared-vpc/private-network-acl.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a Network ACL and rules for subnets of the private subnets in the
+  shared VPC.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcCidrBlock: { Type: String }
+  VpcIpv6CidrBlocks: { Type: CommaDelimitedList }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  PrivateNetworkAcl:
+    Type: AWS::EC2::NetworkAcl
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_private" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  # INGRESS 140
+  # Allows inbound traffic on high-numbered ports from all IPs. This generally
+  # is for return HTTP(S) traffic from requests made from hosts within the VPC.
+  # Some of the ports in this range may be denied by other rules.
+  # This assumes that the HTTP requests are originating from Linux host, and
+  # use the common ephemeral port range for that operating system.
+  # These are also the dynamic ports used with ECS port mapping, allowing
+  # traffic between the load balancer and ECS instances.
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  InboudIpV4TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 140
+  InboudIpV6TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 141
+
+  # INGRESS 160
+  # Allow return path TCP traffic from IPs within the VPC on the ephemeral port
+  # range used by AWS Linux. This is response traffic for request that originate
+  # from Lambda in the VPC (e.g, a Lambda execution makes a Redis (6379)
+  # request to a cluster in the VPC, and the response is sent back on ephemeral
+  # port 1037). This is required if we have Lambda functions running in private
+  # subnets and they are making any sort of TCP requests.
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  # InboudIpV4TcpAwsLambdaEphemeralPortsNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     CidrBlock: !Ref VpcCidrBlock
+  #     Egress: false
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 1024
+  #       To: 65535
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 160
+  # InboudIpV6TcpAwsLambdaEphemeralPortsNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     Egress: false
+  #     Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 1024
+  #       To: 65535
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 161
+
+  # INGRESS 500
+  # Allows inbound Aurora traffic from all IPs within the VPC
+  InboundIpV4AuroraNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 3306
+        To: 3306
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 500
+  InboundIpV6AuroraNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 3306
+        To: 3306
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 501
+
+  # INGRESS 520
+  # Allows inbound Redis traffic from all IPs within the VPC (e.g., an
+  # application running on an EC2 instance in the VPC making a request to a
+  # Redis cluster running in a private subnet).
+  InboundIpV4RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 520
+  InboundIpV6RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 521
+
+  # # INGRESS 540
+  # # Allows inbound Memcached traffic from all IPs within the VPC (e.g., an
+  # # application running on an EC2 instance in the VPC making a request to a
+  # # memcached instance running in a private subnet).
+  # InboundIpV4MemcachedNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     CidrBlock: !Ref VpcCidrBlock
+  #     Egress: false
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 11211
+  #       To: 11211
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 540
+  # InboundIpV6MemcachedNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     Egress: false
+  #     Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 11211
+  #       To: 11211
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 541
+
+  # # INGRESS 660
+  # # Allows inbound HTTPS traffic from IPs within the VPC to allow traffic to
+  # # the Networks search app running along side the Sphinx server, from the
+  # # public Networks web server.
+  # InboundIpV4NetworksAppNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     CidrBlock: !Ref VpcCidrBlock
+  #     Egress: false
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 443
+  #       To: 443
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 660
+  # InboundIpV6NetworksAppNetworkAclEntry:
+  #   Type: AWS::EC2::NetworkAclEntry
+  #   Properties:
+  #     Egress: false
+  #     Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+  #     NetworkAclId: !Ref PrivateNetworkAcl
+  #     PortRange:
+  #       From: 443
+  #       To: 443
+  #     Protocol: 6 # TCP
+  #     RuleAction: allow
+  #     RuleNumber: 661
+
+  # INGRESS 720
+  # Allows inbound SSH traffic from IPs within the VPC to allow connecting to
+  # private instances from, e.g., an SSH bastion
+  InboundIpV4VpcSshNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: false
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 720
+  InboundIpV6VpcSshNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: false
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 22
+        To: 22
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 721
+
+  ##############################################################################
+  ##############################################################################
+  ##############################################################################
+
+  # EGRESS 120
+  # Allows outbound traffic on high-numbered ports to the VPC. This generally
+  # is for return traffic to clients on ephemeral ports. Some of the
+  # ports in this range may be denied by other rules. Also used to connect to
+  # databases and other services within the VPC.
+  # https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html#nacl-ephemeral-ports
+  OutboudIpV4TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: true
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 120
+  OutboudIpV6TcpEphemeralPortsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 1024
+        To: 65535
+      Protocol: 6
+      RuleAction: allow
+      RuleNumber: 121
+
+  # EGRESS 130
+  # Allows outbound HTTPS web requests originating from hosts within the VPC
+  # to all IPs
+  OutboundIpV4HttpsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: 0.0.0.0/0
+      Egress: true
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 130
+  OutboundIpV6HttpsNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: ::/0
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 443
+        To: 443
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 131
+
+  # EGRESS 200
+  # Allows outbound MySQL and Aurora traffic to IPs within the VPC (e.g., an
+  # application on one of our EC2 instances connecting to its Aurora database
+  # in the same VPC)
+  OutboundIpV4MysqlNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: true
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 3306
+        To: 3306
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 200
+  OutboundIpV6MysqlNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 3306
+        To: 3306
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 201
+
+  # EGRESS 220
+  # Allows outbound Redis traffic to IPs within the VPC (e.g., an application
+  # on one of our EC2 instances connecting to a Redis cluster in the same VPC)
+  OutboundIpV4RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      Egress: true
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 220
+  OutboundIpV6RedisNetworkAclEntry:
+    Type: AWS::EC2::NetworkAclEntry
+    Properties:
+      Egress: true
+      Ipv6CidrBlock: !Select [0, !Ref VpcIpv6CidrBlocks]
+      NetworkAclId: !Ref PrivateNetworkAcl
+      PortRange:
+        From: 6379
+        To: 6379
+      Protocol: 6 # TCP
+      RuleAction: allow
+      RuleNumber: 221
+
+Outputs:
+  NetworkAclName:
+    Description: The resource name of the private network ACL
+    Value: !Ref PrivateNetworkAcl

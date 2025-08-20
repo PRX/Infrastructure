@@ -1,0 +1,441 @@
+# stacks/apps/dovetail-insights.yml
+# 200A
+#
+# The names of the SQS queues created by this template are intended to
+# implicitly match some configuration that exists within the CMS application.
+# The only part of the queue names that is passed to the application is the
+# prefix; if the stems change in other the template or the app config, things
+# will not function as expected.
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a dedicated load balancer and the ECS service for the public Insights
+  web server.
+
+Parameters:
+  kWebContainerName:
+    Type: String
+    Default: wordpress
+  kWebApplicationPort:
+    Type: Number
+    Default: 8080
+  #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EcsClusterName: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  EnvironmentTypeLowercase: { Type: String }
+  RegionMode: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
+  AlbListenerRulePriorityPrefix: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
+  MysqlHostname: { Type: String }
+  ValkeyHostname: { Type: String }
+  ValkeyPort: { Type: String }
+  AlbAccessToken: { Type: AWS::SSM::Parameter::Value<String> }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  # IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref WebTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - wordpress.*
+              - api.*
+              - admin.*
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: x-prx-alb-access-token
+            Values:
+              - !Ref AlbAccessToken
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
+  HostHeader2ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref WebTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - feeds.*
+              - projects.*
+              - sitemap.*
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: x-prx-alb-access-token
+            Values:
+              - !Ref AlbAccessToken
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "02"]]
+
+  ExecutionRole:
+    # ExecutionRole is the IAM role that is used within ECS (outside the task)
+    # to manage task execution
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/smtp/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  TaskRole:
+    # TaskRole is the IAM role that is provided _within_ the task environment.
+    # Inside a Docker container belonging to the task, if you use the AWS CLI
+    # or SDK, and don't provide other IAM credentials, this role will be used.
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: s3:*
+                Effect: Allow
+                Resource:
+                  - arn:aws:s3:::media-pri-org
+                  - arn:aws:s3:::media-pri-org/*
+                Sid: AllowS3
+            Version: "2012-10-17"
+          PolicyName: MediaBucket
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /up.html
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_wordpress" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  WebTargetGroupHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's WordPress server is returning 5XX errors
+        from the ECS service to the load balancer.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  WebEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
+          Weight: 1
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: !If [IsProduction, 5, 1]
+      EnableECSManagedTags: true
+      LoadBalancers:
+        - ContainerName: !Ref kWebContainerName
+          ContainerPort: !Ref kWebApplicationPort
+          TargetGroupArn: !Ref WebTargetGroup
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: attribute:ecs.cpu-architecture == arm64
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TaskDefinition: !Ref WebTaskDefinition
+  WebTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProduction, 30, 7]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  WebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Cpu: 100 # Currently we don't use CPU reservations for anything meaningful
+          Environment:
+            - Name: PRX_ENVIRONMENT
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: DB_HOST
+              Value: !Ref MysqlHostname
+            - Name: WP_REDIS_HOST
+              Value: !Ref ValkeyHostname
+            - Name: WP_REDIS_PORT
+              Value: !Ref ValkeyPort
+            - Name: WP_REDIS_PREFIX
+              Value: tw-wordpress
+            - Name: WP_REDIS_DATABASE
+              Value: 0
+            - Name: WP_REDIS_TIMEOUT
+              Value: 1
+            - Name: WP_REDIS_READ_TIMEOUT
+              Value: 1
+            - Name: WP_REDIS_SCHEME
+              Value: tls
+            - Name: WP_REDIS_MAXTTL
+              Value: 3600
+            - Name: NEW_RELIC_APP_NAME
+              Value: !Sub The World WordPress (${EnvironmentType})
+            - Name: WP_DEBUG
+              Value: !If [IsProduction, false, false]
+            - Name: WP_DEBUG_LOG
+              Value: !If [IsProduction, false, false]
+            - Name: WPMS_SMTP_PORT
+              Value: 587
+            - Name: WPMS_SSL
+              Value: tls
+            - Name: WPMS_SMTP_AUTH
+              Value: true
+            - Name: WPMS_SMTP_AUTOTLS
+              Value: false
+            - Name: WPMS_MAILER
+              Value: smtp
+            - Name: WPMS_MAIL_FROM
+              Value: editors@theworld.org
+            - Name: WPMS_MAIL_FROM_FORCE
+              Value: true
+            - Name: WPMS_MAIL_FROM_NAME
+              Value: The World from PRX
+            - Name: WPMS_MAIL_FROM_NAME_FORCE
+              Value: force
+            - Name: APACHE_DOCUMENT_ROOT
+              Value: /var/www/html
+          Essential: true
+          HealthCheck:
+            Command: [ "CMD-SHELL", "curl --fail http://localhost:8080/up.html || exit 1" ]
+            Interval: 30
+            Retries: 3
+            StartPeriod: 15
+            Timeout: 5
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
+          LinuxParameters:
+            InitProcessEnabled: false
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          # Memory and MemoryReservation values are based on current instances
+          # sizes, ensuring that only 1 WordPress task is running on any
+          # instance
+          # Prod: c8g.xlarge => 8 GiB
+          # Stag: t4g.small => 2 GiB
+          Memory: !If [IsProduction, 7650, 1800]
+          MemoryReservation: !If [IsProduction, 4111, 1111]
+          Name: !Ref kWebContainerName
+          PortMappings:
+            - ContainerPort: !Ref kWebApplicationPort
+              HostPort: 0
+          Secrets:
+            - Name: AUTH_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/auth-key
+            - Name: AUTH_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/auth-salt
+            - Name: SECURE_AUTH_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/secure-auth-key
+            - Name: SECURE_AUTH_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/secure-auth-salt
+            - Name: LOGGED_IN_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/logged-in-key
+            - Name: LOGGED_IN_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/logged-in-salt
+            - Name: NONCE_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/nonce-key
+            - Name: NONCE_SALT
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/nonce-salt
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
+            - Name: WPMS_SMTP_HOST
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/smtp/hostname
+            - Name: WPMS_SMTP_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/smtp/username
+            - Name: WPMS_SMTP_PASS
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/smtp/password
+            - Name: DB_NAME
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/mysql/database
+            - Name: DB_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/mysql/username
+            - Name: DB_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/mysql/password
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # Autoscaling
+  ScalingIamRole:
+    Type: AWS::IAM::Role
+    Condition: IsProduction
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: IsProduction
+    Properties:
+      MinCapacity: 3
+      MaxCapacity: 20
+      ResourceId: !Sub service/${EcsClusterName}/${WebEcsService.Name}
+      RoleARN: !GetAtt ScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: IsProduction
+    Properties:
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub ${AlbFullName}/${WebTargetGroup.TargetGroupFullName}
+        ScaleInCooldown: 180
+        ScaleOutCooldown: 60
+        TargetValue: 10
+
+Outputs:
+  WebServiceName:
+    Value: !GetAtt WebEcsService.Name
+  WebTargetGroupFullName:
+    Value: !GetAtt WebTargetGroup.TargetGroupFullName
+  AlbAccessToken:
+    Value: !Ref AlbAccessToken

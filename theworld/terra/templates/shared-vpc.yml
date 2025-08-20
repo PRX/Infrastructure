@@ -1,0 +1,333 @@
+# theworld/shared-vpc.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a /16 VPC with private and public subnets in three availability
+  zones. The IPv4 CIDR blocks for each subnet have a /20 mask, which yields
+  4,096 hosts per subnet, and 16 possible /20 ranges within the /16 network.
+  This provides enough room to create two complete sets of private and public
+  subnets, allowing for updating the CIDR blocks of all subnet resources and
+  avoiding range overlaps.
+
+Parameters:
+  AvailabilityZoneSelectorServiceToken: { Type: String }
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  TemplateUrlPrefix: { Type: String }
+  SharedVpcCidrBlock: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      CidrBlock: !Ref SharedVpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  IPv6VpcCidrBlock:
+    Type: AWS::EC2::VPCCidrBlock
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AmazonProvidedIpv6CidrBlock: true
+      VpcId: !Ref Vpc
+
+  # DHCP
+  DhcpOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: ec2.internal
+      DomainNameServers:
+        - AmazonProvidedDNS
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  DhcpOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      DhcpOptionsId: !Ref DhcpOptions
+      VpcId: !Ref Vpc
+
+  # Network ACLs
+  PublicNetworkAclStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/public-network-acl.yml
+      TimeoutInMinutes: 5
+  PrivateNetworkAclStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/private-network-acl.yml
+      TimeoutInMinutes: 5
+
+  # Routing and subnets
+  PublicSubnetsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+        NetworkAclName: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/public-subnets.yml
+      TimeoutInMinutes: 5
+  PrivateSubnetsStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IPv6VpcCidrBlock
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        VpcCidrBlock: !GetAtt Vpc.CidrBlock
+        VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+        AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
+        NetworkAclName: !GetAtt PrivateNetworkAclStack.Outputs.NetworkAclName
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/private-subnets.yml
+      TimeoutInMinutes: 5
+
+  # AWS PrivateLink and VPC endpoints
+  InterfaceEndpointsStack:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        PublicSubnet1Id: !GetAtt PublicSubnetsStack.Outputs.Subnet1Id
+        PublicSubnet2Id: !GetAtt PublicSubnetsStack.Outputs.Subnet2Id
+        PublicSubnet3Id: !GetAtt PublicSubnetsStack.Outputs.Subnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/interface-endpoints.yml
+      TimeoutInMinutes: 5
+  GatewayEndpointsStack:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        VpcId: !Ref Vpc
+        PublicRouteTableId: !GetAtt PublicSubnetsStack.Outputs.RouteTableId
+        PrivateRouteTableId: !GetAtt PrivateSubnetsStack.Outputs.RouteTableId
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/gateway-endpoints.yml
+      TimeoutInMinutes: 5
+
+  # Flow logs
+  FlowLogsStack:
+    Type: AWS::CloudFormation::Stack
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      Parameters:
+        EnvironmentType: !Ref EnvironmentType
+        VpcId: !Ref Vpc
+        RootStackName: !Ref RootStackName
+        RootStackId: !Ref RootStackId
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TemplateURL: !Sub ${TemplateUrlPrefix}/flow-logs.yml
+      TimeoutInMinutes: 5
+
+Outputs:
+  VpcId:
+    Description: Resource ID for the VPC
+    Value: !Ref Vpc
+  VpcCidrBlock:
+    Description: The IPv4 CIDR block for the VPC
+    Value: !GetAtt Vpc.CidrBlock
+  VpcIpv6CidrBlocks:
+    Description: >-
+      A comma-delimited list of IPv6 CIDB blocks associated with the VPC
+    Value: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
+
+  PublicSubnet1Id:
+    Description: ID of public subnet 1
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet1Id
+  PublicSubnet1Az:
+    Description: AZ of public subnet 1
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet1AZ
+  PublicSubnet2Id:
+    Description: ID of public subnet 2
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet2Id
+  PublicSubnet2Az:
+    Description: AZ of public subnet 2
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet2AZ
+  PublicSubnet3Id:
+    Description: ID of public subnet 3
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet3Id
+  PublicSubnet3Az:
+    Description: AZ of public subnet 3
+    Value: !GetAtt PublicSubnetsStack.Outputs.Subnet3AZ
+
+  PrivateSubnet1Id:
+    Description: ID of private subnet 1
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet1Id
+  PrivateSubnet1Az:
+    Description: AZ of private subnet 2
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet1AZ
+  PrivateSubnet2Id:
+    Description: ID of private subnet 2
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet2Id
+  PrivateSubnet2Az:
+    Description: AZ of private subnet 2
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet2AZ
+  PrivateSubnet3Id:
+    Description: ID of private subnet 3
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet3Id
+  PrivateSubnet3Az:
+    Description: AZ of private subnet 1
+    Value: !GetAtt PrivateSubnetsStack.Outputs.Subnet3AZ
+
+  CloudWatchLogsEndpointAccessSecurityGroupId:
+    Description: >-
+      The ID of a security group allows outbound HTTPS traffic to flow to
+      CloudWatch Logs VPC Endpoints
+    Value: !GetAtt InterfaceEndpointsStack.Outputs.CloudWatchLogsEndpointAccessSecurityGroupId
+  EcsLaunchEndpointsAccessSecurityGroupId:
+    Description: >-
+      The ID of a security group that has VPC Endpoint access to AWS services
+      required to launch tasks in ECS.
+    Value: !GetAtt InterfaceEndpointsStack.Outputs.EcsLaunchEndpointsAccessSecurityGroupId
+  KmsEndpointAccessSecurityGroupId:
+    Description: >-
+      The ID of a security group that has KMS VPC Endpoint access.
+    Value: !GetAtt InterfaceEndpointsStack.Outputs.KmsEndpointAccessSecurityGroupId
+  StsEndpointAccessSecurityGroupId:
+    Description: >-
+      The ID of a security group that has STS VPC Endpoint access.
+    Value: !GetAtt InterfaceEndpointsStack.Outputs.StsEndpointAccessSecurityGroupId
+  SystemManagerEndpointAccessSecurityGroupId:
+    Description: >-
+      The ID of a security group that has System Manager VPC Endpoint access.
+    Value: !GetAtt InterfaceEndpointsStack.Outputs.SystemManagerEndpointAccessSecurityGroupId
+  FlowLogsLogGroupName:
+    Value: !GetAtt FlowLogsStack.Outputs.LogGroupName

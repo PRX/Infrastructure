@@ -1,0 +1,25 @@
+Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  EcsClusterName: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  ClusterCapacityProviderAssociation:
+    # This is handling associations for capacity providers, even ones not
+    # created in this template.
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref EcsClusterName
+      CapacityProviders:
+        - !Ref Aarch64AsgCapacityProviderName
+      DefaultCapacityProviderStrategy:
+        # With only one default capacity provider, the base and weight won't
+        # factor into scheduling; everything will be even within the ASG
+        - Base: 0
+          Weight: 1
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
