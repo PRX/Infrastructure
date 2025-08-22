@@ -43,6 +43,7 @@ Resources:
         - !Ref EcrPublicPushPolicy
         - !Ref PrivateEcrPushPolicy
         - !Ref SsmParameterPutPolicy
+        - !Ref AssumeRolePolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -197,3 +198,22 @@ Resources:
             Action:
               - ssm:PutParameter
             Resource: "arn:aws:ssm:*:*:parameter/*/pkg/docker-image-tag"
+
+  # GH actions may need more permissions than we are willing to grant to this
+  # role, so we allow this role to assume some other roles. The assumed role
+  # **MUST** be tagged with PRX-GHA-AccessRole=AssumeRole. Roles that may
+  # otherwise allow this role to assume them (like with an org-wide trust
+  # policy), are not necessarily allowed.
+  AssumeRolePolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows assuming certain roles
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:ResourceTag/PRX-GHA-AccessRole: AssumeRole
+            Resource: "*"
