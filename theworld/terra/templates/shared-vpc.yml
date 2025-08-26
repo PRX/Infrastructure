@@ -1,5 +1,6 @@
 # theworld/shared-vpc.yml
 AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
 
 Description: >-
   Creates a /16 VPC with private and public subnets in three availability
@@ -76,7 +77,7 @@ Resources:
 
   # Network ACLs
   PublicNetworkAclStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DependsOn: IPv6VpcCidrBlock
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
@@ -90,18 +91,18 @@ Resources:
         VpcCidrBlock: !GetAtt Vpc.CidrBlock
         VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/public-network-acl.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/public-network-acl.yml
       TimeoutInMinutes: 5
   PrivateNetworkAclStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DependsOn: IPv6VpcCidrBlock
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
@@ -115,20 +116,20 @@ Resources:
         VpcCidrBlock: !GetAtt Vpc.CidrBlock
         VpcIpv6CidrBlocks: !Join [",", !GetAtt Vpc.Ipv6CidrBlocks]
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/private-network-acl.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/private-network-acl.yml
       TimeoutInMinutes: 5
 
   # Routing and subnets
   PublicSubnetsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DependsOn: IPv6VpcCidrBlock
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
@@ -144,18 +145,18 @@ Resources:
         AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
         NetworkAclName: !GetAtt PublicNetworkAclStack.Outputs.NetworkAclName
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/public-subnets.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/public-subnets.yml
       TimeoutInMinutes: 5
   PrivateSubnetsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DependsOn: IPv6VpcCidrBlock
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
@@ -171,20 +172,20 @@ Resources:
         AvailabilityZoneSelectorServiceToken: !Ref AvailabilityZoneSelectorServiceToken
         NetworkAclName: !GetAtt PrivateNetworkAclStack.Outputs.NetworkAclName
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/private-subnets.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/private-subnets.yml
       TimeoutInMinutes: 5
 
   # AWS PrivateLink and VPC endpoints
   InterfaceEndpointsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Properties:
@@ -198,18 +199,18 @@ Resources:
         PublicSubnet2Id: !GetAtt PublicSubnetsStack.Outputs.Subnet2Id
         PublicSubnet3Id: !GetAtt PublicSubnetsStack.Outputs.Subnet3Id
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/interface-endpoints.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/interface-endpoints.yml
       TimeoutInMinutes: 5
   GatewayEndpointsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Properties:
@@ -222,20 +223,20 @@ Resources:
         PublicRouteTableId: !GetAtt PublicSubnetsStack.Outputs.RouteTableId
         PrivateRouteTableId: !GetAtt PrivateSubnetsStack.Outputs.RouteTableId
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/gateway-endpoints.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/gateway-endpoints.yml
       TimeoutInMinutes: 5
 
   # Flow logs
   FlowLogsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     UpdateReplacePolicy: Delete
     DeletionPolicy: Delete
     Properties:
@@ -246,15 +247,15 @@ Resources:
         RootStackId: !Ref RootStackId
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/flow-logs.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref RootStackName
+        "prx:cloudformation:root-stack-id": !Ref RootStackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc/flow-logs.yml
       TimeoutInMinutes: 5
 
 Outputs:

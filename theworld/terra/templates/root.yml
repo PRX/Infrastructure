@@ -1,3 +1,6 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
 Parameters:
   # Optional
   AuthorizedKeys: { Type: AWS::SSM::Parameter::Value<List<String>>, Default: /prx/global/Terra/authorized-keys, NoEcho: true }
@@ -66,31 +69,33 @@ Mappings:
 
 Resources:
   Constants:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      Location: ./constants.yml
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackId: !Ref AWS::StackId
         RootStackName: !Ref AWS::StackName
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Infrastructure }
-      TemplateURL: !Sub ${TemplateUrlBase}/constants.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
       TimeoutInMinutes: 5
 
   CustomResourcesStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      Location: ./custom-resources.yml
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
@@ -98,15 +103,14 @@ Resources:
         RootStackId: !Ref AWS::StackId
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/custom-resources.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
       TimeoutInMinutes: 5
 
   Certificate:
@@ -117,11 +121,17 @@ Resources:
           Fn::If:
             - IsProduction
             - - admin.theworld.org
+              - admin.prod.theworld.org
               - api.theworld.org
+              - api.prod.theworld.org
               - feeds.theworld.org
-              - projects.theworld.org
-              - sitemap.theworld.org
+              - feeds.prod.theworld.org
+              # - projects.theworld.org
+              # - projects.prod.theworld.org
+              # - sitemap.theworld.org
+              # - sitemap.prod.theworld.org
               - wordpress.theworld.org
+              - wordpress.prod.theworld.org
             - - admin.stag.theworld.org
               - api.stag.theworld.org
               - feeds.stag.theworld.org
@@ -139,28 +149,28 @@ Resources:
       ValidationMethod: DNS
 
   SharedGlueDatabaseStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      Location: ./shared-glue-database.yml
       Parameters:
         EnvironmentType: !Ref EnvironmentType
         RootStackName: !Ref AWS::StackName
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-glue-database.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
       TimeoutInMinutes: 10
 
   SharedEcsClusterStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -170,19 +180,19 @@ Resources:
         RootStackId: !Ref AWS::StackName
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-ecs/ecs-cluster.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-ecs/ecs-cluster.yml
       TimeoutInMinutes: 20
 
   SharedVpcStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -195,20 +205,20 @@ Resources:
         TemplateUrlPrefix: !Sub ${TemplateUrlBase}/shared-vpc
         SharedVpcCidrBlock: !FindInMap [SharedVpcCidrBlockMap, !Ref "AWS::Region", !Ref EnvironmentType]
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-vpc.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-vpc.yml
       TimeoutInMinutes: 20
 
   # Requires VPC and shared Glue DB
   SharedAlbStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -226,19 +236,19 @@ Resources:
         LatencyGroupDomain: !Sub spire-shared-alb-latency-group.${EnvironmentTypeAbbreviation}.prx.tech
         CertificateArn: !Ref Certificate
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-alb.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-alb.yml
       TimeoutInMinutes: 40
 
   SharedDatabaseSecurityGroupsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -249,18 +259,18 @@ Resources:
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-db-sg.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-db-sg.yml
       TimeoutInMinutes: 5
   SharedValkeySecurityGroupsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -271,20 +281,20 @@ Resources:
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-valkey-sg.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-valkey-sg.yml
       TimeoutInMinutes: 5
 
   # Requires VPC and ALB
   SharedEcsAsgSecurityGroupStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -296,19 +306,19 @@ Resources:
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
         LoadBalancerSecurityGroupId: !GetAtt SharedAlbStack.Outputs.LoadBalancerSecurityGroupId
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-ecs/asg-sg.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-ecs/asg-sg.yml
       TimeoutInMinutes: 20
   # Requires VPC, ALB, and more
   SharedEcsAsgAarch64Stack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -333,19 +343,19 @@ Resources:
         # SharedRedisReplicationGroupEndpointAddress: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointAddress
         # SharedRedisReplicationGroupEndpointPort: !GetAtt SharedRedisStack.Outputs.ReplicationGroupEndpointPort
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-ecs/asg-aarch64.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-ecs/asg-aarch64.yml
       TimeoutInMinutes: 1440
 
   SharedEcsCapacityProviderAssociationStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -354,19 +364,19 @@ Resources:
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
         Aarch64AsgCapacityProviderName: !GetAtt SharedEcsAsgAarch64Stack.Outputs.CapacityProviderName
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-ecs/ecs-capacity-provider-association.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-ecs/ecs-capacity-provider-association.yml
       TimeoutInMinutes: 20
 
   SharedAuroraMysqlStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -383,18 +393,18 @@ Resources:
         SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
         SharedMysqlMasterUsername: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/shared-mysql/master-username
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-aurora-mysql.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-aurora-mysql.yml
       TimeoutInMinutes: 20
   SharedValkeyStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -409,19 +419,19 @@ Resources:
         VpcPrivateSubnet2Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet2Id
         VpcPrivateSubnet3Id: !GetAtt SharedVpcStack.Outputs.PrivateSubnet3Id
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-valkey.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-valkey.yml
       TimeoutInMinutes: 40
 
   WordPressStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -446,19 +456,19 @@ Resources:
         ValkeyPort: !GetAtt SharedValkeyStack.Outputs.CacheEndpointPort
         AlbAccessToken: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/alb-access-token
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/apps/wordpress.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./apps/wordpress.yml
       TimeoutInMinutes: 20
 
   SharedCdnStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -472,24 +482,25 @@ Resources:
         CertificateArn: !Ref Certificate
         AlbAccessToken: !GetAtt WordPressStack.Outputs.AlbAccessToken
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      TemplateURL: !Sub ${TemplateUrlBase}/shared-cdn.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./shared-cdn.yml
       TimeoutInMinutes: 20
 
   # Assumed to require all possible requirements
   DashboardsStack:
-    Type: AWS::CloudFormation::Stack
+    Type: AWS::Serverless::Application
     # Condition: CreateDashboardsStack
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      Location: ./dashboards.yml
       Parameters:
         EnvironmentType: !Ref EnvironmentType
 
@@ -526,12 +537,12 @@ Resources:
   #       SharedVpcFlowLogsLogGroupName: !GetAtt SharedVpcStack.Outputs.FlowLogsLogGroupName
 
       Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:application, Value: Common }
-      TemplateURL: !Sub ${TemplateUrlBase}/dashboards.yml
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
       TimeoutInMinutes: 10
