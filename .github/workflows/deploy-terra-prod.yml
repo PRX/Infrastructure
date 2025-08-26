@@ -1,0 +1,49 @@
+name: Deploy The World terra stack, production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::976680550710:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-terra-stag
+
+      - name: Update Parameter Store for Production
+        run: |
+          staging_sha=$(aws cloudformation describe-stacks --region us-east-1 --stack-name terra-stag --query "Stacks[0].Outputs[?OutputKey=='WordPressEcrImageTag'].OutputValue" --output text)
+          aws ssm put-parameter \
+            --region us-east-1 \
+            --name /prx/prod/Terra/The_World-WordPress/pkg/docker-image-tag \
+            --value "github/prx/the-world-cms-wordpress:${staging_sha}" \
+            --overwrite
+
+      - name: Deploy CloudFormation stack
+        working-directory: theworld/terra/templates
+        run: |
+          sam build \
+            --template-file root.yml \
+          && sam deploy \
+            --region us-east-1 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name terra-prod \
+            --resolve-s3 \
+            --s3-prefix terra-prod \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --role-arn arn:aws:iam::976680550710:role/PRX-GHA-ServiceRoleForCloudFormation
