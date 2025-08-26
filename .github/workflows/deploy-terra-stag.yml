@@ -1,0 +1,44 @@
+name: Deploy The World terra stack, staging
+
+on:
+  push:
+    branches: [main]
+    paths: [theworld/terra/templates/**]
+  repository_dispatch:
+    types: [deploy_terra_stag]
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::976680550710:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-terra-stag
+
+      - name: Deploy CloudFormation stack
+        working-directory: theworld/terra/templates
+        run: |
+          sam build \
+            --template-file root.yml \
+          && sam deploy \
+            --region us-east-1 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name terra-stag \
+            --resolve-s3 \
+            --s3-prefix terra-stag \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --role-arn arn:aws:iam::976680550710:role/PRX-GHA-ServiceRoleForCloudFormation

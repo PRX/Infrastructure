@@ -1,0 +1,32 @@
+# stacks/constants.yml
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Provides services to be used as CloudFormation custom resources
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackId: { Type: String }
+  RootStackName: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+
+Mappings:
+  EnvironmentTypeMap:
+    Staging:
+      EnvironmentTypeAbbreviation: stag
+      EnvironmentTypeLowercase: staging
+    Production:
+      EnvironmentTypeAbbreviation: prod
+      EnvironmentTypeLowercase: production
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+  Placeholder: { Type: AWS::SNS::Topic }
+
+Outputs:
+  EnvironmentTypeAbbreviation: { Value: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, EnvironmentTypeAbbreviation] }
+  EnvironmentTypeLowercase: { Value: !FindInMap [EnvironmentTypeMap, !Ref EnvironmentType, EnvironmentTypeLowercase] }
+
+  RootStackId: { Value: !Ref RootStackId }
+  RootStackName: { Value: !Ref RootStackName }

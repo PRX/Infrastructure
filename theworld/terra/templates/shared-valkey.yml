@@ -1,0 +1,135 @@
+# stacks/shared-app-redis.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates a Redis cluster intended to be used by several applications. Unlike
+  the shared-redis/cluster.yml, this is a non-redundant single node redis. It
+  should only be used for pure FIFO caching, with no state we need to hold
+  onto if it should cycle or disappear. The cluster's security group will allow
+  only traffic from a security group provided as a stack parameter.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  SharedValkeyClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  StagingInstanceType:
+    Type: String
+    Default: cache.t4g.micro
+  ProductionInstanceType:
+    Type: String
+    Default: cache.t4g.small
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  SharedValkeyServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Primary security group for the shared ${EnvironmentType} Valkey server
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_app_redis" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  SharedValkeyServerClientIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allows ingress traffic from the client security group
+      FromPort: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Port
+      GroupId: !GetAtt SharedValkeyServerSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref SharedValkeyClientSecurityGroupId
+      ToPort: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Port
+
+  # This adds an egress rule to the client security group created in
+  # shared-valkey-sg.yml, which clients like EC2 instances and Lambda functions
+  # belong to. This rule allows outbound traffic from those clients to the
+  # Valkey server security group.
+  SharedValkeyClientSecurityGroupValkeyEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allows outbound Valkey traffic
+      DestinationSecurityGroupId: !Ref SharedValkeyServerSecurityGroup
+      FromPort: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Port
+      GroupId: !Ref SharedValkeyClientSecurityGroupId
+      IpProtocol: tcp
+      ToPort: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Port
+
+  SharedAppRedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: !Sub Shared ${EnvironmentType} Valkey subnet group
+      SubnetIds:
+        - !Ref VpcPrivateSubnet1Id
+        - !Ref VpcPrivateSubnet2Id
+        - !Ref VpcPrivateSubnet3Id
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  SharedValkeyReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      AtRestEncryptionEnabled: false
+      AutomaticFailoverEnabled: false
+      AutoMinorVersionUpgrade: true
+      CacheNodeType: !If [IsProduction, !Ref ProductionInstanceType, !Ref StagingInstanceType]
+      CacheParameterGroupName: default.valkey8
+      CacheSubnetGroupName: !Ref SharedAppRedisSubnetGroup
+      Engine: valkey
+      EngineVersion: 8.1 # aws elasticache describe-cache-engine-versions --engine valkey --query "CacheEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
+      MultiAZEnabled: false
+      # NumNodeGroups: 1 # NodeGroups are Shards.
+      ReplicasPerNodeGroup: !If [IsProduction, 1, 0] # **Update requires replacement** Replicas are nodes. N replicas will result in N+1 Nodes Per Shard.
+      ReplicationGroupDescription: !Sub Shared ${EnvironmentType} Valkey
+      SecurityGroupIds:
+        - !Ref SharedValkeyServerSecurityGroup
+      SnapshotRetentionLimit: 0 # 0 = automatic backups are disabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:billing:pricing-intent, Value: Reserved }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TransitEncryptionEnabled: true
+
+Outputs:
+  CacheName:
+    Value: !Ref SharedValkeyReplicationGroup
+  CacheEndpointAddress:
+    Description: Cache endpoint hostname
+    Value: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Address
+  CacheEndpointPort:
+    Description: Cache endpoint port
+    Value: !GetAtt SharedValkeyReplicationGroup.PrimaryEndPoint.Port

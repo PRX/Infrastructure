@@ -1,0 +1,218 @@
+Parameters:
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  EnvironmentType:
+    Type: String
+    AllowedValues:
+      - Staging
+      - Production
+  EnvironmentTypeAbbreviation: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  VpcPublicSubnet1Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet2Id:
+    Type: AWS::EC2::Subnet::Id
+  VpcPublicSubnet3Id:
+    Type: AWS::EC2::Subnet::Id
+  SharedMysqlClientSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  SharedMysqlMasterUsername:
+    Type: AWS::SSM::Parameter::Value<String>
+    NoEcho: true
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  DbClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: !Sub ${AWS::StackName} cluster parameters
+      Family: aurora-mysql8.0
+      Parameters:
+        slow_query_log: 1
+        long_query_time: 0.5
+        log_output: FILE
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  DbCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      AutoMinorVersionUpgrade: true
+      BackupRetentionPeriod: !If [IsProduction, 35, 7]
+      DatabaseInsightsMode: advanced
+      DBClusterParameterGroupName: !Ref DbClusterParameterGroup
+      # DBClusterParameterGroupName: !If
+      #   - HasGlobalClusterIdentifier # indicates a secondary cluster
+      #   - !Ref DbClusterParameterGroup
+      #   - !Ref AWS::NoValue
+      DBSubnetGroupName: !Ref DbSubnetGroup
+      DeletionProtection: true
+      EnableCloudwatchLogsExports:
+        - audit
+        - error
+        - general
+        - slowquery
+      Engine: aurora-mysql
+      # Upgrading to a new engine version requires that at least one instance
+      # is running in the cluster. For clusters that we normally run headless,
+      # add an instance before attempting the upgrade.
+      EngineVersion: "8.0.mysql_aurora.3.08.2" # aws rds describe-db-engine-versions --engine aurora-mysql --query "DBEngineVersions[*].{Engine:Engine,EngineVersion:EngineVersion}" --output text
+      # GlobalClusterIdentifier: !If
+      #   - HasGlobalClusterIdentifier
+      #   - !Ref GlobalClusterIdentifier
+      #   - !Ref AWS::NoValue
+      # EnableGlobalWriteForwarding: !If
+      #   - HasGlobalClusterIdentifier # indicates a secondary cluster
+      #   - true
+      #   - false
+      MasterUsername: !Ref SharedMysqlMasterUsername
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/prx/${EnvironmentTypeAbbreviation}/Terra/shared-mysql/master-password}}"
+      # MasterUsername: !If
+      #   - HasMasterUserCredentials
+      #   - !Ref DbClusterMasterUsername
+      #   - !Ref AWS::NoValue
+      # MasterUserPassword: !If
+      #   - HasMasterUserCredentials
+      #   - !Ref DbClusterMasterUserPassword
+      #   - !Ref AWS::NoValue
+      PerformanceInsightsEnabled: true
+      PerformanceInsightsRetentionPeriod: 465
+      PreferredBackupWindow: 00:00-00:30
+      PreferredMaintenanceWindow: Mon:03:00-Mon:04:00
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcSecurityGroupIds:
+        - !Ref DbClusterServerSecurityGroup
+
+  DbInstance:
+    Type: AWS::RDS::DBInstance
+    DependsOn: DbSubnetGroup
+    # Condition: HasInstances
+    UpdateReplacePolicy: Retain
+    DeletionPolicy: Retain
+    Properties:
+      AllowMajorVersionUpgrade: false
+      AutoMinorVersionUpgrade: true
+      Engine: aurora-mysql
+      DBClusterIdentifier: !Ref DbCluster
+      # DBParameterGroupName: default.aurora-mysql5.7
+      # PubliclyAccessible: 'true'
+      DBInstanceClass: db.r6g.large
+      # EnablePerformanceInsights
+      # MonitoringInterval
+      # MonitoringRoleArn
+      # PerformanceInsightsRetentionPeriod
+      # PreferredMaintenanceWindow
+      # PubliclyAccessible
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  DbSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      DBSubnetGroupDescription: !Sub >-
+        Subnet group for the shared ${EnvironmentType} Aurora MySQL containing
+        subnets from the shared VPC the database is launched into
+      SubnetIds:
+        - !Ref VpcPublicSubnet1Id
+        - !Ref VpcPublicSubnet2Id
+        - !Ref VpcPublicSubnet3Id
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  DbClusterServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      GroupDescription: !Sub >-
+        Primary security group for the shared ${EnvironmentType} Aurora
+        MySQL database server
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  DbClusterClientIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allows ingress traffic from the client security group
+      FromPort: !GetAtt DbCluster.Endpoint.Port
+      GroupId: !GetAtt DbClusterServerSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref SharedMysqlClientSecurityGroupId
+      ToPort: !GetAtt DbCluster.Endpoint.Port
+
+  # This adds an egress rule to the client security group created in
+  # shared-db-sg.yml, which clients like EC2 instances and Lambda functions
+  # belong to. This rule allows outbound traffic from those clients to the
+  # database server security group.
+  SharedMysqlClientSecurityGroupAuroraEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      Description: >-
+        Allows outbound Aurora MySQL traffic
+      DestinationSecurityGroupId: !Ref DbClusterServerSecurityGroup
+      FromPort: !GetAtt DbCluster.Endpoint.Port
+      GroupId: !Ref SharedMysqlClientSecurityGroupId
+      IpProtocol: tcp
+      ToPort: !GetAtt DbCluster.Endpoint.Port
+
+
+Outputs:
+  DbClusterIdentifier:
+    Value: !Ref DbCluster
+  DbHostname:
+    Value: !GetAtt DbCluster.Endpoint.Address

@@ -1,0 +1,47 @@
+# stacks/shared-ecs/ecs-cluster.yml
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Creates an ECS cluster that's intended to be shared by most applications
+  managed by the root stack.
+
+Parameters:
+  EnvironmentType: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterSettings:
+        - Name: containerInsights
+          Value: !If [IsProduction, enhanced, enhanced]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+Outputs:
+  EcsClusterName:
+    Description: >-
+      The resource name of the ECS cluster, such as
+      MyStack-MyCluster-NT5EUXTN176T
+    Value: !Ref EcsCluster
+  EcsClusterArn:
+    Description: >-
+      The Amazon Resource Name (ARN) of the Amazon ECS cluster, such as
+      arn:aws:ecs:us-east-2:123456789012:cluster/MyECSCluster
+    Value: !GetAtt EcsCluster.Arn
