@@ -30,7 +30,7 @@
  * Proxy parameter: www.new-domain.com/path/to/include/in/redirect______/path/to/drop/from/redirect
  * Response: 301 https://www.new-domain.com/path/to/include/in/redirect
  */
-exports.handler = async (event, context) => ({
+export const handler = async (event, context) => ({
   statusCode: event.rawPath.substring(1, 4),
   headers: {
     location: `https://${
