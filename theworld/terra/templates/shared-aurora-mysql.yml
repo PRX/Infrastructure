@@ -210,6 +210,63 @@ Resources:
       IpProtocol: tcp
       ToPort: !GetAtt DbCluster.Endpoint.Port
 
+  TotalQueryTimeHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [The World] Shared MySQL <${EnvironmentTypeAbbreviation}> QUERY TIME HIGH (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's shared EC2 auto scaling group is running
+        a lot more instances than normal
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 3
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DbCluster
+      EvaluationPeriods: 5
+      MetricName: TotalQueryTime
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Average
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 250000
+      TreatMissingData: notBreaching
+  TotalQueryTimeVeryHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [The World] Shared MySQL <${EnvironmentTypeAbbreviation}> QUERY TIME VERY HIGH (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's shared EC2 auto scaling group is running
+        a lot more instances than normal
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: DBClusterIdentifier
+          Value: !Ref DbCluster
+      EvaluationPeriods: 2
+      MetricName: TotalQueryTime
+      Namespace: AWS/RDS
+      Period: 60
+      Statistic: Average
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 1000000
+      TreatMissingData: notBreaching
 
 Outputs:
   DbClusterIdentifier:

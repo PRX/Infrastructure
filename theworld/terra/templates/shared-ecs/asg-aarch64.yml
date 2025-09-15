@@ -18,6 +18,7 @@ Parameters:
     Default: /aws/service/ecs/optimized-ami/amazon-linux-2023/arm64/recommended/image_id
   ########
   EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
@@ -427,6 +428,36 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Website }
+
+  TargetGroupHealthHostHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [The World] Shared ASG <${EnvironmentTypeAbbreviation}> RUNNING MANY INSTANCES (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's shared EC2 auto scaling group is running
+        a lot more instances than normal
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 3
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref Asg
+      EvaluationPeriods: 5
+      MetricName: GroupInServiceInstances
+      Namespace: AWS/AutoScaling
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 10
+      TreatMissingData: notBreaching
 
 Outputs:
   AsgName:

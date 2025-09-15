@@ -195,11 +195,11 @@ Resources:
         - { Key: prx:dev:application, Value: Website }
       UnhealthyThresholdCount: 3
       VpcId: !Ref VpcId
-  WebTargetGroupHttp5xxAlarm:
+  WebTargetGroupAnyHttp5xxAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub ERROR [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
+      AlarmName: !Sub WARN [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} The World's WordPress server is returning 5XX errors
         from the ECS service to the load balancer.
@@ -225,6 +225,37 @@ Resources:
         - { Key: prx:dev:family, Value: The World }
         - { Key: prx:dev:application, Value: Website }
       Threshold: 0
+      TreatMissingData: notBreaching
+  WebTargetGroupManyHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RETURNING MANY 5XX ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's WordPress server is returning 5XX errors
+        from the ECS service to the load balancer.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 3
       TreatMissingData: notBreaching
 
   WebEcsService:
@@ -444,6 +475,39 @@ Resources:
         ScaleInCooldown: 180
         ScaleOutCooldown: 60
         TargetValue: 175
+
+  TargetGroupHealthHostHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's WordPress server is running a lot more
+        tasks than normal
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 3
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 5
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 10
+      TreatMissingData: notBreaching
 
 Outputs:
   EcrImageTag:
