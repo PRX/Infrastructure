@@ -69,6 +69,7 @@ Parameters:
   AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
   SlackMessageRelaySnsTopicArn: { Type: String }
   Aarch64AsgCapacityProviderName: { Type: String }
+  PorterJobExecutionSnsTopicArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -203,6 +204,14 @@ Resources:
                 Sid: AllowSsmChannels
             Version: "2012-10-17"
           PolicyName: EcsExec
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPorterJobExecution
+            Version: "2012-10-17"
+          PolicyName: Porter
         - PolicyDocument:
             Statement:
               - Action: sns:Publish
@@ -396,6 +405,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
@@ -553,6 +564,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
@@ -971,6 +984,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
