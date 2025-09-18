@@ -194,6 +194,18 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowSsmChannels
+            Version: "2012-10-17"
+          PolicyName: EcsExec
+        - PolicyDocument:
+            Statement:
               - Action: sns:Publish
                 Effect: Allow
                 Resource: !Ref PorterJobExecutionSnsTopicArn
@@ -300,6 +312,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: !If [IsPrimaryRegion, !If [IsProduction, 10, 2], 0]
       EnableECSManagedTags: true
+      EnableExecuteCommand: true
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
           ContainerPort: !Ref kApplicationPort
@@ -335,6 +348,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: !If [IsProduction, 2, 1]
       EnableECSManagedTags: true
+      EnableExecuteCommand: true
       PlacementConstraints:
         - Type: memberOf
           Expression: attribute:ecs.cpu-architecture == arm64
