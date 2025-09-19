@@ -69,6 +69,7 @@ Parameters:
   AdFilesS3BucketArn: { Type: AWS::SSM::Parameter::Value<String> }
   SlackMessageRelaySnsTopicArn: { Type: String }
   Aarch64AsgCapacityProviderName: { Type: String }
+  PorterJobExecutionSnsTopicArn: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -193,6 +194,26 @@ Resources:
       Policies:
         - PolicyDocument:
             Statement:
+              - Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowSsmChannels
+            Version: "2012-10-17"
+          PolicyName: EcsExec
+        - PolicyDocument:
+            Statement:
+              - Action: sns:Publish
+                Effect: Allow
+                Resource: !Ref PorterJobExecutionSnsTopicArn
+                Sid: AllowPorterJobExecution
+            Version: "2012-10-17"
+          PolicyName: Porter
+        - PolicyDocument:
+            Statement:
               - Action: sns:Publish
                 Effect: Allow
                 Resource: !Ref SlackMessageRelaySnsTopicArn
@@ -291,6 +312,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: !If [IsPrimaryRegion, !If [IsProduction, 10, 2], 0]
       EnableECSManagedTags: true
+      EnableExecuteCommand: true
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
           ContainerPort: !Ref kApplicationPort
@@ -326,6 +348,7 @@ Resources:
         MinimumHealthyPercent: 50
       DesiredCount: !If [IsProduction, 2, 1]
       EnableECSManagedTags: true
+      EnableExecuteCommand: true
       PlacementConstraints:
         - Type: memberOf
           Expression: attribute:ecs.cpu-architecture == arm64
@@ -382,6 +405,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
@@ -539,6 +564,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
@@ -957,6 +984,8 @@ Resources:
               Value: !Ref SharedClickhousePort
             - Name: CLICKHOUSE_USER
               Value: !Ref SharedClickhouseAuguryUsername
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
             - Name: POSTGRES_HOST
               Value: !Ref SharedAuroraPostgresqlEndpoint
             - Name: POSTGRES_PORT
