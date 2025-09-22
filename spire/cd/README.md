@@ -20,7 +20,7 @@ As with [CI](https://github.com/PRX/Infrastructure/tree/main/ci), the CD system 
 
 At the core of the CD system is an [AWS CodePipeline](https://aws.amazon.com/codepipeline/) pipeline that moves code and configuration through a deployment path. That includes things like staging and production deploys, acceptance testing, notification messaging, and state capture. The pipeline is triggered automatically by code and configuration changes.
 
-Currently the CD stack is designed to be launched in any region where the environments are needed to run. At this time, though, multi-region support is not fully functional, and the CD stack should be limited to a single deployment in a single region.
+Currently the CD stack is designed to be launched in any region where the environments are needed to run. For multi-region deployments, the CD stack can be run in multiple regions simultaneously, though there is currently no coordination between deployments of different regions. This is an area that may be improved in the future.
 
 ### Pipeline Overview
 
@@ -31,22 +31,20 @@ The following describes many aspects of the CD pipeline in the order that they u
 The CodePipeline pipeline has three triggers:
 
 - pushes to the `main` branch of the [Infrastructure](https://github.com/PRX/Infrastructure) GitHub repository
-- pushes to the `main` branch of the [meta.prx.org](https://github.com/prx/meta.prx.org) GitHub repository
-- new versions of the [template configuration file](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/continuous-delivery-codepipeline-cfn-artifacts.html#w2ab2c13c15c15) in S3 used for the staging environment (the bucket name and object ID for this file are determined by stack parameters on the CD stack).
+- pushes to the `main` branch of the [acceptance-tests](https://github.com/PRX/acceptance-tests) GitHub repository
+- changes to certain parameters in Parameter Store via [EventBridge](https://github.com/PRX/Infrastructure/blob/main/spire/cd/src/parameter-store-listener/index.js)
 
 These triggers are defined as `source` actions in the first stage of the pipeline.
 
 ##### GitHub triggers
 
-The GitHub-based source actions use CodeStar connections. The connection should be set up before launching the CD stack, and the Arn of the connection is passed to the stack as a parameter. Ensure that the connection has access to any repositories that are used as source actions.
+Relevant changes in the Infrastructure repository result in pipeline executions through [GitHub Actions](https://github.com/PRX/Infrastructure/blob/main/.github/workflows/deploy-devops-spire-cd-pipeline-stack.yml) that look for specific changes in that repository. This is to prevent unnecessary pipeline executions for unrelated changes in the repository.
 
 #### Staging Deploy
 
-The staging enviroment is launched and updated using a CloudFormation `deploy` action. That action takes several inputs. One is the aforementioned staging template config. file, and another is the artifact from the Infrastructure repository source action. The `deploy` action is able to reference a file from that artifact (repo) as the template to launch or update the staging stack from; the values in the config. file are used a the stack parameters.
+The staging enviroment is launched and updated first using an AWS Lambda [function](https://github.com/PRX/Infrastructure/blob/main/spire/cd/src/create-nested-change-set/index.js) to create a nested change set. Becase our deployment utilizes [_nested stacks_](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html), nested change sets allow us to inspect changes to the infrastructure at all levels, which improve our confidence in rapid deployment and helps prevent unforseen issues.
 
-> Prior to CodePipeline attempting to deploy an environment, the config. file will need to exist in the expected S3 location. Create a zip archive for a given environment in the **config** bucket. It should contain a single file (e.g., `staging.json`). All template config. files should contain exactly the same keys, which must match the stack parameters in `root.yml` (other than those flagged as **parameter overrides**). (_Note: there is a root level `Parameters` key in all template configuration files_.)
-
-The file from the repository used as the stack template is `root.yml`. This file references many other templates in the repo (i.e., [_nested stacks_](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-nested-stacks.html)). In order for CloudFormation to be able to access these templates they **must** be on S3 (i.e., cannot be passed into the pipeline action directly as with the template config. file). In order to support this, prior to the `deploy` action executing, a [custom pipeline action](https://github.com/PRX/Infrastructure/blob/main/cd/lambdas/infrastructure-s3-sync/lambda_function.py) (using AWS Lambda) copies the contents of the GitHub artifact to a known location in S3, which the `root.yml` template uses for each nested stack template (that location comes from the [storage stack](https://github.com/PRX/Infrastructure/tree/main/storage) and is passed in as a parameter to all resources that need the value).
+The change set and subsequent deploy use template files that are [copied](https://github.com/PRX/Infrastructure/blob/main/spire/cd/src/template-copy/lambda_function.py) into S3 at the start of a pipeline execution. Many dynamic values, such as code artifact version numbers (Docker image tags, etc), are sourced from [Parameter Store](https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-parameter-store.html) and use native CloudFormation features to resolve those values just-in-time.
 
 The Git commit hash of the Infrastructure repo is used as a prefix in S3 for the copy. That value is passed to the root stack as a parameter (using `ParameterOverrides`) via a CodePipleine [variable](https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-variables.html) that is provided by GitHub pipeline actions (`CommitId`).
 
@@ -54,23 +52,23 @@ The Git commit hash of the Infrastructure repo is used as a prefix in S3 for the
 
 > The `root.yml` files in this bucket are **not** the ones used to deploy a stack. The deploy action is able to pull a file directly out of pipeline artifact, so `root.yml` comes from that. The nested stack tempates that are referenced _within_ `root.yml` are sourced from the bucket. Their paths are construced from the various known-value. For instance, to deploy a nested stack using a template that lives at `apps/backend.yml`, the stack resource in `root.yml` would have a `TemplateURL` like _(pseudo)_ `"http://{source-bucket-name}.s3.{region}.amazonaws.com", {commit-hash}/apps/backend.yml"`.
 
-The staging `deploy` action does **not** have a confirmation before the deploy happens. Staging is, essentially, continuously deployed. The pipeline creates both the changeset and deploy actions in order to easily report what changes the deploy will make.
+Staging does **not** have a confirmation before the deploy happens. Staging is, essentially, continuously deployed. The pipeline creates both the changeset and deploy actions in order to easily report what changes the deploy will make.
 
-Most deploys are a result of application code changes – for example, an updated version of an app that has been pushed to a new Docker image. Code changes do not directly trigger the pipeline. Instead, identifiers for deployable code are maintained within the template configuration files (which are a trigger). In the case of a Docker app, an image tag is used. The template config. file is updated by some mechanism when there is a new Docker tag, which in turn triggers the pipeline to run. The value from the config. is then used within the app's template, which is ultimately how the update happens.
+Most deploys are a result of application code changes – for example, an updated version of an app that has been pushed to a new Docker image. Code changes do not directly trigger the pipeline. Instead, identifiers for deployable code are maintained within Parameter Store. In the case of a Docker app, an image tag is used. When a paremeter is updated, the change is detected by EventBridge and, when necessary, triggers the pipeline to run.
 
 At the start of this process (after the `source` actions) and after the staging deploy completes, notifications are sent to Slack.
 
 ### Testing
 
-After staging has been deployed, a series of acceptance tests are run. These are maintained in the [meta.prx.org](https://github.com/prx/meta.prx.org) project, and run in [AWS CodeBuild](https://aws.amazon.com/codebuild/). If the CodeBuild run failures, the pipeline stops.
+After staging has been deployed, a series of acceptance tests are run. These are maintained in the [acceptance-tests](https://github.com/prx/acceptance-tests) project, and run in [AWS CodeBuild](https://aws.amazon.com/codebuild/). If the CodeBuild run failures, the pipeline stops.
 
 ### Production Deploy
 
-In order to deploy a set of changes that have passed testing in staging, the updated application code references (Docker tags, etc) need to be merged into the production template configuration file. Because staging and production have many distinct parameters, the config. file can not be carried over wholesale; instead, only parameter values that are application version references are copied from the now-tested staging config. to the currently-deploy production config. This is done by a [custom Lambda](https://github.com/PRX/Infrastructure/blob/main/cd/lambdas/production-config-pseudo-source/lambda_function.py) pipeline action.
+In order to deploy a set of changes that have passed testing in staging, the updated application code references (Docker tags, etc) need to be promoted to the production-specific parameters in Parameter Store. For example, staging deploys may use a parameter called `/prx/stag/Spire/Dovetail-Feeder/pkg/docker-image-tag`, and once the version referenced in that parameter has been deployed and tested in staging, the value is copied to `/prx/prod/Spire/Dovetail-Feeder/pkg/docker-image-tag` so that it is available for production deploys.
 
-Like staging, production deploys makes use of [change sets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html). A change set is created using the new production template config. file, and the new Infrastructure code. Unlike staging, an `approval` action is required to execute the change set and complete the deploy. There is an [Lambda function](https://github.com/PRX/Infrastructure/blob/main/cd/lambdas/pipeline-approval-notification-handler/lambda_function.py) that exists outside of the pipeline that handles messages from the `approval` action, and allows the approvals to be dealt with in Slack.
+Like staging, production deploys makes use of [change sets](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-updating-stacks-changesets.html). Unlike staging, an `approval` action is required to execute the change set and complete the deploy. There is an [Lambda function](hhttps://github.com/PRX/Infrastructure/tree/main/spire/cd/src/pipeline-events-listener) that exists outside of the pipeline that handles messages from the `approval` action, and allows the approvals to be dealt with in Slack.
 
-Once the deploy has been approved, the change set executes. If it is successful, a notification is sent, and the metadata that represents that specific deploy is captured (by a [Lambda function](https://github.com/PRX/Infrastructure/blob/main/cd/lambdas/environment-state-capture/index.js)). That includes the Git hash of the Infrastructure code and the version ID of the template config. file. If necessary, those values to be used to redeploy a known-good combination of infrastructure version and application versions.
+Once the deploy has been approved, the change set executes. If it is successful, a notification is sent, and the metadata that represents that specific deploy is captured (by a [Lambda function](https://github.com/PRX/Infrastructure/tree/main/spire/cd/src/parameter-capture)).
 
 ## Permissions
 
