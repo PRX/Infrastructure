@@ -76,10 +76,13 @@ async function buildMessage(approvalNotification) {
 
   const regionNickname = regions(region);
   const pipelineNickname = pipelineNames(pipeline);
-  const url = urls.executionConsoleUrl(region, pipeline, execId);
+  const pipelineUrl = urls.executionConsoleUrl(region, pipeline, execId);
+  const deepLinkRoleName = "AdministratorAccess";
+  const urlEncodedPipelineUrl = encodeURIComponent(pipelineUrl);
+  const deepPipelineUrl = `https://d-906713e952.awsapps.com/start/#/console?account_id=${AccountId}&role_name=${deepLinkRoleName}&destination=${urlEncodedPipelineUrl}`;
   const icon = emoji(execId);
   const header = [
-    `*<${url}|${regionNickname} » ${pipelineNickname}>*`,
+    `*<${deepPipelineUrl}|${regionNickname} » ${pipelineNickname}>*`,
     `*Execution ID:* \`${execId}\` ${icon}`,
   ].join('\n');
 
