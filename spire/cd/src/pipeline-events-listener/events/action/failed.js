@@ -17,7 +17,7 @@ module.exports = async (event) => {
   const regionNickname = regions(region);
   const pipelineNickname = pipelineNames(pipeline);
   const pipelineUrl = urls.executionConsoleUrl(region, pipeline, execId);
-  const deepLinkRoleName = "AdministratorAccess";
+  const deepLinkRoleName = 'AdministratorAccess';
   const urlEncodedPipelineUrl = encodeURIComponent(pipelineUrl);
   const deepPipelineUrl = `https://d-906713e952.awsapps.com/start/#/console?account_id=${event.account}&role_name=${deepLinkRoleName}&destination=${urlEncodedPipelineUrl}`;
   const icon = emoji(execId);
