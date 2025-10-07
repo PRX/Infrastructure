@@ -69,6 +69,7 @@ Parameters:
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
@@ -147,11 +148,16 @@ Resources:
         RootStackName: !Ref RootStackName
         RootStackId: !Ref RootStackId
         CodeS3Bucket: !Ref DeploymentPackageBucketName
-        CodeS3ObjectKey: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Analytics/pkg/s3-object-key
+        CodeS3ObjectKey:
+          Fn::If:
+            - IsProduction
+            - !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Analytics/pkg/s3-object-key
+            - !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Analytics/v2-beta/pkg/s3-object-key
         DovetailVerifiedMetricsKinesisStreamArn: !Ref DovetailVerifiedMetricsKinesisStreamArn
         DovetailVerifiedMetricsKinesisStreamName: !Ref DovetailVerifiedMetricsKinesisStreamName
         DovetailCountedKinesisStreamArn: !Ref DovetailCountedKinesisStreamArn
         DovetailCountedKinesisStreamName: !Ref DovetailCountedKinesisStreamName
+        BigqueryCredentials: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-analytics/BIGQUERY_CREDENTIALS
         DovetailRouterHosts: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-analytics/DOVETAIL_ROUTER_HOSTS
         DovetailRouterApiTokens: !Sub /prx/${EnvironmentTypeAbbreviation}/dovetail-analytics/DOVETAIL_ROUTER_API_TOKENS
         FrequencyDynamodbTableName: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Analytics/FREQUENCY_DDB_TABLE

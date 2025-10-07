@@ -28,6 +28,7 @@ Parameters:
   DovetailVerifiedMetricsKinesisStreamName: { Type: String }
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
+  BigqueryCredentials: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterHosts: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String> }
   FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
@@ -57,6 +58,8 @@ Resources:
   AnalyticsBigqueryFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -67,6 +70,8 @@ Resources:
           BQ_PROJECT_ID: prx-metrics
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
+          BQ_CREDENTIALS: !Ref BigqueryCredentials
+          BQ_DATASET: !If [IsProduction, production, staging]
       Events:
         MetricsKinesisTrigger:
           Properties:
@@ -76,9 +81,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-bigquery.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -463,6 +468,8 @@ Resources:
   AnalyticsDynamoDbFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -483,9 +490,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailCountedKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-dynamodb.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -729,6 +736,8 @@ Resources:
   AnalyticsFrequencyFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -749,9 +758,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-frequency.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -1001,6 +1010,8 @@ Resources:
   AnalyticsPingbacksFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -1020,9 +1031,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-pingbacks.handler]
       MemorySize: 2048
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
