@@ -168,7 +168,13 @@ async function triggerBuild(ciContentsResponse, event) {
     // If the buildspec appears to be making an explicit choice about
     // publishing, respect that choice. Otherwise, default to no publishing for
     // pull requests.
-    if (!buildspec.includes('PRX_CI_PUBLISH')) {
+    if (
+      buildspec.includes('PRX_CI_PUBLISH: true') ||
+      buildspec.includes('PRX_CI_PUBLISH: "true"') ||
+      buildspec.includes("PRX_CI_PUBLISH: 'true'")
+    ) {
+      environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'true' });
+    } else {
       environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
     }
   } else {
