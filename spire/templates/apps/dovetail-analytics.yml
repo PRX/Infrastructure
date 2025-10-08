@@ -28,8 +28,9 @@ Parameters:
   DovetailVerifiedMetricsKinesisStreamName: { Type: String }
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
+  BigqueryCredentials: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   DovetailRouterHosts: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String> }
+  DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   FrequencyDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
 
@@ -57,6 +58,8 @@ Resources:
   AnalyticsBigqueryFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -67,6 +70,8 @@ Resources:
           BQ_PROJECT_ID: prx-metrics
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
+          BQ_CREDENTIALS: !Ref BigqueryCredentials
+          BQ_DATASET: !If [IsProduction, production, staging]
       Events:
         MetricsKinesisTrigger:
           Properties:
@@ -76,9 +81,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-bigquery.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -201,12 +206,12 @@ Resources:
     # Counts the total number of downloads sent to BigQuery?
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest = "dt_downloads" }'
+      FilterPattern: !If [IsProduction, '{ $.dest = "dt_downloads" }', '{ $.msg = "Finished BigQuery" }']
       LogGroupName: !Ref AnalyticsBigqueryFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub bigquery_downloads_${AnalyticsBigqueryFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.downloads]
   AnalyticsBigqueryFunctionLowDownloadsAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
@@ -239,12 +244,12 @@ Resources:
     # Counts the total number of impressions sent to BigQuery?
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest = "dt_impressions" }'
+      FilterPattern: !If [IsProduction, '{ $.dest = "dt_impressions" }', '{ $.msg = "Finished BigQuery" }']
       LogGroupName: !Ref AnalyticsBigqueryFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub bigquery_impressions_${AnalyticsBigqueryFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.impressions]
   AnalyticsBigqueryFunctionImpressionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
@@ -463,6 +468,8 @@ Resources:
   AnalyticsDynamoDbFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -483,9 +490,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailCountedKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-dynamodb.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -695,40 +702,42 @@ Resources:
     # Counts the number of rows inserted to DynamoDB
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest = "dynamodb" }'
+      FilterPattern: !If [IsProduction, '{ $.dest = "dynamodb" }', '{ $.msg = "Finished DynamoDB" }']
       LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub dynamodb_inserts_${AnalyticsDynamoDbFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.upserts]
 
   AnalyticsDynamoDbFunctionLookupsMetricFilter:
     # Count the number of redirect-datas we've looked up and shuffeld along to
     # the metrics-kinesis stream
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest = "kinesis*" }'
+      FilterPattern: !If [IsProduction, '{ $.dest = "kinesis*" }', '{ $.msg = "Finished DynamoDB" }']
       LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub dynamodb_lookups_${AnalyticsDynamoDbFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.logged]
 
   AnalyticsDynamoDbFunctionRetriesMetricFilter:
     # Counts the number of retried DynamoDB operations
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.ddb = "retrying" }'
+      FilterPattern: !If [IsProduction, '{ $.ddb = "retrying" }', '{ $.msg = "Finished DynamoDB" }']
       LogGroupName: !Ref AnalyticsDynamoDbFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub dynamodb_retries_${AnalyticsDynamoDbFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: "1"
+          MetricValue: !If [IsProduction, "1", $.failures]
 
   # Frequency
   AnalyticsFrequencyFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -749,9 +758,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-frequency.handler]
       MemorySize: 512
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -860,6 +869,7 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Analytics }
+  # TODO: pretty sure this is doing nothing
   AnalyticsFrequencyFunctionLogGroupImpressionsToKinesisSubscriptionFilter:
     # Send impression data from Frequency Lambda function's logs to Kinesis
     Type: AWS::Logs::SubscriptionFilter
@@ -964,16 +974,17 @@ Resources:
       TreatMissingData: notBreaching
 
   AnalyticsFrequencyFunctionInsertsMetricFilter:
-    # Counts the number of rows inserted to DynamoDB
+    # Counts the number of impression timestamps added to DynamoDB
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest = "dynamodb" }'
+      FilterPattern: !If [IsProduction, '{ $.dest = "dynamodb" }', '{ $.msg = "Finished Frequency" }']
       LogGroupName: !Ref AnalyticsFrequencyFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub frequency_inserts_${AnalyticsFrequencyFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.added]
 
+  # TODO: not a thing
   AnalyticsFrequencyFunctionLookupsMetricFilter:
     # Count the number of redirect-datas we've looked up and shuffeld along to
     # the metrics-kinesis stream
@@ -986,6 +997,7 @@ Resources:
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.rows
 
+  # TODO: this lambda never had the logic to throw and error and retry these
   AnalyticsFrequencyFunctionRetriesMetricFilter:
     # Counts the number of retried DynamoDB operations
     Type: AWS::Logs::MetricFilter
@@ -1001,6 +1013,8 @@ Resources:
   AnalyticsPingbacksFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - !If [IsProduction, x86_64, arm64]
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -1020,9 +1034,9 @@ Resources:
             StartingPosition: LATEST
             Stream: !Ref DovetailVerifiedMetricsKinesisStreamArn
           Type: Kinesis
-      Handler: index.handler
+      Handler: !If [IsProduction, index.handler, index-pingbacks.handler]
       MemorySize: 2048
-      Runtime: nodejs16.x
+      Runtime: !If [IsProduction, nodejs16.x, nodejs22.x]
       Policies:
         - !Ref ParameterStoreReadPolicy
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
@@ -1177,26 +1191,26 @@ Resources:
       TreatMissingData: notBreaching
 
   AnalyticsPingbacksFunctionNotAdzerkMetricFilter:
-    # Counts the number of pingbacks sent everywhere except Adzerk
+    # Counts the number of pingbacks sent anywhere
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.dest != "*.adzerk.net" }'
+      FilterPattern: !If [IsProduction, '{ $.dest != "*.adzerk.net" }', '{ $.msg = "Finished Pingbacks" }']
       LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub pingbacks_other_${AnalyticsPingbacksFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.rows
+          MetricValue: !If [IsProduction, $.rows, $.pingbacks]
 
   AnalyticsPingbacksFunctionFailMetricFilter:
     # Counts the number of failed pingbacks
     Type: AWS::Logs::MetricFilter
     Properties:
-      FilterPattern: '{ $.msg = "PINGFAIL*" }'
+      FilterPattern: !If [IsProduction, '{ $.msg = "PINGFAIL*" }', '{ $.msg = "Finished Pingbacks" }']
       LogGroupName: !Ref AnalyticsPingbacksFunctionLogGroup
       MetricTransformations:
         - MetricName: !Sub pingbacks_fails_${AnalyticsPingbacksFunction}
           MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: "1"
+          MetricValue: !If [IsProduction, "1", $.pingfails]
 
   # CloudWatch Dashboard
   Dashboard:
