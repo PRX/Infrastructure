@@ -164,7 +164,13 @@ async function triggerBuild(ciContentsResponse, event) {
     environmentVariables.push({ name: 'PRX_GITHUB_PR_AUTHOR', value: author });
     environmentVariables.push({ name: 'PRX_GITHUB_ACTION', value: action });
     environmentVariables.push({ name: 'PRX_BRANCH', value: branch });
-    environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
+
+    // If the buildspec appears to be making an explicit choice about
+    // publishing, respect that choice. Otherwise, default to no publishing for
+    // pull requests.
+    if (!buildspec.includes('PRX_CI_PUBLISH')) {
+      environmentVariables.push({ name: 'PRX_CI_PUBLISH', value: 'false' });
+    }
   } else {
     // All other events should be code pushes to the default branch. These
     // should get tested and published. The buildspec.yml file will contain
