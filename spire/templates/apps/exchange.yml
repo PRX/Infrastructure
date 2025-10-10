@@ -1673,6 +1673,7 @@ Resources:
   FtpServerLogGroupSubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
     Condition: IsStaging
+    DependsOn: FtpServerLogGroupProcessorFunctionPermission
     Properties:
       ApplyOnTransformedLogs: true
       DestinationArn: !GetAtt FtpServerLogGroupProcessorFunction.Arn
@@ -1687,8 +1688,19 @@ Resources:
         tktk
       Handler: index.handler
       InlineCode: |
+        const zlib = require("zlib");
+
         exports.handler = async (event, context) => {
-          console.log(JSON.stringify(event));
+          const payload = Buffer.from(input.awslogs.data, "base64");
+          zlib.gunzip(payload, function(e, result) {
+            if (e) {
+              context.fail(e);
+            } else {
+              result = JSON.parse(result.toString());
+              console.log("Event Data:", JSON.stringify(result, null, 2));
+              context.succeed();
+            }
+          });
         };
       MemorySize: 128
       Runtime: nodejs22.x
@@ -1701,6 +1713,13 @@ Resources:
         prx:ops:environment: !Ref EnvironmentType
         prx:dev:application: Exchange
       Timeout: 10
+  FtpServerLogGroupProcessorFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Condition: IsStaging
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt FtpServerLogGroupProcessorFunction.Arn
+      Principal: logs.amazonaws.com
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
