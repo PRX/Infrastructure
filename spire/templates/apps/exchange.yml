@@ -1613,6 +1613,7 @@ Resources:
         - !If [IsProduction, FTP, !Ref AWS::NoValue]
         - !If [IsProduction, FTPS, !Ref AWS::NoValue]
       SecurityPolicyName: TransferSecurityPolicy-2020-06
+      StructuredLogDestinations: !If [IsStaging, [!GetAtt FtpServerStructuredLogGroup.Arn], !Ref AWS::NoValue]
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -1627,6 +1628,22 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub /aws/transfer/${FtpServer.ServerId}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+  FtpServerStructuredLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsStaging
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/transfer/${EnvironmentTypeAbbreviation}/exchange
       RetentionInDays: 14
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -1669,7 +1686,7 @@ Resources:
           MetricNamespace: PRX/Transfer
           MetricValue: $.bytes_out
           Unit: Bytes
-  #
+  # Log processing
   FtpServerLogGroupSubscriptionFilter:
     Type: AWS::Logs::SubscriptionFilter
     Condition: IsStaging
@@ -1688,17 +1705,19 @@ Resources:
         tktk
       Handler: index.handler
       InlineCode: |
-        const zlib = require("zlib");
+        const { gunzipSync } = require("zlib");
 
         exports.handler = async (event, context) => {
-          const payload = Buffer.from(input.awslogs.data, "base64");
-          zlib.gunzip(payload, function(e, result) {
-            if (e) {
-              context.fail(e);
-            } else {
-              result = JSON.parse(result.toString());
-              console.log("Event Data:", JSON.stringify(result, null, 2));
-              context.succeed();
+          const zippedPayload = Buffer.from(event.awslogs.data, "base64");
+          const unzippedPayload = gunzipSync(zippedPayload);
+          const json = unzippedPayload.toString("utf8");
+          const payload = JSON.parse(json);
+          const logEvents = payload.logEvents;
+          logEvents.forEach((logEvent) => {
+            const match = logEvent.message.match(/([a-zA-Z0-9-_]+)\.[a-zA-Z0-9]+ [A-Z]+ Path=(.*) BytesOut=([0-9]+)/)
+            if (match) {
+              const [, account, path, bytesOut] = match;
+              console.log(`${account} used ${bytesOut} bytes for ${path}`);
             }
           });
         };
