@@ -167,7 +167,8 @@ async function triggerBuild(ciContentsResponse, event) {
 
     // If the buildspec appears to be making an explicit choice about
     // publishing, respect that choice. Otherwise, default to no publishing for
-    // pull requests.
+    // pull requests. Note: this is pretty hacky; it is approximating actual
+    // YAML parsing, so it may be somewhat fragile and unreliable.
     if (
       buildspec.includes('PRX_CI_PUBLISH: true') ||
       buildspec.includes('PRX_CI_PUBLISH: "true"') ||

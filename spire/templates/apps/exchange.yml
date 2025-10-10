@@ -1669,6 +1669,38 @@ Resources:
           MetricNamespace: PRX/Transfer
           MetricValue: $.bytes_out
           Unit: Bytes
+  #
+  FtpServerLogGroupSubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    Condition: IsStaging
+    Properties:
+      ApplyOnTransformedLogs: true
+      DestinationArn: !GetAtt FtpServerLogGroupProcessorFunction.Arn
+      FilterPattern: BytesOut
+      LogGroupName: !Ref FtpServerLogGroup
+  FtpServerLogGroupProcessorFunction:
+    Type: AWS::Serverless::Function
+    Condition: IsStaging
+    Properties:
+      Architectures: [arm64]
+      Description: >-
+        tktk
+      Handler: index.handler
+      InlineCode: |
+        exports.handler = async (event, context) => {
+          console.log(JSON.stringify(event));
+        };
+      MemorySize: 128
+      Runtime: nodejs22.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Exchange
+      Timeout: 10
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
