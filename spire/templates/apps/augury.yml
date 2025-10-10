@@ -857,6 +857,26 @@ Resources:
         - MetricName: !GetAtt Constants.TargetingRecordCacheSizeMetricsName
           MetricNamespace: !Ref kMetricFilterNamespace
           MetricValue: $.max_flight_allocation_cache_entries.acs_entry_count
+  PollingEndpointRequestsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.path = "/api/v1/inventory/*/schedules/*" }
+      LogGroupName: !Ref WebTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub PollingEndpointRequests${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  NonPollingEndpointRequestsMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: |-
+        { $.path != "/api/v1/inventory/*/schedules/*" && $.path != "/health_check" }
+      LogGroupName: !Ref WebTaskLogGroup
+      MetricTransformations:
+        - MetricName: !Sub NonPollingEndpointRequests${EnvironmentType}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
   AuguryActualsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: EnableWorkers # See README
