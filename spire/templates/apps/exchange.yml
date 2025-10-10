@@ -1694,8 +1694,9 @@ Resources:
     Properties:
       ApplyOnTransformedLogs: false
       DestinationArn: !GetAtt FtpServerLogGroupProcessorFunction.Arn
-      FilterPattern: "BytesOut="
-      LogGroupName: !Ref FtpServerLogGroup
+      FilterPattern: >-
+        { $.bytes-out = * && $.activity-type = "CLOSE" }
+      LogGroupName: !Ref FtpServerStructuredLogGroup
   FtpServerLogGroupProcessorFunction:
     Type: AWS::Serverless::Function
     Condition: IsStaging
@@ -1712,14 +1713,9 @@ Resources:
           const unzippedPayload = gunzipSync(zippedPayload);
           const json = unzippedPayload.toString("utf8");
           const payload = JSON.parse(json);
+          console.log(JSON.stringify(payload));
           const logEvents = payload.logEvents;
-          logEvents.forEach((logEvent) => {
-            const match = logEvent.message.match(/([a-zA-Z0-9-_]+)\.[a-zA-Z0-9]+ [A-Z]+ Path=(.*) BytesOut=([0-9]+)/)
-            if (match) {
-              const [, account, path, bytesOut] = match;
-              console.log(`${account} used ${bytesOut} bytes for ${path}`);
-            }
-          });
+          console.log(JSON.stringify(logEvents));
         };
       MemorySize: 128
       Runtime: nodejs22.x
