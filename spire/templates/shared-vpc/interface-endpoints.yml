@@ -40,6 +40,7 @@ Parameters:
   PublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
 
 Conditions:
+  IsStaging: !Equals [!Ref EnvironmentType, Staging]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 # !!!! IMPORTANT !!!!
@@ -401,6 +402,21 @@ Resources:
         - !Ref EcsLaunchEndpointsInboundTrafficSecurityGroup
         - !Ref CloudWatchLogsEndpointInboundTrafficSecurityGroup
       ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  TEMPCloudWatchVpcEndpoint:
+    # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch-and-interface-VPC.html
+    Type: AWS::EC2::VPCEndpoint
+    Condition: IsStaging
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CloudWatchLogsEndpointInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.monitoring
       SubnetIds:
         - !Ref PublicSubnet1Id
         - !Ref PublicSubnet2Id
