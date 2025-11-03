@@ -1690,57 +1690,6 @@ Resources:
           MetricNamespace: PRX/Transfer
           MetricValue: $.bytes_out
           Unit: Bytes
-  # Log processing
-  FtpServerLogGroupSubscriptionFilter:
-    Type: AWS::Logs::SubscriptionFilter
-    Condition: IsStaging
-    DependsOn: FtpServerLogGroupProcessorFunctionPermission
-    Properties:
-      ApplyOnTransformedLogs: false
-      DestinationArn: !GetAtt FtpServerLogGroupProcessorFunction.Arn
-      FilterPattern: >-
-        { $.bytes-out = * && $.activity-type = "CLOSE" }
-      LogGroupName: !Ref FtpServerStructuredLogGroup
-  FtpServerLogGroupProcessorFunction:
-    Type: AWS::Serverless::Function
-    Condition: IsStaging
-    Properties:
-      Architectures: [arm64]
-      Description: >-
-        tktk
-      Handler: index.handler
-      InlineCode: |
-        const { gunzipSync } = require("zlib");
-
-        exports.handler = async (event, context) => {
-          const zippedPayload = Buffer.from(event.awslogs.data, "base64");
-          const unzippedPayload = gunzipSync(zippedPayload);
-          const json = unzippedPayload.toString("utf8");
-          const payload = JSON.parse(json);
-          console.log(JSON.stringify(payload));
-          const logEvents = payload.logEvents;
-          console.log(JSON.stringify(logEvents));
-        };
-      MemorySize: 128
-      Runtime: nodejs22.x
-      Tags:
-        prx:meta:tagging-version: "2021-04-07"
-        prx:cloudformation:stack-name: !Ref AWS::StackName
-        prx:cloudformation:stack-id: !Ref AWS::StackId
-        prx:cloudformation:root-stack-name: !Ref RootStackName
-        prx:cloudformation:root-stack-id: !Ref RootStackId
-        prx:ops:environment: !Ref EnvironmentType
-        prx:dev:application: Exchange
-      Timeout: 10
-  FtpServerLogGroupProcessorFunctionPermission:
-    Type: AWS::Lambda::Permission
-    Condition: IsStaging
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt FtpServerLogGroupProcessorFunction.Arn
-      Principal: logs.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !GetAtt FtpServerStructuredLogGroup.Arn
   # In order to return the correct IP from PASV commands, the NLB must have a
   # single IP that is configured as the FTP server's PassiveIP.
   FtpServerNblElasticIp:
