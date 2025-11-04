@@ -108,6 +108,27 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
       VpcId: !Ref VpcId
+  CloudWatchEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to CloudWatch VPC Endpoints in
+        ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt CloudWatchEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_cloudwatch-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
   KmsEndpointAccessSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -163,6 +184,27 @@ Resources:
           ToPort: 443
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_system-manager-interface-access" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  EventBridgeEndpointAccessSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows outbound HTTPS traffic to flow to EventBridge VPC Endpoints
+        in ${EnvironmentType}
+      SecurityGroupEgress:
+        - DestinationSecurityGroupId: !GetAtt EventBridgeEndpointInboundTrafficSecurityGroup.GroupId
+          FromPort: 443
+          IpProtocol: tcp
+          ToPort: 443
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_eventbridge-interface-access" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
@@ -423,6 +465,62 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
+  CloudWatchEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the CloudWatch VPC Endpoint. Other
+    # security group that have egress rules to this group will have CloudWatch
+    # access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the CloudWatchEndpointAccessSecurityGroup
+        to flow into the CloudWatch VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_cloudwatch-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  CloudWatchEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt CloudWatchEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt CloudWatchEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
+  CloudWatchVpcEndpoint:
+    # https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch-and-interface-VPC.html
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CloudWatchEndpointInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.monitoring
+      SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  CloudWatchVpcEndpointTags:
+    Type: Custom::Ec2ResourceTags
+    Properties:
+      ServiceToken: !Ref Ec2ResourceTaggerServiceToken
+      ResourceId: !Ref CloudWatchVpcEndpoint
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_cloudwatch" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
   KmsEndpointInboundTrafficSecurityGroup:
     # This security group is associated with the KMS VPC Endpoint. Other
     # security group that have egress rules to this group will have KMS access.
@@ -646,6 +744,62 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
 
+  EventBridgeEndpointInboundTrafficSecurityGroup:
+    # This security group is associated with the EventBridge VPC Endpoint.
+    # Other security groups that have egress rules to this group will have
+    # EventBridge access.
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        Allows HTTPS traffic from the EventBridgeEndpointAccessSecurityGroup
+        to flow into the STS VPC Endpoint in ${EnvironmentType}
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-vpc_eventbridge-interface-inbound" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+  EventBridgeEndpointInboundTrafficSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      FromPort: 443
+      GroupId: !GetAtt EventBridgeEndpointInboundTrafficSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !GetAtt EventBridgeEndpointAccessSecurityGroup.GroupId
+      ToPort: 443
+  EventBridgeVpcEndpoint:
+    # https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-related-service-vpc.html
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref EventBridgeEndpointInboundTrafficSecurityGroup
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.events
+      SubnetIds:
+        - !Ref PublicSubnet1Id
+        - !Ref PublicSubnet2Id
+        - !Ref PublicSubnet3Id
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  EventBridgeVpcEndpointTags:
+    Type: Custom::Ec2ResourceTags
+    Properties:
+      ServiceToken: !Ref Ec2ResourceTaggerServiceToken
+      ResourceId: !Ref EventBridgeVpcEndpoint
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_eventbridge" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+
 Outputs:
   EcsLaunchEndpointsAccessSecurityGroupId:
     Value: !GetAtt EcsLaunchEndpointsAccessSecurityGroup.GroupId
@@ -655,6 +809,10 @@ Outputs:
     Value: !GetAtt StsEndpointAccessSecurityGroup.GroupId
   CloudWatchLogsEndpointAccessSecurityGroupId:
     Value: !GetAtt CloudWatchLogsEndpointAccessSecurityGroup.GroupId
+  CloudWatchEndpointAccessSecurityGroupId:
+    Value: !GetAtt CloudWatchEndpointAccessSecurityGroup.GroupId
+  EventBridgeEndpointAccessSecurityGroupId:
+    Value: !GetAtt EventBridgeEndpointAccessSecurityGroup.GroupId
   KinesisStreamsEndpointAccessSecurityGroupId:
     Value: !GetAtt KinesisStreamsEndpointAccessSecurityGroup.GroupId
   SystemManagerEndpointAccessSecurityGroupId:
