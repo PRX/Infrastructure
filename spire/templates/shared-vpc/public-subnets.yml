@@ -46,6 +46,39 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VpcId
 
+  # NAT Gateway in the public subnet so it can access the internet, which will
+  # be used by resources in the private subnet so they can reach the internet
+  Subnet1NatGatewayElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_nat-gateway" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+  Subnet1NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt Subnet1NatGatewayElasticIp.AllocationId
+      ConnectivityType: public
+      MaxDrainDurationSeconds: 350
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_nat-gateway" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+
   # Routing for public subnets. A subnet being associated with this route table
   # is what makes it a public subnet, since there's an internet gateway
   # associated with the route table.
@@ -185,6 +218,9 @@ Outputs:
   InternetGatewayName:
     Description: The name of the internet gateway
     Value: !Ref InternetGateway
+
+  Subnet1NatGatewayId:
+    Value: !Ref Subnet1NatGateway
 
   Subnet1Id:
     Description: ID of public subnet 1
