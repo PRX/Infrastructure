@@ -27,6 +27,21 @@ Resources:
     Properties:
       ServiceToken: !Ref AvailabilityZoneSelectorServiceToken
 
+  # Egress-only internet gateway
+  EgressOnlyInternetGateway:
+    Type: AWS::EC2::EgressOnlyInternetGateway
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared_private" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      VpcId: !Ref VpcId
+
   # Routing for private subnets. A subnet being associated with this route
   # table is what makes it a private subnet, since there is no internet gateway
   # associated with the route table.
@@ -43,6 +58,15 @@ Resources:
         - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:application, Value: Common }
+
+  # Add a Egress-only Internet Gateway route, to allow resources in private subnets
+  # to access the internet without being exposed to the internet directly
+  PrivateRouteTableEgressOnlyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationIpv6CidrBlock: ::/0
+      EgressOnlyInternetGatewayId: !Ref EgressOnlyInternetGateway
 
   # Private subnets
   PrivateSubnet1:
