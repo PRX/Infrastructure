@@ -1,0 +1,78 @@
+# dns/trax.fm-hosted_zone.yml
+################################################################################
+#### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ########################################
+#### THIS FILE IS CONTINUOUSLY DEPLOYED ########################################
+#### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ########################################
+################################################################################
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Hosted zone and record sets for trax.fm
+
+Parameters:
+  Domain:
+    Default: podcastprivacy.org.
+    Description: The domain name and hosted zone
+    Type: String
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Primary Podcast Privacy domain
+      HostedZoneTags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: podcastprivacy.org }
+      Name: !Ref Domain
+
+  Website:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: WWW
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Type: A
+          Name: !Ref Domain
+          AliasTarget:
+            DNSName: dasp08mkws1ev.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: AAAA
+          Name: !Ref Domain
+          AliasTarget:
+            DNSName: dasp08mkws1ev.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: A
+          Name: !Sub www.${Domain}
+          AliasTarget:
+            DNSName: dasp08mkws1ev.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+        - Type: AAAA
+          Name: !Sub www.${Domain}
+          AliasTarget:
+            DNSName: dasp08mkws1ev.cloudfront.net
+            # Global CloudFront hosted zone ID
+            HostedZoneId: Z2FDTNDATAQYW2
+
+  AwsAcmLegacyUsEast1:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for prx-legacy in us-east-1
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # passengerlist.org
+        - Name: !Sub _16b610b45e762017c85afcdd8f71448d.${Domain}
+          ResourceRecords:
+            - _3b67c0be5df26902d62f5bb5d05244e3.jkddzztszm.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
+        # www.passengerlist.org
+        - Name: !Sub _feffccf60749dfb0feef048adb2936cc.www.${Domain}
+          ResourceRecords:
+            - _967a941d248f7ed88f76a97950d1641f.jkddzztszm.acm-validations.aws.
+          TTL: "3600"
+          Type: CNAME
