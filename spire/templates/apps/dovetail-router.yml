@@ -911,6 +911,7 @@ Resources:
           DYNAMODB_TABLE_NAME: !Ref FeedScalerDynamodbTable
           ECS_CLUSTER_NAME: !Ref EcsClusterName
           ECS_SERVICE_NAME: !GetAtt EcsService.Name
+          NODE_OPTIONS: --experimental-detect-module
       Events:
         S3Event:
           Type: EventBridgeRule
@@ -928,19 +929,17 @@ Resources:
                 - aws.s3
       Handler: index.handler
       InlineCode: !Sub |
-        // As of 2024-09, there's no way to use `import` as part of inline
-        // Lambda function code, so we have to use `require`.
-        const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
-        const {
+        import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+        import {
           DynamoDBClient,
           BatchGetItemCommand,
           PutItemCommand,
-        } = require('@aws-sdk/client-dynamodb');
-        const {
+        } from '@aws-sdk/client-dynamodb';
+        import {
           ECSClient,
           DescribeServicesCommand,
           UpdateServiceCommand,
-        } = require('@aws-sdk/client-ecs');
+        } from '@aws-sdk/client-ecs';
 
         const s3 = new S3Client();
         const ddb = new DynamoDBClient({ region: '${AWS::Region}' });
@@ -955,7 +954,7 @@ Resources:
           'themoth/feed-rss.xml': 20,
         };
 
-        exports.handler = async (event) => {
+        export const handler = async (event) => {
           console.log(JSON.stringify(event));
 
           const Bucket = event.detail.bucket.name;
@@ -1041,7 +1040,7 @@ Resources:
               Effect: Allow
               Resource: !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:service/${EcsClusterName}/${EcsService.Name}
           Version: "2012-10-17"
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Tags:
         prx:meta:tagging-version: "2021-04-07"
         prx:cloudformation:stack-name: !Ref AWS::StackName
