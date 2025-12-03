@@ -1238,6 +1238,7 @@ Resources:
       Environment:
         Variables:
           PUBLIC_FEED_DOMAIN: !Ref FeederCdnHostname
+          NODE_OPTIONS: --experimental-detect-module
       Events:
         ApiRootRequest:
           Properties:
@@ -1255,7 +1256,6 @@ Resources:
           Type: HttpApi
       Handler: index.handler
       InlineCode: |
-        const http = require('http');
         const text = (statusCode = 200, body = 'ok', maxAge = 0) => {
           const headers = {
             'Content-Type': 'text/plain',
@@ -1264,29 +1264,24 @@ Resources:
           return { statusCode, body, headers };
         };
 
-        exports.handler = async (event) => {
+        export const handler = async (event) => {
           if (!event.queryStringParameters || !event.queryStringParameters.auth) {
             return text(403, 'nope, no feed for you!', 300);
           }
 
-          console.log('requesting', `http://${process.env.PUBLIC_FEED_DOMAIN}${event.path}`);
+          const url = `http://${process.env.PUBLIC_FEED_DOMAIN}${event.path}`;
+          console.info(JSON.stringify({msg: "proxying", url}));
 
-          const resp = await new Promise((resolve) => {
-            http.get(`http://${process.env.PUBLIC_FEED_DOMAIN}${event.path}`, resolve);
-          });
-          if (resp.statusCode !== 200) {
+          const resp = await fetch(url);
+
+          if (resp.status !== 200) {
             return text(404, 'Not Found', 300);
           }
-          if (!(resp.headers['content-type'] || '').match(/application\/(rss\+)?xml/)) {
+          if (!/application\/(rss\+)?xml/.test(resp.headers.get("content-type") || '')) {
             return text(404, 'Not Feed', 300);
           }
 
-          const data = await new Promise((resolve, reject) => {
-            let chunks = '';
-            resp.on('data', (chunk) => (chunks += chunk));
-            resp.on('error', (err) => reject(err));
-            resp.on('end', () => resolve(chunks));
-          });
+          const data = await resp.text();
 
           const auth = event.queryStringParameters.auth;
           const body = data.replace(
