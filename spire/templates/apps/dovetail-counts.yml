@@ -67,6 +67,11 @@ Resources:
   CountsFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Architectures:
+        - Fn::If:
+            - IsProduction
+            - x86_64
+            - arm64
       CodeUri:
         Bucket: !Ref CodeS3Bucket
         Key: !Ref CodeS3ObjectKey
@@ -96,7 +101,11 @@ Resources:
             - !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:38
             - !Ref AWS::NoValue
       MemorySize: 2000
-      Runtime: nodejs16.x
+      Runtime:
+        Fn::If:
+          - IsProduction
+          - nodejs16.x
+          - nodejs24.x
       Policies:
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
