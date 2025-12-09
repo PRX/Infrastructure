@@ -33,16 +33,13 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
-  VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
+  Aarch64AsgCapacityProviderName: { Type: String }
   MysqlHostname: { Type: String }
   ValkeyHostname: { Type: String }
   ValkeyPort: { Type: String }
   AlbAccessToken: { Type: AWS::SSM::Parameter::Value<String> }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -186,7 +183,6 @@ Resources:
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: "30"
-      TargetType: ip
       Tags:
         - { Key: Name, Value: !Sub "${RootStackName}_wordpress" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -265,6 +261,10 @@ Resources:
   WebEcsService:
     Type: AWS::ECS::Service
     Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
+          Weight: 1
       Cluster: !Ref EcsClusterArn
       DeploymentConfiguration:
         MaximumPercent: 200
@@ -272,20 +272,13 @@ Resources:
       DesiredCount: !If [IsProduction, 5, 1]
       EnableECSManagedTags: true
       EnableExecuteCommand: true
-      LaunchType: FARGATE
       LoadBalancers:
         - ContainerName: !Ref kWebContainerName
           ContainerPort: !Ref kWebApplicationPort
           TargetGroupArn: !Ref WebTargetGroup
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          AssignPublicIp: ENABLED
-          SecurityGroups:
-            - !Ref SharedEcsAsgInstanceSecurityGroupId
-          Subnets:
-            - !Ref VpcPublicSubnet1Id
-            - !Ref VpcPublicSubnet2Id
-            - !Ref VpcPublicSubnet3Id
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: attribute:ecs.cpu-architecture == arm64
       PropagateTags: TASK_DEFINITION
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -315,10 +308,9 @@ Resources:
   WebTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Cpu: !If [IsProduction, 2048, 512] # 512 = 0.5 vCPU, 2048 = 2 vCPU, etc
-      Memory: !If [IsProduction, 8192, 2048]
       ContainerDefinitions:
-        - Environment:
+        - Cpu: 100 # Currently we don't use CPU reservations for anything meaningful
+          Environment:
             - Name: PRX_ENVIRONMENT
               Value: !Ref EnvironmentTypeLowercase
             - Name: DB_HOST
@@ -381,10 +373,17 @@ Resources:
               awslogs-group: !Ref WebTaskLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
+          # Memory and MemoryReservation values are based on current instances
+          # sizes, ensuring that only 1 WordPress task is running on any
+          # instance
+          # Prod: c8g.xlarge => 8 GiB
+          # Stag: t4g.small => 2 GiB
+          Memory: !If [IsProduction, 7650, 1800]
+          MemoryReservation: !If [IsProduction, 4111, 1111]
           Name: !Ref kWebContainerName
           PortMappings:
             - ContainerPort: !Ref kWebApplicationPort
-              Protocol: tcp
+              HostPort: 0
           Secrets:
             - Name: AUTH_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/auth-key
@@ -417,9 +416,7 @@ Resources:
             - Name: DB_PASSWORD
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/mysql/password
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
+      NetworkMode: bridge
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
