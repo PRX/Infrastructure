@@ -476,11 +476,11 @@ Resources:
         ScaleOutCooldown: 60
         TargetValue: 300
 
-  TargetGroupHealthHostHighAlarm:
+  TargetGroupHealthyHostHighAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: IsProduction
     Properties:
-      AlarmName: !Sub FATAL [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS (${RootStackName})
+      AlarmName: !Sub ERROR [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS (${RootStackName})
       AlarmDescription: !Sub >-
         ${EnvironmentType} The World's WordPress server is running a lot more
         tasks than normal
@@ -492,6 +492,38 @@ Resources:
         - Name: TargetGroup
           Value: !GetAtt WebTargetGroup.TargetGroupFullName
       EvaluationPeriods: 5
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 10
+      TreatMissingData: notBreaching
+  TargetGroupHealthyHostHighSustainedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [The World] WordPress Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS SUSTAINED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's WordPress server has been running a lot
+        more tasks than normal for a long time
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 45
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 60
       MetricName: HealthyHostCount
       Namespace: AWS/ApplicationELB
       Period: 60
