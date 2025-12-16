@@ -73,6 +73,7 @@ Parameters:
   TheCountHostname: { Type: String }
   TheCastleHostname: { Type: String }
   Aarch64AsgCapacityProviderName: { Type: String }
+  SharedGlueDatabaseName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -1729,10 +1730,158 @@ Resources:
   # AWS Transfer Family does not allow public servers with insecure FTP
   # enabled. Putting the server behind an NLB allows forwarding of public FTP
   # requests to a private server.
+  NlbAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: !If [IsProduction, 14, 3]
+            Status: Enabled
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+  NlbAccessLogsBucketPolicy:
+    # https://docs.aws.amazon.com/elasticloadbalancing/latest/network/enable-access-logs.html#access-logging-bucket-requirements
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref NlbAccessLogsBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetBucketAcl
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Resource: !GetAtt NlbAccessLogsBucket.Arn
+          - Action: s3:PutObject
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+            Effect: Allow
+            Principal:
+              Service: delivery.logs.amazonaws.com
+            Resource: !Sub ${NlbAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+          - Action: s3:PutObject
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Resource: !Sub ${NlbAccessLogsBucket.Arn}/AWSLogs/${AWS::AccountId}/*
+        Version: "2012-10-17"
+  NlbAccessLogsGlueTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref SharedGlueDatabaseName
+      TableInput:
+        Description: !Sub >-
+          ${EnvironmentType} Exchange FTP server NLB logs
+        Name: exchange-ftp-nlb
+        Parameters:
+          projection.enabled: "true"
+          projection.date.type: date
+          projection.date.range: 2021/01/01,NOW
+          projection.date.format: yyyy/MM/dd
+          projection.date.interval: "1"
+          projection.date.interval.unit: DAYS
+          storage.location.template: !Sub s3://${NlbAccessLogsBucket}/AWSLogs/${AWS::AccountId}/elasticloadbalancing/${AWS::Region}/${!date}
+        PartitionKeys:
+          - Name: date
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: type
+              Type: string
+            - Name: version
+              Type: string
+            - Name: time
+              Type: string
+            - Name: elb
+              Type: string
+            - Name: listener
+              Type: string
+            - Name: client_ip
+              Type: string
+            - Name: client_port
+              Type: int
+            - Name: target_ip
+              Type: string
+            - Name: target_port
+              Type: int
+            - Name: tcp_connection_time_ms
+              Type: double
+            - Name: tls_handshake_time_ms
+              Type: double
+            - Name: received_bytes
+              Type: bigint
+            - Name: sent_bytes
+              Type: bigint
+            - Name: incoming_tls_alert
+              Type: int
+            - Name: chosen_cert_arn
+              Type: string
+            - Name: chosen_cert_serial
+              Type: string
+            - Name: tls_cipher_suite
+              Type: string
+            - Name: tls_protocol_version
+              Type: string
+            - Name: tls_named_group
+              Type: string
+            - Name: domain_name
+              Type: string
+            - Name: alpn_fe_protocol
+              Type: string
+            - Name: alpn_be_protocol
+              Type: string
+            - Name: alpn_client_preference_list
+              Type: string
+            - Name: tls_connection_creation_time
+              Type: string
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          Location: !Sub s3://${NlbAccessLogsBucket}/AWSLogs/${AWS::AccountId}/elasticloadbalancing/${AWS::Region}/
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            Parameters:
+              input.regex: >-
+                ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*):([0-9]*) ([^ ]*):([0-9]*) ([-.0-9]*) ([-.0-9]*) ([-0-9]*) ([-0-9]*) ([-0-9]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ([^ ]*) ?([^ ]*)?( .*)?
+              serialization.format: "1"
+            SerializationLibrary: org.apache.hadoop.hive.serde2.RegexSerDe
+        TableType: EXTERNAL_TABLE
+  AccessLogsRecentQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref SharedGlueDatabaseName
+      Description: >-
+        View recent FTP NLB requests using the table's date partitions
+      Name: !Sub ${EnvironmentType} FTP NLB Recent Requests
+      QueryString: !Sub >-
+        SELECT *
+        FROM "${SharedGlueDatabaseName}"."${NlbAccessLogsGlueTable}"
+        WHERE "date" > date_format(current_date - interval '1' day, '%Y/%m/%d')
+        ORDER BY time ASC
   FtpServerNlb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       IpAddressType: ipv4
+      LoadBalancerAttributes:
+        # https://docs.aws.amazon.com/elasticloadbalancing/latest/network/load-balancer-access-logs.html
+        - Key: idle_timeout.timeout_seconds
+          Value: "150"
+        - Key: access_logs.s3.enabled
+          Value: "true"
+        - Key: access_logs.s3.bucket
+          Value: !Ref NlbAccessLogsBucket
       Scheme: internet-facing
       SubnetMappings:
         - AllocationId: !GetAtt FtpServerNblElasticIp.AllocationId
