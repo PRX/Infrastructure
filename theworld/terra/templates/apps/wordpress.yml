@@ -42,7 +42,7 @@ Parameters:
   ValkeyHostname: { Type: String }
   ValkeyPort: { Type: String }
   AlbAccessToken: { Type: AWS::SSM::Parameter::Value<String> }
-  SharedEcsAsgInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -262,6 +262,53 @@ Resources:
       Threshold: 3
       TreatMissingData: notBreaching
 
+  WebServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The primary security group for ${EnvironmentType} EC2 instances used in
+        the shared ASG and ECS cluster (i.e., ECS container instances).
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_shared-ecs-asg_instance" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  WebServiceWordPressPortIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow ingress traffic from the LB SG to the WordPress service running
+        in Fargate
+      FromPort: 8080
+      GroupId: !GetAtt WebServiceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
+      ToPort: 8080
+  WebServiceSecurityGroupAllIpv4Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} WordPress Fargate
+        tasks
+      GroupId: !GetAtt WebServiceSecurityGroup.GroupId
+      IpProtocol: "-1"
+  WebServiceSecurityGroupAllIpv6Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} WordPress Fargate
+        tasks
+      GroupId: !GetAtt WebServiceSecurityGroup.GroupId
+      IpProtocol: "-1"
+
   WebEcsService:
     Type: AWS::ECS::Service
     Properties:
@@ -281,7 +328,7 @@ Resources:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
           SecurityGroups:
-            - !Ref SharedEcsAsgInstanceSecurityGroupId
+            - !GetAtt WebServiceSecurityGroup.GroupId
           Subnets:
             - !Ref VpcPublicSubnet1Id
             - !Ref VpcPublicSubnet2Id
