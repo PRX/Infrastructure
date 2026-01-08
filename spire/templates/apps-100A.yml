@@ -55,8 +55,6 @@ Parameters:
 
   IdSharedAlbListenerRulePriorityPrefix: { Type: String }
 
-  IframelySharedAlbListenerRulePriorityPrefix: { Type: String }
-
   PlaySharedAlbListenerRulePriorityPrefix: { Type: String }
 
   StyleguideSharedAlbListenerRulePriorityPrefix: { Type: String }
@@ -309,36 +307,6 @@ Resources:
       TemplateURL: !Sub ${TemplateUrlPrefix}/id.yml
       TimeoutInMinutes: 20
 
-  IframelyStack:
-    Type: AWS::CloudFormation::Stack
-    UpdateReplacePolicy: Delete
-    DeletionPolicy: Delete
-    Properties:
-      Parameters:
-        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
-        AlbFullName: !Ref AlbFullName
-        AlbHttpsListenerArn: !Ref AlbHttpsListenerArn
-        EcsClusterArn: !Ref EcsClusterArn
-        VpcId: !Ref VpcId
-        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_World-Iframely/pkg/docker-image-tag
-        AlbListenerRulePriorityPrefix: !Ref IframelySharedAlbListenerRulePriorityPrefix
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref RootStackName
-        RootStackId: !Ref RootStackId
-        X8664AsgCapacityProviderName: !Ref X8664AsgCapacityProviderName
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Iframely }
-      TemplateURL: !Sub ${TemplateUrlPrefix}/iframely.yml
-      TimeoutInMinutes: 20
-
   PlayStack:
     Type: AWS::CloudFormation::Stack
     UpdateReplacePolicy: Delete
@@ -490,9 +458,6 @@ Outputs:
 
   IdTargetGroupFullName:
     Value: !GetAtt IdStack.Outputs.TargetGroupFullName
-
-  IframelyTargetGroupFullName:
-    Value: !GetAtt IframelyStack.Outputs.TargetGroupFullName
 
   PlayWebTargetGroupFullName:
     Value: !GetAtt PlayStack.Outputs.WebTargetGroupFullName
