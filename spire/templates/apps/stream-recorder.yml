@@ -1,0 +1,234 @@
+# stacks/apps/stream-recorder.yml
+# 100A
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Creates a Lambda function that orchestrates audio stream recordings
+
+Parameters:
+  kMetricFilterNamespace:
+    Type: String
+    Default: PRX/Dovetail/StreamRecorder
+  #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  AwsOrganizationId: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  CodeS3Bucket: { Type: String }
+  CodeS3ObjectKey: { Type: AWS::SSM::Parameter::Value<String> }
+  StreamRecorderConfigUrl: { Type: AWS::SSM::Parameter::Value<String> }
+  StreamRecorderOxbowSnsTopicArns: { Type: AWS::SSM::Parameter::Value<String> }
+
+Conditions:
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  StreamRecorderBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 30
+            Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Stream Recorder }
+  StreamRecorderBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Bucket: !Ref StreamRecorderBucket
+      PolicyDocument:
+        Statement:
+          - Action: s3:GetObject
+            Condition:
+              StringEquals:
+                aws:PrincipalOrgID: !Ref AwsOrganizationId
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Resource: !Sub ${StreamRecorderBucket.Arn}/*
+            Sid: AllowOrganizationObjectRead
+        Version: "2012-10-17"
+
+  StreamRecorderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref CodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} Stream Recorder
+      Environment:
+        Variables:
+          BUFFER_START: "300"
+          BUFFER_END: "300"
+          CONFIG_URL: !Ref StreamRecorderConfigUrl
+          OXBOW_SNS_TOPICS: !Ref StreamRecorderOxbowSnsTopicArns
+          OXBOW_STARTUP_TIME: "120"
+          OXBOW_WIP_TIME: "30"
+          S3_BUCKET: !Ref StreamRecorderBucket
+      Events:
+        ScheduleTrigger:
+          Properties:
+            Schedule: !Sub rate(1 minute)
+            Enabled: true
+          Type: Schedule
+      Handler: index.handler
+      MemorySize: 256
+      Runtime: nodejs24.x
+      Policies:
+        - Statement:
+            - Action: s3:ListBucket
+              Effect: Allow
+              Resource: !GetAtt StreamRecorderBucket.Arn
+            - Action:
+                - s3:GetObject
+                - s3:GetObjectAcl
+                - s3:GetObjectTagging
+                - s3:PutObject
+                - s3:PutObjectAcl
+                - s3:PutObjectTagging
+              Effect: Allow
+              Resource: !Sub ${StreamRecorderBucket.Arn}/*
+          Version: "2012-10-17"
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:family: Dovetail
+        prx:dev:application: Stream Recorder
+      Timeout: 60
+  StreamRecorderFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${StreamRecorderFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Stream Recorder }
+
+  StreamRecorderElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Stream-Recorder] Lambda function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Stream Recorder Lambda function is failing, so it
+        may not be capturing audio streams!
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamRecorderFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Stream Recorder }
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  StreamRecorderFunctionWarnLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "warn" }'
+      LogGroupName: !Ref StreamRecorderFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub warns_${StreamRecorderFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  StreamRecorderFunctionLoggedWarnAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub WARN [Stream-Recorder] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED WARNINGS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Stream Recorder Lambda function has logged some warnings.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub warns_${StreamRecorderFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref StreamRecorderFunctionLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Stream Recorder }
+      Threshold: 0
+      TreatMissingData: notBreaching
+
+  StreamRecorderFunctionErrorLevelLogMetricFilter:
+    Type: AWS::Logs::MetricFilter
+    Properties:
+      FilterPattern: '{ $._logLevel = "error" }'
+      LogGroupName: !Ref StreamRecorderFunctionLogGroup
+      MetricTransformations:
+        - MetricName: !Sub errors_${StreamRecorderFunction}
+          MetricNamespace: !Ref kMetricFilterNamespace
+          MetricValue: "1"
+  StreamRecorderFunctionLoggedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ERROR [Stream-Recorder] Lambda function <${EnvironmentTypeAbbreviation}> LOGGED ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Stream Recorder Lambda function has logged some errors.
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 1
+      MetricName: !Sub errors_${StreamRecorderFunction}
+      Namespace: !Ref kMetricFilterNamespace
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref StreamRecorderFunctionLogGroup }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Stream Recorder }
+      Threshold: 0
+      TreatMissingData: notBreaching
