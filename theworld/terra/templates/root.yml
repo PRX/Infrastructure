@@ -434,12 +434,16 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       Parameters:
+        DeploymentType: !If [IsProduction, "Fargate", "Fargate"]
         NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
         AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
         AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
         EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
         EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
         VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
         EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/pkg/docker-image-tag
         AlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, WordPress, prefix]
         EnvironmentType: !Ref EnvironmentType
@@ -453,6 +457,9 @@ Resources:
         ValkeyHostname: !GetAtt SharedValkeyStack.Outputs.CacheEndpointAddress
         ValkeyPort: !GetAtt SharedValkeyStack.Outputs.CacheEndpointPort
         AlbAccessToken: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-WordPress/alb-access-token
+        LoadBalancerSecurityGroupId: !GetAtt SharedAlbStack.Outputs.LoadBalancerSecurityGroupId
+        SharedMysqlClientSecurityGroupId: !GetAtt SharedDatabaseSecurityGroupsStack.Outputs.SharedMysqlClientSecurityGroupId
+        SharedValkeyClientSecurityGroupId: !GetAtt SharedValkeySecurityGroupsStack.Outputs.SharedValkeyClientSecurityGroupId
       Tags:
         "prx:meta:tagging-version": "2021-04-07"
         "prx:cloudformation:stack-name": !Ref AWS::StackName
