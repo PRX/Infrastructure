@@ -1,0 +1,489 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Description: >-
+  Runs The World frontend as Fargate tasks
+
+Parameters:
+  kWebContainerName:
+    Type: String
+    Default: frontend
+  kWebApplicationPort:
+    Type: Number
+    Default: 3000
+  #######
+  NestedChangeSetScrubbingResourcesState: { Type: String }
+  AlbFullName: { Type: String }
+  AlbHttpsListenerArn: { Type: String }
+  EcsClusterArn: { Type: String }
+  EcsClusterName: { Type: String }
+  EnvironmentType: { Type: String }
+  EnvironmentTypeAbbreviation: { Type: String }
+  EnvironmentTypeLowercase: { Type: String }
+  RegionMode: { Type: String }
+  RootStackName: { Type: String }
+  RootStackId: { Type: String }
+  VpcId: { Type: AWS::EC2::VPC::Id }
+  VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
+  VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
+  EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
+  AlbListenerRulePriorityPrefix: { Type: String }
+  AlbAccessToken: { Type: AWS::SSM::Parameter::Value<String> }
+  LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentType, Production]
+  EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
+
+Resources:
+  NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  HostHeaderListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - TargetGroupArn: !Ref WebTargetGroup
+          Type: forward
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values:
+              - frontend.*
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: x-prx-alb-access-token
+            Values:
+              - !Ref AlbAccessToken
+      ListenerArn: !Ref AlbHttpsListenerArn
+      Priority: !Join ["", [!Ref AlbListenerRulePriorityPrefix, "01"]]
+
+  ExecutionRole:
+    # ExecutionRole is the IAM role that is used within ECS (outside the task)
+    # to manage task execution
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: ssm:GetParameters
+                Effect: Allow
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Terra/The_World-Frontend/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Terra/The_World-Frontend/smtp/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
+                Sid: AllowAppParameterRead
+            Version: "2012-10-17"
+          PolicyName: ContainerSecrets
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  TaskRole:
+    # TaskRole is the IAM role that is provided _within_ the task environment.
+    # Inside a Docker container belonging to the task, if you use the AWS CLI
+    # or SDK, and don't provide other IAM credentials, this role will be used.
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - ssmmessages:CreateControlChannel
+                  - ssmmessages:CreateDataChannel
+                  - ssmmessages:OpenControlChannel
+                  - ssmmessages:OpenDataChannel
+                Effect: Allow
+                Resource: "*"
+                Sid: AllowSsmMessages
+            Version: "2012-10-17"
+          PolicyName: EcsExec
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  WebTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: /up.html?t
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      Port: 80
+      Protocol: HTTP
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+      TargetType: ip
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_frontend" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref VpcId
+  WebTargetGroupAnyHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [The World] Frontend Server <${EnvironmentTypeAbbreviation}> RETURNING 5XX ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's Frontend server is returning 5XX errors
+        from the ECS service to the load balancer.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 0
+      TreatMissingData: notBreaching
+  WebTargetGroupManyHttp5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [The World] Frontend Server <${EnvironmentTypeAbbreviation}> RETURNING MANY 5XX ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's Frontend server is returning 5XX errors
+        from the ECS service to the load balancer.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 1
+      MetricName: HTTPCode_Target_5XX_Count
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 3
+      TreatMissingData: notBreaching
+
+  WebTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: !If [IsProduction, 30, 7]
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+
+  FargateWebServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub >-
+        The security group for ${EnvironmentType} The World frontend Fargate
+        tasks.
+      Tags:
+        - { Key: Name, Value: !Sub "${RootStackName}_frontend_fargate-task" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      VpcId: !Ref VpcId
+  FargateWebServiceNextjsPortIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      Description: >-
+        Allow ingress traffic from the LB SG to the frontend service running
+        in Fargate
+      FromPort: !Ref kWebApplicationPort
+      GroupId: !GetAtt FargateWebServiceSecurityGroup.GroupId
+      IpProtocol: tcp
+      SourceSecurityGroupId: !Ref LoadBalancerSecurityGroupId
+      ToPort: !Ref kWebApplicationPort
+  FargateWebServiceSecurityGroupAllIpv4Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIp: 0.0.0.0/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} frontend Fargate
+        tasks
+      GroupId: !GetAtt FargateWebServiceSecurityGroup.GroupId
+      IpProtocol: "-1"
+  FargateWebServiceSecurityGroupAllIpv6Egress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      CidrIpv6: ::/0
+      Description: !Sub >-
+        Allows ALL outbound traffic from ${EnvironmentType} frontend Fargate
+        tasks
+      GroupId: !GetAtt FargateWebServiceSecurityGroup.GroupId
+      IpProtocol: "-1"
+
+  FargateWebEcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: !If [IsProduction, 0, 0]
+      EnableECSManagedTags: true
+      EnableExecuteCommand: true
+      LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: !Ref kWebContainerName
+          ContainerPort: !Ref kWebApplicationPort
+          TargetGroupArn: !Ref WebTargetGroup
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !GetAtt FargateWebServiceSecurityGroup.GroupId
+          Subnets:
+            - !Ref VpcPublicSubnet1Id
+            - !Ref VpcPublicSubnet2Id
+            - !Ref VpcPublicSubnet3Id
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TaskDefinition: !Ref FargateWebTaskDefinition
+  FargateWebTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Cpu: !If [IsProduction, 2048, 512] # 512 = 0.5 vCPU, 2048 = 2 vCPU, etc
+      Memory: !If [IsProduction, 8192, 2048]
+      ContainerDefinitions:
+        - Environment:
+            - Name: PRX_ENVIRONMENT
+              Value: !Ref EnvironmentTypeLowercase
+          Essential: true
+          HealthCheck:
+            Command: [ "CMD-SHELL", !Sub "curl --fail http://localhost:${kWebApplicationPort}/up.html?d || exit 1" ]
+            Interval: 30
+            Retries: 3
+            StartPeriod: 15
+            Timeout: 5
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Name: !Ref kWebContainerName
+          PortMappings:
+            - ContainerPort: !Ref kWebApplicationPort
+              Protocol: tcp
+          # Secrets:
+          #   - Name: AUTH_KEY
+          #     ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-Frontend/auth-key
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      RuntimePlatform:
+        CpuArchitecture: ARM64
+        OperatingSystemFamily: LINUX
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # Autoscaling
+  ScalingIamRole:
+    Type: AWS::IAM::Role
+    Condition: IsProduction
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: application-autoscaling.amazonaws.com
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: IsProduction
+    Properties:
+      MinCapacity: 3
+      MaxCapacity: 100
+      ResourceId: !Sub service/${EcsClusterName}/${FargateWebEcsService.Name}
+      RoleARN: !GetAtt ScalingIamRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+  ScalingPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: IsProduction
+    Properties:
+      PolicyName: RequestCountScaling
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ScalableTarget
+      TargetTrackingScalingPolicyConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ALBRequestCountPerTarget
+          ResourceLabel: !Sub ${AlbFullName}/${WebTargetGroup.TargetGroupFullName}
+        ScaleInCooldown: 30
+        ScaleOutCooldown: 30
+        TargetValue: 500
+
+  TargetGroupHealthyHostHighAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub ERROR [The World] Frontend Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's Frontend server is running a lot more
+        tasks than normal
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 3
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 5
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 10
+      TreatMissingData: notBreaching
+  TargetGroupHealthyHostHighSustainedAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub FATAL [The World] Frontend Server <${EnvironmentTypeAbbreviation}> RUNNING MANY TASKS SUSTAINED (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} The World's Frontend server has been running a lot
+        more tasks than normal for a long time
+      ComparisonOperator: GreaterThanThreshold
+      DatapointsToAlarm: 45
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref AlbFullName
+        - Name: TargetGroup
+          Value: !GetAtt WebTargetGroup.TargetGroupFullName
+      EvaluationPeriods: 60
+      MetricName: HealthyHostCount
+      Namespace: AWS/ApplicationELB
+      Period: 60
+      Statistic: Maximum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WebTaskLogGroup }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Threshold: 10
+      TreatMissingData: notBreaching
+
+Outputs:
+  EcrImageTag:
+    Value: !Ref EcrImageTag
+  WebServiceName:
+    Value: !GetAtt FargateWebEcsService.Name
+  WebTargetGroupFullName:
+    Value: !GetAtt WebTargetGroup.TargetGroupFullName
+  AlbAccessToken:
+    Value: !Ref AlbAccessToken

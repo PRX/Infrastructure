@@ -39,6 +39,7 @@ Mappings:
   #
   # The final rule priority values must be between 1 and 50000.
   SharedAlbListenerRulePriorityMap:
+    Frontend: { prefix: 15 }
     WordPress: { prefix: 25 }
   SharedVpcCidrBlockMap:
     # must be a /16 private network
@@ -471,6 +472,42 @@ Resources:
         "prx:dev:application": Website
       Location: ./apps/wordpress.yml
       TimeoutInMinutes: 20
+  FrontendStack:
+    Type: AWS::Serverless::Application
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      Parameters:
+        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
+        AlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
+        AlbHttpsListenerArn: !GetAtt SharedAlbStack.Outputs.HttpsListenerArn
+        EcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
+        EcsClusterArn: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterArn
+        VpcId: !GetAtt SharedVpcStack.Outputs.VpcId
+        VpcPublicSubnet1Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet1Id
+        VpcPublicSubnet2Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet2Id
+        VpcPublicSubnet3Id: !GetAtt SharedVpcStack.Outputs.PublicSubnet3Id
+        EcrImageTag: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-Frontend/pkg/docker-image-tag
+        AlbListenerRulePriorityPrefix: !FindInMap [SharedAlbListenerRulePriorityMap, Frontend, prefix]
+        EnvironmentType: !Ref EnvironmentType
+        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
+        EnvironmentTypeLowercase: !GetAtt Constants.Outputs.EnvironmentTypeLowercase
+        RegionMode: !FindInMap [RegionModeMap, !Ref "AWS::Region", !Ref EnvironmentType]
+        RootStackName: !Ref AWS::StackName
+        RootStackId: !Ref AWS::StackId
+        AlbAccessToken: !Sub /prx/${EnvironmentTypeAbbreviation}/Terra/The_World-Frontend/alb-access-token
+        LoadBalancerSecurityGroupId: !GetAtt SharedAlbStack.Outputs.LoadBalancerSecurityGroupId
+      Tags:
+        "prx:meta:tagging-version": "2021-04-07"
+        "prx:cloudformation:stack-name": !Ref AWS::StackName
+        "prx:cloudformation:stack-id": !Ref AWS::StackId
+        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
+        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
+        "prx:ops:environment": !Ref EnvironmentType
+        "prx:dev:family": The World
+        "prx:dev:application": Website
+      Location: ./apps/frontend.yml
+      TimeoutInMinutes: 20
 
   SharedCdnStack:
     Type: AWS::Serverless::Application
@@ -555,3 +592,5 @@ Resources:
 Outputs:
   WordPressEcrImageTag:
     Value: !GetAtt WordPressStack.Outputs.EcrImageTag
+  FrontendEcrImageTag:
+    Value: !GetAtt FrontendStack.Outputs.EcrImageTag
