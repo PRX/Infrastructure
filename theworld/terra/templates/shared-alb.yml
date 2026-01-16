@@ -22,7 +22,6 @@ Parameters:
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
   SharedGlueDatabaseName: { Type: String }
   LatencyGroupDomain: { Type: String }
-  CertificateArn: { Type: String }
   MaintenanceMode: { Type: String, Default: "Off" }
 
 Conditions:
@@ -32,6 +31,29 @@ Conditions:
 
 Resources:
   NestedChangeSetScrubber: { Type: AWS::SNS::Topic, Condition: EnableNestedChangeSetScrubbingResources }
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !If [IsProduction, theworld.org, stag.theworld.org]
+      SubjectAlternativeNames:
+          Fn::If:
+            - IsProduction
+            - - frontend.theworld.org
+              - frontend.prod.theworld.org
+              - wordpress.theworld.org
+              - wordpress.prod.theworld.org
+            - - frontend.stag.theworld.org
+              - wordpress.stag.theworld.org
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName} ${AWS::Region}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      ValidationMethod: DNS
 
   LoadBalancerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -283,7 +305,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       Certificates:
-        - CertificateArn: !Ref CertificateArn
+        - CertificateArn: !Ref Certificate
       DefaultActions:
         - FixedResponseConfig:
             StatusCode: "404"
