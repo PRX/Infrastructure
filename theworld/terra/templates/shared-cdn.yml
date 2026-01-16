@@ -8,7 +8,8 @@ Parameters:
   NestedChangeSetScrubbingResourcesState: { Type: String }
   SharedAlbDualstackDnsName: { Type: String }
   CertificateArn: { Type: String }
-  AlbAccessToken: { Type: String, }
+  WordPressAlbAccessToken: { Type: String, }
+  FrontendAlbAccessToken: { Type: String, }
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -120,6 +121,27 @@ Resources:
             QueryStringBehavior: whitelist
             QueryStrings:
               - ver
+  FrontendCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 60 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 30 # 5 minutes
+        Name: !Sub ${AWS::StackName}-frontend-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+          QueryStringsConfig:
+            QueryStringBehavior: none
+            QueryStrings:
+              - foo
 
   OriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
@@ -213,10 +235,10 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: [GET, HEAD]
           CachedMethods: [GET, HEAD]
-          CachePolicyId: !GetAtt AggresiveCachePolicy.Id
+          CachePolicyId: !GetAtt FrontendCachePolicy.Id
           Compress: true
           OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
-          TargetOriginId: wordpress-ecs
+          TargetOriginId: frontend-ecs
           ViewerProtocolPolicy: redirect-to-https
         Enabled: true
         HttpVersion: http2and3
@@ -229,7 +251,15 @@ Resources:
             DomainName: !Ref SharedAlbDualstackDnsName
             OriginCustomHeaders:
               - HeaderName: x-prx-alb-access-token
-                HeaderValue: !Ref AlbAccessToken
+                HeaderValue: !Ref WordPressAlbAccessToken
+          - Id: frontend-ecs
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            DomainName: !Ref SharedAlbDualstackDnsName
+            OriginCustomHeaders:
+              - HeaderName: x-prx-alb-access-token
+                HeaderValue: !Ref FrontendAlbAccessToken
         PriceClass: PriceClass_All
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArn
