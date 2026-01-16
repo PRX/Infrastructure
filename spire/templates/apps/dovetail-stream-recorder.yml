@@ -24,6 +24,7 @@ Parameters:
   StreamRecorderOxbowSnsTopicArns: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
+  IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -90,9 +91,9 @@ Resources:
       Events:
         ScheduleTrigger:
           Properties:
-            Schedule: !Sub rate(1 minute)
+            Schedule: rate(1 minute)
             # TODO: remove after testing redundant recording callbacks
-            Enabled: false
+            State: !If [IsPrimaryRegion, ENABLED, DISABLED]
           Type: Schedule
       Handler: index.handler
       MemorySize: 256
