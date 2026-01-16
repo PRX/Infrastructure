@@ -9,7 +9,6 @@ Parameters:
   SharedAlbDualstackDnsName: { Type: String }
   CertificateArn: { Type: String }
   WordPressAlbAccessToken: { Type: String, }
-  FrontendAlbAccessToken: { Type: String, }
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -121,25 +120,6 @@ Resources:
             QueryStringBehavior: whitelist
             QueryStrings:
               - ver
-  FrontendCachePolicy:
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        DefaultTTL: 60 # 1 day (default)
-        MaxTTL: 31536000 # 1 year (default)
-        MinTTL: 30 # 5 minutes
-        Name: !Sub ${AWS::StackName}-frontend-cache-policy
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - host
-          QueryStringsConfig:
-            QueryStringBehavior: none
 
   OriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
@@ -180,7 +160,6 @@ Resources:
               - admin.stag.theworld.org
               - api.stag.theworld.org
               - feeds.stag.theworld.org
-              - frontend.stag.theworld.org
               - projects.stag.theworld.org
               - sitemap.stag.theworld.org
         CacheBehaviors:
@@ -234,10 +213,10 @@ Resources:
         DefaultCacheBehavior:
           AllowedMethods: [GET, HEAD]
           CachedMethods: [GET, HEAD]
-          CachePolicyId: !GetAtt FrontendCachePolicy.Id
+          CachePolicyId: !GetAtt AggresiveCachePolicy.Id
           Compress: true
           OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
-          TargetOriginId: frontend-ecs
+          TargetOriginId: wordpress-ecs
           ViewerProtocolPolicy: redirect-to-https
         Enabled: true
         HttpVersion: http2and3
@@ -251,14 +230,6 @@ Resources:
             OriginCustomHeaders:
               - HeaderName: x-prx-alb-access-token
                 HeaderValue: !Ref WordPressAlbAccessToken
-          - Id: frontend-ecs
-            CustomOriginConfig:
-              OriginProtocolPolicy: https-only
-              OriginSSLProtocols: [TLSv1.2]
-            DomainName: !Ref SharedAlbDualstackDnsName
-            OriginCustomHeaders:
-              - HeaderName: x-prx-alb-access-token
-                HeaderValue: !Ref FrontendAlbAccessToken
         PriceClass: PriceClass_All
         ViewerCertificate:
           AcmCertificateArn: !Ref CertificateArn

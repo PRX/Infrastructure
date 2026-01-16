@@ -43,6 +43,8 @@ Parameters:
   LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedMysqlClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
   SharedValkeyClientSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedWafArn: { Type: String }
+  SharedAlbDualstackDnsName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -767,6 +769,270 @@ Resources:
         - { Key: prx:dev:application, Value: Website }
       Threshold: 10
       TreatMissingData: notBreaching
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !If [IsProduction, theworld.org, stag.theworld.org]
+      SubjectAlternativeNames:
+          Fn::If:
+            - IsProduction
+            - - admin.theworld.org
+              - admin.prod.theworld.org
+              - api.theworld.org
+              - api.prod.theworld.org
+              - feeds.theworld.org
+              - feeds.prod.theworld.org
+              - projects.theworld.org
+              - projects.prod.theworld.org
+              - sitemap.theworld.org
+              - sitemap.prod.theworld.org
+              - wordpress.theworld.org
+              - wordpress.prod.theworld.org
+            - - admin.stag.theworld.org
+              - api.stag.theworld.org
+              - feeds.stag.theworld.org
+              - projects.stag.theworld.org
+              - sitemap.stag.theworld.org
+              - wordpress.stag.theworld.org
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName} ${AWS::Region}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      ValidationMethod: DNS
+
+  # Many wp-admin responses are no-cache, and this will honor those. Cacheable
+  # responses are cached for 10 minutes max. All query strings and some
+  # WordPress-specific cookies are used as cache keys and passed through to the
+  # origin.
+  WordPressAdminCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 0
+        MaxTTL: 600
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-admin-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: whitelist
+            Cookies:
+              - wordpress_*
+              - wp-settings-*
+              - wp-resetpass-*
+              - wp_lang
+          EnableAcceptEncodingBrotli: false
+          EnableAcceptEncodingGzip: false
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+              - user-agent
+          QueryStringsConfig:
+            QueryStringBehavior: all
+  GraphqlCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 900 # 15 minutes
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 60
+        Name: !Sub ${AWS::StackName}-graphql-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: whitelist
+            Cookies:
+              - wordpress_*
+              - wp-settings-*
+              - wp_lang
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+              - x-wp-nonce
+          QueryStringsConfig:
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - query
+              - operationName
+              - variables
+  RestApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 86400 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 60
+        Name: !Sub ${AWS::StackName}-rest-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: whitelist
+            Cookies:
+              - wordpress_*
+              - wp-settings-*
+              - wp-resetpass-*
+              - wp_lang
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+              - x-wp-nonce
+          QueryStringsConfig:
+            QueryStringBehavior: all
+  AggresiveCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 86400 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 600 # 5 minutes
+        Name: !Sub ${AWS::StackName}-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+          QueryStringsConfig:
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - ver
+
+  OriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      # The headers, cookies, and query strings that are included in the
+      # CACHE KEY (CachePolicyConfig) are also included in requests that
+      # CloudFront sends to the origin.
+      OriginRequestPolicyConfig:
+        CookiesConfig:
+          CookieBehavior: none
+          # Cookies:
+        HeadersConfig:
+          HeaderBehavior: none
+          # Headers:
+        Name: !Sub ${AWS::StackName}-origin-req-policy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+          # QueryStrings:
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        # Aliases:
+        #   Fn::If:
+        #     - IsProduction
+        #     - - admin.theworld.org
+        #       - admin.prod.theworld.org
+        #       - api.theworld.org
+        #       - api.prod.theworld.org
+        #       - feeds.theworld.org
+        #       - feeds.prod.theworld.org
+        #       - projects.theworld.org
+        #       - projects.prod.theworld.org
+        #       - sitemap.theworld.org
+        #       - sitemap.prod.theworld.org
+        #     - - stag.theworld.org
+        #       - admin.stag.theworld.org
+        #       - api.stag.theworld.org
+        #       - feeds.stag.theworld.org
+        #       - projects.stag.theworld.org
+        #       - sitemap.stag.theworld.org
+        CacheBehaviors:
+          # GraphQL API requests
+          - AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: !GetAtt GraphqlCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/graphql"
+            TargetOriginId: wordpress-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # REST API requests
+          - AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: !GetAtt RestApiCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/wp-json*"
+            TargetOriginId: wordpress-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # WordPress Login
+          - AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt WordPressAdminCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/wp-login.php"
+            TargetOriginId: wordpress-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # WordPress Admin
+          - AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt WordPressAdminCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/wp-admin/*"
+            TargetOriginId: wordpress-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # WordPress Preview
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt WordPressAdminCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/preview/*"
+            TargetOriginId: wordpress-ecs
+            ViewerProtocolPolicy: redirect-to-https
+        Comment: !Sub The World ${EnvironmentType} WordPress
+        ConnectionMode: direct
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: !GetAtt AggresiveCachePolicy.Id
+          Compress: true
+          OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+          TargetOriginId: wordpress-ecs
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - Id: wordpress-ecs
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            DomainName: !Ref SharedAlbDualstackDnsName
+            OriginCustomHeaders:
+              - HeaderName: x-prx-alb-access-token
+                HeaderValue: !Ref AlbAccessToken
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        WebACLId: !Ref SharedWafArn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
 
 Outputs:
   EcrImageTag:

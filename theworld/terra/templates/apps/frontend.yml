@@ -31,6 +31,8 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   AlbAccessToken: { Type: AWS::SSM::Parameter::Value<String> }
   LoadBalancerSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
+  SharedWafArn: { Type: String }
+  SharedAlbDualstackDnsName: { Type: String }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -473,6 +475,144 @@ Resources:
         - { Key: prx:dev:application, Value: Website }
       Threshold: 10
       TreatMissingData: notBreaching
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !If [IsProduction, theworld.org, stag.theworld.org]
+      SubjectAlternativeNames:
+          Fn::If:
+            - IsProduction
+            - - frontend.theworld.org
+              - frontend.prod.theworld.org
+            - - frontend.stag.theworld.org
+      Tags:
+        - { Key: Name, Value: !Sub "${AWS::StackName} ${AWS::Region}" }
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      ValidationMethod: DNS
+
+  NextStaticCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 60 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 30 # 5 minutes
+        Name: !Sub ${AWS::StackName}-frontend-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  AggresiveCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 86400 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 600 # 5 minutes
+        Name: !Sub ${AWS::StackName}-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+          QueryStringsConfig:
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - ver
+  OriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      # The headers, cookies, and query strings that are included in the
+      # CACHE KEY (CachePolicyConfig) are also included in requests that
+      # CloudFront sends to the origin.
+      OriginRequestPolicyConfig:
+        CookiesConfig:
+          CookieBehavior: none
+          # Cookies:
+        HeadersConfig:
+          HeaderBehavior: none
+          # Headers:
+        Name: !Sub ${AWS::StackName}-origin-req-policy
+        QueryStringsConfig:
+          QueryStringBehavior: none
+          # QueryStrings:
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          Fn::If:
+            - IsProduction
+            - - theworld.org
+              - frontend.theworld.org
+              - frontend.prod.theworld.org
+            - - stag.theworld.org
+              - frontend.stag.theworld.org
+        CacheBehaviors:
+          # WordPress Preview
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt NextStaticCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/_next/static/*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+        Comment: !Sub The World ${EnvironmentType} frontend
+        ConnectionMode: direct
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          CachePolicyId: !GetAtt AggresiveCachePolicy.Id
+          Compress: true
+          OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+          TargetOriginId: frontend-ecs
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - Id: frontend-ecs
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            DomainName: !Ref SharedAlbDualstackDnsName
+            OriginCustomHeaders:
+              - HeaderName: x-prx-alb-access-token
+                HeaderValue: !Ref AlbAccessToken
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          MinimumProtocolVersion: TLSv1.2_2021
+          SslSupportMethod: sni-only
+        WebACLId: !Ref SharedWafArn
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
 
 Outputs:
   EcrImageTag:
