@@ -114,42 +114,6 @@ Resources:
         "prx:dev:application": Website
       TimeoutInMinutes: 5
 
-  Certificate:
-    Type: AWS::CertificateManager::Certificate
-    Condition: IsProduction
-    Properties:
-      DomainName: !If [IsProduction, theworld.org, stag.theworld.org]
-      SubjectAlternativeNames:
-          Fn::If:
-            - IsProduction
-            - - admin.theworld.org
-              - admin.prod.theworld.org
-              - api.theworld.org
-              - api.prod.theworld.org
-              - feeds.theworld.org
-              - feeds.prod.theworld.org
-              - projects.theworld.org
-              - projects.prod.theworld.org
-              - sitemap.theworld.org
-              - sitemap.prod.theworld.org
-              - wordpress.theworld.org
-              - wordpress.prod.theworld.org
-            - - admin.stag.theworld.org
-              - api.stag.theworld.org
-              - feeds.stag.theworld.org
-              - projects.stag.theworld.org
-              - sitemap.stag.theworld.org
-              - wordpress.stag.theworld.org
-      Tags:
-        - { Key: Name, Value: !Sub "${AWS::StackName} ${AWS::Region}" }
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:dev:family, Value: The World }
-        - { Key: prx:dev:application, Value: Website }
-      ValidationMethod: DNS
-
   SharedGlueDatabaseStack:
     Type: AWS::Serverless::Application
     DeletionPolicy: Delete
@@ -534,39 +498,10 @@ Resources:
         "prx:dev:application": Website
       Location: ./apps/frontend.yml
       TimeoutInMinutes: 20
-
-  SharedCdnStack:
-    Type: AWS::Serverless::Application
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Condition: IsProduction
-    Properties:
-      Parameters:
-        EnvironmentType: !Ref EnvironmentType
-        EnvironmentTypeAbbreviation: !Ref EnvironmentTypeAbbreviation
-        RootStackName: !Ref AWS::StackName
-        RootStackId: !Ref AWS::StackId
-        NestedChangeSetScrubbingResourcesState: !Ref NestedChangeSetScrubbingResourcesState
-        SharedAlbDualstackDnsName: !GetAtt SharedAlbStack.Outputs.AlbDualstackDnsName
-        CertificateArn: !Ref Certificate
-        WordPressAlbAccessToken: !GetAtt WordPressStack.Outputs.AlbAccessToken
-      Tags:
-        "prx:meta:tagging-version": "2021-04-07"
-        "prx:cloudformation:stack-name": !Ref AWS::StackName
-        "prx:cloudformation:stack-id": !Ref AWS::StackId
-        "prx:cloudformation:root-stack-name": !Ref AWS::StackName
-        "prx:cloudformation:root-stack-id": !Ref AWS::StackId
-        "prx:ops:environment": !Ref EnvironmentType
-        "prx:dev:family": The World
-        "prx:dev:application": Website
-      Location: ./shared-cdn.yml
-      TimeoutInMinutes: 20
-
   # Assumed to require all possible requirements
   DashboardsStack:
     Type: AWS::Serverless::Application
     # Condition: CreateDashboardsStack
-    Condition: IsProduction
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
@@ -581,17 +516,13 @@ Resources:
 
         SharedEcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
 
-        SharedCdnCloudFrontDistributionId: !GetAtt SharedCdnStack.Outputs.CloudFrontDistributionId
-
         WordPressWebServiceName: !GetAtt WordPressStack.Outputs.WebServiceName
         WordPressWebTargetGroupFullName: !GetAtt WordPressStack.Outputs.WebTargetGroupFullName
+        WordPressCdnCloudFrontDistributionId: !GetAtt WordPressStack.Outputs.CloudFrontDistributionId
 
-  #       InfrastructureGitCommit: !Ref InfrastructureGitCommit
-
-  #       SharedEcsClusterName: !GetAtt SharedEcsClusterStack.Outputs.EcsClusterName
-
-  #       SharedVpcId: !GetAtt SharedVpcStack.Outputs.VpcId
-  #       SharedVpcCidrBlock: !GetAtt SharedVpcStack.Outputs.VpcCidrBlock
+        FrontendWebServiceName: !GetAtt FrontendStack.Outputs.WebServiceName
+        FrontendWebTargetGroupFullName: !GetAtt FrontendStack.Outputs.WebTargetGroupFullName
+        FrontendCdnCloudFrontDistributionId: !GetAtt FrontendStack.Outputs.CloudFrontDistributionId
 
         SharedEcsAsgAarch64Name: !GetAtt SharedEcsAsgAarch64Stack.Outputs.AsgName
 
@@ -600,11 +531,6 @@ Resources:
         SharedAlbFullName: !GetAtt SharedAlbStack.Outputs.AlbFullName
 
         SharedValkeyCacheName: !GetAtt SharedValkeyStack.Outputs.CacheName
-
-  #       SharedMemcachedCacheName: !GetAtt SharedMemcachedStack.Outputs.CacheName
-  #       SharedAppRedisCacheName: !GetAtt SharedAppRedisStack.Outputs.CacheName
-
-  #       SharedVpcFlowLogsLogGroupName: !GetAtt SharedVpcStack.Outputs.FlowLogsLogGroupName
 
       Tags:
         "prx:meta:tagging-version": "2021-04-07"
