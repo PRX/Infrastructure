@@ -494,10 +494,44 @@ Resources:
     Type: AWS::CloudFront::CachePolicy
     Properties:
       CachePolicyConfig:
-        DefaultTTL: 60 # 1 day (default)
+        DefaultTTL: 86400 # 1 day (default)
         MaxTTL: 31536000 # 1 year (default)
-        MinTTL: 30 # 5 minutes
-        Name: !Sub ${AWS::StackName}-frontend-cache-policy
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-next-static-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  StaticCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 86400 # 1 day (default)
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-next-static-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+  ApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 0
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-next-static-cache-policy
         ParametersInCacheKeyAndForwardedToOrigin:
           CookiesConfig:
             CookieBehavior: none
@@ -508,7 +542,45 @@ Resources:
             Headers:
               - host
           QueryStringsConfig:
-            QueryStringBehavior: none
+            QueryStringBehavior: all
+  NextDataCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 0
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-next-static-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - host
+          QueryStringsConfig:
+            QueryStringBehavior: all
+  NextImageCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 60
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-next-static-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: whitelist
+            Headers:
+              - accept
+          QueryStringsConfig:
+            QueryStringBehavior: all
   AggresiveCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -559,13 +631,49 @@ Resources:
             - [theworld.org]
             - [stag.theworld.org]
         CacheBehaviors:
-          # WordPress Preview
-          - AllowedMethods: [GET, HEAD, OPTIONS]
-            CachedMethods: [GET, HEAD, OPTIONS]
+          # Next.js static
+          - AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
             CachePolicyId: !GetAtt NextStaticCachePolicy.Id
             Compress: true
             OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
             PathPattern: "/_next/static/*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # Static
+          - AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: !GetAtt StaticCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/static/*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # API
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt ApiCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/api/*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # Next.js data
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt NextDataCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/_next/data/*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # Next.js image
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt NextImageCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/_next/image*"
             TargetOriginId: frontend-ecs
             ViewerProtocolPolicy: redirect-to-https
         Comment: !Sub The World ${EnvironmentType} frontend
