@@ -43,6 +43,7 @@ Resources:
         - !Ref EcrPublicPushPolicy
         - !Ref PrivateEcrPushPolicy
         - !Ref SsmParameterPutPolicy
+        - !Ref SsmParameterGetDockerHubPolicy
         - !Ref AssumeRolePolicy
       RoleName: PRX-GHA-AccessRole
       Tags:
@@ -198,6 +199,21 @@ Resources:
             Action:
               - ssm:PutParameter
             Resource: "arn:aws:ssm:*:*:parameter/*/pkg/docker-image-tag"
+
+  # GH actions need Docker Hub credentials to avoid rate limits
+  SsmParameterGetDockerHubPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Allows reading Docker Hub credentials from SSM
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - "arn:aws:ssm:*:*:parameter/prx/DOCKERHUB_USERNAME"
+              - "arn:aws:ssm:*:*:parameter/prx/DOCKERHUB_PASSWORD"
 
   # GH actions may need more permissions than we are willing to grant to this
   # role, so we allow this role to assume some other roles. The assumed role
