@@ -84,7 +84,6 @@ Resources:
     Properties:
       ServiceToken: !Ref EchoServiceToken
       ActualsIngestJobInvocationCountMetricName: !Sub ActualsIngestJobInvocationCountNewCluster${EnvironmentType}
-      TargetingRecordCacheSizeMetricsName: !Sub TargetingRecordCacheSize${EnvironmentType}
       AdFilesS3BucketName: !Select [5, !Split [":", !Ref AdFilesS3BucketArn]]
       WorkerLoggedErrorsMetricName: !Sub WorkerLoggedErrors${EnvironmentType}
       SlowWorkerLoggedErrorsMetricName: !Sub SlowWorkerLoggedErrors${EnvironmentType}
@@ -845,16 +844,6 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       Threshold: 0
       TreatMissingData: notBreaching
-  TargetingRecordCacheSizeMetricFilter:
-    Type: AWS::Logs::MetricFilter
-    Properties:
-      FilterPattern: |-
-        { $.type = "inventory.allocation_caching_states" }
-      LogGroupName: !Ref WorkerTaskLogGroup
-      MetricTransformations:
-        - MetricName: !GetAtt Constants.TargetingRecordCacheSizeMetricsName
-          MetricNamespace: !Ref kMetricFilterNamespace
-          MetricValue: $.max_flight_allocation_cache_entries.acs_entry_count
   AuguryActualsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: EnableWorkers # See README
@@ -882,31 +871,6 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
       Threshold: 1
       TreatMissingData: breaching
-  AuguryExpandedAllocationCacheSizeAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub ERROR [Augury] Allocation Targeting Record Cache <${EnvironmentTypeAbbreviation}> IS LARGE (${RootStackName})
-      AlarmDescription: !Sub >-
-        ${EnvironmentType} Augury's expanded allocation cache is big for some
-        flight(s). Check the logs and the TruncateExpiredDataJob job.
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      EvaluationPeriods: 3
-      MetricName: !GetAtt Constants.TargetingRecordCacheSizeMetricsName
-      Namespace: !Ref kMetricFilterNamespace
-      Period: 300
-      Statistic: Maximum
-      Tags:
-        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
-        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
-        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
-        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
-        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
-        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
-        - { Key: prx:ops:cloudwatch-log-group-name, Value: !Ref WorkerTaskLogGroup }
-        - { Key: prx:dev:family, Value: Dovetail }
-        - { Key: prx:dev:application, Value: Augury }
-      Threshold: 1000
-      TreatMissingData: notBreaching
   AuguryForecastsAreBehindAlarm:
     Type: AWS::CloudWatch::Alarm
     Condition: EnableWorkers # See README
