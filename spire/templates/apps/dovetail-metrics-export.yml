@@ -257,6 +257,47 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt CneNetworkExport.Arn
 
+  CpmNetworkExport:
+    Type: AWS::Events::Rule
+    Condition: EnableProductionRules
+    Properties:
+      Description: CPM network data export
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ExportFunction.Arn
+          Id: !Sub "${RootStackName}.Export.CPMNetwork"
+          Input: |-
+            {
+              "PodcastIDs": [
+                10059,
+                10060,
+                10061,
+                10062,
+                10063,
+                10064,
+                10065,
+                10066,
+                10686
+              ],
+              "ObjectPrefix": "PRX/",
+              "Copies": [
+                {
+                  "Mode": "AWS/S3",
+                  "BucketName": "cpm-cdp-platform"
+                }
+              ]
+            }
+  CpmNetworkExportInvokePermission:
+    Condition: EnableProductionRules
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CpmNetworkExport.Arn
+
   BoostrIntegration:
     Type: AWS::Events::Rule
     Condition: EnableProductionRules
