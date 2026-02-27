@@ -26,6 +26,21 @@ Parameters:
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   SharedClickhouseInstanceSecurityGroupId: { Type: AWS::EC2::SecurityGroup::Id }
 
+Mappings:
+  # castlehouse git shas:
+  #   https://github.com/PRX/castlehouse/commits/main/
+  #
+  # clickhouse server/client versions:
+  #   https://packages.clickhouse.com/deb/dists/stable/main/binary-amd64/Packages
+  #   yum list clickhouse-server --showduplicates
+  VersionMap:
+    Staging:
+      Castlehouse: 650fb00
+      Clickhouse: 25.10.3.100
+    Production:
+      Castlehouse: d5de04b
+      Clickhouse: 25.10.2.65
+
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
@@ -116,14 +131,42 @@ Resources:
                 - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
             02_install_clickhouse:
               # https://clickhouse.com/docs/en/install#from-rpm-packages
-              command: |
-                #!/bin/bash
-                if ! command -v clickhouse-server &> /dev/null; then
-                  yum-config-manager --add-repo https://packages.clickhouse.com/rpm/clickhouse.repo
-                  yum install -y clickhouse-server clickhouse-client
-                  systemctl enable clickhouse-server
-                  systemctl start clickhouse-server
-                fi
+              command: !Sub
+                - |-
+                  #!/bin/bash
+                  if ! yum list installed clickhouse-server | grep ${clickhouse_version} &> /dev/null; then
+                    yum-config-manager --add-repo https://packages.clickhouse.com/rpm/clickhouse.repo
+
+                    echo "upgrading to clickhouse-server-${clickhouse_version}"
+                    yum install -y clickhouse-server-${clickhouse_version} clickhouse-client-${clickhouse_version}
+                    export NEEDS_RESTART=true
+                  fi
+
+                  export CONFIG_PATH=/etc/clickhouse-server/config.d/override-config.xml
+                  export CONFIG_URL=https://raw.githubusercontent.com/PRX/castlehouse/${castlehouse_version}/override-config.xml
+                  if ! diff $CONFIG_PATH <(curl -s $CONFIG_URL) &> /dev/null; then
+                    echo "updating to override-config.xml ${castlehouse_version}"
+                    curl -so $CONFIG_PATH $CONFIG_URL
+                    export NEEDS_RESTART=true
+                  fi
+
+                  export USERS_PATH=/etc/clickhouse-server/users.d/override-users.xml
+                  export USERS_URL=https://raw.githubusercontent.com/PRX/castlehouse/${castlehouse_version}/override-users.xml
+                  if ! diff $USERS_PATH <(curl -s $USERS_URL) &> /dev/null; then
+                    echo "updating to override-users.xml ${castlehouse_version}"
+                    curl -so $USERS_PATH $USERS_URL
+                    export NEEDS_RESTART=true
+                  fi
+
+                  if [ "$NEEDS_RESTART" = "true" ]; then
+                    echo "restarting clickhouse-server"
+                    systemctl enable clickhouse-server
+                    systemctl stop clickhouse-server
+                    systemctl start clickhouse-server
+                    echo "success!"
+                  fi
+                - clickhouse_version: !FindInMap [VersionMap, !Ref EnvironmentType, Clickhouse]
+                  castlehouse_version: !FindInMap [VersionMap, !Ref EnvironmentType, Castlehouse]
             03_setup_schema:
               # https://github.com/PRX/castlehouse/tree/main
               command: !Sub |
@@ -240,10 +283,6 @@ Resources:
                 Environment="GOOGLE_STORAGE_BUCKET_ENDPOINT=https://storage.googleapis.com/${GoogleStorageBucket}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_ID=${GoogleStorageHmacKeyId}"
                 Environment="GOOGLE_STORAGE_HMAC_KEY_SECRET=${GoogleStorageHmacKeySecret}"
-            /etc/clickhouse-server/config.d/override-config.xml:
-              source: https://raw.githubusercontent.com/PRX/castlehouse/main/override-config.xml
-            /etc/clickhouse-server/users.d/override-users.xml:
-              source: https://raw.githubusercontent.com/PRX/castlehouse/main/override-users.xml
           packages:
             yum:
               jq: []
