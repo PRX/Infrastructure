@@ -240,7 +240,6 @@ Resources:
                   - s3:Get*
                   - s3:ListBucket
                   - s3:ListBucketMultipartUploads
-                  - s3:ListBucketVersions
                 Effect: Allow
                 Resource: !Ref AdFilesS3BucketArn
                 Sid: AllowBucketActions
@@ -250,12 +249,32 @@ Resources:
                   - s3:ListMultipartUploadParts
                   - s3:PutObject
                   - s3:PutObjectAcl
-                  - s3:PutObjectVersionAcl
                 Effect: Allow
                 Resource: !Sub ${AdFilesS3BucketArn}/*
                 Sid: AllowObjectActions
             Version: "2012-10-17"
           PolicyName: S3UploadAccess
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:Get*
+                  - s3:ListBucket
+                  - s3:ListBucketMultipartUploads
+                Effect: Allow
+                Resource: !GetAtt ForecastsDataLakeBucket.Arn
+                Sid: AllowDataLakeBucketActions
+              - Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject
+                  - s3:Get*
+                  - s3:ListMultipartUploadParts
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Effect: Allow
+                Resource: !Sub ${ForecastsDataLakeBucket.Arn}/*
+                Sid: AllowDataLakeObjectActions
+            Version: "2012-10-17"
+          PolicyName: ForecastsDataLakeBucket
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
         - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
@@ -453,6 +472,10 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: DATALAKE_URI
+              Value: !Sub s3://${ForecastsDataLakeBucket}
+            - Name: DATALAKE_AWS_REGION
+              Value: !Ref AWS::Region
             - Name: SLOW_WORKER_RELAY_SQS_URL
               Value: !Ref SlowWorkerRelaySqsQueue
             - Name: SLACK_SNS_TOPIC
@@ -620,6 +643,10 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: DATALAKE_URI
+              Value: !Sub s3://${ForecastsDataLakeBucket}
+            - Name: DATALAKE_AWS_REGION
+              Value: !Ref AWS::Region
             - Name: SLOW_WORKER_RELAY_SQS_URL
               Value: !Ref SlowWorkerRelaySqsQueue
             - Name: SLACK_SNS_TOPIC
@@ -695,6 +722,26 @@ Resources:
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Augury }
       TaskRoleArn: !GetAtt TaskRole.Arn
+
+  ForecastsDataLakeBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:family, Value: Dovetail }
+        - { Key: prx:dev:application, Value: Augury }
 
   S3SigningUser:
     Type: AWS::IAM::User
@@ -1048,6 +1095,10 @@ Resources:
               Value: !If [IsProduction, Augury Production, Augury Staging]
             - Name: BQ_DATASET
               Value: !If [IsProduction, production, staging]
+            - Name: DATALAKE_URI
+              Value: !Sub s3://${ForecastsDataLakeBucket}
+            - Name: DATALAKE_AWS_REGION
+              Value: !Ref AWS::Region
             - Name: SLACK_SNS_TOPIC
               Value: !Ref SlackMessageRelaySnsTopicArn
             - Name: SLACK_CHANNEL_ID
