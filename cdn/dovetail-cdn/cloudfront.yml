@@ -200,6 +200,9 @@ Resources:
   CloudFrontCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
+      # The headers, cookies, and query strings that are included in the
+      # CACHE KEY (CachePolicyConfig) are also included in requests that
+      # CloudFront sends to the origin.
       CachePolicyConfig:
         Comment: !Sub Policy for ${AWS::StackName}
         DefaultTTL: 86400
@@ -212,12 +215,19 @@ Resources:
           EnableAcceptEncodingBrotli: false
           EnableAcceptEncodingGzip: false
           HeadersConfig:
-            HeaderBehavior: none
+            HeaderBehavior: whitelist
+            Headers:
+              - Origin
+              - Access-Control-Request-Headers
+              - Access-Control-Request-Method
           QueryStringsConfig:
             QueryStringBehavior: none
   CloudFrontOriginRequestPolicy:
     Type: AWS::CloudFront::OriginRequestPolicy
     Properties:
+      # The headers, cookies, and query strings that are included in the
+      # CACHE KEY (CachePolicyConfig) are also included in requests that
+      # CloudFront sends to the origin.
       OriginRequestPolicyConfig:
         Comment: !Sub Policy for ${AWS::StackName}
         CookiesConfig:
@@ -331,8 +341,8 @@ Resources:
         CacheBehaviors:
           - Fn::If:
               - HasRegion1
-              - AllowedMethods: [HEAD, GET]
-                CachedMethods: [HEAD, GET]
+              - AllowedMethods: [HEAD, GET, OPTIONS]
+                CachedMethods: [HEAD, GET, OPTIONS]
                 CachePolicyId: !Ref CloudFrontCachePolicy
                 Compress: false
                 FunctionAssociations:
@@ -349,8 +359,8 @@ Resources:
               - !Ref AWS::NoValue
           - Fn::If:
               - HasRegion2
-              - AllowedMethods: [HEAD, GET]
-                CachedMethods: [HEAD, GET]
+              - AllowedMethods: [HEAD, GET, OPTIONS]
+                CachedMethods: [HEAD, GET, OPTIONS]
                 CachePolicyId: !Ref CloudFrontCachePolicy
                 Compress: false
                 FunctionAssociations:
@@ -367,8 +377,8 @@ Resources:
               - !Ref AWS::NoValue
           - Fn::If:
               - HasRegion3
-              - AllowedMethods: [HEAD, GET]
-                CachedMethods: [HEAD, GET]
+              - AllowedMethods: [HEAD, GET, OPTIONS]
+                CachedMethods: [HEAD, GET, OPTIONS]
                 CachePolicyId: !Ref CloudFrontCachePolicy
                 Compress: false
                 FunctionAssociations:
