@@ -28,6 +28,27 @@ Resources:
         - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
         - { Key: prx:dev:family, Value: Dovetail }
         - { Key: prx:dev:application, Value: Counts }
+  CloudfrontRealTimeLogsStreamPolicy:
+    Type: AWS::Kinesis::ResourcePolicy
+    Properties:
+      ResourceArn: !GetAtt CloudfrontRealTimeLogsStream.Arn
+      ResourcePolicy:
+        Statement:
+          - Action:
+              - kinesis:DescribeStream
+              - kinesis:DescribeStreamSummary
+              - kinesis:GetRecords
+              - kinesis:GetShardIterator
+              - kinesis:ListShards
+              - kinesis:SubscribeToShard
+            Condition:
+              StringEquals:
+                aws:ResourceOrgID: ${aws:PrincipalOrgID}
+                aws:ResourceTag/prx:ops:environment: ${aws:PrincipalTag/prx:ops:environment}
+            Effect: Allow
+            Resource: !GetAtt CloudfrontRealTimeLogsStream.Arn
+            Principal: "*"
+        Version: '2012-10-17'
 
 Outputs:
   RealTimeLogsStreamArn:
