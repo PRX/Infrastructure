@@ -92,16 +92,13 @@ Resources:
             Stream: !Ref OldDovetailCdnLogsKinesisStreamArn
           Type: Kinesis
         CountsBytesKinesisStreamTrigger:
-          Fn::If:
-            - IsProduction
-            - !Ref AWS::NoValue
-            - Type: Kinesis
-              Properties:
-                BatchSize: 100
-                BisectBatchOnFunctionError: true
-                Enabled: true
-                StartingPosition: LATEST
-                Stream: !Ref DovetailCdnLogsKinesisStreamArn
+          Properties:
+            BatchSize: 100
+            BisectBatchOnFunctionError: true
+            Enabled: !If [IsProduction, false, true]
+            StartingPosition: LATEST
+            Stream: !Ref DovetailCdnLogsKinesisStreamArn
+          Type: Kinesis
       Handler: index.handler
       Layers:
         - Fn::If:
