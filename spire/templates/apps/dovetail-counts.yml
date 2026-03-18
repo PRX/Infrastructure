@@ -28,7 +28,8 @@ Parameters:
   ArrangementsDynamodbRegion: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
   ArrangementsDynamodbAccessRoleArn: { Type: AWS::SSM::Parameter::Value<String> }
-  DovetailCdnLogsKinesisStreamArn: { Type: String }
+  DovetailCdnLogsKinesisStreamArn: { Type: AWS::SSM::Parameter::Value<String> }
+  OldDovetailCdnLogsKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailRedisReplicationGroupEndpointAddress: { Type: String }
   DovetailRedisReplicationGroupEndpointPort: { Type: String }
@@ -87,6 +88,14 @@ Resources:
             BatchSize: 100
             BisectBatchOnFunctionError: true
             Enabled: true
+            StartingPosition: LATEST
+            Stream: !Ref OldDovetailCdnLogsKinesisStreamArn
+          Type: Kinesis
+        CountsBytesKinesisStreamTrigger:
+          Properties:
+            BatchSize: 100
+            BisectBatchOnFunctionError: true
+            Enabled: !If [IsProduction, false, true]
             StartingPosition: LATEST
             Stream: !Ref DovetailCdnLogsKinesisStreamArn
           Type: Kinesis
