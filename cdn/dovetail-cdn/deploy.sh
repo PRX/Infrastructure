@@ -124,37 +124,4 @@ aws cloudformation deploy \
         "StandardLoggingBucket=prx-dovetail.s3.amazonaws.com" \
         "StandardLoggingPrefix=$logging_prefix" \
 
-#
-#
-#
-# Deploy stacks for Kinesis stream proxies to each region
-for region in "${REGIONS[@]}"
-do
-    echo "=> Deploying stack [real-time-logs-kinesis-relay-$env_short] to $region"
-
-    src_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "real-time-logs-kinesis-$env_short" --profile "prx-dovetail-cdn-$env_lower" --query "Stacks[0].Outputs[?OutputKey=='RealTimeLogsStreamArn'].OutputValue" --output text)
-    dest_kin_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamArn'].OutputValue" --output text)
-    dest_kin_role_arn=$(aws cloudformation describe-stacks --region "$region" --stack-name "$spire_root_stack_name" --profile "prx-legacy" --query "Stacks[0].Outputs[?OutputKey=='DovetailCdnLogsKinesisStreamOrgWriterRoleArn'].OutputValue" --output text)
-
-    sam build \
-        --template-file real-time-logs-kinesis-relay.yml \
-        --parameter-overrides \
-            "EnvironmentType=$env_proper"
-    sam deploy \
-        --no-fail-on-empty-changeset \
-        --no-confirm-changeset \
-        --resolve-s3 \
-        --region "$region" \
-        --profile "prx-dovetail-cdn-$env_lower" \
-        --stack-name "real-time-logs-kinesis-relay-$env_short" \
-        --s3-prefix "real-time-logs-kinesis-relay-$env_short" \
-        --capabilities CAPABILITY_IAM \
-        --parameter-overrides \
-            "EnvironmentType=$env_proper" \
-            "EnvironmentTypeAbbreviation=$env_short" \
-            "SourceKinesisStreamArn=$src_kin_arn" \
-            "DestinationKinesisStreamArn=$dest_kin_arn" \
-            "DestinationKinesisStreamWriterRoleArn=$dest_kin_role_arn"
-done
-
 trap "clean_up $tmp_dir" EXIT
