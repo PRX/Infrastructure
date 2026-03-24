@@ -73,6 +73,8 @@ Parameters:
   DovetailAppleApiBridgeEndpointUrl: { Type: String }
   SlackMessageRelaySnsTopicArn: { Type: String }
   Aarch64AsgCapacityProviderName: { Type: String }
+  ApplePodcastsConnectApiUrl: { Type: AWS::SSM::Parameter::Value<String> }
+  ApplePodcastsConnectApiAudName: { Type: AWS::SSM::Parameter::Value<String> }
 
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
@@ -905,6 +907,10 @@ Resources:
               Value: !Ref S3SigningAccessKeyId
             - Name: UPLOAD_SIGNING_SERVICE_URL
               Value: !Ref S3SigningEndpointUrl
+            - Name: APPLE_PODCASTS_CONNECT_API_URL
+              Value: !Ref ApplePodcastsConnectApiUrl
+            - Name: APPLE_PODCASTS_CONNECT_API_AUD_NAME
+              Value: !Ref ApplePodcastsConnectApiAudName
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
           LinuxParameters:
@@ -1091,9 +1097,13 @@ Resources:
               Value: !Ref FeederUploadsBucket
             - Name: WORKER_COUNT
               Value: !If [IsProduction, 8, 5]
+            - Name: APPLE_PODCASTS_CONNECT_API_URL
+              Value: !Ref ApplePodcastsConnectApiUrl
+            - Name: APPLE_PODCASTS_CONNECT_API_AUD_NAME
+              Value: !Ref ApplePodcastsConnectApiAudName
           Essential: true
           HealthCheck:
-            Command: [ "CMD-SHELL", "pgrep -f shoryuken || exit 1" ]
+            Command: ["CMD-SHELL", "pgrep -f shoryuken || exit 1"]
             Interval: 30
             Retries: 3
             StartPeriod: 15
