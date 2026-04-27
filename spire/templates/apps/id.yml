@@ -26,7 +26,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
@@ -185,7 +184,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/ID/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/ID/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -310,8 +311,6 @@ Resources:
               Value: !GetAtt SesSendingSmtpCredentials.Password
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, id.prx.org, id.prx.org (Staging)]
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: DATABASE_POOL_SIZE
               Value: "5"
             - Name: SIGN_UP_URL
@@ -389,6 +388,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/turnstile-secret
             - Name: LOCKBOX_MASTER_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/lockbox-master-key
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Spire/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

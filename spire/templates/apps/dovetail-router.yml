@@ -31,7 +31,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   EchoServiceToken: { Type: String }
   SharedEcsAsgInstanceSecurityGroupId: { Type: String }
@@ -676,11 +675,11 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/*
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Router/*
                 Sid: AllowAppParameterRead
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/*
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/*
                 Sid: AllowGlobalParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -796,8 +795,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: NEWRELIC_APP_NAME
               Value: !If [IsProduction, Dovetail Router Production, Dovetail Router Staging]
-            - Name: NEWRELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: AGENTS_URL
               Value: https://raw.githubusercontent.com/PRX/prx-podagent/main/db/agents.lock.json
             - Name: DDB_FREQUENCY_TABLE
@@ -839,6 +836,8 @@ Resources:
               ValueFrom: /prx/global/Spire/maxmind/account-id
             - Name: MAXMIND_LICENSE_KEY
               ValueFrom: /prx/global/Spire/maxmind/license-key
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Spire/new-relic-lite-api-key
           Ulimits:
             - HardLimit: 8192
               Name: nofile

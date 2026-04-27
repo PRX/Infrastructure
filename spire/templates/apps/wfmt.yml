@@ -34,7 +34,6 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   AmazonSesSmtpCredentialsGeneratorServiceToken: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
-  NewRelicApiKeyPrxLite: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   WfmtHostname: { Type: String }
@@ -323,7 +322,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Spire/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -505,8 +506,6 @@ Resources:
               Value: "16"
             - Name: LANG
               Value: en_US.UTF-8
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NOTIFICATION_EMAIL_ADDRESS
               Value: wfmt-admins@prx.org
             - Name: PRX_HOST
@@ -572,6 +571,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/rails-secret
             - Name: DEVISE_SECRET_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/devise-secret
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Spire/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -664,8 +665,6 @@ Resources:
               Value: "16"
             - Name: LANG
               Value: en_US.UTF-8
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NOTIFICATION_EMAIL_ADDRESS
               Value: wfmt-admins@prx.org
             - Name: PRX_HOST
@@ -728,6 +727,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/rails-secret
             - Name: DEVISE_SECRET_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/WFMT/devise-secret
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Spire/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
