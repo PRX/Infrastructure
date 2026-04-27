@@ -27,7 +27,6 @@ Parameters:
   VpcPrivateSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPrivateSubnet3Id: { Type: AWS::EC2::Subnet::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   CastlePostgresUsername: { Type: AWS::SSM::Parameter::Value<String> }
@@ -184,7 +183,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -261,8 +262,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_APP_NAME
               Value: !If [IsProduction, Castle Production, Castle Staging]
             - Name: PG_HOST
@@ -306,6 +305,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/database-password
             - Name: PG_USER
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Castle/database-username
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

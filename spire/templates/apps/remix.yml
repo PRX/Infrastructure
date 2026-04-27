@@ -30,7 +30,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
@@ -149,7 +148,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Remix/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Remix/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -311,8 +312,6 @@ Resources:
               Value: "5"
             - Name: LANG
               Value: en_US.UTF-8
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_LOG
               Value: stdout
             - Name: PRX_HOST
@@ -374,6 +373,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/short-url-salt
             - Name: PORTER_CALLBACK_TOKEN
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/porter-callback-token
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -424,8 +425,6 @@ Resources:
               Value: "5"
             - Name: LANG
               Value: en_US.UTF-8
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_LOG
               Value: stdout
             - Name: PRX_HOST
@@ -491,6 +490,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/short-url-salt
             - Name: PORTER_CALLBACK_TOKEN
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Remix/porter-callback-token
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

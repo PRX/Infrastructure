@@ -42,7 +42,6 @@ Parameters:
   S3SigningEndpointUrl: { Type: String }
   S3SigningAccessKeyId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
   AlbListenerRulePriorityPrefix: { Type: String }
   SharedAppRedisEndpointAddress: { Type: String }
@@ -575,11 +574,13 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/podping-auth-token
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/podping-auth-token
                 Sid: AllowPodpingParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -867,8 +868,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Feeder Production, Feeder Staging]
             - Name: PLAY_HOST
@@ -956,6 +955,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/ar-encryption-deterministic-key
             - Name: ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/ar-encryption-key-derivation-salt
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -1061,8 +1062,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Feeder Production, Feeder Staging]
             - Name: PLAY_HOST
@@ -1149,6 +1148,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/ar-encryption-deterministic-key
             - Name: ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Feeder/ar-encryption-key-derivation-salt
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

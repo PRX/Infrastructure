@@ -43,7 +43,6 @@ Parameters:
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
   SpotsHostname: { Type: String }
-  NewRelicApiKeyPrxLite: { Type: String }
   Aarch64AsgCapacityProviderName: { Type: String }
 
 Conditions:
@@ -93,7 +92,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -294,8 +295,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Spots Production, Spots Staging]
             - Name: PORT
@@ -349,6 +348,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/id-auth-client-secret
             - Name: SECRET_KEY_BASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/secret-key-base
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -427,8 +428,6 @@ Resources:
               Value: !Ref FeederHostname
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Spots Production, Spots Staging]
             - Name: PORT
@@ -479,6 +478,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/id-auth-client-secret
             - Name: SECRET_KEY_BASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Spots/secret-key-base
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

@@ -32,7 +32,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
-  NewRelicApiKeyPrxLite: { Type: String }
   SharedAuroraPostgresqlEndpoint: { Type: String }
   SharedAuroraPostgresqlPort: { Type: String }
   SharedClickhouseEndpoint: { Type: String }
@@ -83,7 +82,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -255,8 +256,6 @@ Resources:
               Value: 16
             - Name: ID_HOST
               Value: !Ref IdHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Insights Production, Insights Staging]
             - Name: PORT
@@ -302,6 +301,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/id-app-client-key
             - Name: SECRET_KEY_BASE
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Dovetail-Insights/secret-key-base
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

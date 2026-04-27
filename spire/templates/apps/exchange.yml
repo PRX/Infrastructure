@@ -37,7 +37,6 @@ Parameters:
   RegionMode: { Type: String }
   RootStackName: { Type: String }
   RootStackId: { Type: String }
-  NewRelicApiKeyPrxLite: { Type: String }
   VpcId: { Type: AWS::EC2::VPC::Id }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
@@ -300,7 +299,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -492,8 +493,6 @@ Resources:
               Value: !Ref ExchangeHostname
             - Name: DATABASE_POOL_SIZE
               Value: "5"
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Exchange Production, Exchange Staging]
             - Name: CMS_API_VERSION
@@ -590,6 +589,8 @@ Resources:
                 - Name: CHEF_VALIDATION_CERT
                   ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
                 - !Ref AWS::NoValue
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -734,8 +735,6 @@ Resources:
               Value: !Ref ExchangeHostname
             - Name: DATABASE_POOL_SIZE
               Value: "5"
-            - Name: NEW_RELIC_LICENSE_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, Exchange Production, Exchange Staging]
             - Name: CMS_API_VERSION
@@ -829,6 +828,8 @@ Resources:
                 - Name: CHEF_VALIDATION_CERT
                   ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/chef-validation-certificate
                 - !Ref AWS::NoValue
+            - Name: NEW_RELIC_LICENSE_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

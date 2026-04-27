@@ -36,7 +36,6 @@ Parameters:
   AlbListenerRulePriorityPrefix: { Type: String }
   TheCountLogsFileSystemId: { Type: String }
   EcrImageTag: { Type: AWS::SSM::Parameter::Value<String> }
-  NewRelicApiKeyPrxLite: { Type: String }
   SharedAuroraMysqlEndpoint: { Type: String }
   SharedAuroraMysqlPort: { Type: String }
   ExchangeHostname: { Type: String }
@@ -149,7 +148,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -273,8 +274,6 @@ Resources:
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, The Castle Production, The Castle Staging]
             - Name: DB_PORT_3306_TCP_ADDR
@@ -332,6 +331,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/mediajoint-user
             - Name: MEDIAJOINT_PASSWORD
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/mediajoint-password
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -378,8 +379,6 @@ Resources:
               Value: !Ref EnvironmentTypeAbbreviation
             - Name: AWS_DEFAULT_REGION
               Value: !Ref AWS::Region
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, The Castle Production, The Castle Staging]
             - Name: DB_PORT_3306_TCP_ADDR
@@ -438,6 +437,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/mediajoint-user
             - Name: MEDIAJOINT_PASSWORD
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/The_Castle/mediajoint-password
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:

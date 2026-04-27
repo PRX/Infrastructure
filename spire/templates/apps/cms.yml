@@ -54,7 +54,6 @@ Parameters:
   FeederHostname: { Type: String }
   IdHostname: { Type: String }
   MetaHostname: { Type: String }
-  NewRelicApiKeyPrxLite: { Type: String }
   BetaHostname: { Type: String }
   X8664AsgCapacityProviderName: { Type: String }
 
@@ -329,7 +328,9 @@ Resources:
             Statement:
               - Action: ssm:GetParameters
                 Effect: Allow
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/CMS/*
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/CMS/*
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/global/Terra/new-relic-lite-api-key
                 Sid: AllowAppParameterRead
             Version: "2012-10-17"
           PolicyName: ContainerSecrets
@@ -463,8 +464,6 @@ Resources:
               Value: !Ref IdHostname
             - Name: META_HOST
               Value: !Ref MetaHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, CMS Production, CMS Staging]
             - Name: PORTER_SNS_TOPIC_ARN
@@ -508,6 +507,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/CMS/public-asset-secret
             - Name: RAILS_SECRET_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/CMS/rails-secret-key
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
@@ -580,8 +581,6 @@ Resources:
               Value: !Ref IdHostname
             - Name: META_HOST
               Value: !Ref MetaHostname
-            - Name: NEW_RELIC_KEY
-              Value: !Ref NewRelicApiKeyPrxLite
             - Name: NEW_RELIC_NAME
               Value: !If [IsProduction, CMS Production, CMS Staging]
             - Name: PORTER_SNS_TOPIC_ARN
@@ -625,6 +624,8 @@ Resources:
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/CMS/public-asset-secret
             - Name: RAILS_SECRET_KEY
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/CMS/rails-secret-key
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Terra/new-relic-lite-api-key
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       NetworkMode: bridge
       Tags:
