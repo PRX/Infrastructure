@@ -331,3 +331,126 @@ Resources:
           userIdentity.arn,
           errorCode
         ORDER BY "Event Count" DESC
+
+  AllTrailTable:
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Description: >-
+          Organization trail logs partitioned for all accounts and regions
+        Name: all-accounts-and-regions
+        Parameters:
+          projection.enabled: "true"
+          projection.date.type: date
+          projection.date.range: 2021/01/01,NOW
+          projection.date.format: yyyy/MM/dd
+          projection.date.interval: "1"
+          projection.date.interval.unit: DAYS
+          projection.region.type: enum
+          projection.region.values:
+            Fn::Join:
+              - ","
+              - - us-east-1
+                - us-east-2
+                - us-west-1
+                - us-west-2
+                - ap-south-1
+                - ap-northeast-3
+                - ap-northeast-2
+                - ap-southeast-1
+                - ap-southeast-2
+                - ap-northeast-1
+                - ca-central-1
+                - eu-central-1
+                - eu-west-1
+                - eu-west-2
+                - eu-west-3
+                - eu-north-1
+                - sa-east-1
+          projection.account.type: enum
+          projection.account.values:
+            Fn::Join:
+              - ","
+              - - 791634636503
+                - 723449562934
+                - 453110829192
+                - 289246384557
+                - 151502348212
+                - 424798965986
+                - 578003269847
+                - 485319730460
+                - 874261868300
+                - 838846856186
+                - 856014627802
+                - 127213743756
+                - 561178107736
+                - 803306215334
+                - 048723829744
+                - 639773875692
+                - 556402616001
+                - 823548231123
+                - 976680550710
+          storage.location.template: !Sub s3://${CloudTrailS3Bucket}/AWSLogs/${OrganizationId}/${!account}/CloudTrail/${!region}/${!date}
+        PartitionKeys:
+          - Name: date
+            Type: string
+          - Name: region
+            Type: string
+          - Name: account
+            Type: string
+        StorageDescriptor:
+          Columns:
+            - Name: eventVersion
+              Type: string
+            - Name: userIdentity
+              Type: struct<type:string,principalId:string,arn:string,accountId:string,invokedBy:string,accessKeyId:string,userName:string,sessionContext:struct<attributes:struct<mfaAuthenticated:string,creationDate:string>,sessionIssuer:struct<type:string,principalId:string,arn:string,accountId:string,userName:string>>>
+            - Name: eventTime
+              Type: string
+            - Name: eventSource
+              Type: string
+            - Name: eventName
+              Type: string
+            - Name: awsRegion
+              Type: string
+            - Name: sourceIpAddress
+              Type: string
+            - Name: userAgent
+              Type: string
+            - Name: errorCode
+              Type: string
+            - Name: errorMessage
+              Type: string
+            - Name: requestParameters
+              Type: string
+            - Name: responseElements
+              Type: string
+            - Name: additionalEventData
+              Type: string
+            - Name: requestId
+              Type: string
+            - Name: eventId
+              Type: string
+            - Name: readOnly
+              Type: string
+            - Name: resources
+              Type: array<struct<arn:string,accountId:string,type:string>>
+            - Name: eventType
+              Type: string
+            - Name: apiVersion
+              Type: string
+            - Name: recipientAccountId
+              Type: string
+            - Name: serviceEventDetails
+              Type: string
+            - Name: sharedEventID
+              Type: string
+            - Name: vpcEndpointId
+              Type: string
+          InputFormat: com.amazon.emr.cloudtrail.CloudTrailInputFormat
+          Location: !Sub s3://${CloudTrailS3Bucket}/AWSLogs/${OrganizationId}
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            SerializationLibrary: com.amazon.emr.hive.serde.CloudTrailSerde
+        TableType: EXTERNAL_TABLE
