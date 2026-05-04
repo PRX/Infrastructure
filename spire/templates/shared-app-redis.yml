@@ -106,6 +106,85 @@ Resources:
         - { Key: prx:dev:application, Value: Common }
       TransitEncryptionEnabled: true
 
+  RedisMemoryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsPrimaryRegion
+    Properties:
+      AlarmName: !Sub WARN [Common] App Redis <${EnvironmentTypeAbbreviation}> HIGH MEMORY USAGE
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared app Redis's database memory usage has
+        exceeded the recommended safe level
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Metrics:
+        - Id: node1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${SharedAppRedisReplicationGroup}-001
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: max
+          Expression: "MAX(METRICS())"
+          ReturnData: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      Threshold: 85
+      TreatMissingData: notBreaching
+
+  RedisMemoryVeryLowAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsPrimaryRegion
+    Properties:
+      AlarmName: !Sub ERROR [Common] App Redis <${EnvironmentTypeAbbreviation}> VERY HIGH MEMORY USAGE
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} shared app Redis's database memory usage has reached
+        a critically high level
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      Metrics:
+        - Id: node1
+          MetricStat:
+            Metric:
+              Dimensions:
+                - Name: CacheClusterId
+                  Value: !Sub ${SharedAppRedisReplicationGroup}-001
+                - Name: CacheNodeId
+                  Value: "0001"
+              MetricName: DatabaseMemoryUsagePercentage
+              Namespace: AWS/ElastiCache
+            Period: 120
+            Stat: Maximum
+            Unit: Percent
+          ReturnData: false
+        - Id: max
+          Expression: "MAX(METRICS())"
+          ReturnData: true
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Common }
+      Threshold: 93
+      TreatMissingData: notBreaching
+
+
 Outputs:
   CacheName:
     Value: !If [IsPrimaryRegion, !Ref SharedAppRedisReplicationGroup, ""]
