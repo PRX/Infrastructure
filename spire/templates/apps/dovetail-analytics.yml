@@ -6,7 +6,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >-
   Creates a number of Lambda functions that collect Dovetail metrics data
   from Kinesis streams, and process and forward that data to various
-  destinations, like BigQuery, 3rd-party pingbacks, and DynamoDB for 
+  destinations, like BigQuery, 3rd-party pingbacks, and DynamoDB for
   campaign impressions and listener frequency.
 
 Parameters:
@@ -29,6 +29,7 @@ Parameters:
   DovetailCountedKinesisStreamArn: { Type: String }
   DovetailCountedKinesisStreamName: { Type: String }
   BigqueryCredentials: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
+  BigQueryClientConfig: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterHosts: { Type: AWS::SSM::Parameter::Value<String> }
   DovetailRouterApiTokens: { Type: AWS::SSM::Parameter::Value<String>, NoEcho: true }
   FrequencyDynamodbTableName: { Type: AWS::SSM::Parameter::Value<String> }
@@ -69,7 +70,8 @@ Resources:
           BQ_PROJECT_ID: prx-metrics
           # TODO: get these out of the code and into CFN somehow
           PARAMSTORE_PREFIX: !Sub /prx/${EnvironmentTypeAbbreviation}/analytics-bigquery
-          BQ_CREDENTIALS: !Ref BigqueryCredentials
+          BQ_CREDENTIALS: !If [IsProduction, !Ref BigqueryCredentials, !Ref AWS::NoValue]
+          BIGQUERY_CLIENT_CONFIG: !If [IsProduction, !Ref AWS::NoValue, !Ref BigQueryClientConfig]
           BQ_DATASET: !If [IsProduction, production, staging]
       Events:
         MetricsKinesisTrigger:
