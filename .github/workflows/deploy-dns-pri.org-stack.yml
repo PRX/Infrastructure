@@ -1,0 +1,39 @@
+name: Deploy pri.org DNS
+
+# Continuously deploys dns/pri.org-hosted_zone.yml
+
+on:
+  push:
+    branches: [main]
+    paths: [dns/pri.org-hosted_zone.yml]
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: us-east-1
+          role-to-assume: arn:aws:iam::561178107736:role/PRX-GHA-AccessRole
+          role-session-name: gha-deploy-priorg-dns
+
+      - name: Deploy CloudFormation Stack
+        working-directory: dns
+        run: |
+          aws cloudformation deploy \
+            --no-fail-on-empty-changeset \
+            --region us-east-1 \
+            --stack-name hostedzone-pri-org \
+            --template-file pri.org-hosted_zone.yml \
+            --role-arn arn:aws:iam::561178107736:role/PRX-GHA-ServiceRoleForCloudFormation
