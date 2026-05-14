@@ -510,21 +510,9 @@ Resources:
           EnableAcceptEncodingBrotli: true
           EnableAcceptEncodingGzip: true
           HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - host
-              - rsc
-              - next-router-prefetch
-              - next-router-state-tree
-              - next-router-segment-prefetch
-              - next-url
-              - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
-            # HeaderBehavior: none
+            HeaderBehavior: none
           QueryStringsConfig:
-            QueryStringBehavior: all
+            QueryStringBehavior: none
   StaticCachePolicy:
     # "/static/*"
     Type: AWS::CloudFront::CachePolicy
@@ -540,21 +528,9 @@ Resources:
           EnableAcceptEncodingBrotli: true
           EnableAcceptEncodingGzip: true
           HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - host
-              - rsc
-              - next-router-prefetch
-              - next-router-state-tree
-              - next-router-segment-prefetch
-              - next-url
-              - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
-            # HeaderBehavior: none
+            HeaderBehavior: none
           QueryStringsConfig:
-            QueryStringBehavior: all
+            QueryStringBehavior: none
   ApiCachePolicy:
     # "/api/*"
     Type: AWS::CloudFront::CachePolicy
@@ -573,52 +549,14 @@ Resources:
             HeaderBehavior: whitelist
             Headers:
               - host
-              - rsc
-              - next-router-prefetch
-              - next-router-state-tree
-              - next-router-segment-prefetch
-              - next-url
-              - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
-            # HeaderBehavior: whitelist
-            # Headers:
-            #   - host
           QueryStringsConfig:
-            QueryStringBehavior: all
-  NextDataCachePolicy:
-    # "/_next/data/*"
-    Type: AWS::CloudFront::CachePolicy
-    Properties:
-      CachePolicyConfig:
-        DefaultTTL: 0
-        MaxTTL: 31536000 # 1 year (default)
-        MinTTL: 0
-        Name: !Sub ${AWS::StackName}-next-cache-cache-policy
-        ParametersInCacheKeyAndForwardedToOrigin:
-          CookiesConfig:
-            CookieBehavior: none
-          EnableAcceptEncodingBrotli: true
-          EnableAcceptEncodingGzip: true
-          HeadersConfig:
-            HeaderBehavior: whitelist
-            Headers:
-              - host
-              - rsc
-              - next-router-prefetch
-              - next-router-state-tree
-              - next-router-segment-prefetch
-              - next-url
-              - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
-            # HeaderBehavior: whitelist
-            # Headers:
-            #   - host
-          QueryStringsConfig:
-            QueryStringBehavior: all
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - after
+              - all
+              - search
+              - sf
+              - url
   NextImageCachePolicy:
     # "/_next/image*"
     Type: AWS::CloudFront::CachePolicy
@@ -636,21 +574,14 @@ Resources:
           HeadersConfig:
             HeaderBehavior: whitelist
             Headers:
-              - host
-              - rsc
-              - next-router-prefetch
-              - next-router-state-tree
-              - next-router-segment-prefetch
-              - next-url
               - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
-            # HeaderBehavior: whitelist
-            # Headers:
-            #   - accept
           QueryStringsConfig:
-            QueryStringBehavior: all
+            QueryStringBehavior: whitelist
+            QueryStrings:
+              - url
+              - w
+              - q
+              - f
   AggresiveCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -677,6 +608,7 @@ Resources:
               - cache-control
               - if-none-match
               - if-modified-since
+              - v
           QueryStringsConfig:
             QueryStringBehavior: all
             # QueryStringBehavior: whitelist
@@ -736,15 +668,6 @@ Resources:
             Compress: true
             OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
             PathPattern: "/api/*"
-            TargetOriginId: frontend-ecs
-            ViewerProtocolPolicy: redirect-to-https
-          # Next.js data
-          - AllowedMethods: [GET, HEAD, OPTIONS]
-            CachedMethods: [GET, HEAD, OPTIONS]
-            CachePolicyId: !GetAtt NextDataCachePolicy.Id
-            Compress: true
-            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
-            PathPattern: "/_next/data/*"
             TargetOriginId: frontend-ecs
             ViewerProtocolPolicy: redirect-to-https
           # Next.js image
