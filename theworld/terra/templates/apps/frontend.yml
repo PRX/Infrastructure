@@ -582,6 +582,25 @@ Resources:
               - w
               - q
               - f
+  SocialImageCachePolicy:
+    # "/*/opengraph-image"
+    # "/*/twitter-image"
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        DefaultTTL: 60
+        MaxTTL: 31536000 # 1 year (default)
+        MinTTL: 0
+        Name: !Sub ${AWS::StackName}-social-image-cache-policy
+        ParametersInCacheKeyAndForwardedToOrigin:
+          CookiesConfig:
+            CookieBehavior: none
+          EnableAcceptEncodingBrotli: true
+          EnableAcceptEncodingGzip: true
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: all
   AggresiveCachePolicy:
     Type: AWS::CloudFront::CachePolicy
     Properties:
@@ -605,9 +624,9 @@ Resources:
               - next-router-segment-prefetch
               - next-url
               - accept
-              - cache-control
-              - if-none-match
-              - if-modified-since
+              # - cache-control
+              # - if-none-match
+              # - if-modified-since
               - v
           QueryStringsConfig:
             QueryStringBehavior: all
@@ -677,6 +696,24 @@ Resources:
             Compress: true
             OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
             PathPattern: "/_next/image*"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # Open Graph images
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt SocialImageCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/*/opengraph-image"
+            TargetOriginId: frontend-ecs
+            ViewerProtocolPolicy: redirect-to-https
+          # Twitter images
+          - AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: !GetAtt SocialImageCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/*/twitter-image"
             TargetOriginId: frontend-ecs
             ViewerProtocolPolicy: redirect-to-https
         Comment: !Sub The World ${EnvironmentType} frontend
