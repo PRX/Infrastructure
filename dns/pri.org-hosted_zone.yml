@@ -1,0 +1,307 @@
+# dns/pri.org-hosted_zone.yml
+################################################################################
+#### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ########################################
+#### THIS FILE IS CONTINUOUSLY DEPLOYED ########################################
+#### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! ########################################
+################################################################################
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Hosted zone and record sets for pri.org
+
+Parameters:
+  Domain:
+    Default: pri.org.
+    Description: The domain name and hosted zone
+    Type: String
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      HostedZoneConfig:
+        Comment: Legacy PRI domain
+      HostedZoneTags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:family, Value: The World }
+        - { Key: prx:dev:application, Value: Website }
+      Name: !Ref Domain
+
+# Purpose-based
+  Text:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      # Route53 expects TXT record values to be enclosed in double quotes, so in
+      # the YAML they need to be double-quoted.
+      # Each domain name should only have a single text record. Add multiple
+      # resource records if necessary.
+      # All SPF records need to go into a single resource record.
+      Comment: TXT Records
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref Domain
+          ResourceRecords:
+            # SPF
+            - '"v=spf1 include:_spf.google.com -all"'
+            # Domain verification
+            - '"google-site-verification=5EwbpkFWN414TjI2cZu2zVFb3xA_OVjLbQNPHjNwuG4"'
+            - '"google-site-verification=2qbE_13DuElR1CMocR3R43OS8KbAcrGn-qcFZs_J6WQ"'
+            - '"google-site-verification=bDiqRl_IoIg_LyFVylu5DT7HB2esYm_RFoo0Ic_GP7I"'
+            - '"apple-domain-verification=UUcr0lEc8539QZI4"'
+            - '"amazon-business-verification=0e6794c382c723496424a539a90940d852766bec436a89302f1810aac890d54f"'
+            - '"ogmoukr4cml1gi9btbf7mj3gma"'
+          TTL: "300"
+          Type: TXT
+  Email:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Email
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+
+        # Inbound email for @pri.org, currently through Google Workspace
+        - Name: !Ref Domain
+          ResourceRecords:
+            - 1 smtp.google.com.
+          TTL: "60"
+          Type: MX
+
+        # DMARC
+        # https://simonandrews.ca/articles/how-to-set-up-spf-dkim-dmarc#dmarc
+        # Sets the DMARC policy for email sent from @pri.org
+        - Name: !Sub _dmarc.${Domain}
+          ResourceRecords:
+            - '"v=DMARC1; p=reject; pct=100; ri=86400; rua=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com; ruf=mailto:dmarc-reports@prx.org,mailto:dmarc@qf66rrn4.uriports.com; aspf=r; adkim=r"'
+          TTL: "60"
+          Type: TXT
+
+  Projects:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Projects
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub projects.${Domain}
+          ResourceRecords:
+            - theworld.org.
+          TTL: "60"
+          Type: CNAME
+  Media:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Media
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub media.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d2xoxjnw2cr97i.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub media.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d2xoxjnw2cr97i.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+  GlobalPost:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: GlobalPost
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Sub gpinvestigations.${Domain}
+          ResourceRecords:
+            -  52.0.16.118
+          TTL: "60"
+          Type: A
+
+  WebProd:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Production web
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # pri.org
+        - Name: !Ref Domain
+          Type: A
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Ref Domain
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+        # cdn.pri.org
+        - Name: !Sub cdn.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d2xoxjnw2cr97i.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub cdn.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d2xoxjnw2cr97i.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+        # cdn2.pri.org
+        - Name: !Sub cdn2.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1z2cenxmmqwzp.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub cdn2.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1z2cenxmmqwzp.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+        # interactive.pri.org
+        - Name: !Sub interactive.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1z2cenxmmqwzp.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub interactive.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1z2cenxmmqwzp.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+        # www.pri.org
+        - Name: !Sub www.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub www.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+  WebStag:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Staging web
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+
+        # beta.pri.org
+        - Name: !Sub beta.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub beta.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1dvqc7hwl2ebv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+        # interactive-dev.pri.org
+        - Name: !Sub interactive-dev.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: dzaz8bp6ddbuu.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub interactive-dev.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: dzaz8bp6ddbuu.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+
+  Feeds:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: RSS feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # feeds.pri.org
+        - Name: !Sub feeds.${Domain}
+          ResourceRecords:
+            - 19zzie2.feedproxy.ghs.google.com.
+          TTL: "60"
+          Type: CNAME
+
+# Service-specific
+  GoogleWorkspace:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Google Workspace
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # DKIM
+        # This is the public key matching a private key that Google Workspace
+        # uses to sign emails it send on our behalf
+        # https://admin.google.com/ac/apps/gmail/authenticateemail
+        - Name: !Sub google._domainkey.${Domain}
+          ResourceRecords:
+            - '"v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCyC5Xk8gDn40SqLDUJxITYqKQFKF2yCZ0tbGaAhn2s8SPJ+OwD6AaMmgZH3bl0mFnnIa7tfQBbrwKo1UI8ARBZRwCV4Ob6I1tn9r9raI/MxjzxFBeGzGh+EErs5wSWpLBL7Tkzs+s3QYtW6/DHIgu7TJzgL6csJiwpNtIx5ussEQIDAQAB"'
+          TTL: "300"
+          Type: TXT
+  AwsAcmPri:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for PRI AWS account
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # media.pri.org
+        - Name: !Sub _f0fa2c88911a348a80663c7049715f1a.media.${Domain}
+          ResourceRecords:
+            - _41d89661278775045b3a48ff25d1cc23.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+
+        # cdn.pri.org
+        - Name: !Sub _723d8fa44ea3930330ee0ef735f39873.cdn.${Domain}
+          ResourceRecords:
+            - _1c9cbfe7dd0df446984d7fd61e2e45dd.tfmgdnztqk.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+  AwsAcmTheWorld:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for The World
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # interactive.pri.org
+        - Name: !Sub _03b5be2941b743e495fb02492a4ac47d.interactive.${Domain}
+          ResourceRecords:
+            - _acad921cbb993fe75c96de3bceacafa8.mzlfeqexyx.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+
+        # cdn2.pri.org
+        - Name: !Sub _e84bb2027fbbf79f504cc1577b4dc25b.cdn2.${Domain}
+          ResourceRecords:
+            - _776ed9b651502c8360cc628c500b5f2c.mzlfeqexyx.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+  AwsAcmLegacy:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: AWS ACM validation records for prx-legacy
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # *.pri.org
+        - Name: !Sub _9bf8d51c1c039e34eba565904f50287d.${Domain}
+          ResourceRecords:
+            - _493807040b84564706b86c86a2780818.jfrzftwwjs.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+
+        # www.pri.org
+        - Name: !Sub _e8d03ac55b03a15f63d89c01826211ec.www.${Domain}
+          ResourceRecords:
+            - _478a69f6769c2df5f5b7435c4231ca48.chvvfdvqrj.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
+
+        # beta.pri.org
+        - Name: !Sub _ca7563f7ec9acb6938e9e4a992b58cc0.beta.${Domain}
+          ResourceRecords:
+            - _cd32dfb523c96e10cf28da48e617af5a.bcsdcprczz.acm-validations.aws.
+          TTL: "60"
+          Type: CNAME
