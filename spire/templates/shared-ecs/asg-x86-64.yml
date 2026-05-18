@@ -30,7 +30,6 @@ Parameters:
   RootStackName: { Type: String }
   RootStackId: { Type: String }
   NestedChangeSetScrubbingResourcesState: { Type: String }
-  AuthorizedKeys: { Type: CommaDelimitedList }
   VpcPublicSubnet1Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet2Id: { Type: AWS::EC2::Subnet::Id }
   VpcPublicSubnet3Id: { Type: AWS::EC2::Subnet::Id }
@@ -289,16 +288,6 @@ Resources:
                   text: !Sub >-
                     EC2 instance `'"$INSTANCE_ID"'` could not connect to `${DovetailRedisReplicationGroupEndpointAddress}`
                     at `'"$IP"'`. It will be marked as *unhealthy* in its auto scaling group and get replaced.
-            02_add_authorized_keys:
-              # For more information, see:
-              # https://github.com/PRX/internal/wiki/AWS:-Developer-Access
-              command: !Sub
-                - |-
-                  #!/bin/bash
-                  echo "Adding developer public keys to authorized_keys"
-                  truncate -s 0 /home/ec2-user/.ssh/authorized_keys
-                  echo "${developer_keys}" >> /home/ec2-user/.ssh/authorized_keys
-                - developer_keys: !Join ["\n", !Ref AuthorizedKeys]
           services:
             sysvinit:
               cfn-hup:
