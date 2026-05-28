@@ -122,52 +122,10 @@ Resources:
           TTL: "3600"
           Type: TXT
 
-  Web:
+  ProdWebSite:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: Website
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        # Admin
-        - Name: !Sub admin.${Domain}
-          Type: A
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        - Name: !Sub admin.${Domain}
-          Type: AAAA
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-
-        # API
-        - Name: !Sub api.${Domain}
-          Type: A
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        - Name: !Sub api.${Domain}
-          Type: AAAA
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-
-        # Projects
-        - Name: !Sub projects.${Domain}
-          Type: A
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        - Name: !Sub projects.${Domain}
-          Type: AAAA
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-
-  WebProd:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Website
+      Comment: Prod frontend CDN
       HostedZoneId: !Ref HostedZone
       RecordSets:
         # theworld.org => Frontend CDN
@@ -192,6 +150,62 @@ Resources:
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
           Name: !Sub prod.${Domain}
           Type: AAAA
+        # www.theworld.org => Frontend CDN
+        - AliasTarget:
+            DNSName: d1n280y8tzgftg.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Name: !Sub www.${Domain}
+          Type: A
+        - AliasTarget:
+            DNSName: d1n280y8tzgftg.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Name: !Sub www.${Domain}
+          Type: AAAA
+  ProdWebServer:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod frontend web server
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # frontend.theworld.org => ALB
+        - Name: !Sub frontend.${Domain}
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+          Type: A
+        - Name: !Sub frontend.${Domain}
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+          Type: AAAA
+        # frontend.prod.theworld.org => ALB
+        - Name: !Sub frontend.prod.${Domain}
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+          Type: A
+        - Name: !Sub frontend.prod.${Domain}
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+          Type: AAAA
+  ProdWebAdmin:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod admin
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # admin.theworld.org => WordPress CDN
+        - Name: !Sub admin.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub admin.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
         # admin.prod.theworld.org => WordPress CDN
         - Name: !Sub admin.prod.${Domain}
           Type: A
@@ -199,6 +213,23 @@ Resources:
             DNSName: d1c3n70303fmlv.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
         - Name: !Sub admin.prod.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+  ProdWebApi:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod API
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # api.theworld.org => WordPress CDN
+        - Name: !Sub api.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub api.${Domain}
           Type: AAAA
           AliasTarget:
             DNSName: d1c3n70303fmlv.cloudfront.net.
@@ -214,6 +245,23 @@ Resources:
           AliasTarget:
             DNSName: d1c3n70303fmlv.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+  ProdWebFeeds:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # feeds.theworld.org => WordPress CDN
+        - Name: !Sub feeds.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub feeds.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
         # feeds.prod.theworld.org => WordPress CDN
         - Name: !Sub feeds.prod.${Domain}
           Type: A
@@ -225,17 +273,23 @@ Resources:
           AliasTarget:
             DNSName: d1c3n70303fmlv.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        # frontend.prod.theworld.org => ALB
-        - Name: !Sub frontend.prod.${Domain}
-          AliasTarget:
-            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
-            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+  ProdWebProjects:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod Projects
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # projects.theworld.org => WordPress CDN
+        - Name: !Sub projects.${Domain}
           Type: A
-        - Name: !Sub frontend.prod.${Domain}
           AliasTarget:
-            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
-            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub projects.${Domain}
           Type: AAAA
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
         # projects.prod.theworld.org => WordPress CDN
         - Name: !Sub projects.prod.${Domain}
           Type: A
@@ -243,6 +297,23 @@ Resources:
             DNSName: d1c3n70303fmlv.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
         - Name: !Sub projects.prod.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+  ProdWebSitemap:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod sitemap
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # sitemap.theworld.org => WordPress CDN
+        - Name: !Sub sitemap.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: d1c3n70303fmlv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+        - Name: !Sub sitemap.${Domain}
           Type: AAAA
           AliasTarget:
             DNSName: d1c3n70303fmlv.cloudfront.net.
@@ -258,6 +329,23 @@ Resources:
           AliasTarget:
             DNSName: d1c3n70303fmlv.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+  ProdWebWordpress:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod backend web server
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # wordpress.theworld.org => ALB
+        - Name: !Sub wordpress.${Domain}
+          Type: A
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
+        - Name: !Sub wordpress.${Domain}
+          Type: AAAA
+          AliasTarget:
+            DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
+            HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
         # wordpress.prod.theworld.org => ALB
         - Name: !Sub wordpress.prod.${Domain}
           Type: A
@@ -269,21 +357,11 @@ Resources:
           AliasTarget:
             DNSName: dualstack.terra-pr-Alb-NhSSRJx4QOE4-1598927907.us-east-1.elb.amazonaws.com.
             HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
-        # www.theworld.org => Frontend CDN
-        - AliasTarget:
-            DNSName: d1n280y8tzgftg.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Name: !Sub www.${Domain}
-          Type: A
-        - AliasTarget:
-            DNSName: d1n280y8tzgftg.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Name: !Sub www.${Domain}
-          Type: AAAA
-  WebStaging:
+
+  StagWebSite:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: Website
+      Comment: Stag frontend CDN
       HostedZoneId: !Ref HostedZone
       RecordSets:
         # stag.theworld.org => Frontend CDN
@@ -292,39 +370,17 @@ Resources:
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
           Name: !Sub stag.${Domain}
           Type: A
-        # admin.stag.theworld.org => WordPress CDN
-        - Name: !Sub admin.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
+        - AliasTarget:
+            DNSName: d4km6bhz5e2nk.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Type: A
-        - Name: !Sub admin.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Name: !Sub stag.${Domain}
           Type: AAAA
-        # api.stag.theworld.org => WordPress CDN
-        - Name: !Sub api.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Type: A
-        - Name: !Sub api.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Type: AAAA
-        # feeds.stag.theworld.org => WordPress CDN
-        - Name: !Sub feeds.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Type: A
-        - Name: !Sub feeds.stag.${Domain}
-          AliasTarget:
-            DNSName: dl4if2ebho9jv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-          Type: AAAA
+  StagWebServer:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag frontend web server
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
         # frontend.stag.theworld.org => ALB
         - Name: !Sub frontend.stag.${Domain}
           AliasTarget:
@@ -336,6 +392,63 @@ Resources:
             DNSName: dualstack.terra-st-Alb-4vLMvfQxI6cX-561145973.us-east-1.elb.amazonaws.com.
             HostedZoneId: Z35SXDOTRQ7X7K # hosted zone ID for ALBs in us-east-1
           Type: AAAA
+  StagWebAdmin:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Prod admin
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # admin.stag.theworld.org => WordPress CDN
+        - Name: !Sub admin.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: A
+        - Name: !Sub admin.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: AAAA
+  StagWebApi:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag API
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # api.stag.theworld.org => WordPress CDN
+        - Name: !Sub api.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: A
+        - Name: !Sub api.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: AAAA
+  StagWebFeeds:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag feeds
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        # feeds.stag.theworld.org => WordPress CDN
+        - Name: !Sub feeds.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: A
+        - Name: !Sub feeds.stag.${Domain}
+          AliasTarget:
+            DNSName: dl4if2ebho9jv.cloudfront.net.
+            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
+          Type: AAAA
+  StagWebProjects:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag Projects
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
         # projects.stag.theworld.org => WordPress CDN
         - Name: !Sub projects.stag.${Domain}
           AliasTarget:
@@ -347,6 +460,12 @@ Resources:
             DNSName: d2ticgsp4wc2b3.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
           Type: AAAA
+  StagWebSitemap:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag sitemap
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
         # sitemap.stag.theworld.org => WordPress CDN
         - Name: !Sub sitemap.stag.${Domain}
           AliasTarget:
@@ -358,6 +477,12 @@ Resources:
             DNSName: d2ticgsp4wc2b3.cloudfront.net.
             HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
           Type: AAAA
+  StagWebWordpress:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      Comment: Stag backend web server
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
         # wordpress.stag.theworld.org => ALB
         - Name: !Sub wordpress.stag.${Domain}
           AliasTarget:
@@ -425,7 +550,7 @@ Resources:
           Type: AAAA
           Name: !Sub files.${Domain}
 
-  Feeds:
+  PodcastFeeds:
     Type: AWS::Route53::RecordSetGroup
     Properties:
       Comment: Feeds
@@ -449,34 +574,6 @@ Resources:
             - pf0938last.publicfeeds.net.
           TTL: "3600"
           Type: CNAME
-        # CMS feeds
-        - Name: !Sub feeds.${Domain}
-          Type: A
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        - Name: !Sub feeds.${Domain}
-          Type: AAAA
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-
-  Sitemap:
-    Type: AWS::Route53::RecordSetGroup
-    Properties:
-      Comment: Sitemap
-      HostedZoneId: !Ref HostedZone
-      RecordSets:
-        - Name: !Sub sitemap.${Domain}
-          Type: A
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
-        - Name: !Sub sitemap.${Domain}
-          Type: AAAA
-          AliasTarget:
-            DNSName: d1c3n70303fmlv.cloudfront.net.
-            HostedZoneId: Z2FDTNDATAQYW2 # Global CloudFront hosted zone ID
 
   Embedded: # This is for embedded players
     Type: AWS::Route53::RecordSetGroup
@@ -598,10 +695,10 @@ Resources:
           TTL: "3600"
           Type: CNAME
 
-  AwsAcmFeedCdnProdUsEast1:
+  AwsAcmFeedCdnProd:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: AWS ACM validation records for feed-cdn-production in us-east-1
+      Comment: AWS ACM validation records for feed-cdn-production
       HostedZoneId: !Ref HostedZone
       RecordSets:
         #  *.theworld.org
@@ -628,10 +725,10 @@ Resources:
             - _2124f019a520adb3d048435a4d00cac8.sdgjtdhdhz.acm-validations.aws.
           TTL: "3600"
           Type: CNAME
-  AwsAcmLegacyUsEast1:
+  AwsAcmLegacy:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: AWS ACM validation records for prx-legacy in us-east-1
+      Comment: AWS ACM validation records for prx-legacy
       HostedZoneId: !Ref HostedZone
       RecordSets:
         #  search.theworld.org
@@ -646,10 +743,10 @@ Resources:
             - _59e41e3645125f53b21b2df2bfbd73b1.yqdvztwmqr.acm-validations.aws.
           TTL: "3600"
           Type: CNAME
-  AwsAcmTheWorldUsEast1:
+  AwsAcmTheWorld:
     Type: AWS::Route53::RecordSetGroup
     Properties:
-      Comment: AWS ACM validation records for prx-legacy in us-east-1
+      Comment: AWS ACM validation records for prx-theworld
       HostedZoneId: !Ref HostedZone
       RecordSets:
         # theworld.org
@@ -718,7 +815,7 @@ Resources:
           ResourceRecords: [_72886acf732a67d5b4177bdf7f62d7cd.xlfgrmvvlj.acm-validations.aws.]
           TTL: "3600"
           Type: CNAME
-        # frontend.theworld.org
+        # frontend.prod.theworld.org
         - Name: !Sub _b2923a3cf4ff20b260586b14ebcd8c3e.frontend.prod.${Domain}
           ResourceRecords: [_8473e650ccea0f07fd5a251875a9261c.jkddzztszm.acm-validations.aws.]
           TTL: "3600"
