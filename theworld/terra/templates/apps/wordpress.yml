@@ -631,7 +631,6 @@ Resources:
   # Autoscaling
   ScalingIamRole:
     Type: AWS::IAM::Role
-    Condition: IsProduction
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -653,10 +652,9 @@ Resources:
         - { Key: prx:dev:application, Value: Website }
   ScalableTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
-    Condition: IsProduction
     Properties:
-      MinCapacity: 3
-      MaxCapacity: 30
+      MinCapacity: !If [IsProduction, 3, 1]
+      MaxCapacity: !If [IsProduction, 30, 8]
       ResourceId: !If
         - IsFargate
         - !Sub service/${EcsClusterName}/${FargateWebEcsService.Name}
@@ -666,7 +664,6 @@ Resources:
       ServiceNamespace: ecs
   ScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Condition: IsProduction
     Properties:
       PolicyName: RequestCountScaling
       PolicyType: TargetTrackingScaling
@@ -675,7 +672,7 @@ Resources:
         PredefinedMetricSpecification:
           PredefinedMetricType: ALBRequestCountPerTarget
           ResourceLabel: !Sub ${AlbFullName}/${WebTargetGroup.TargetGroupFullName}
-        ScaleInCooldown: 60
+        ScaleInCooldown: !If [IsProduction, 60, 5]
         ScaleOutCooldown: 60
         TargetValue: 300
 
