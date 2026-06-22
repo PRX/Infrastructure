@@ -25,10 +25,12 @@ Parameters:
   WordPressWebServiceName: { Type: String }
   WordPressWebTargetGroupFullName: { Type: String }
   WordPressCdnCloudFrontDistributionId: { Type: String }
+  WordPressWafName: { Type: String }
 
   FrontendWebServiceName: { Type: String }
   FrontendWebTargetGroupFullName: { Type: String }
   FrontendCdnCloudFrontDistributionId: { Type: String }
+  FrontendWafName: { Type: String }
 
 Conditions:
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
@@ -95,6 +97,36 @@ Resources:
             {
               "type": "metric",
               "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "properties": {
+                "metrics": [
+                  [ "AWS/WAFV2", "AllowedRequests", "WebACL", "${WordPressWafName}", "Rule", "ALL", { "id": "wpallowed", "label": "Allowed reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "BlockedRequests", "WebACL", "${WordPressWafName}", "Rule", "ALL", { "id": "wpblocked", "label": "Blocked reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "CaptchaRequests", "WebACL", "${WordPressWafName}", "Rule", "ALL", { "id": "wpcaptcha", "label": "Captcha reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "ChallengeRequests", "WebACL", "${WordPressWafName}", "Rule", "ALL", { "id": "wpchallenge", "label": "Challenge reqs" "visible": false } ],
+                  [ { "expression": "SUM([wpallowed, wpblocked, wpcaptcha, wpchallenge])", "label": "WordPress Total reqs", "id": "wptotal" } ],
+                  [ { "expression": "wptotal - wpallowed", "label": "WordPress Intercepted reqs", "id": "wpintercepted" } ],
+                  [ "AWS/WAFV2", "AllowedRequests", "WebACL", "${FrontendWafName}", "Rule", "ALL", { "id": "feallowed", "label": "Allowed reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "BlockedRequests", "WebACL", "${FrontendWafName}", "Rule", "ALL", { "id": "feblocked", "label": "Blocked reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "CaptchaRequests", "WebACL", "${FrontendWafName}", "Rule", "ALL", { "id": "fecaptcha", "label": "Captcha reqs" "visible": false } ],
+                  [ "AWS/WAFV2", "ChallengeRequests", "WebACL", "${FrontendWafName}", "Rule", "ALL", { "id": "fechallenge", "label": "Challenge reqs" "visible": false } ],
+                  [ { "expression": "SUM([feallowed, feblocked, fecaptcha, fechallenge])", "label": "Frontend Total reqs", "id": "fetotal" } ],
+                  [ { "expression": "fetotal - feallowed", "label": "Frontend Intercepted reqs", "id": "feintercepted" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "period": 300,
+                "title": "WAF",
+                "stat": "Sum"
+              }
+            },
+
+            {
+              "type": "metric",
+              "x": 6,
               "y": 16,
               "width": 6,
               "height": 4,
@@ -113,7 +145,7 @@ Resources:
             },
             {
               "type": "metric",
-              "x": 0,
+              "x": 6,
               "y": 20,
               "width": 6,
               "height": 4,
