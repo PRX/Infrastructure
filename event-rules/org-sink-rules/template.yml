@@ -48,7 +48,7 @@ Resources:
         - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudTrail-org-sink
           Id: org-sink-trail-root-activity
           RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudTrailOrgSinkRole
-  CloudTrailActivityRule:
+  CloudTrailIamActivityRule:
     Type: AWS::Events::Rule
     Properties:
       EventPattern:
@@ -58,7 +58,32 @@ Resources:
       State: ENABLED
       Targets:
         - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudTrail-org-sink
-          Id: org-sink-trail-root-activity
+          Id: org-sink-trail-iam-activity
+          RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudTrailOrgSinkRole
+  CloudTrailIdentityCenterActivityRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        detail:
+          eventSource: [sso.amazonaws.com, sso-directory.amazonaws.com]
+          eventName:
+            - CreatePermissionSet
+            - CreateTrustedTokenIssuer
+            - ProvisionPermissionSet
+            - PutInlinePolicyToPermissionSet
+            - PutPermissionsBoundaryToPermissionSet
+            - PutPermissionsPolicy
+            - UpdatePermissionSet
+
+            - AddMemberToGroup
+            - CreateUser
+            - EnableUser
+            - UpdateGroup
+            - UpdateUser
+      State: ENABLED
+      Targets:
+        - Arn: arn:aws:events:us-east-2:578003269847:event-bus/CloudTrail-org-sink
+          Id: org-sink-trail-idc-activity
           RoleArn: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/PRX-CloudTrailOrgSinkRole
 
   GuardDutyFindingRule:
