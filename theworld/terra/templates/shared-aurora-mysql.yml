@@ -145,7 +145,6 @@ Resources:
 
   DbCluster2:
     Type: AWS::RDS::DBCluster
-    Condition: IsProduction
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -191,7 +190,11 @@ Resources:
       PerformanceInsightsRetentionPeriod: 465
       PreferredBackupWindow: 00:00-00:30
       PreferredMaintenanceWindow: Mon:03:00-Mon:04:00
-      SnapshotIdentifier: arn:aws:rds:us-east-1:976680550710:cluster-snapshot:rds:terra-prod-sharedauroramysqlstack-1vns0c-dbcluster-7tfxrnogiybs-2026-07-09-00-05
+      SnapshotIdentifier:
+        Fn::If:
+          - IsProduction
+          - arn:aws:rds:us-east-1:976680550710:cluster-snapshot:rds:terra-prod-sharedauroramysqlstack-1vns0c-dbcluster-7tfxrnogiybs-2026-07-09-00-05
+          - arn:aws:rds:us-east-1:976680550710:cluster-snapshot:rds:terra-prod-sharedauroramysqlstack-1vns0c-dbcluster-7tfxrnogiybs-2026-07-09-00-05
       Tags:
         - { Key: Name, Value: !Sub "${AWS::StackName}_shared-mysql-aurora" }
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
@@ -208,7 +211,6 @@ Resources:
   DbInstance:
     Type: AWS::RDS::DBInstance
     DependsOn: DbSubnetGroup
-    Condition: IsProduction
     # Condition: HasInstances
     UpdateReplacePolicy: Retain
     DeletionPolicy: Retain
