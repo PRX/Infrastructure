@@ -86,6 +86,29 @@ Resources:
             Sid: AllowInvalidations
         Version: "2012-10-17"
 
+  AcmPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - acm:DescribeCertificate
+              - acm:RequestCertificate
+            Condition:
+              StringEquals:
+                "aws:RequestTag/prx:lifetime": "temporary"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowTempCertRequest
+          - Action: acm:DeleteCertificate
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/prx:lifetime": "temporary"
+            Effect: Allow
+            Resource: "*"
+            Sid: AllowTempCertDelete
+        Version: "2012-10-17"
+
   S3ListVersionsPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -143,6 +166,7 @@ Resources:
               AWS: "*"
       # Include all the policies defined above
       ManagedPolicyArns:
+        - !Ref AcmPolicy
         - !Ref CloudFrontPolicy
         - !Ref CodePipelinePolicy
         - !Ref IamPolicy
