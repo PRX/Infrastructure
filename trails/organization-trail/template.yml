@@ -473,7 +473,7 @@ Resources:
         FROM "${GlueDatabase}"."${CommonTrailTable}"
         -- FROM "${GlueDatabase}"."${AllTrailTable}"
         WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND userIdentity.arn like '%/ryan.cavis@prx.org'
+          AND userIdentity.arn like '%/someone@prx.org'
         GROUP BY eventType,
           eventSource,
           eventName
@@ -492,3 +492,26 @@ Resources:
         WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
           AND userIdentity.type = 'Root'
         ORDER BY eventTime ASC
+  TotalsByTimeQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Calculate various totals by time
+      Name: Organization Trail totals by time
+      QueryString: !Sub |
+        SELECT
+          date_trunc('hour', from_iso8601_timestamp(eventtime)) AS "Time",
+          count(*) AS "Total Events",
+          count(DISTINCT recipientAccountId) AS "Total Accounts",
+          count(DISTINCT region) AS "Total Regions",
+          count(DISTINCT eventSource) AS "Total Services",
+          count(DISTINCT eventName) AS "Total Actions",
+          count_if(errorCode <> '') AS "Total Errors"
+          count_if(readonly = 'true') AS "Total Read-Only",
+          count_if(readonly = 'false') AS "Total Write",
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '0' day, '%Y/%m/%d')
+        GROUP BY date_trunc('hour', from_iso8601_timestamp(eventtime))
+        ORDER BY "Time" ASC
