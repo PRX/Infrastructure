@@ -217,121 +217,6 @@ Resources:
           SerdeInfo:
             SerializationLibrary: com.amazon.emr.hive.serde.CloudTrailSerde
         TableType: EXTERNAL_TABLE
-  ErrorQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref GlueDatabase
-      Description: >-
-        Searches for events with any error code
-      Name: Organization Trail error codes
-      QueryString: !Sub |
-        SELECT
-          eventTime AS "Time",
-          account AS "Trail Account",
-          recipientAccountId AS "Recipient Account",
-          userIdentity.accountId AS "Identity Account",
-          awsRegion AS "Target Region",
-          eventType AS "Type",
-          eventSource AS "Service",
-          eventName AS "Action",
-          userIdentity.type AS "Identity Type",
-          userIdentity.arn AS "Identity ARN",
-          userIdentity.invokedBy AS "Invoked By",
-          errorCode AS "Error Code",
-          errorMessage AS "Error Message"
-        FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
-          AND "account" = '000000000000'
-          AND errorCode <> ''
-          AND errorMessage <> 'No updates are to be performed.'
-          AND errorMessage <> 'The specified log group already exists'
-        ORDER BY eventTime DESC
-  FullScanQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref GlueDatabase
-      Description: >-
-        Scans all recent events for a given account
-      Name: Organization Trail basic scan
-      QueryString: !Sub |
-        SELECT
-          eventTime AS "Time",
-          account AS "Trail Account",
-          recipientAccountId AS "Recipient Account",
-          userIdentity.accountId AS "Identity Account",
-          awsRegion AS "Target Region",
-          eventType AS "Type",
-          eventSource AS "Service",
-          eventName AS "Action",
-          userIdentity.type AS "Identity Type",
-          userIdentity.arn AS "Identity ARN",
-          userIdentity.invokedBy AS "Invoked By"
-        FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
-          AND "account" = '000000000000'
-        ORDER BY eventTime ASC
-  WriteOperationScanQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref GlueDatabase
-      Description: >-
-        Scans for write operations (i.e., exclude read-only) for a given account
-      Name: Organization Trail write operations scan
-      QueryString: !Sub |
-        SELECT
-          eventTime AS "Time",
-          account AS "Trail Account",
-          recipientAccountId AS "Recipient Account",
-          userIdentity.accountId AS "Identity Account",
-          awsRegion AS "Target Region",
-          eventType AS "Type",
-          eventSource AS "Service",
-          eventName AS "Action",
-          userIdentity.type AS "Identity Type",
-          userIdentity.arn AS "Identity ARN",
-          userIdentity.invokedBy AS "Invoked By"
-        FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
-          AND "readOnly" = 'false'
-          AND "account" = '000000000000'
-          -- Exclude some common events
-          -- AND eventName NOT IN ('CreateLogStream')
-          -- Include only event from SSO users (i.e., humans)
-          -- AND userIdentity.arn LIKE '%AWSReservedSSO%'
-        ORDER BY eventTime ASC
-  ErrorReportQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref GlueDatabase
-      Description: >-
-        Groups events by errorCode to find high volume errors
-      Name: Organization Trail error code report
-      QueryString: !Sub |
-        SELECT
-          count(*) AS "Event Count",
-          errorCode AS "Error Code",
-          recipientAccountId AS "Recipient Account",
-          eventType AS "Type",
-          eventSource AS "Service",
-          eventName AS "Action",
-          userIdentity.arn AS "Identity ARN"
-        FROM "${GlueDatabase}"."${CommonTrailTable}"
-        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
-          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
-          AND "account" = '000000000000'
-          AND errorCode <> ''
-        GROUP BY
-          recipientAccountId,
-          eventType,
-          eventName,
-          eventSource,
-          userIdentity.arn,
-          errorCode
-        ORDER BY "Event Count" DESC
-
   AllTrailTable:
     Type: AWS::Glue::Table
     Properties:
@@ -454,3 +339,156 @@ Resources:
           SerdeInfo:
             SerializationLibrary: com.amazon.emr.hive.serde.CloudTrailSerde
         TableType: EXTERNAL_TABLE
+
+  ErrorQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Searches for events with any error code
+      Name: Organization Trail error codes
+      QueryString: !Sub |
+        SELECT
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By",
+          errorCode AS "Error Code",
+          errorMessage AS "Error Message"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventtime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+          AND errorCode <> ''
+          AND errorMessage <> 'No updates are to be performed.'
+          AND errorMessage <> 'The specified log group already exists'
+        ORDER BY eventTime DESC
+  FullScanQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Scans all recent events for a given account
+      Name: Organization Trail basic scan
+      QueryString: !Sub |
+        SELECT
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+        ORDER BY eventTime ASC
+  WriteOperationScanQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Scans for write operations (i.e., exclude read-only) for a given account
+      Name: Organization Trail write operations scan
+      QueryString: !Sub |
+        SELECT
+          eventTime AS "Time",
+          account AS "Trail Account",
+          recipientAccountId AS "Recipient Account",
+          userIdentity.accountId AS "Identity Account",
+          awsRegion AS "Target Region",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.type AS "Identity Type",
+          userIdentity.arn AS "Identity ARN",
+          userIdentity.invokedBy AS "Invoked By"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "readOnly" = 'false'
+          AND "account" = '000000000000'
+          -- Exclude some common events
+          -- AND eventName NOT IN ('CreateLogStream')
+          -- Include only event from SSO users (i.e., humans)
+          -- AND userIdentity.arn LIKE '%AWSReservedSSO%'
+        ORDER BY eventTime ASC
+  ErrorReportQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Groups events by errorCode to find high volume errors
+      Name: Organization Trail error code report
+      QueryString: !Sub |
+        SELECT
+          count(*) AS "Event Count",
+          errorCode AS "Error Code",
+          recipientAccountId AS "Recipient Account",
+          eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          userIdentity.arn AS "Identity ARN"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND "eventTime" >= to_iso8601(current_timestamp - interval '1' hour)
+          AND "account" = '000000000000'
+          AND errorCode <> ''
+        GROUP BY
+          recipientAccountId,
+          eventType,
+          eventName,
+          eventSource,
+          userIdentity.arn,
+          errorCode
+        ORDER BY "Event Count" DESC
+  UserEventReportQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        Groups events by service/action for a user
+      Name: Organization Trail user event report
+      QueryString: !Sub |
+        SELECT eventType AS "Type",
+          eventSource AS "Service",
+          eventName AS "Action",
+          COUNT(*) AS "Event Count"
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND userIdentity.arn like '%/ryan.cavis@prx.org'
+        GROUP BY eventType,
+          eventSource,
+          eventName
+        ORDER BY "Event Count" DESC
+  RootEventScanQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref GlueDatabase
+      Description: >-
+        All root activity
+      Name: Organization Trail root event scan
+      QueryString: !Sub |
+        SELECT *
+        FROM "${GlueDatabase}"."${CommonTrailTable}"
+        -- FROM "${GlueDatabase}"."${AllTrailTable}"
+        WHERE "date" >= date_format(current_date - interval '1' day, '%Y/%m/%d')
+          AND userIdentity.type = 'Root'
+        ORDER BY eventTime ASC
