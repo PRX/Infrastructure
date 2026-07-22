@@ -1534,6 +1534,96 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !GetAtt FtpServerAuthorizerFunction.Arn
       Principal: transfer.amazonaws.com
+  FtpServerCredentialCaptureFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Architectures: [arm64]
+      CodeUri:
+        Bucket: !Ref CodeS3Bucket
+        Key: !Ref FtpAuthorizerLambdaCodeS3ObjectKey
+      Description: !Sub ${EnvironmentType} FTP transfer credential capture
+      Environment:
+        Variables:
+          DB_NAME_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+          DB_USERNAME_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-username
+          DB_PASSWORD_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-password
+          MYSQL_ENDPOINT: !Ref SharedAuroraMysqlEndpoint
+          ENCRYPTION_SECRET_PARAMETER_ARN: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/database-name
+      Events:
+        ScheduleTrigger:
+          Properties:
+            Schedule: rate(15 minutes)
+            State: ENABLED
+          Type: Schedule
+      Handler: capture.handler
+      MemorySize: 512
+      Policies:
+        - Statement:
+            - Action: ssm:Get*
+              Effect: Allow
+              Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/prx/${EnvironmentTypeAbbreviation}/Spire/Exchange/*
+              Sid: AllowParameterReadOnly
+      Runtime: nodejs24.x
+      Tags:
+        prx:meta:tagging-version: "2021-04-07"
+        prx:cloudformation:stack-name: !Ref AWS::StackName
+        prx:cloudformation:stack-id: !Ref AWS::StackId
+        prx:cloudformation:root-stack-name: !Ref RootStackName
+        prx:cloudformation:root-stack-id: !Ref RootStackId
+        prx:ops:environment: !Ref EnvironmentType
+        prx:dev:application: Exchange
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+          - !GetAtt FtpServerAuthorizerFunctionSecurityGroup.GroupId
+          - !Ref SharedMysqlClientSecurityGroupId
+        SubnetIds:
+          - !Ref VpcPrivateSubnet1Id
+          - !Ref VpcPrivateSubnet2Id
+          - !Ref VpcPrivateSubnet3Id
+  FtpServerCredentialCaptureFunctionElevatedErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: IsProduction
+    Properties:
+      AlarmName: !Sub WARN [Exchange] FTP credential capture function <${EnvironmentTypeAbbreviation}> INVOCATIONS ERRORS (${RootStackName})
+      AlarmDescription: !Sub >-
+        ${EnvironmentType} Exchange FTP Server credential capture Lambda
+        function is failing, which could be preventing stations from pulling
+        audio files if any credentials change.
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FtpServerCredentialCaptureFunction
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
+      Threshold: 0
+      TreatMissingData: notBreaching
+  FtpServerCredentialCaptureFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FtpServerCredentialCaptureFunction}
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: Exchange }
   FtpServerLoggingRole:
     Type: AWS::IAM::Role
     Properties:
