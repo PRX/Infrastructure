@@ -1107,6 +1107,63 @@ Resources:
         Allow: {}
       Description: !Sub WordPress WAF for The World ${EnvironmentType} CDN
       Name: !Sub ${EnvironmentTypeAbbreviation}-tw-wordpress
+      Rules:
+        - Name: InternationalBots
+          Priority: 10
+          Statement:
+            GeoMatchStatement:
+              CountryCodes:
+              - VN
+              - HK
+              - SG
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: InternationalBots
+          Action:
+            Captcha: {}
+        - Name: BadBots
+          Priority: 20
+          Statement:
+            RegexPatternSetReferenceStatement:
+              # TODO Sort out multi-region
+              Arn: arn:aws:wafv2:us-east-1:976680550710:global/regexpatternset/BadBots/77983be8-c291-4263-97fc-08424eaee286
+              FieldToMatch:
+                SingleHeader:
+                  Name: user-agent
+              TextTransformations:
+              - Priority: 0
+                Type: LOWERCASE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BadBots
+          Action:
+            Block: {}
+        - Name: AdminKnownGeosOnly
+          Priority: 30
+          Statement:
+            AndStatement:
+              Statements:
+              - NotStatement:
+                  Statement:
+                    GeoMatchStatement:
+                      CountryCodes:
+                      - US
+                      - BR # TODO Until 2026-10-01
+              - RegexMatchStatement:
+                  RegexString: "^(\\/wp-login\\.php)|(\\/wp-admin\\/)"
+                  FieldToMatch:
+                    UriPath: {}
+                  TextTransformations:
+                  - Priority: 0
+                    Type: NONE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AdminKnownGeosOnly
+          Action:
+            Block: {}
       Scope: CLOUDFRONT
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }

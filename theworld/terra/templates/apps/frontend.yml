@@ -883,6 +883,93 @@ Resources:
         Allow: {}
       Description: !Sub Frontend WAF for The World ${EnvironmentType} CDN
       Name: !Sub ${EnvironmentTypeAbbreviation}-tw-frontend
+      Rules:
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 10
+          OverrideAction:
+            None: {}  # Use None to respect the rule group's actions
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              # Version: (exclude to use vendor default version)
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesCommonRuleSet
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 20
+          OverrideAction:
+            None: {}  # Use None to respect the rule group's actions
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+              # Version: (exclude to use vendor default version)
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSet
+        - Name: AWSManagedRulesAmazonIpReputationList
+          Priority: 30
+          OverrideAction:
+            None: {}  # Use None to respect the rule group's actions
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+              # Version: (exclude to use vendor default version)
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesAmazonIpReputationList
+        - Name: BadBots
+          Priority: 100
+          Statement:
+            RegexPatternSetReferenceStatement:
+              # TODO Sort out multi-region
+              Arn: arn:aws:wafv2:us-east-1:976680550710:global/regexpatternset/BadBots/77983be8-c291-4263-97fc-08424eaee286
+              FieldToMatch:
+                SingleHeader:
+                  Name: user-agent
+              TextTransformations:
+              - Priority: 0
+                Type: LOWERCASE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BadBots
+          Action:
+            Block: {}
+        - Name: InternationalBots
+          Priority: 110
+          Statement:
+            GeoMatchStatement:
+              CountryCodes:
+              - VN
+              - SG
+              - BR
+              - HK
+              - MY
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: InternationalBots
+          Action:
+            Captcha: {}
+        - Name: AWSManagedRulesBotControlRuleSet
+          Priority: 200
+          OverrideAction:
+            Count: {}  # Override all rules in rule set to count-only
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+              Version: Version_6.0
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesBotControlRuleSet
       Scope: CLOUDFRONT
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
