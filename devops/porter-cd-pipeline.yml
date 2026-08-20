@@ -55,6 +55,15 @@ Resources:
         - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
         - { Key: prx:ops:environment, Value: Production }
         - { Key: prx:dev:application, Value: DevOps }
+  HlsParallelEcrRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
 
   # Runs `sam build` and `sam package`, and outputs the resulting
   # CloudFormation template as an artifact.
@@ -544,6 +553,138 @@ Resources:
         - { Key: prx:dev:application, Value: DevOps }
       TimeoutInMinutes: 15
 
+
+  # Runs `docker build` for the HLS Parallel task image if necessary, and pushes
+  # the result to the ECR repository above. The CodeBuild project exports a
+  # variable called IMAGE_NAME with the Docker image name:tag in all cases.
+  HlsParallelBuildProjectLogGroup:
+    Type: AWS::Logs::LogGroup
+    UpdateReplacePolicy: Delete
+    DeletionPolicy: Delete
+    Properties:
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  HlsParallelBuildProjectRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+        Version: "2012-10-17"
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+  HlsParallelBuildProjectPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action:
+              - s3:PutObject
+              - s3:GetObject
+              - s3:GetObjectVersion
+            Effect: Allow
+            Resource: !Sub ${PipelineArtifactStore.Arn}/*
+          - Action: ecr:GetAuthorizationToken
+            Effect: Allow
+            Resource: "*"
+          - Action:
+              - ecr:*RepositoryPolicy
+              - ecr:BatchCheckLayerAvailability
+              - ecr:CompleteLayerUpload
+              - ecr:DescribeImages
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+            Effect: Allow
+            Resource: !GetAtt HlsParallelEcrRepository.Arn
+          - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource: !GetAtt HlsParallelBuildProjectLogGroup.Arn
+          - Action: ssm:GetParameters
+            Effect: Allow
+            Resource: "*" # TODO
+        Version: "2012-10-17"
+      PolicyName: PorterHlsParallelBuildProjectPolicy
+      Roles:
+        - !Ref HlsParallelBuildProjectRole
+  HlsParallelBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Artifacts:
+        Type: CODEPIPELINE
+      Description: Builds and publishes the HLS Parallel task Docker image
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: ECR_REPOSITORY_NAME
+            Value: !Ref HlsParallelEcrRepository
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Ref HlsParallelBuildProjectLogGroup
+          Status: ENABLED
+      ServiceRole: !GetAtt HlsParallelBuildProjectRole.Arn
+      Source:
+        BuildSpec: |-
+          version: 0.2
+          env:
+            parameter-store:
+              DOCKERHUB_USERNAME: /prx/DOCKERHUB_USERNAME
+              DOCKERHUB_PASSWORD: /prx/DOCKERHUB_PASSWORD
+            exported-variables:
+              - IMAGE_NAME
+          phases:
+            pre_build:
+              commands:
+                - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+                - echo Logging in to Docker Hub...
+                - echo $DOCKERHUB_PASSWORD | docker login --username $DOCKERHUB_USERNAME --password-stdin
+            build:
+              commands:
+                # Calculate the SHA1 hash of the hls-parallel directory
+                - sha1=`find src/containers/hls-parallel -type f -print0 | sort -z | xargs -0 sha1sum | sha1sum | awk '{ print $1 }'`
+                # Construct the Docker image name:tag using the hash
+                - imageName="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY_NAME:$sha1"
+                # See if that tag already exists in the repository
+                - >-
+                  lookup=`aws ecr describe-images --repository-name "$ECR_REPOSITORY_NAME" --image-ids imageTag="$sha1" || echo "notFound"`
+                # Only build and push the image if it doesn't exist, meaning the directory and code has changed
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker build -t hls-parallel src/containers/hls-parallel; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker tag hls-parallel:latest "$imageName"; fi
+                - >-
+                  if [ "$lookup" = "notFound" ]; then docker push "$imageName"; fi
+            post_build:
+              commands:
+                - export IMAGE_NAME="$imageName"
+        Type: CODEPIPELINE
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:ops:environment, Value: Production }
+        - { Key: prx:dev:application, Value: DevOps }
+      TimeoutInMinutes: 15
+
   # Runs Porter's acceptance test suite against the staging state machine
   AcceptanceTestsBucket:
     Type: AWS::S3::Bucket
@@ -774,6 +915,7 @@ Resources:
                   - !GetAtt TranscodeBuildProject.Arn
                   - !GetAtt FtpBuildProject.Arn
                   - !GetAtt HlsBuildProject.Arn
+                  - !GetAtt HlsParallelBuildProject.Arn
                   - !GetAtt AcceptanceTestsProject.Arn
             Version: "2012-10-17"
           PolicyName: CodeBuildActionPolicy
@@ -886,6 +1028,20 @@ Resources:
                 - Name: PorterRepoSourceArtifact
               Namespace: hls_build
               RunOrder: 1
+            # Exports a variable called IMAGE_NAME to the namespace with the
+            # docker image name:tag
+            - Name: HLS-Parallel-Docker-Build-and-Publish
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: "1"
+              Configuration:
+                ProjectName: !Ref HlsParallelBuildProject
+              InputArtifacts:
+                - Name: PorterRepoSourceArtifact
+              Namespace: hls_parallel_build
+              RunOrder: 1
         - Name: Staging
           Actions:
             # Runs a CloudFormation update using the SAM template (the
@@ -907,6 +1063,7 @@ Resources:
                   {
                     "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
                     "HlsEcsTaskDefinitionImage": "#{hls_build.IMAGE_NAME}",
+                    "HlsParallelEcsTaskDefinitionImage": "#{hls_parallel_build.IMAGE_NAME}",
                     "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
                     "EnvironmentType": "Staging",
                     "EnvironmentTypeAbbreviation": "stag",
@@ -968,6 +1125,7 @@ Resources:
                   {
                     "FtpCopyEcsTaskDefinitionImage": "#{ftp_build.IMAGE_NAME}",
                     "HlsEcsTaskDefinitionImage": "#{hls_build.IMAGE_NAME}",
+                    "HlsParallelEcsTaskDefinitionImage": "#{hls_parallel_build.IMAGE_NAME}",
                     "TranscodeEcsTaskDefinitionImage": "#{transcode_build.IMAGE_NAME}",
                     "EnvironmentType": "Production",
                     "EnvironmentTypeAbbreviation": "prod",
