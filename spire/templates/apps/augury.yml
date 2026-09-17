@@ -399,9 +399,13 @@ Resources:
         - { Key: prx:dev:application, Value: Augury }
   WebTaskOomLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: HasAuroraEndpoint # See README
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
+      # It's not well documented, but afaik when a log group is a target of an
+      # EventBridge rule, it *must* be named `/aws/events/…`
+      LogGroupName: !Sub /aws/events/${WebEcsService.Name}-oom-events
       RetentionInDays: 14
       Tags:
         - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
