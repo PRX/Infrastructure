@@ -338,6 +338,56 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt WitfNetworkExport.Arn
 
+  WuwmNetworkExport:
+    Type: AWS::Events::Rule
+    Condition: EnableProductionRules
+    Properties:
+      Description: WUWM network data export
+      RoleArn: !GetAtt RulesRole.Arn
+      ScheduleExpression: cron(15 0 * * ? *) # 00:15 UTC every day
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt ExportFunction.Arn
+          Id: !Sub "${RootStackName}.Export.WUWMNetwork"
+          Input: |-
+            {
+              "PodcastIDs": [
+                10785,
+                10818,
+                10819,
+                11610,
+                11643,
+                11644,
+                11645,
+                11646,
+                11647,
+                11648,
+                12534,
+                12535,
+                12536,
+                12537,
+                12538,
+                14943,
+                15042,
+                16395
+              ],
+              "ObjectPrefix": "PRX/",
+              "Copies": [
+                {
+                  "Mode": "AWS/S3",
+                  "BucketName": "wuwm-dovetail-export-345549355588"
+                }
+              ]
+            }
+  WuwmNetworkExportInvokePermission:
+    Condition: EnableProductionRules
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ExportFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WuwmNetworkExport.Arn
+
   WxxiNetworkExport:
     Type: AWS::Events::Rule
     Condition: EnableProductionRules
