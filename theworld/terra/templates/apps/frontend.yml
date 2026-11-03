@@ -742,6 +742,24 @@ Resources:
             PathPattern: "/*/twitter-image"
             TargetOriginId: frontend-ecs
             ViewerProtocolPolicy: redirect-to-https
+          # Plausible script
+          - AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: !GetAtt AggresiveCachePolicy.Id
+            Compress: true
+            OriginRequestPolicyId: !GetAtt OriginRequestPolicy.Id
+            PathPattern: "/js/script.js"
+            TargetOriginId: plausible
+            ViewerProtocolPolicy: redirect-to-https
+          # Plausible events
+          - AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            Compress: true
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68002d296205 # Managed-AllViewerExceptHostHeader
+            PathPattern: "/api/event"
+            TargetOriginId: plausible
+            ViewerProtocolPolicy: redirect-to-https
         Comment: !Sub The World ${EnvironmentType} frontend
         ConnectionMode: direct
         DefaultCacheBehavior:
@@ -764,6 +782,11 @@ Resources:
             OriginCustomHeaders:
               - HeaderName: x-prx-alb-access-token
                 HeaderValue: !Ref AlbAccessToken
+          - Id: plausible
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+            DomainName: plausible.io
         PriceClass: PriceClass_All
         ViewerCertificate:
           AcmCertificateArn: !Ref CdnCertificate
