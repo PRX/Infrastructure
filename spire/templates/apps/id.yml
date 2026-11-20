@@ -47,6 +47,7 @@ Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, Production]
   HasAuroraEndpoint: !Not [!Equals [!Ref SharedAuroraMysqlEndpoint, ""]]
   IsPrimaryRegion: !Equals [!Ref RegionMode, Primary]
+  EnableWorkers: !And [!Condition HasAuroraEndpoint, !Condition IsPrimaryRegion]
   EnableNestedChangeSetScrubbingResources: !Equals [!Ref NestedChangeSetScrubbingResourcesState, Enabled]
 
 Resources:
@@ -419,6 +420,183 @@ Resources:
           PortMappings:
             - ContainerPort: !Ref kApplicationPort
               HostPort: 0
+          Secrets:
+            - Name: ALGORITHM
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/algorithm
+            - Name: CERT_STRING
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/certificate
+            - Name: CLIENT_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/client-id
+            - Name: DB_ENV_MYSQL_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-name
+            - Name: DB_ENV_MYSQL_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-password
+            - Name: DB_ENV_MYSQL_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-username
+            - Name: DB_CRISP_DATABASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-crisp-name
+            - Name: DB_CRISP_PASSWORD
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-crisp-password
+            - Name: DB_CRISP_USER
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/database-crisp-username
+            - Name: PRIVATE_KEY_STRING
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/private-key
+            - Name: SECRET_KEY_BASE
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/secret-key-base
+            - Name: SECRET_TOKEN
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/secret-token
+            - Name: SESSION_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/session-key
+            - Name: GOOGLE_OAUTH2_APP_ID
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/google-oauth-app-id
+            - Name: GOOGLE_OAUTH2_APP_SECRET
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/google-oauth-app-secret
+            - Name: TURNSTILE_SECRET_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/turnstile-secret
+            - Name: LOCKBOX_MASTER_KEY
+              ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/lockbox-master-key
+            - Name: NEW_RELIC_KEY
+              ValueFrom: /prx/global/Spire/new-relic-lite-api-key
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      NetworkMode: bridge
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: ID }
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  WorkerEcsService:
+    Type: AWS::ECS::Service
+    Condition: EnableWorkers # See README
+    Properties:
+      CapacityProviderStrategy:
+        - Base: 0
+          CapacityProvider: !Ref Aarch64AsgCapacityProviderName
+          Weight: 1
+      Cluster: !Ref EcsClusterArn
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+      DesiredCount: 1
+      EnableECSManagedTags: true
+      EnableExecuteCommand: true
+      PlacementConstraints:
+        - Type: memberOf
+          Expression: attribute:ecs.cpu-architecture == arm64
+      PropagateTags: TASK_DEFINITION
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: ID }
+      TaskDefinition: !Ref WorkerTaskDefinition
+  WorkerTaskLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      RetentionInDays: 14
+      Tags:
+        - { Key: prx:meta:tagging-version, Value: "2021-04-07" }
+        - { Key: prx:cloudformation:stack-name, Value: !Ref AWS::StackName }
+        - { Key: prx:cloudformation:stack-id, Value: !Ref AWS::StackId }
+        - { Key: prx:cloudformation:root-stack-name, Value: !Ref RootStackName }
+        - { Key: prx:cloudformation:root-stack-id, Value: !Ref RootStackId }
+        - { Key: prx:ops:environment, Value: !Ref EnvironmentType }
+        - { Key: prx:dev:application, Value: ID }
+  WorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ContainerDefinitions:
+        - Command: [worker]
+          Cpu: !If [IsProduction, 200, 128]
+          Environment:
+            - Name: APP_NAME
+              Value: id
+            - Name: RAILS_ENV
+              Value: !Ref EnvironmentTypeLowercase
+            - Name: APP_ENV
+              Value: !Ref EnvironmentTypeAbbreviation
+            - Name: AWS_BUCKET
+              Value: !Select [5, !Split [":", !Ref MediajointS3BucketArn]]
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: DB_PORT_3306_TCP_ADDR
+              Value: !Ref SharedAuroraMysqlEndpoint
+            - Name: DB_PORT_3306_TCP_PORT
+              Value: !Ref SharedAuroraMysqlPort
+            - Name: MARIADB_TLS_DISABLE_PEER_VERIFICATION
+              Value: "1"
+            - Name: CALLBACK_SQS_URL
+              Value: !GetAtt CallbackQueue.QueueUrl
+            - Name: SMTP_ADDRESS
+              Value: !Sub email-smtp.${AWS::Region}.amazonaws.com
+            - Name: SMTP_AUTHENTICATION
+              Value: login
+            - Name: SMTP_PORT
+              Value: "587"
+            - Name: SMTP_DOMAIN
+              Value: prx.org
+            - Name: SMTP_USER_NAME
+              Value: !GetAtt SesSendingSmtpCredentials.UserName
+            - Name: SMTP_PASSWORD
+              Value: !GetAtt SesSendingSmtpCredentials.Password
+            - Name: NEW_RELIC_NAME
+              Value: !If [IsProduction, id.prx.org, id.prx.org (Staging)]
+            - Name: DATABASE_POOL_SIZE
+              Value: "5"
+            - Name: SIGN_UP_URL
+              Value: !Sub https://${ExchangeHostname}/users/new
+            - Name: DEVISE_MAILER_EMAIL
+              Value: !If [IsProduction, do-not-reply@prx.org, do-not-reply-staging@prx.org]
+            - Name: ACTION_MAILER_HOST
+              Value: !Ref IdHostname
+            - Name: ISSUER_IDENTIFIER
+              Value: !Ref IdHostname
+            - Name: SESSION_DOMAIN
+              Value: !If [IsProduction, .prx.org, .prx.tech]
+            - Name: PORTER_SNS_TOPIC_ARN
+              Value: !Ref PorterJobExecutionSnsTopicArn
+            - Name: UPLOADS_BUCKET
+              Value: !Ref IdUploadsBucket
+            - Name: TURNSTILE_SITE_KEY
+              Value: !Ref TurnstileID
+            - Name: MANDATORY_SSO_DOMAINS
+              Value: "prx.org,wgbh.org,sebpo.com,kqed.org"
+            - Name: AUGURY_HOST
+              Value: !Ref AuguryHostname
+            - Name: EXCHANGE_HOST
+              Value: !Ref ExchangeHostname
+            - Name: FEEDER_HOST
+              Value: !Ref FeederHostname
+            - Name: METRICS_HOST
+              Value: !Ref MetricsHostname
+            - Name: INSIGHTS_HOST
+              Value: !Ref DovetailInsightsHostname
+            - Name: SPOTS_HOST
+              Value: !Ref SpotsHostname
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${EcrImageTag}
+          LinuxParameters:
+            InitProcessEnabled: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WorkerTaskLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Memory: !If [IsProduction, 2000, 1000]
+          MemoryReservation: !If [IsProduction, 1000, 500]
+          Name: !Ref kWorkerContainerName
           Secrets:
             - Name: ALGORITHM
               ValueFrom: !Sub /prx/${EnvironmentTypeAbbreviation}/Spire/ID/algorithm
